@@ -5,18 +5,19 @@ TagManager:
   serializedVersion: 2
   tags:
   - Enemy
+  - IgnoreCamera
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - 
+  - IgnoreCamera
   - Water
   - UI
-  - 
-  - 
-  - 
-  - 
-  - 
+  - UltimateVFX
+  - Muse Animate Environment
+  - Muse Animate Handles
+  - Muse Animate Posing
+  - Muse Animate Thumbnail
   - 
   - 
   - 

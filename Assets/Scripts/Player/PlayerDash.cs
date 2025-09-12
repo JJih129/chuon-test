@@ -19,7 +19,11 @@ public class PlayerDash : MonoBehaviour
 
     void Update()
     {
+        // ✅ 피격 경직 중 대시 금지
+        if (GetComponent<PlayerHealth>()?.IsStaggered ?? false) return;
+
         dashCooldownTimer -= Time.deltaTime;
+
         if (IsDashing)
         {
             controller.Move(dashDirection * dashSpeed * Time.deltaTime);
@@ -29,8 +33,8 @@ public class PlayerDash : MonoBehaviour
             return;
         }
 
-        // 대시는 이동/공격 중엔 X
-        if ((GetComponent<PlayerComboAttack>()?.IsAttacking ?? false)) return;
+        bool isAttacking = GetComponent<PlayerComboAttack>()?.IsAttacking ?? false;
+        if (isAttacking) return;
 
         if (Input.GetKeyDown(KeyCode.LeftShift) && dashCooldownTimer <= 0f)
         {
