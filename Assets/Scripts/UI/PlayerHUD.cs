@@ -1,56 +1,85 @@
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
+using System;
 
+/// ==============================
+/// ▼ 변수 헤더(한글 설명)
+/// hpFillImage         : 체력바로 쓸 Image. Type=Filled, fillAmount 0~1 적용
+/// ampouleSlots[5]     : 앰플 5칸 개별 아이콘 Image. 좌→우 순서로 드래그
+/// maxAmpouleCount     : 최대 앰플 개수(표기는 5칸 고정)
+/// Bind/Unbind         : IHealth/소모품 이벤트 연결 및 해제
+/// UpdateHP/UpdateAmpoule : 외부에서 수치 갱신 시 직접 호출용
+/// ==============================
 public class PlayerHUD : MonoBehaviour
 {
-    [Header("HP UI")]
-    public Slider hpBar;
-    public Image damageFlash;
-    public Color flashColor = new Color(1, 0, 0, 0.35f);
-    public float flashFadeSpeed = 5f;
+    // ── HP (Image.fillAmount) ─────────────────────────────────────
+    [Header("HP Fill 이미지 | Type=Filled")]
+    [Tooltip("체력바로 사용할 Image 컴포넌트")]
+    public Image hpFillImage;
 
-    [Header("Ampoule UI")]
-    public TMP_Text ampouleText;
+    // ── 앰플 (5칸 이미지) ────────────────────────────────────────
+    [Header("앰플 슬롯 이미지 5칸 | 좌→우 순서")]
+    [Tooltip("각 칸을 나타내는 개별 Image")]
+    public Image[] ampouleSlots = new Image[5];
 
-    IHealth boundHealth;
-    PlayerConsumables boundConsumables;
-    bool flash;
+    [Header("최대 앰플 개수")]
+    public int maxAmpouleCount = 5;
 
-    void Update()
+    // ── 바인딩 대상(옵션) ───────────────────────────────────────
+    IHealth boundHealth;                // HP 이벤트 소스
+    PlayerConsumables boundConsumables; // 앰플 이벤트 소스(있으면)
+
+    // ── 공개 API ────────────────────────────────────────────────
+    // [HP 업데이트] - 현재/최대 HP를 비율로 반영
+    public void UpdateHP(int current, int max)
     {
-        if (!damageFlash) return;
-        if (flash) { damageFlash.color = flashColor; flash = false; }
-        else damageFlash.color = Color.Lerp(damageFlash.color, Color.clear, flashFadeSpeed * Time.deltaTime);
+        if (hpFillImage && max > 0)
+            hpFillImage.fillAmount = Mathf.Clamp01((float)current / max);
+        else if (hpFillImage)
+            hpFillImage.fillAmount = 0f;
     }
 
+    // [앰플 업데이트] - 현재 앰플 개수만큼 슬롯 on
+    public void UpdateAmpoule(int count)
+    {
+        int cur = Mathf.Clamp(count, 0, Mathf.Min(maxAmpouleCount, ampouleSlots.Length));
+        for (int i = 0; i < ampouleSlots.Length; i++)
+            if (ampouleSlots[i]) ampouleSlots[i].enabled = (i < cur);
+    }
+
+    // [Bind] - 외부 시스템(IHealth, PlayerConsumables)과 연결
     public void Bind(IHealth health, PlayerConsumables consumables = null)
     {
         Unbind();
 
+        // HP 바인딩
         boundHealth = health;
         if (boundHealth != null)
         {
             boundHealth.OnHPChanged += OnHPChanged;
-            boundHealth.OnDamaged += _ => flash = true;
             boundHealth.OnDied += OnDied;
-            OnHPChanged(boundHealth.CurrentHP, boundHealth.MaxHP);
+            UpdateHP(boundHealth.CurrentHP, boundHealth.MaxHP);
         }
 
+        // 앰플 바인딩(있을 때만)
         boundConsumables = consumables;
         if (boundConsumables != null)
         {
             boundConsumables.OnAmpouleChanged += OnAmpouleChanged;
-            OnAmpouleChanged(boundConsumables.CurrentAmpoule, boundConsumables.MaxAmpoule);
+            UpdateAmpoule(boundConsumables.CurrentAmpoule);
+        }
+        else
+        {
+            UpdateAmpoule(0);
         }
     }
 
+    // [Unbind] - 이벤트 해제
     public void Unbind()
     {
         if (boundHealth != null)
         {
             boundHealth.OnHPChanged -= OnHPChanged;
-            boundHealth.OnDamaged -= _ => flash = true; // 람다 해제는 한계 → 간단 샘플. 실프로덕션은 핸들 저장 권장
             boundHealth.OnDied -= OnDied;
             boundHealth = null;
         }
@@ -61,18 +90,8 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
-    void OnHPChanged(int cur, int max)
-    {
-        if (hpBar) hpBar.value = (float)cur / max;
-    }
-
-    void OnAmpouleChanged(int cur, int max)
-    {
-        if (ampouleText) ampouleText.text = $"x {cur}";
-    }
-
-    void OnDied()
-    {
-        // 사망 시 HUD 반응 필요하면 여기
-    }
+    // ── 내부 콜백 ───────────────────────────────────────────────
+    void OnHPChanged(int cur, int max) => UpdateHP(cur, max);
+    void OnAmpouleChanged(int cur, int max) => UpdateAmpoule(cur);
+    void OnDied() { /* 필요 시 사망 연출 */ }
 }

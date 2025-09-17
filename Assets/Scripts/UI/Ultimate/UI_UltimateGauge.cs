@@ -3,21 +3,61 @@ using UnityEngine.UI;
 
 public class UI_UltimateGauge : MonoBehaviour
 {
-    // ===== ë³€ìˆ˜ í—¤ë”(í•œê¸€) =====
-    [Header("ê²Œì´ì§€ í‘œì‹œ | 0~1 ë¹„ìœ¨ë¡œ ì±„ì›€/íšŒì „/ìƒ‰ìƒë‹¨ê³„")]
+    // ========================= º¯¼ö Çì´õ(ÇÑ±Û ¼³¸í) =========================
+    [Header("¨ç Ã¤¿ò ÀÌ¹ÌÁö | °ÔÀÌÁö ¹Ù(ÇÊ¼ö)")]
+    [Tooltip("Image Type=Filled ÀÎ Ã¤¿ò ÀÌ¹ÌÁö")]
     public Image fill;
-    public RectTransform rotor;
-    public Gradient colorByPercent;
 
-    static UI_UltimateGauge _instance;
+    [Header("¨è ÁØºñ ÀÌÆåÆ® | 100% µµ´Þ ½Ã ÄÑÁú FX(¼±ÅÃ)")]
+    [Tooltip("°ÔÀÌÁö°¡ °¡µæ Âû ¶§ È°¼ºÈ­ÇÒ ¿ÀºêÁ§Æ®")]
+    public GameObject readyFx;
 
-    void Awake() => _instance = this;
+    [Header("¨é º¸°£ ¼Óµµ | Ã¤¿ò·® ºÎµå·´°Ô ÀÌµ¿ ¼Óµµ")]
+    [Tooltip("°ªÀÌ ³ôÀ»¼ö·Ï ºü¸£°Ô µû¶ó°£´Ù")]
+    public float lerpSpeed = 6f;
 
-    public static void UpdateValue(float t)
+    // ========================= ³»ºÎ »óÅÂ =========================
+    static UI_UltimateGauge _inst;   // Á¤Àû Á¢±Ù(ÄÁÆ®·Ñ·¯¿¡¼­ È£Ãâ)
+    float _target;                   // ¸ñÇ¥ Ã¤¿ò ºñÀ² 0~1
+    float _current;                  // ÇöÀç Ã¤¿ò ºñÀ² 0~1
+    bool _ready;
+
+    void Awake()
     {
-        if (_instance == null) return;
-        if (_instance.fill)  _instance.fill.fillAmount = t;
-        if (_instance.rotor) _instance.rotor.localEulerAngles = new Vector3(0,0, Mathf.Lerp(0, 720f, t));
-        if (_instance.fill)  _instance.fill.color = _instance.colorByPercent.Evaluate(t);
+        _inst = this;
+        SetInternal(0f);
+        SetReadyInternal(false);
+    }
+
+    void Update()
+    {
+        _current = Mathf.Lerp(_current, _target, Time.deltaTime * lerpSpeed);
+        if (fill) fill.fillAmount = _current;
+    }
+
+    // ============ °ø°³ Á¤Àû API(ÄÁÆ®·Ñ·¯/½Ã½ºÅÛ¿¡¼­ È£Ãâ) ============
+    public static void UpdateValue(float ratio)
+    {
+        if (_inst == null) return;
+        _inst.SetInternal(Mathf.Clamp01(ratio));
+    }
+
+    public static void SetReady(bool ready)
+    {
+        if (_inst == null) return;
+        _inst.SetReadyInternal(ready);
+    }
+
+    // ========================= ³»ºÎ ±¸Çö =========================
+    void SetInternal(float ratio01)
+    {
+        _target = ratio01;
+        if (_target < 1f && readyFx) readyFx.SetActive(false);
+    }
+
+    void SetReadyInternal(bool ready)
+    {
+        _ready = ready;
+        if (readyFx) readyFx.SetActive(_ready);
     }
 }
