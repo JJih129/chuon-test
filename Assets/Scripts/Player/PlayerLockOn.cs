@@ -1,5 +1,15 @@
 using UnityEngine;
 
+/// ===== 변수 헤더 (한글설명) =====
+/// lockOnRange     : 락온 가능한 최대 거리 (미터)
+/// lockOnFOV       : 카메라 전방 기준 허용 시야각(도)
+/// obstacleMask    : 카메라-타겟 사이 라인캐스트에 사용할 장애물 레이어
+/// pivotName       : 적 루트 아래에 생성할 피벗 오브젝트 이름
+/// defaultPivotY   : 렌더러가 없을 때 루트 기준 기본 피벗 높이 (월드 단위 오프셋)
+/// lockOnTarget    : 현재 락온 타겟(피벗 Transform)
+/// cameraManager   : Cinemachine 연동용 카메라 매니저
+/// playerPivot     : 플레이어용 피벗 (없으면 생성)
+/// =====================================
 public class PlayerLockOn : MonoBehaviour
 {
     [Header("탐색")]
@@ -13,8 +23,8 @@ public class PlayerLockOn : MonoBehaviour
     public string pivotName = "LockPivot";
 
     [Header("Pivot")]
-    [Tooltip("자동 생성 피벗의 기본 높이(전역 기본값)")]
-    public float defaultPivotY = 1.3f; // ★ 기존 1.6f → 1.3f로 낮춤 (인스펙터에서 조절 가능)
+    [Tooltip("자동 생성 피벗의 기본 높이(월드 단위). 렌더러가 없을 때 사용")]
+    public float defaultPivotY = 1.3f;
 
     [Header("상태")]
     public Transform lockOnTarget;                 // 현재 타겟 Pivot(=적의 LockPivot)
@@ -46,10 +56,6 @@ public class PlayerLockOn : MonoBehaviour
                 if (enemyRoot != null) StartLockOn(enemyRoot);
             }
         }
-
-        // 좌/우 전환: Q / E
-        //if (IsLockOn && Input.GetKeyDown(KeyCode.Q)) SwitchTarget(-1);
-        //if (IsLockOn && Input.GetKeyDown(KeyCode.E)) SwitchTarget(+1);
     }
 
     // ==== 락온 시작/해제 ====
@@ -106,49 +112,6 @@ public class PlayerLockOn : MonoBehaviour
         return bestRoot;
     }
 
-    // ==== 카메라 기준 좌/우 전환 (-1=왼쪽, +1=오른쪽) ====
-    void SwitchTarget(int dir)
-    {
-        if (!IsLockOn || Camera.main == null) return;
-
-        Transform cam = Camera.main.transform;
-        Vector3 camRight = cam.right;
-
-        Transform current = lockOnTarget;
-        Transform best = null;
-        float bestSide = -Mathf.Infinity;
-        float bestDist = Mathf.Infinity;
-
-        foreach (var e in GameObject.FindGameObjectsWithTag("Enemy"))
-        {
-            Transform pivot = FindOrCreatePivot(e.transform, pivotName, defaultPivotY);
-            if (pivot == current || pivot == null) continue;
-
-            // 현재 타겟 기준 좌/우 판정
-            Vector3 fromCur = (pivot.position - current.position).normalized;
-            float side = Vector3.Dot(fromCur, camRight); // +오른쪽, -왼쪽
-
-            if (dir < 0 && side >= 0) continue; // 왼쪽 찾는 중인데 오른쪽이면 패스
-            if (dir > 0 && side <= 0) continue; // 오른쪽 찾는 중인데 왼쪽이면 패스
-
-            float dist = Vector3.Distance(transform.position, pivot.position);
-            float score = Mathf.Abs(side); // 더 측면에 크게 벌어진 것을 우선
-
-            if (score > bestSide || (Mathf.Approximately(score, bestSide) && dist < bestDist))
-            {
-                bestSide = score;
-                bestDist = dist;
-                best = pivot;
-            }
-        }
-
-        if (best != null)
-        {
-            lockOnTarget = best;
-            cameraManager?.StartLockOn(lockOnTarget);
-        }
-    }
-
     // ==== PlayerMovement가 쓰는 헬퍼 ====
     public Vector3 GetLockOnMoveDirection(float h, float v)
     {
@@ -185,20 +148,45 @@ public class PlayerLockOn : MonoBehaviour
 
     Transform CreatePivot(Transform root, string name, float defaultY)
     {
-        // 모델의 Renderer Bounds를 이용해 "머리쪽"에 더 가깝게 피벗을 배치
-        float y = defaultY;
+        // 1) 렌더러 기반 world Y 계산
         var rend = root.GetComponentInChildren<Renderer>();
-        if (rend)
+        Vector3 desiredWorldPos;
+
+        if (rend != null)
         {
-            // center ~ max 사이 60% 지점 정도(머리 쪽), 살짝 더 낮춤(-0.1f)
-            y = Mathf.Lerp(rend.bounds.center.y, rend.bounds.max.y, 0.6f) - root.position.y;
-            y -= 0.1f;
+            // 렌더러 중심과 상단 사이에서 적절한 높이 선택 (월드 Y)
+            float centreY = rend.bounds.center.y;
+            float topY = rend.bounds.max.y;
+            float chosenY = Mathf.Lerp(centreY, topY, 0.6f) - 0.1f;
+            // pivot의 xz는 렌더러 중심을 따름
+            desiredWorldPos = new Vector3(rend.bounds.center.x, chosenY, rend.bounds.center.z);
+        }
+        else
+        {
+            // 렌더러 없으면 루트 위치 + 기본 오프셋(월드 단위)
+            desiredWorldPos = root.position + Vector3.up * defaultY;
         }
 
+        // GameObject 생성 및 부모 설정. 월드 위치를 의도대로 유지하도록 설정
         var go = new GameObject(name);
-        go.transform.SetParent(root, false);
-        go.transform.localPosition = new Vector3(0, y, 0);
-        go.transform.localRotation = Quaternion.identity;
+        go.transform.SetParent(root, true); // true: worldPosition stays
+        go.transform.position = desiredWorldPos;
+        go.transform.rotation = Quaternion.identity;
+
+        // 피벗 팔로워 붙이기 및 yOffset 계산 (월드 기준)
+        var follower = go.AddComponent<LockPivotFollower>();
+        if (rend != null)
+        {
+            follower.sourceRenderer = rend;
+            // yOffset = pivotWorldY - rendererCenterY (월드 단위)
+            follower.yOffset = go.transform.position.y - rend.bounds.center.y;
+        }
+        else
+        {
+            follower.sourceRenderer = null;
+            follower.yOffset = 0f;
+        }
+
         return go.transform;
     }
 }

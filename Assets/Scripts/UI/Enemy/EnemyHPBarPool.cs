@@ -1,28 +1,65 @@
-using System.Collections.Generic;
+// EnemyHPBarPool.cs
 using UnityEngine;
+using System.Collections.Generic;
 
 public class EnemyHPBarPool : MonoBehaviour
 {
     public EnemyHPBar prefab;
-    public int preload = 5;
+    public int initialSize = 6;
+    public Transform parent; // optional, 자동 할당 지원
 
-    readonly Queue<EnemyHPBar> pool = new Queue<EnemyHPBar>();
+    Queue<EnemyHPBar> _pool = new();
 
     void Awake()
     {
-        for (int i = 0; i < preload; i++)
-            pool.Enqueue(Instantiate(prefab, transform));
+        // 자동 부모 할당
+        if (parent == null)
+        {
+            if (prefab != null && prefab.GetComponent<RectTransform>() != null)
+            {
+                // UI 프리팹이면 Canvas 찾아서 부모로 사용
+                var c = FindObjectOfType<Canvas>();
+                parent = c != null ? c.transform : null;
+            }
+
+            if (parent == null)
+            {
+                // World-space 용 컨테이너 생성
+                var go = GameObject.Find("EnemyHPBar_WorldContainer");
+                if (go == null) go = new GameObject("EnemyHPBar_WorldContainer");
+                parent = go.transform;
+            }
+        }
+
+        for (int i = 0; i < initialSize; i++)
+        {
+            var e = CreateInstance();
+            e.gameObject.SetActive(false);
+            _pool.Enqueue(e);
+        }
+    }
+
+    EnemyHPBar CreateInstance()
+    {
+        var inst = Instantiate(prefab);
+        // 부모가 RectTransform이면 worldPositionStays = false (UI)
+        bool isUI = inst.GetComponent<RectTransform>() != null && parent != null && parent.GetComponent<RectTransform>() != null;
+        inst.transform.SetParent(parent, !isUI); // UI: false(로컬 좌표), World: true(월드 유지)
+        return inst;
     }
 
     public EnemyHPBar Get()
     {
-        return pool.Count > 0 ? pool.Dequeue() : Instantiate(prefab, transform);
+        if (_pool.Count == 0) return CreateInstance();
+        var e = _pool.Dequeue();
+        e.gameObject.SetActive(true);
+        return e;
     }
 
     public void Return(EnemyHPBar bar)
     {
-        bar.Hide();
-        bar.Unbind();
-        pool.Enqueue(bar);
+        if (bar == null) return;
+        bar.gameObject.SetActive(false);
+        _pool.Enqueue(bar);
     }
 }

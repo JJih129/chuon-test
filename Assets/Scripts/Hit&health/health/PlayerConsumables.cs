@@ -1,3 +1,4 @@
+// Assets/Scripts/Hit&health/health/PlayerConsumables.cs
 using System;
 using UnityEngine;
 
@@ -44,7 +45,6 @@ public class PlayerConsumables : MonoBehaviour
         health.Heal(amount);
 
         OnAmpouleChanged?.Invoke(currentAmpoule, maxAmpoule);
-        // 유리 캡슐 파편/사운드 등은 여기서 트리거
     }
 
     public void Refill()

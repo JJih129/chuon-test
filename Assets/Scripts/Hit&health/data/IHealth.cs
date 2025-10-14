@@ -1,23 +1,36 @@
-// Assets/Scripts/Hit&health/IHealth.cs
+using System;
+using UnityEngine;
+
 public interface IHealth
 {
-    // ▶ 최대/현재 체력
-    int MaxHP { get; }
+    // 상태
     int CurrentHP { get; }
-
-    // ▶ 사망 여부
+    int MaxHP { get; }
     bool IsDead { get; }
+    bool IsStaggered { get; }
 
-    // ▶ 이벤트 (UI/바인더 호환)
-    //  - OnHPChanged(cur, max) : 대부분의 HP UI가 구독
-    //  - OnHealthChanged(cur, max) : 과거 호환용(남겨둠)
-    //  - OnDamaged(amount) : 피해 연출/플래시 등
-    //  - OnDied() : 사망 UI/처리
-    event System.Action<int, int> OnHPChanged;
-    event System.Action<int, int> OnHealthChanged;
-    event System.Action<int> OnDamaged;
-    event System.Action OnDied;
+    // 인빈시블
+    bool isInvincible { get; set; }
+    void SetInvincible(float seconds);
 
-    // ▶ 회복
+    // 데미지 적용 오버로드(프로젝트 내 여러 호출을 수용)
+    void ApplyDamage(float damage);
+    void ApplyDamage(int damage);
+
+    // 상세형 API (기존 코드에서 사용하던 시그니처)
+    void TakeDamage(int amount, HitType hitType, Vector3 hitPoint);
+
+    // 회복
     void Heal(int amount);
+
+    // 이벤트: (cur, max) 형태로 통일 — 기존 코드 호환을 위해 이름 2개 유지
+    event Action<int, int> OnHPChanged;
+    event Action<int, int> OnHealthChanged;
+
+    // 단발 데미지 이벤트들 (일부 스크립트가 구독)
+    event Action<int> OnDamaged;
+    event Action<int, HitType> OnDamagedWithType;
+
+    // 사망
+    event Action OnDied;
 }

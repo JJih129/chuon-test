@@ -2,37 +2,45 @@ using UnityEngine;
 
 public class EnemyHPBarPresenter : MonoBehaviour
 {
-    public Transform pivot; // LockPivot (없으면 자동 생성)
-    EnemyHealth health;
-    EnemyHPBar bar;
+    public EnemyHPBar bar;
+    IHealth boundHealth;
 
-    void Awake()
+    // 기존 단일 인자
+    public void Attach(IHealth health)
     {
-        health = GetComponent<EnemyHealth>();
-        if (!pivot)
-        {
-            var go = new GameObject("LockPivot");
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0, 1.3f, 0); // 기본 머리 높이
-            pivot = go.transform;
-        }
+        Attach(health, null, Vector3.up * 2f);
     }
 
-    public void Attach(EnemyHPBar hpBar)
+    // 추가된 오버로드: 타겟 Transform과 오프셋을 함께 지정 가능
+    public void Attach(IHealth health, Transform targetTransform, Vector3 offset)
     {
-        bar = hpBar;
-        bar.target = pivot;
-        bar.Bind(health);
-        bar.Show();
+        if (health == null) return;
+        boundHealth = health;
+        // bar 구성
+        if (bar != null)
+        {
+            bar.target = targetTransform;
+            bar.offset = offset;
+            bar.Show();
+        }
+
+        health.OnHPChanged += OnHPChanged;
+        health.OnHealthChanged += OnHPChanged;
     }
 
     public void Detach()
     {
-        if (bar != null)
+        if (boundHealth != null)
         {
-            bar.Hide();
-            bar.Unbind();
-            bar = null;
+            boundHealth.OnHPChanged -= OnHPChanged;
+            boundHealth.OnHealthChanged -= OnHPChanged;
+            boundHealth = null;
         }
+        if (bar != null) bar.Hide();
+    }
+
+    void OnHPChanged(int cur, int max)
+    {
+        if (bar != null) bar.OnHPChangedCallback(cur, max);
     }
 }

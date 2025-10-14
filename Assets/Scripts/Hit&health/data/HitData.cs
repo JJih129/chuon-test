@@ -1,12 +1,15 @@
 using UnityEngine;
 
-// °ø°Ý/ÇÇ°Ý Á¤º¸(µ¥¹ÌÁö, ¹æÇâ µî)¸¦ ÇÑ ¹ø¿¡ ³Ñ°ÜÁÖ´Â µ¥ÀÌÅÍ Å¬·¡½º
 public class HitData
 {
     public int damage;
     public Vector3 hitPoint;
     public Vector3 hitDirection;
     public GameObject attacker;
+    public bool isParryable = false;
+    public HitType hitType = HitType.Normal;
 
-    // (ÃßÈÄ ³Ë¹é, Å©¸®Æ¼ÄÃ, ÀÌÆåÆ® µî È®Àå °¡´É)
+    // íŽ¸ì˜ ì ‘ê·¼ìž
+    public Transform attackerTransform => attacker != null ? attacker.transform : null;
+    public string attackerName => attacker != null ? attacker.name : "null";
 }

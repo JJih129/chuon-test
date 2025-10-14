@@ -1,160 +1,195 @@
-using UnityEngine;
+// PlayerDamageReceiver.cs
+// ì„¤ëª…: ë°ë¯¸ì§€ ì²˜ë¦¬ + ì²´ë ¥ í˜¸ì¶œ + ì• ë‹ˆ ì¬ìƒ(AnimationLockManager ì‚¬ìš© ìš°ì„ ).
+using System;
 using System.Reflection;
-
-// ============================== ¡å º¯¼ö Çì´õ(Æ©´× °¡ÀÌµå) ¡å ==============================
-// [ÂüÁ¶]
-// guard : °¡µå/ÆĞ¸µ ·ÎÁ÷À» °¡Áø ÄÁÆ®·Ñ·¯ (PlayerGuardController)
-// healthBehaviour : ³×°¡ ÀÌ¹Ì ¾²´Â Ã¼·Â ÄÄÆ÷³ÍÆ®(¿¹: PlayerHealth, EnemyHealth µî)
-//   - IHealth°¡ ÀÖÀ¸¸é Ä³½ºÆÃÇØ¼­ ¾²°í,
-//   - IHealth°¡ ¾ø°Å³ª ½Ã±×´ÏÃ³°¡ ´Ù¸£¸é ¸®ÇÃ·º¼ÇÀ¸·Î ApplyDamage/Tak eDamage(int/float) Å½»ö.
-//
-// [ÇÇ°İ Ã³¸® ¿É¼Ç]
-// zeroDamageOnParry : ÆĞ¸µ ¼º°ø ½Ã µ¥¹ÌÁö¸¦ 0À¸·Î ¸¸µéÁö ¿©ºÎ
-// blockSparksOffset : °¡µå ½ºÆÄÅ© VFX/È÷Æ® ÀÌÆåÆ®°¡ ¶ß´Â À§Ä¡ º¸Á¤°ª
-// ========================================================================================
+using UnityEngine;
 
 [DisallowMultipleComponent]
 public class PlayerDamageReceiver : MonoBehaviour
 {
-    [Header("¢º ÂüÁ¶")]
-    [Tooltip("°¡µå/ÆĞ¸µ Á¦¾î ½ºÅ©¸³Æ®")]
-    public PlayerGuardController guard;
+    [Header("ì—°ê²° (Inspectorì— ì§€ì • ê°€ëŠ¥)")]
+    [Tooltip("ê°€ë“œ/íŒ¨ë§ ì»¨íŠ¸ë¡¤ëŸ¬ (PlayerGuardController ë“±). ë¹„ì›Œë‘ë©´ ìë™ íƒìƒ‰")]
+    public MonoBehaviour guard;
+    [Tooltip("ì²´ë ¥ ì²˜ë¦¬ ì»´í¬ë„ŒíŠ¸ (IHealth ë˜ëŠ” ApplyDamage ë“±). ë¹„ì›Œë‘ë©´ ìë™ íƒìƒ‰")]
+    public MonoBehaviour healthBehaviour;
 
-    [Tooltip("Ã¼·Â ÄÄÆ÷³ÍÆ®(¿¹: PlayerHealth/EnemyHealth). IHealth°¡ ÀÖ´Ù¸é Ä³½ºÆÃµÊ")]
-    public MonoBehaviour healthBehaviour; // »ç¿ëÀÚ°¡ ¾²´Â Health ½ºÅ©¸³Æ® Drag&Drop
+    [Header("ì• ë‹ˆë©”ì´ì…˜ (Hit ë ˆì´ì–´ì— Hit_Light / Hit_Heavy ìƒíƒœ)")]
+    [Tooltip("Hit ë ˆì´ì–´ ì´ë¦„")]
+    public string hitLayerName = "Hit";
+    [Tooltip("ê²½ë¯¸í•œ íˆíŠ¸ ìƒíƒœëª…")]
+    public string lightStateName = "Hit_Light";
+    [Tooltip("ê°•í•œ íˆíŠ¸ ìƒíƒœëª…")]
+    public string heavyStateName = "Hit_Heavy";
+    [Tooltip("Heavy íŒì • ì„ê³„ê°’")]
+    public float heavyThreshold = 10f;
+    [Tooltip("ì• ë‹ˆë©”ì´í„°(ë¹„ì›Œë‘ë©´ ìë™íƒìƒ‰)")]
+    public Animator animator;
 
-    [Header("¢º ÇÇ°İ Ã³¸® ¿É¼Ç")]
-    [Tooltip("ÆĞ¸µ ¼º°ø ½Ã µ¥¹ÌÁö¸¦ 0À¸·Î ¸¸µéÁö ¿©ºÎ")]
-    public bool zeroDamageOnParry = true;
+    [Header("ì• ë‹ˆ ì ê¸ˆ ë§¤ë‹ˆì €")]
+    [Tooltip("AnimationLockManagerë¥¼ ì§ì ‘ ì—°ê²° (ë¹„ì›Œë‘ë©´ ìë™íƒìƒ‰)")]
+    public AnimationLockManager animationLockManager;
 
-    [Tooltip("ºí·Ï/½ºÆÄÅ© ÀÌÆåÆ®¿ë À§Ä¡ º¸Á¤°ª")]
-    public Vector3 blockSparksOffset = new Vector3(0, 1.0f, 0);
+    [Header("ë™ì‘")]
+    [Tooltip("ê¸°ë³¸ì ìœ¼ë¡œ ë“¤ì–´ì˜¤ëŠ” íˆíŠ¸ê°€ íŒ¨ë¦¬ ê°€ëŠ¥í•œê°€")]
+    public bool defaultHitIsParryable = false;
+    [Tooltip("íŒ¨ë¦¬ë¡œ ì¸í•´ ë°ë¯¸ì§€ 0ì´ë©´ Hit ì• ë‹ˆ ì¬ìƒ ìƒëµ")]
+    public bool skipHitAnimOnParryZeroDamage = true;
 
-    // --- ³»ºÎ Ä³½Ã ---
-    object healthObj;                 // ½ÇÁ¦ Health ÀÎ½ºÅÏ½º
-    System.Type healthType;           // Å¸ÀÔ Ä³½Ã
-    // IHealth Ä³½ºÆÃ ¼º°ø ½Ã »ç¿ë
-    System.Type iHealthType;          // ÀÎÅÍÆäÀÌ½º Å¸ÀÔ Ä³½Ã
-    PropertyInfo propCurrentHP;       // IHealth.CurrentHP
-    PropertyInfo propMaxHP;           // IHealth.MaxHP
-    MethodInfo methodApplyDamage;     // IHealth.ApplyDamage(float)
-
-    // ¸®ÇÃ·º¼Ç Æú¹é(¸Ş¼­µå¸í/ÆÄ¶ó¹ÌÅÍ Å¸ÀÔ ´Ù¾çÇÑ °æ¿ì Ä¿¹ö)
-    MethodInfo reflectApplyDamageFloat;   // ApplyDamage(float)/TakeDamage(float)
-    MethodInfo reflectApplyDamageInt;     // ApplyDamage(int)/TakeDamage(int)
+    // ë¦¬í”Œë ‰ì…˜ ìºì‹œ
+    MethodInfo _miApplyFloat;
+    MethodInfo _miApplyInt;
+    MethodInfo _miTakeDamage;
 
     void Awake()
     {
-        if (guard == null) guard = GetComponent<PlayerGuardController>();
+        // ìë™ íƒìƒ‰
+        if (guard == null) guard = FindComponentByName("PlayerGuardController") ?? GetComponent<MonoBehaviour>();
+        if (healthBehaviour == null) AutoFindHealthBehaviour();
+        if (animator == null) animator = GetComponentInChildren<Animator>(true) ?? GetComponentInParent<Animator>(true) ?? GetComponent<Animator>();
+        if (animationLockManager == null) animationLockManager = GetComponentInChildren<AnimationLockManager>(true) ?? GetComponentInParent<AnimationLockManager>(true) ?? GetComponent<AnimationLockManager>();
 
-        healthObj = healthBehaviour != null ? (object)healthBehaviour : null;
-        if (healthObj == null)
-        {
-            Debug.LogWarning("[PlayerDamageReceiver] healthBehaviour ¹ÌÇÒ´ç. Ã¼·Â ¹İ¿µ ºÒ°¡.");
-            return;
-        }
+        CacheHealthMethods();
 
-        healthType = healthObj.GetType();
-
-        // 1) ±âÁ¸ IHealth°¡ ÇÁ·ÎÁ§Æ®¿¡ ÀÖÀ¸¸é ¡®±× IHealth¡¯·Î ½Ãµµ (³×ÀÓ½ºÆäÀÌ½º ºÒ¹®)
-        //    - ÀÎÅÍÆäÀÌ½º¸í¸¸À¸·Î Å½»ö
-        foreach (var itf in healthType.GetInterfaces())
-        {
-            if (itf.Name == "IHealth")
-            {
-                iHealthType = itf;
-                break;
-            }
-        }
-
-        if (iHealthType != null)
-        {
-            // IHealth ÇÁ·ÎÆÛÆ¼/¸Ş¼­µå ½Ã±×´ÏÃ³ Å½»ö (Å¸ÀÔÀÌ floatÀÏ ¼öµµ, intÀÏ ¼öµµ ÀÖ¾î ÈÄ¼Ó Ã³¸®¿¡¼­ Ä³½ºÆÃ)
-            propCurrentHP = iHealthType.GetProperty("CurrentHP");
-            propMaxHP = iHealthType.GetProperty("MaxHP");
-            methodApplyDamage = iHealthType.GetMethod("ApplyDamage");
-        }
-
-        // 2) Æú¹é: ¸Ş¼­µå¸í ´Ù¾çÇÑ ÄÉÀÌ½º Å½»ö (ApplyDamage/TakeDamage, float/int)
-        // float ¿ì¼±
-        reflectApplyDamageFloat =
-            healthType.GetMethod("ApplyDamage", new[] { typeof(float) }) ??
-            healthType.GetMethod("TakeDamage", new[] { typeof(float) });
-        reflectApplyDamageInt =
-            healthType.GetMethod("ApplyDamage", new[] { typeof(int) }) ??
-            healthType.GetMethod("TakeDamage", new[] { typeof(int) });
+        if (healthBehaviour == null) Debug.LogWarning("[PDR] healthBehaviour ë¯¸í• ë‹¹. ë°ë¯¸ì§€ ì ìš© ë¶ˆê°€.", this);
+        if (animator == null) Debug.LogWarning("[PDR] animator ë¯¸í• ë‹¹. Hit ì• ë‹ˆ ì¬ìƒ ë¶ˆê°€.", this);
+        if (animationLockManager == null) Debug.Log("[PDR] AnimationLockManager ë¯¸í• ë‹¹. PlayStateAndLock ì‚¬ìš© ë¶ˆê°€. í´ë°±ìœ¼ë¡œ ì§ì ‘ ì¬ìƒí•©ë‹ˆë‹¤.", this);
     }
 
-    /// <summary>
-    /// Àû È÷Æ®¹Ú½ºÀÇ ´ÜÀÏ ÁøÀÔÁ¡
-    /// attacker : °ø°İÀÚ Transform (¹æÇâ °è»ê¿ë)
-    /// baseDamage : ¿ø µ¥¹ÌÁö
-    /// attackIsParryable : ÀÌ °ø°İÀÌ ÆĞ¸µ °¡´ÉÇÑ ÆĞÅÏÀÎÁö ¿©ºÎ
-    /// hitPointWorld : ¸ÂÀº ¿ùµå À§Ä¡(¿É¼Ç)
-    /// </summary>
-    public void ReceiveHit(Transform attacker, float baseDamage, bool attackIsParryable, Vector3? hitPointWorld = null)
+    void AutoFindHealthBehaviour()
     {
-        if (healthObj == null)
+        MonoBehaviour found = null;
+        foreach (var mb in GetComponentsInChildren<MonoBehaviour>(true)) if (mb is IHealth) { found = mb; break; }
+        if (found == null) foreach (var mb in GetComponentsInParent<MonoBehaviour>(true)) if (mb is IHealth) { found = mb; break; }
+        if (found == null)
         {
-            Debug.LogWarning("[PlayerDamageReceiver] Health ÂüÁ¶ ¾øÀ½.");
-            return;
+            foreach (var mb in GetComponentsInChildren<MonoBehaviour>(true)) if (HasHealthLikeAPI(mb.GetType())) { found = mb; break; }
+            if (found == null) foreach (var mb in GetComponentsInParent<MonoBehaviour>(true)) if (HasHealthLikeAPI(mb.GetType())) { found = mb; break; }
         }
+        if (found != null) { healthBehaviour = found; Debug.Log("[PDR] healthBehaviour ìë™í• ë‹¹: " + found.GetType().Name, this); }
+    }
 
-        // °ø°İÀÚ¡æÇÃ·¹ÀÌ¾î ¹æÇâ
-        Vector3 attackerToPlayer = (transform.position - attacker.position).normalized;
+    MonoBehaviour FindComponentByName(string typeName)
+    {
+        if (string.IsNullOrEmpty(typeName)) return null;
+        foreach (var mb in GetComponentsInChildren<MonoBehaviour>(true)) { if (mb != null && string.Equals(mb.GetType().Name, typeName, StringComparison.OrdinalIgnoreCase)) return mb; }
+        foreach (var mb in GetComponentsInParent<MonoBehaviour>(true)) { if (mb != null && string.Equals(mb.GetType().Name, typeName, StringComparison.OrdinalIgnoreCase)) return mb; }
+        return null;
+    }
 
-        // Guard ·ÎÁ÷À¸·Î ÃÖÁ¾ µ¥¹ÌÁö »êÃâ
-        float finalDamage = baseDamage;
+    bool HasHealthLikeAPI(Type t)
+    {
+        if (t == null) return false;
+        if (typeof(IHealth).IsAssignableFrom(t)) return true;
+        if (t.GetMethod("ApplyDamage", new[] { typeof(float) }) != null) return true;
+        if (t.GetMethod("ApplyDamage", new[] { typeof(int) }) != null) return true;
+        if (t.GetMethod("TakeDamage", new[] { typeof(int), typeof(HitType), typeof(Vector3) }) != null) return true;
+        return false;
+    }
+
+    void CacheHealthMethods()
+    {
+        if (healthBehaviour == null) return;
+        var t = healthBehaviour.GetType();
+        _miApplyFloat = t.GetMethod("ApplyDamage", new[] { typeof(float) });
+        _miApplyInt = t.GetMethod("ApplyDamage", new[] { typeof(int) });
+        _miTakeDamage = t.GetMethod("TakeDamage", new[] { typeof(int), typeof(HitType), typeof(Vector3) });
+        Debug.Log($"[PDR] Cached health methods: ApplyFloat={_miApplyFloat!=null} ApplyInt={_miApplyInt!=null} TakeDamage={_miTakeDamage!=null}", this);
+    }
+
+    // ì™¸ë¶€ì—ì„œ íˆíŠ¸ ì „ë‹¬ (HitData êµ¬ì¡°ì— ë§ì¶° ì‚¬ìš©)
+    public void ReceiveHit(HitData hit)
+    {
+        if (hit == null) { Debug.LogWarning("[PDR] ReceiveHit null"); return; }
+
+        GameObject attacker = hit.attacker;
+        Debug.Log($"[PDR] ReceiveHit called. baseDamage={hit.damage} attacker={(attacker? attacker.name : "null")}", this);
+
+        Transform attackerTransform = attacker != null ? attacker.transform : null;
+        bool attackIsParryable = hit.isParryable || defaultHitIsParryable;
+        Vector3 dir = (attackerTransform != null) ? (transform.position - attackerTransform.position).normalized : Vector3.forward;
+        float finalDamage = hit.damage;
+
+        // guard ì²˜ë¦¬ (ResolveIncomingAttack ê°€ëŠ¥)
         if (guard != null)
-            finalDamage = guard.ResolveIncomingAttack(attackerToPlayer, attackIsParryable, baseDamage);
-
-        if (zeroDamageOnParry && finalDamage < Mathf.Epsilon)
-            finalDamage = 0f;
-
-        // Ã¼·Â ¹İ¿µ
-        ApplyDamageFlexible(finalDamage);
-
-        // µğ¹ö±×/ÀÌÆåÆ®
-        if (hitPointWorld.HasValue)
-            Debug.DrawRay(hitPointWorld.Value, Vector3.up * 0.2f, Color.yellow, 0.25f);
-    }
-
-    // ´Ù¾çÇÑ IHealth/Health ½Ã±×´ÏÃ³ ´ëÀÀ
-    void ApplyDamageFlexible(float dmg)
-    {
-        if (dmg <= 0f) return;
-
-        // 1) IHealth°¡ ÀÖ°í ApplyDamage 1°³ ÆÄ¶ó¹ÌÅÍ¶ó¸é Å¸ÀÔ °Ë»ç ÈÄ È£Ãâ
-        if (iHealthType != null && methodApplyDamage != null)
         {
-            var p = methodApplyDamage.GetParameters();
-            if (p.Length == 1)
+            var mi = guard.GetType().GetMethod("ResolveIncomingAttack", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (mi != null)
             {
-                if (p[0].ParameterType == typeof(float))
+                try
                 {
-                    methodApplyDamage.Invoke(healthObj, new object[] { dmg });
-                    return;
+                    var result = mi.Invoke(guard, new object[] { dir, attackIsParryable, (float)hit.damage });
+                    if (result is float f) finalDamage = f;
+                    else if (result is double d) finalDamage = (float)d;
+                    else if (result is int i) finalDamage = i;
+                    Debug.Log($"[PDR] guard.ResolveIncomingAttack returned {finalDamage}", this);
                 }
-                if (p[0].ParameterType == typeof(int))
-                {
-                    methodApplyDamage.Invoke(healthObj, new object[] { Mathf.RoundToInt(dmg) });
-                    return;
-                }
+                catch (Exception ex) { Debug.LogWarning("[PDR] guard.ResolveIncomingAttack invocation failed: " + ex); }
             }
         }
 
-        // 2) Æú¹é: Å¬·¡½º Á÷Á¢ Å½»ö
-        if (reflectApplyDamageFloat != null)
+        if (skipHitAnimOnParryZeroDamage && finalDamage <= Mathf.Epsilon)
         {
-            reflectApplyDamageFloat.Invoke(healthObj, new object[] { dmg });
-            return;
-        }
-        if (reflectApplyDamageInt != null)
-        {
-            reflectApplyDamageInt.Invoke(healthObj, new object[] { Mathf.RoundToInt(dmg) });
+            Debug.Log("[PDR] finalDamage <= 0 : parried/blocked. no damage applied.", this);
             return;
         }
 
-        Debug.LogWarning($"[PlayerDamageReceiver] Health¿¡ È£Ãâ °¡´ÉÇÑ Apply/TakeDamage°¡ ¾ø½À´Ï´Ù. Å¸ÀÔ={healthType.Name}");
+        // ì²´ë ¥ ì ìš©
+        bool applied = false;
+        if (healthBehaviour != null)
+        {
+            if (healthBehaviour is IHealth ihealth)
+            {
+                if (Mathf.Approximately(finalDamage, Mathf.Round(finalDamage))) ihealth.ApplyDamage((int)Mathf.Round(finalDamage));
+                else ihealth.ApplyDamage(finalDamage);
+                applied = true;
+            }
+            else if (_miApplyFloat != null) { _miApplyFloat.Invoke(healthBehaviour, new object[] { finalDamage }); applied = true; }
+            else if (_miApplyInt != null) { _miApplyInt.Invoke(healthBehaviour, new object[] { Mathf.RoundToInt(finalDamage) }); applied = true; }
+            else if (_miTakeDamage != null) { _miTakeDamage.Invoke(healthBehaviour, new object[] { Mathf.RoundToInt(finalDamage), hit.hitType, hit.hitPoint }); applied = true; }
+        }
+
+        if (!applied) Debug.LogWarning("[PDR] Health ì²˜ë¦¬ ë¶ˆê°€.", this);
+        else Debug.Log("[PDR] Applied damage: " + finalDamage, this);
+
+        // ì• ë‹ˆ ì¬ìƒ: AnimationLockManager ìš°ì„ . ì—†ìœ¼ë©´ ì§ì ‘ ì¬ìƒ(ê¸°ì¡´ ë°©ì‹).
+        string chosenState = (finalDamage >= heavyThreshold) ? heavyStateName : lightStateName;
+        if (animationLockManager != null)
+        {
+            animationLockManager.PlayStateAndLock(hitLayerName, chosenState);
+        }
+        else
+        {
+            PlayHitDirect(chosenState);
+        }
+    }
+
+    void PlayHitDirect(string chosenState)
+    {
+        if (animator == null)
+        {
+            Debug.Log("[PDR] animator ì—†ë‹¤. Hit ì¬ìƒ ìŠ¤í‚µ", this);
+            return;
+        }
+
+        int layerIndex = animator.GetLayerIndex(hitLayerName);
+        if (layerIndex < 0) layerIndex = 0;
+
+        // ê°•ì œ ê°€ì¤‘ì¹˜ (ì„ì‹œ)
+        float orig = animator.GetLayerWeight(layerIndex);
+        animator.SetLayerWeight(layerIndex, 1f);
+
+        int stateHash = Animator.StringToHash(chosenState);
+        animator.Play(stateHash, layerIndex, 0f);
+        animator.Update(0f);
+
+        // ë³µêµ¬: ì½”ë£¨í‹´ìœ¼ë¡œ ë‹¤ìŒ í”„ë ˆì„ì—ì„œ ì›ë³µ
+        StartCoroutine(RestoreLayerWeightNextFrame(layerIndex, orig));
+        Debug.Log($"[PDR] DirectPlay Hit ì• ë‹ˆ ì¬ìƒ: {chosenState} on layer {layerIndex}", this);
+    }
+
+    System.Collections.IEnumerator RestoreLayerWeightNextFrame(int layerIndex, float orig)
+    {
+        yield return null;
+        animator.SetLayerWeight(layerIndex, orig);
     }
 }

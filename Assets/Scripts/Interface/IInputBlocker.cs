@@ -1,11 +1,14 @@
-// 파일명: IInputBlocker.cs
-// 역할: 플레이어 입력을 전역으로 차단/해제하는 공용 인터페이스
-
+// IInputBlocker.cs
+// 단순 전역/로컬 입력 차단 인터페이스 (프로젝트 전반에서 이 시그니처 사용)
 public interface IInputBlocker
 {
-    // ===== 변수 헤더(설명) =====
-    // true: 모든 입력 차단, false: 입력 허용
-    void BlockAll(bool on);
-    // 현재 입력 차단 여부 확인
-    bool IsBlocked();
+    // 전체 입력 차단 플래그(읽기전용)
+    bool IsBlocked { get; }
+
+    // 로컬 차단 (예: 특정 행동 동안만)
+    void SetBlocked(bool blocked);
+
+    // 전체 차단 카운터용(중첩 호출 지원)
+    void BlockAll();
+    void BlockAll(bool block);
 }

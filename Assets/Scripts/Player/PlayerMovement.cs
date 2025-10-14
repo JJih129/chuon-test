@@ -148,7 +148,8 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        // ── 상단 상태 가드 ───────────────────────────────────────────
+        if (PlayerLockManager.IsLocked) return;
+// ── 상단 상태 가드 ───────────────────────────────────────────
         bool isAttacking = GetComponent<PlayerCombatController>()?.IsAttacking ?? false;
 
         if (externalLocked || isAttacking)

@@ -1,25 +1,60 @@
-// 파일명: UltimateInputRouter.cs
-// 역할: R키를 PlayerUltimateController.TryActivate()로 연결 (임시/프로토)
+using System;
 using UnityEngine;
 
+// 간단한 입력 라우터: InputBlocker 확인, Guard 입력을 PlayerGuardController로 라우팅
 [DisallowMultipleComponent]
 public class UltimateInputRouter : MonoBehaviour
 {
-    [Header("입력 키 | 궁극기 발동 키")]
-    public KeyCode ultimateKey = KeyCode.R;
+    [Tooltip("Assign a component that implements IInputBlocker (or null).")]
+    public MonoBehaviour inputBlockerBehaviour;
 
-    PlayerUltimateController _ult;
+    [Tooltip("Assign the PlayerGuardController (used to call StartGuard/EndGuard)")]
+    public PlayerGuardController guardController;
 
-    void Awake() => _ult = GetComponent<PlayerUltimateController>();
+    IInputBlocker inputBlocker;
+
+    void Awake()
+    {
+        if (inputBlockerBehaviour != null && inputBlockerBehaviour is IInputBlocker)
+        {
+            inputBlocker = (IInputBlocker)inputBlockerBehaviour;
+        }
+        else
+        {
+            if (inputBlockerBehaviour != null)
+                Debug.LogWarning($"UltimateInputRouter: inputBlockerBehaviour isn't an IInputBlocker.");
+            inputBlocker = null;
+        }
+
+        if (guardController == null)
+        {
+            // try to find on same GameObject
+            guardController = GetComponent<PlayerGuardController>() ?? FindObjectOfType<PlayerGuardController>();
+            if (guardController == null) Debug.LogWarning("UltimateInputRouter: guardController not assigned/found.");
+        }
+    }
 
     void Update()
     {
-        if (_ult == null) return;
-        // 입력이 전역 차단되었으면 무시(선택)
-        var blk = GetComponent<IInputBlocker>();
-        if (blk != null && blk.IsBlocked()) return;
+        // block inputs if inputBlocker says so
+        if (inputBlocker != null && inputBlocker.IsBlocked) return;
 
-        if (Input.GetKeyDown(ultimateKey))
-            _ult.TryActivate();
+        // Example guard input handling using E key (change to your input system)
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            if (guardController != null)
+            {
+                guardController.StartGuard();
+            }
+            else Debug.LogWarning("UltimateInputRouter: StartGuard called but guardController == null");
+        }
+
+        if (Input.GetKeyUp(KeyCode.E))
+        {
+            if (guardController != null)
+            {
+                guardController.EndGuard();
+            }
+        }
     }
 }

@@ -1,49 +1,22 @@
+// (ì›ë³¸ì„ í¬ê²Œ ë³€ê²½í•˜ì§€ ì•Šê³  ì•ˆì „ì„±ë§Œ ë³´ê°•)
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-// ÅëÇÕ ½ºÅ©¸³Æ®: ±ÙÁ¢ ±â¹İ º¸½º UI °ü¸®±â
-// - Àû ÇÁ¸®ÆÕ¿¡ ProximityBossUI¸¦ ºÙÀÌ¸é ÀÚµ¿ µî·ÏµË´Ï´Ù.
-// - World-space HP ¹Ù´Â EnemyHPBarPool¿¡¼­ °¡Á®¿Í Àç»ç¿ëÇÕ´Ï´Ù.
-// - »ó´Ü °íÁ¤ º¸½º HUD´Â BossHUD.Bind(IHealth)¸¦ »ç¿ëÇØ ¹ÙÀÎµùÇÕ´Ï´Ù.
-// ÁÖÀÇ: ÀÌ ÆÄÀÏ¿¡¼­´Â ILockOnController, IHealth µîÀÇ ÀÎÅÍÆäÀÌ½º¸¦ ÀçÁ¤ÀÇÇÏÁö ¾Ê½À´Ï´Ù.
-
 public class IntegratedBossUI : MonoBehaviour
 {
-    // ===================== º¯¼ö Çì´õ(ÇÑ±Û ¼³¸í) =====================
-    [Header("¢º °ø¿ë ÂüÁ¶ | ÇÁ·ÎÁ§Æ®¿¡ ÀÌ¹Ì ÀÖ´Â ÄÄÆ÷³ÍÆ®µéÀ» ¿¬°áÇÏ¼¼¿ä")]
-    [Tooltip("ÇÃ·¹ÀÌ¾î Transform. °Å¸® °è»ê ±âÁØÀÔ´Ï´Ù.")]
     public Transform player;
-
-    [Tooltip("¸ŞÀÎ Ä«¸Ş¶ó(ºôº¸µå Á¤·Ä¿ë). ºñ¿öµÎ¸é Camera.main »ç¿ë.")]
     public Camera mainCamera;
-
-    [Tooltip("EnemyHPBarPool ÀÎ½ºÅÏ½º. World-space HP¹Ù¸¦ °¡Á®¿Ã Ç®.")]
     public EnemyHPBarPool hpBarPool;
-
-    [Tooltip("»ó´Ü °íÁ¤ Boss HUD ·çÆ®(¿¹: Canvas¿¡ ÀÖ´Â HUD Root)")]
     public GameObject topBossHUDRoot;
-
-    [Tooltip("»ó´Ü BossHUD ÄÄÆ÷³ÍÆ®. topBossHUDRoot¿¡ ÇÒ´çµÈ ÄÄÆ÷³ÍÆ®.")]
     public BossHUD topBossHUD;
 
-    [Header("¢º °Å¸®/³ëÃâ ¼³Á¤")]
-    [Tooltip("World-space UI³ª »ó´Ü HUD°¡ Ç¥½ÃµÇ´Â ÃÖ´ë °Å¸®(¹ÌÅÍ)")]
     public float showDistance = 18f;
-
-    [Tooltip("¼û±è ÀÓ°è¿¡ ´õÇØÁÙ ¿©À¯°Å¸®(¹ÌÅÍ). hideDistance = showDistance + hideHysteresis")]
     public float hideHysteresis = 2f;
-
-    [Tooltip("°Å¸® Ã¼Å© Æú¸µ ÁÖ±â(ÃÊ). 0ÀÌ¸é ¸Å ÇÁ·¹ÀÓ Ã¼Å©(¼º´É ÁÖÀÇ)")]
     public float pollInterval = 0.12f;
-
-    [Tooltip("¶ô¿Â »óÅÂÀÏ ¶§¸¸ Ç¥½ÃÇÏ·Á¸é true·Î ¼³Á¤. false¸é °Å¸®¸¸À¸·Î ÆÇÁ¤.")]
     public bool requireLockOn = false;
-
-    [Tooltip("µ¿½Ã¿¡ º¸ÀÏ ¼ö ÀÖ´Â World-space HP¹ÙÀÇ ÃÖ´ë °³¼ö. ¼º´É/°¡µ¶¼º Á¶Àı¿ë.")]
     public int maxVisibleWorldBars = 3;
 
-    // ===================== ³»ºÎ »óÅÂ =====================
     static IntegratedBossUI _instance;
     List<ProximityBossUI> registered = new List<ProximityBossUI>();
     Dictionary<ProximityBossUI, EnemyHPBar> activeBars = new Dictionary<ProximityBossUI, EnemyHPBar>();
@@ -58,13 +31,11 @@ public class IntegratedBossUI : MonoBehaviour
         _instance = this;
 
         if (mainCamera == null) mainCamera = Camera.main;
-        // using ¾øÀ½ Ãß°¡ ÇÊ¿ä ¾øÀ½
         lockOnController = FindObjectOfType<SimpleLockOnController>() as ILockOnController;
 
-
         showSqr = showDistance * showDistance;
-        hideSqr = (showDistance + Mathf.Max(0f, hideHysteresis));
-        hideSqr *= hideSqr;
+        float hideDist = showDistance + Mathf.Max(0f, hideHysteresis);
+        hideSqr = hideDist * hideDist;
 
         if (topBossHUDRoot != null) topBossHUDRoot.SetActive(false);
 
@@ -76,7 +47,6 @@ public class IntegratedBossUI : MonoBehaviour
         if (_instance == this) _instance = null;
     }
 
-    // µî·Ï API. Àû ÇÁ¸®ÆÕÀÇ ProximityBossUI°¡ È£Ãâ.
     public static void Register(ProximityBossUI comp)
     {
         if (_instance == null) return;
@@ -86,10 +56,13 @@ public class IntegratedBossUI : MonoBehaviour
     {
         if (_instance == null) return;
         _instance.registered.Remove(comp);
-        // ¹Ù ¹İÈ¯
         if (_instance.activeBars.TryGetValue(comp, out var bar))
         {
-            _instance.hpBarPool?.Return(bar);
+            if (_instance.hpBarPool != null)
+            {
+                bar.ResetForPool();
+                _instance.hpBarPool.Return(bar);
+            }
             _instance.activeBars.Remove(comp);
         }
     }
@@ -108,7 +81,6 @@ public class IntegratedBossUI : MonoBehaviour
     {
         if (player == null) return;
 
-        // ÈÄº¸ Á¤·Ä: °Å¸® ±âÁØ
         var list = new List<(ProximityBossUI comp, float sqr, float dist)>();
         foreach (var c in registered)
         {
@@ -119,23 +91,22 @@ public class IntegratedBossUI : MonoBehaviour
         }
         list.Sort((a, b) => a.sqr.CompareTo(b.sqr));
 
-        // ¶ô¿Â »óÅÂ È®ÀÎ
         Transform currentLock = lockOnController != null ? lockOnController.GetCurrentTarget() : null;
 
-        // World bars: »óÀ§ N°³ ³ëÃâ
         int shownWorld = 0;
-        var toShowTop = list.Count > 0 ? list[0].comp : null; // ÃÖ¿ì¼± Å¸°Ù
+        var toShowTop = list.Count > 0 ? list[0].comp : null;
 
         for (int i = 0; i < list.Count; i++)
         {
             var entry = list[i];
+            if (entry.comp == null) continue;
+
             bool lockok = true;
             if (requireLockOn && currentLock != entry.comp.transform) lockok = false;
 
             bool withinShow = entry.sqr <= showSqr;
             bool withinHide = entry.sqr <= hideSqr;
 
-            // ³ëÃâ °áÁ¤: ¶ô¿Â Á¶°Ç Åë°ú && °Å¸® Á¶°Ç
             bool shouldShowWorld = lockok && withinShow && shownWorld < maxVisibleWorldBars;
 
             if (shouldShowWorld)
@@ -145,10 +116,9 @@ public class IntegratedBossUI : MonoBehaviour
             }
             else
             {
-                // È÷½ºÅ×¸®½Ã½º: ÀÌ¹Ì º¸ÀÌ´Â ¹Ù´Â hideSqr ±âÁØÀ¸·Î À¯Áö
                 if (activeBars.ContainsKey(entry.comp) && withinHide && lockok)
                 {
-                    // À¯Áö
+                    // ìœ ì§€
                 }
                 else
                 {
@@ -157,7 +127,6 @@ public class IntegratedBossUI : MonoBehaviour
             }
         }
 
-        // Top HUD: ÃÖ¿ì¼± Å¸°Ù¸¸ ¹ÙÀÎµù
         if (toShowTop != null)
         {
             bool lockok = true;
@@ -169,17 +138,15 @@ public class IntegratedBossUI : MonoBehaviour
                 return;
             }
         }
-        // Á¶°Ç ¹ÌÃæÁ·ÀÌ¸é ¼û±è
         UnbindTopHUD();
     }
 
     void ShowWorldBar(ProximityBossUI comp)
     {
-        if (activeBars.ContainsKey(comp)) return; // ÀÌ¹Ì º¸ÀÓ
+        if (comp == null || activeBars.ContainsKey(comp)) return;
         if (hpBarPool == null) return;
 
         var bar = hpBarPool.Get();
-        // ¹ÙÀÎµù: IHealth ±â´ë
         var ih = comp.healthBehaviour as IHealth;
         if (ih != null)
         {
@@ -187,18 +154,20 @@ public class IntegratedBossUI : MonoBehaviour
         }
         else
         {
-            // ½Ã±×´ÏÃ³°¡ ´Ù¸£¸é À¯¿¬ÇÏ°Ô Ã³¸® ½Ãµµ (¿¹: component¿¡ ApplyDamage µî)
-            // ¹ÙÀÎµùÀÌ ½ÇÆĞÇÏ¸é ¹İÈ¯
+            // ë°”ì¸ë”© ì‹¤íŒ¨ ì‹œ ì•ˆì „í•˜ê²Œ í’€ì— ë°˜í™˜
+            bar.ResetForPool();
+            hpBarPool.Return(bar);
+            return;
         }
         bar.target = comp.pivot ? comp.pivot : comp.transform;
         bar.offset = comp.worldOffset;
         bar.Show();
-
         activeBars[comp] = bar;
     }
 
     void HideWorldBar(ProximityBossUI comp)
     {
+        if (comp == null) return;
         if (!activeBars.ContainsKey(comp)) return;
         var bar = activeBars[comp];
         hpBarPool?.Return(bar);
@@ -219,32 +188,5 @@ public class IntegratedBossUI : MonoBehaviour
         if (topBossHUD == null || topBossHUDRoot == null) return;
         topBossHUD.Unbind();
         topBossHUDRoot.SetActive(false);
-    }
-}
-
-
-// -------------------- Àû ÇÁ¸®ÆÕ¿¡ ºÙÀÌ´Â ÄÄÆ÷³ÍÆ® --------------------
-public class ProximityBossUI : MonoBehaviour
-{
-    [Header("¢º Å¸°Ù ÇÇ¹ş | ¸Ó¸® À§ À§Ä¡ µî")]
-    [Tooltip("World-space HP¹Ù°¡ ºÙÀ» Transform. ºñ¿öµÎ¸é ÀÌ ¿ÀºêÁ§Æ® »ç¿ë.")]
-    public Transform pivot;
-
-    [Header("¢º Ã¼·Â ÄÄÆ÷³ÍÆ®(¿¬µ¿)")]
-    [Tooltip("IHealth¸¦ ±¸ÇöÇÑ ÄÄÆ÷³ÍÆ®¸¦ µå·¡±×ÇÏ¼¼¿ä. ÀÎÅÍÆäÀÌ½º°¡ ¾Æ´Ï´õ¶óµµ ÀÌ¸§ÀÌ À¯»çÇÏ¸é Bind ½ÃµµÇÕ´Ï´Ù.")]
-    public MonoBehaviour healthBehaviour;
-
-    [Header("¢º ¿ùµå¹Ù ¿ÀÇÁ¼Â")]
-    [Tooltip("¿ùµå HP¹ÙÀÇ ·ÎÄÃ ¿ÀÇÁ¼Â(¸Ó¸® À§ ¸¶Áø µî)")]
-    public Vector3 worldOffset = new Vector3(0f, 1.0f, 0f);
-
-    void OnEnable()
-    {
-        if (pivot == null) pivot = this.transform;
-        IntegratedBossUI.Register(this);
-    }
-    void OnDisable()
-    {
-        IntegratedBossUI.Unregister(this);
     }
 }

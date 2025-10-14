@@ -1,61 +1,51 @@
+using System;
 using UnityEngine;
-
-// BossHealth.cs
-// IHealth를 올바르게 구현한 보스 체력 컴포넌트
 
 public class BossHealth : MonoBehaviour, IHealth
 {
-    [Header("▶ 체력 설정")]
-    [Tooltip("보스 최대 체력")]
-    [SerializeField] int maxHP = 100;              // 인스펙터 노출용 내부 필드
-    [Tooltip("시작 시 현재 체력 (0이면 MaxHP로 세팅됨)")]
-    [SerializeField] int startHP = 0;
+    public int maxHP = 300;
+    public int currentHP = 300;
+    public GameObject hitEffectPrefab;
 
-    [Header("▶ 디버그/옵션")]
-    [Tooltip("죽었을 때 오브젝트 비활성화할지 여부")]
-    public bool disableOnDeath = false;
+    public bool isInvincible { get; set; } = false;
+    public bool IsStaggered { get; private set; } = false;
 
-    // 인터페이스 프로퍼티 구현 (MaxHP는 읽기 전용 프로퍼티)
+    public event Action<int, int> OnHPChanged;
+    public event Action<int, int> OnHealthChanged;
+    public event Action<int> OnDamaged;
+    public event Action<int, HitType> OnDamagedWithType;
+    public event Action OnDied;
+
+    public int CurrentHP => currentHP;
     public int MaxHP => maxHP;
-    public int CurrentHP { get; private set; }
-    public bool IsDead { get; private set; }
+    public bool IsDead => currentHP <= 0;
 
-    // IHealth 이벤트들
-    public event System.Action<int, int> OnHPChanged;
-    public event System.Action<int, int> OnHealthChanged;
-    public event System.Action<int> OnDamaged;
-    public event System.Action OnDied;
+    public void ApplyDamage(float damage) => ApplyDamage(Mathf.RoundToInt(damage));
+    public void ApplyDamage(int damage) => TakeDamage(damage, HitType.Heavy, transform.position);
 
-    void Awake()
+    public void TakeDamage(int amount, HitType hitType, Vector3 hitPoint)
     {
-        CurrentHP = (startHP <= 0) ? MaxHP : Mathf.Clamp(startHP, 0, MaxHP);
-        IsDead = CurrentHP <= 0;
+        if (isInvincible) return;
+
+        currentHP -= amount;
+        if (currentHP < 0) currentHP = 0;
+
+        if (hitEffectPrefab != null) Instantiate(hitEffectPrefab, hitPoint, Quaternion.identity);
+
+        OnHPChanged?.Invoke(currentHP, maxHP);
+        OnHealthChanged?.Invoke(currentHP, maxHP);
+        OnDamaged?.Invoke(amount);
+        OnDamagedWithType?.Invoke(amount, hitType);
+
+        if (currentHP <= 0) OnDied?.Invoke();
     }
 
-    // 회복
     public void Heal(int amount)
     {
-        if (IsDead || amount <= 0) return;
-        CurrentHP = Mathf.Clamp(CurrentHP + amount, 0, MaxHP);
-        OnDamaged?.Invoke(0); // 필요 없다면 제거
-        OnHPChanged?.Invoke(CurrentHP, MaxHP);
-        OnHealthChanged?.Invoke(CurrentHP, MaxHP);
+        currentHP = Mathf.Clamp(currentHP + amount, 0, maxHP);
+        OnHPChanged?.Invoke(currentHP, maxHP);
+        OnHealthChanged?.Invoke(currentHP, maxHP);
     }
 
-    // 데미지 적용
-    public void ApplyDamage(int amount)
-    {
-        if (IsDead || amount <= 0) return;
-        CurrentHP = Mathf.Clamp(CurrentHP - amount, 0, MaxHP);
-        OnDamaged?.Invoke(amount);
-        OnHPChanged?.Invoke(CurrentHP, MaxHP);
-        OnHealthChanged?.Invoke(CurrentHP, MaxHP);
-
-        if (CurrentHP <= 0 && !IsDead)
-        {
-            IsDead = true;
-            OnDied?.Invoke();
-            if (disableOnDeath) gameObject.SetActive(false);
-        }
-    }
+    public void SetInvincible(float seconds) { isInvincible = true; /* 媛꾨떒 泥섎━ */ }
 }

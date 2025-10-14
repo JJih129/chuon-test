@@ -2,26 +2,24 @@ using UnityEngine;
 
 public class BossUIBillboard : MonoBehaviour
 {
-    // [¸ñÇ¥ Ä«¸Þ¶ó] ÀÌ Ä«¸Þ¶ó ¹æÇâÀ¸·Î UI°¡ Á¤¸é À¯Áö.
-    [SerializeField, Tooltip("ºôº¸µå ´ë»óÀ¸·Î »ç¿ëÇÒ Ä«¸Þ¶ó")]
+    [SerializeField, Tooltip("ë¹Œë³´ë“œ ëŒ€ìƒìœ¼ë¡œ ì‚¬ìš©í•  ì¹´ë©”ë¼")]
     private Camera targetCamera;
 
-    // [Ãà °íÁ¤] YÃà¸¸ È¸ÀüÇÒÁö ¿©ºÎ. true¸é ·Ñ/ÇÇÄ¡´Â °íÁ¤ÇÏ°í ¿ä¸¸ Àû¿ë.
-    [SerializeField, Tooltip("¼öÆò(Y) È¸Àü¸¸ Àû¿ëÇÒÁö ¿©ºÎ")]
+    [SerializeField, Tooltip("ìˆ˜í‰(Y) íšŒì „ë§Œ ì ìš©í• ì§€ ì—¬ë¶€")]
     private bool yOnly = true;
 
-    private void LateUpdate()
+    void Awake()
     {
-        if (targetCamera == null)
-        {
-            if (Camera.main == null) return;
-            targetCamera = Camera.main;
-        }
+        if (targetCamera == null) targetCamera = Camera.main;
+    }
 
-        Vector3 dir = targetCamera.transform.position - transform.position;
+    void LateUpdate()
+    {
+        if (targetCamera == null) return;
+        // ì¹´ë©”ë¼ë¥¼ í–¥í•´ ì•žë©´ì´ ë³´ì´ë„ë¡ ì„¤ì • (ì •ë©´ í•­ìƒ ì¹´ë©”ë¼ë¥¼ ë°”ë¼ë´„)
+        Vector3 dir = transform.position - targetCamera.transform.position;
         if (yOnly) dir.y = 0f;
-
-        if (dir.sqrMagnitude > 0.0001f)
-            transform.rotation = Quaternion.LookRotation(-dir.normalized, Vector3.up);
+        if (dir.sqrMagnitude <= 0.0001f) return;
+        transform.rotation = Quaternion.LookRotation(dir);
     }
 }

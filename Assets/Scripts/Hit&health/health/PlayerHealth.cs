@@ -1,119 +1,103 @@
-// Assets/Scripts/Hit&health/health/PlayerHealth.cs
+using System;
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public class PlayerHealth : MonoBehaviour, IHealth
 {
-    [Header("▶ 최대 체력(HP)")]
-    [SerializeField] private int maxHP = 100;
+    [Header("Player HP")]
+    public int maxHP = 100;
+    public int currentHP = 100;
 
-    [Header("▶ 시작 시 현재 체력(0 이하이면 최대치로 시작)")]
-    [SerializeField] private int startHP = 0;
+    [Header("Invincible")]
+    [SerializeField] bool _isInvincible = false;
+    public bool isInvincible
+    {
+        get => _isInvincible;
+        set
+        {
+            _isInvincible = value;
+            if (!_isInvincible) invincibleTimer = 0f;
+        }
+    }
+    float invincibleTimer = 0f;
 
-    [Header("▶ 무적 여부(피해 무시)")]
-    public bool isInvincible = false;
+    public float invincibleDuration = 1.0f;
 
-    [Header("▶ 경미/강 피격 시 경직(Stagger) 유지 시간(초)")]
-    [SerializeField] private float staggerSecondsLight = 0.25f;
-    [SerializeField] private float staggerSecondsHeavy = 0.55f;
+    [Header("Effects")]
+    public GameObject hitEffectPrefab;
+    public CameraShake cameraShake;
 
-    public int MaxHP => maxHP;
+    // EVENTS
+    public event Action<int, int> OnHPChanged;
+    public event Action<int, int> OnHealthChanged;
+    public event Action<int> OnDamaged;
+    public event Action<int, HitType> OnDamagedWithType;
+    public event Action OnDied;
+
+    // PROPS
     public int CurrentHP => currentHP;
-    public bool IsDead => isDead;
-
-    // === UI/바인더 이벤트 (IHealth) ===
-    public event System.Action<int, int> OnHPChanged;
-    public event System.Action<int, int> OnHealthChanged;
-    public event System.Action<int> OnDamaged;
-    public event System.Action OnDied;
-
-    private int currentHP;
-    private bool isDead;
-    public bool IsStaggered { get; private set; }
-    private float staggerEndRealtime = 0f;
-
-    private PlayerCombatController combat;
+    public int MaxHP => maxHP;
+    public bool IsDead => currentHP <= 0;
+    public bool IsStaggered { get; private set; } = false;
 
     void Awake()
     {
-        combat = GetComponent<PlayerCombatController>();
-        currentHP = (startHP <= 0) ? maxHP : Mathf.Clamp(startHP, 0, maxHP);
-        isDead = (currentHP <= 0);
-        // 초기값 브로드캐스트
-        OnHPChanged?.Invoke(currentHP, maxHP);
-        OnHealthChanged?.Invoke(currentHP, maxHP);
+        currentHP = Mathf.Clamp(currentHP, 0, maxHP);
     }
 
     void Update()
     {
-        if (IsStaggered && Time.realtimeSinceStartup >= staggerEndRealtime)
-            IsStaggered = false;
+        if (isInvincible)
+        {
+            invincibleTimer -= Time.deltaTime;
+            if (invincibleTimer <= 0f) isInvincible = false;
+        }
     }
 
-    public void TakeDamage(int amount, HitType type, Vector3 hitPoint)
+    // overloads
+    public void ApplyDamage(float damage) => ApplyDamage(Mathf.RoundToInt(damage));
+    public void ApplyDamage(int damage) => TakeDamage(damage, HitType.Normal, transform.position);
+
+    public void TakeDamage(int amount, HitType hitType, Vector3 hitPoint)
     {
-        if (amount <= 0) return;
-        if (isInvincible || isDead) return;
+        if (isInvincible) return;
 
-        // 피해 이벤트(선 발행해도/후 발행해도 무방 → 여기선 선)
-        OnDamaged?.Invoke(amount);
+        currentHP -= amount;
+        if (currentHP < 0) currentHP = 0;
 
-        // HP 감소
-        currentHP = Mathf.Max(0, currentHP - amount);
+        // effect
+        if (hitEffectPrefab != null) Instantiate(hitEffectPrefab, hitPoint, Quaternion.identity);
+        if (cameraShake != null) cameraShake.Shake(0.3f, 0.2f);
+
+        // animator triggers (존재하는 파라미터만 호출)
+        var anim = GetComponent<Animator>();
+        if (anim != null)
+        {
+            if (anim.HasTrigger("Hit")) anim.SetTrigger("Hit");
+            else if (anim.HasTrigger("Hurt")) anim.SetTrigger("Hurt");
+        }
+
+        // events
         OnHPChanged?.Invoke(currentHP, maxHP);
         OnHealthChanged?.Invoke(currentHP, maxHP);
+        OnDamaged?.Invoke(amount);
+        OnDamagedWithType?.Invoke(amount, hitType);
 
-        // 경직 플래그
-        float stagDur = (type == HitType.Strong || type == HitType.ParryFail) ? staggerSecondsHeavy : staggerSecondsLight;
-        if (stagDur > 0f)
-        {
-            IsStaggered = true;
-            staggerEndRealtime = Time.realtimeSinceStartup + stagDur;
-        }
-
-        // 사망 처리
-        if (currentHP <= 0)
-        {
-            isDead = true;
-            IsStaggered = false;
-            combat?.ApplyDeath();
-            OnDied?.Invoke();
-            return;
-        }
-
-        // 피격 연출
-        combat?.ApplyHit(type == HitType.Strong || type == HitType.ParryFail);
+        if (currentHP <= 0) Die();
     }
+
+    void Die() => OnDied?.Invoke();
 
     public void Heal(int amount)
     {
-        if (amount <= 0 || isDead) return;
-        int prev = currentHP;
         currentHP = Mathf.Clamp(currentHP + amount, 0, maxHP);
-        if (currentHP != prev)
-        {
-            OnHPChanged?.Invoke(currentHP, maxHP);
-            OnHealthChanged?.Invoke(currentHP, maxHP);
-        }
-    }
-
-    public void FullHeal()
-    {
-        if (isDead) return;
-        currentHP = maxHP;
         OnHPChanged?.Invoke(currentHP, maxHP);
         OnHealthChanged?.Invoke(currentHP, maxHP);
     }
 
-    public void ForceKill()
+    public void SetInvincible(float seconds)
     {
-        if (isDead) return;
-        currentHP = 0;
-        OnHPChanged?.Invoke(currentHP, maxHP);
-        OnHealthChanged?.Invoke(currentHP, maxHP);
-        isDead = true;
-        IsStaggered = false;
-        combat?.ApplyDeath();
-        OnDied?.Invoke();
+        isInvincible = true;
+        invincibleTimer = seconds;
     }
 }
