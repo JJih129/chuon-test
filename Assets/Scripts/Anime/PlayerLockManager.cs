@@ -1,5 +1,5 @@
 // PlayerLockManager.cs
-// 설명: 전역 애니/입력 락 카운트 관리. 다른 시스템은 IsLocked를 확인하거나 Lock/Unlock 사용.
+// 전역 입력/이동 락 관리. 간단 static API.
 public static class PlayerLockManager
 {
     static int _lockCount = 0;
@@ -15,7 +15,6 @@ public static class PlayerLockManager
         if (_lockCount > 0) _lockCount--;
     }
 
-    // 안전한 범위 락(추천 사용)
     public static System.IDisposable LockScope()
     {
         Lock();

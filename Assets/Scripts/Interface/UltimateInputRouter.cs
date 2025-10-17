@@ -1,7 +1,9 @@
+// UltimateInputRouter.cs
+// 간단한 입력 라우터: InputBlocker 확인, Guard 입력을 PlayerGuardController로 라우팅
+// guardKey : 가드 입력 키를 변경 가능하게 함
 using System;
 using UnityEngine;
 
-// 간단한 입력 라우터: InputBlocker 확인, Guard 입력을 PlayerGuardController로 라우팅
 [DisallowMultipleComponent]
 public class UltimateInputRouter : MonoBehaviour
 {
@@ -11,7 +13,11 @@ public class UltimateInputRouter : MonoBehaviour
     [Tooltip("Assign the PlayerGuardController (used to call StartGuard/EndGuard)")]
     public PlayerGuardController guardController;
 
+    [Tooltip("가드 입력 키 설정")]
+    public KeyCode guardKey = KeyCode.E;
+
     IInputBlocker inputBlocker;
+    bool lastGuardPressed = false;
 
     void Awake()
     {
@@ -28,7 +34,6 @@ public class UltimateInputRouter : MonoBehaviour
 
         if (guardController == null)
         {
-            // try to find on same GameObject
             guardController = GetComponent<PlayerGuardController>() ?? FindObjectOfType<PlayerGuardController>();
             if (guardController == null) Debug.LogWarning("UltimateInputRouter: guardController not assigned/found.");
         }
@@ -36,25 +41,20 @@ public class UltimateInputRouter : MonoBehaviour
 
     void Update()
     {
-        // block inputs if inputBlocker says so
         if (inputBlocker != null && inputBlocker.IsBlocked) return;
 
-        // Example guard input handling using E key (change to your input system)
-        if (Input.GetKeyDown(KeyCode.E))
+        bool pressed = Input.GetKey(guardKey);
+
+        // 상태 변화 기반으로 Start/End 호출 (debounced)
+        if (pressed && !lastGuardPressed)
         {
-            if (guardController != null)
-            {
-                guardController.StartGuard();
-            }
-            else Debug.LogWarning("UltimateInputRouter: StartGuard called but guardController == null");
+            if (guardController != null) guardController.StartGuard();
+        }
+        else if (!pressed && lastGuardPressed)
+        {
+            if (guardController != null) guardController.EndGuard();
         }
 
-        if (Input.GetKeyUp(KeyCode.E))
-        {
-            if (guardController != null)
-            {
-                guardController.EndGuard();
-            }
-        }
+        lastGuardPressed = pressed;
     }
 }

@@ -1,5 +1,5 @@
 // DroneController.cs
-// 설명: 부모/자식 구조 자동 탐지. 수평 거리 유지(stopDistance). 안전한 발사(spawn 검사).
+// 부모/자식 구조 자동 탐지. 수평 거리 유지(stopDistance). 안전한 발사(spawn 검사).
 using System;
 using UnityEngine;
 
@@ -7,48 +7,31 @@ using UnityEngine;
 public class DroneController : MonoBehaviour, IHitReceiver
 {
     [Header("▶ 타겟 (비워두면 Player 태그 자동 검색)")]
-    [Tooltip("추적할 대상 Transform")]
     public Transform target;
 
     [Header("▶ 이동 파라미터")]
-    [Tooltip("이동 속도 (m/s)")]
     public float moveSpeed = 1.5f;
-    [Tooltip("유지할 수평 거리 (XZ 평면 기준)")]
     public float stopDistance = 12f;
-    [Tooltip("회전 속도 (deg/s)")]
     public float turnSpeedDeg = 360f;
 
     [Header("▶ 사격 파라미터")]
-    [Tooltip("발사체 프리팹 (HomingProjectile 또는 BulletProjectile)")]
     public GameObject projectilePrefab;
-    [Tooltip("발사 기준 Transform. 비우면 자동 탐색(이름 FireOrigin 등)")]
     public Transform fireOrigin;
-    [Tooltip("발사체를 전방으로 띄울 거리 (m)")]
     public float projectileSpawnForwardOffset = 0.6f;
-    [Tooltip("사격 허용 수평 거리")]
     public float fireDistance = 12f;
-    [Tooltip("발사 쿨다운(초)")]
     public float fireCooldown = 1.2f;
-    [Tooltip("발사체 속도")]
     public float projectileSpeed = 12f;
-    [Tooltip("발사체 데미지")]
     public int projectileDamage = 15;
 
     [Header("▶ 체력")]
-    [Tooltip("최대 체력")]
     public int maxHP = 100;
-    [Tooltip("사망 VFX (선택)")]
     public GameObject deathVFX;
 
     [Header("▶ 안전/디버그")]
-    [Tooltip("spawnPos 검사 반경")]
     public float spawnSafetyRadius = 0.25f;
-    [Tooltip("spawn 보정 단위 (타겟쪽으로 전진)")]
     public float spawnAdvanceStep = 0.25f;
-    [Tooltip("spawn 보정 최대 시도")]
     public int spawnAdvanceAttempts = 6;
 
-    // 내부
     Rigidbody _rb;
     Collider _col;
     Transform _root;
@@ -119,7 +102,6 @@ public class DroneController : MonoBehaviour, IHitReceiver
         Vector3 flat = new Vector3(toTarget.x, 0f, toTarget.z);
         float horizDist = flat.magnitude;
 
-        // 회전 (타겟 방향)
         if (flat.sqrMagnitude > 0.0001f)
         {
             Quaternion want = Quaternion.LookRotation(flat.normalized, Vector3.up);
@@ -128,15 +110,19 @@ public class DroneController : MonoBehaviour, IHitReceiver
             if (_rb != null) _rb.MoveRotation(next); else transform.rotation = next;
         }
 
-        // 이동: Stop distance 유지 (수평)
         if (horizDist > stopDistance + 0.05f)
         {
             Vector3 moveDir = flat.normalized;
             Vector3 nextPos = currentPos + moveDir * moveSpeed * Time.fixedDeltaTime;
             if (_rb != null) _rb.MovePosition(nextPos); else transform.position = nextPos;
         }
+        else if (horizDist < stopDistance - 0.05f)
+        {
+            Vector3 moveDir = -flat.normalized;
+            Vector3 nextPos = currentPos + moveDir * moveSpeed * Time.fixedDeltaTime;
+            if (_rb != null) _rb.MovePosition(nextPos); else transform.position = nextPos;
+        }
 
-        // 사격 (수평 기준)
         if (horizDist <= fireDistance && Time.time >= _nextFireTime && projectilePrefab != null)
         {
             if (TryFireSafeAndInstantiate()) _nextFireTime = Time.time + fireCooldown;
@@ -147,7 +133,6 @@ public class DroneController : MonoBehaviour, IHitReceiver
     bool TryFireSafeAndInstantiate()
     {
         Transform origin = _fireOriginCached != null ? _fireOriginCached : transform;
-        // spawn 방향은 타겟쪽으로 잡음(모델 계층 문제 보정)
         Vector3 spawnForward = (target != null) ? (new Vector3(target.position.x - origin.position.x, 0f, target.position.z - origin.position.z)).normalized : origin.forward.normalized;
         if (spawnForward.sqrMagnitude < 0.0001f) spawnForward = origin.forward.normalized;
 
@@ -196,11 +181,10 @@ public class DroneController : MonoBehaviour, IHitReceiver
         go.transform.forward = forward;
     }
 
-    // IHitReceiver
     public void ReceiveHit(HitData hit)
     {
         if (hit == null) return;
-        ApplyDamage(hit.damage, hit);
+        ApplyDamage((int)hit.damage, hit);
     }
 
     public void ApplyDamage(int damage, HitData hitInfo = null)

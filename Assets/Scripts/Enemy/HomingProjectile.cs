@@ -1,3 +1,4 @@
+// HomingProjectile.cs
 using System;
 using UnityEngine;
 
@@ -82,12 +83,7 @@ public class HomingProjectile : MonoBehaviour
             var ih = other.GetComponentInParent<IHealth>();
             if (ih != null)
             {
-                try
-                {
-                    // ApplyDamage 오버로드 방어
-                    ih.ApplyDamage(damage);
-                }
-                catch { }
+                try { ih.ApplyDamage(damage); } catch { }
             }
         }
 

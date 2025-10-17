@@ -748,7 +748,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &243504440
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -894,6 +894,7 @@ GameObject:
   - component: {fileID: 281972712}
   - component: {fileID: 281972713}
   - component: {fileID: 281972714}
+  - component: {fileID: 281972715}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -959,49 +960,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   runSpeed: 7
   rotationSpeed: 10
-  speedParam: speed
-  speedDampTime: 0.1
-  runStartTrigger: RunStart
-  startThreshold: 0.2
-  smoothRate: 10
-  runStartStateName: RunStart
-  useRunStartStateTag: 1
-  runStartStateTag: RunStart
-  runStartSpeedCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 2
-      outSlope: 2
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  gateNormalizedTime: 0.4
-  useGateTimer: 1
-  gateTimerSeconds: 0.18
-  runStartRotationMultiplier: 0.6
-  forceDisableRootMotion: 1
-  disableRootMotionOnlyDuringGate: 1
   animator: {fileID: 281972687}
   playerLockOn: {fileID: 0}
-  guard: {fileID: 0}
-  useGuardRotationScale: 0
-  guardRotationMul: 0.85
 --- !u!114 &281972686
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1377,6 +1337,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   inputBlockerBehaviour: {fileID: 0}
   guardController: {fileID: 0}
+  guardKey: 101
 --- !u!114 &281972704
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1529,16 +1490,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd5f714e6948ac428edecef3c80feaf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  guard: {fileID: 0}
-  healthBehaviour: {fileID: 281972694}
-  hitLayerName: Hit
-  lightStateName: Hit_Light
-  heavyStateName: Hit_Heavy
-  heavyThreshold: 40
-  animator: {fileID: 0}
-  animationLockManager: {fileID: 0}
-  defaultHitIsParryable: 0
-  skipHitAnimOnParryZeroDamage: 1
+  healthBehaviour: {fileID: 0}
+  guardController: {fileID: 0}
 --- !u!114 &281972713
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1551,43 +1504,75 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7117a430055745e4facdcd0e7a8e65c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  debugLog: 1
-  autoFix: 1
+  playerRoot: {fileID: 0}
+  combatStateReaderBehaviour: {fileID: 0}
+  inputBlockerBehaviour: {fileID: 0}
+  invulnerabilityBehaviour: {fileID: 0}
+  animator: {fileID: 0}
+  sfx: {fileID: 0}
+  useLegacyInput: 0
   guardKey: 101
-  holdToGuard: 1
-  guardMoveSpeedMultiplier: 0.41
-  guardDamageMultiplier: 0.1
-  parryWindowStartSec: 0.083
-  parryWindowEndSec: 0.25
-  animParamIsGuarding: IsGuarding
-  animParamParryTrigger: Parry
-  animParamBlockTrigger: GuardBlock
-  useSeparateGuardLayer: 1
-  guardLayerName: GuardLayer
-  guardLayerWeightOn: 1
-  guardLayerWeightOff: 0
-  guardIdleStateName: GuardIdle
-  parryStateName: ParrySuccess
-  guardBlockStateName: GuardBlockHit
-  sfxGuardHit: {fileID: 0}
-  sfxParry: {fileID: 0}
-  vfxGuardSparks: {fileID: 0}
-  vfxParryFlash: {fileID: 0}
-  attackHasPriority: 1
-  suppressLayerNamesDuringAttack:
-  - GuardLayer
-  enforceSuppressEveryFrame: 1
+  parryKey: 113
+  guardConeAngle: 140
+  disallowGuardDuringAttack: 1
+  endGuardImmediatelyOnAttackStart: 1
+  enforceLayerSuppressDuringAttack: 1
+  suppressLayerNamesDuringAttack: []
   autoResumeGuardIfHolding: 1
-  addUltimateOnParry: 12.5
-  addBreakOnParry: 12.5
-  combatStateReader: {fileID: 0}
-  ultimate: {fileID: 0}
-  breakGaugeProvider: {fileID: 0}
-  debugDrawGuardCone: 1
-  guardConeAngleDeg: 140
-  guardConeEpsilonDeg: 3
-  forwardRef: {fileID: 0}
-  forwardYawOffsetDeg: 0
+  guardDamageMultiplier: 0.25
+  guardChipMin: 1
+  guardStaminaCostBase: 10
+  guardStaminaPerDamage: 0.5
+  staminaMax: 100
+  staminaRegenPerSec: 15
+  guardBreakThreshold: 0
+  guardBreakStun: 1.2
+  parryStartup: 0.05
+  parryActive: 0.12
+  parryRecovery: 0.35
+  parryIFrame: 0.25
+  parryRequiresGuardAngle: 1
+  parryStunToAttacker: 1
+  allowProjectileDeflect: 1
+  reflectOnParry: 1
+  reflectSpeedMultiplier: 1.1
+  projectileGuardDamageMultiplier: 0.5
+  treatAoeAsAngleBypass: 1
+  poiseOnGuard: 2
+  poiseOnParrySuccess: 12
+  hitstopOnParry: 0.06
+  camShakeOnParry: 0.6
+  camShakeOnGuardBreak: 0.9
+  OnRequestHitstop:
+    m_PersistentCalls:
+      m_Calls: []
+  OnRequestCamShake:
+    m_PersistentCalls:
+      m_Calls: []
+  guardParryTuningByBoss: {fileID: 0}
+  OnGuardStart:
+    m_PersistentCalls:
+      m_Calls: []
+  OnGuardEnd:
+    m_PersistentCalls:
+      m_Calls: []
+  OnGuardBlock:
+    m_PersistentCalls:
+      m_Calls: []
+  OnGuardBreak:
+    m_PersistentCalls:
+      m_Calls: []
+  OnParryStart:
+    m_PersistentCalls:
+      m_Calls: []
+  OnParrySuccess:
+    m_PersistentCalls:
+      m_Calls: []
+  OnParryFail:
+    m_PersistentCalls:
+      m_Calls: []
+  debugDraw: 1
+  parryabilityOverride: 1
 --- !u!114 &281972714
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1601,6 +1586,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   animator: {fileID: 281972687}
+--- !u!114 &281972715
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac52b0c6c5061024ab2395f389554ab0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  guard: {fileID: 0}
 --- !u!1 &290598377
 GameObject:
   m_ObjectHideFlags: 0
@@ -6069,7 +6067,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1931959382
 RectTransform:
   m_ObjectHideFlags: 0
