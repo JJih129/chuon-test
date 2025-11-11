@@ -868,14 +868,11 @@ GameObject:
   - component: {fileID: 281972683}
   - component: {fileID: 281972694}
   - component: {fileID: 281972685}
-  - component: {fileID: 281972686}
   - component: {fileID: 281972687}
   - component: {fileID: 281972688}
   - component: {fileID: 281972690}
-  - component: {fileID: 281972689}
   - component: {fileID: 281972693}
   - component: {fileID: 281972692}
-  - component: {fileID: 281972695}
   - component: {fileID: 281972696}
   - component: {fileID: 281972699}
   - component: {fileID: 281972702}
@@ -888,13 +885,14 @@ GameObject:
   - component: {fileID: 281972703}
   - component: {fileID: 281972707}
   - component: {fileID: 281972708}
-  - component: {fileID: 281972709}
   - component: {fileID: 281972710}
   - component: {fileID: 281972711}
   - component: {fileID: 281972712}
   - component: {fileID: 281972713}
   - component: {fileID: 281972714}
   - component: {fileID: 281972715}
+  - component: {fileID: 281972716}
+  - component: {fileID: 281972717}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -909,7 +907,7 @@ CharacterController:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 281972682}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 1206022287}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -962,19 +960,6 @@ MonoBehaviour:
   rotationSpeed: 10
   animator: {fileID: 281972687}
   playerLockOn: {fileID: 0}
---- !u!114 &281972686
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281972682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 160667a6d475c0b43baa9739b0e204f2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  speed: 5
 --- !u!95 &281972687
 Animator:
   serializedVersion: 5
@@ -1015,31 +1000,10 @@ MonoBehaviour:
     m_Bits: 4
   pivotName: LockPivot
   defaultPivotY: 3
-  lockOnTarget: {fileID: 0}
-  cameraManager: {fileID: 95505297}
-  playerPivot: {fileID: 1529425203}
---- !u!114 &281972689
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281972682}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6568ad537682d844caaacae234f445bd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  animator: {fileID: 281972687}
-  attackDurations:
-  - 0.7
-  - 0.8
-  - 0.85
-  - 0.9
-  returnDuration: 1
-  inputBufferTime: 0.5
-  heavyAttackDuration: 1.2
-  attackHitbox: {fileID: 0}
+  useLegacyInput: 1
+  toggleKey: 9
+  toggleKeyAlt: 325
+  cameraMgr: {fileID: 95505297}
 --- !u!114 &281972690
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1055,6 +1019,18 @@ MonoBehaviour:
   dashSpeed: 18
   dashDuration: 0.25
   dashCooldown: 1
+  perfectDodgeWindowFrames: 10
+  perfectDodgeSlowDuration: 0.3
+  perfectDodgeTimeScale: 0.2
+  perfectDodgeGaugeBonus: 5
+  dodgingParam: IsDodging
+  perfectDodgeTrigger: PerfectDodge
+  OnDashStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  OnPerfectDodge:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!114 &281972692
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1103,38 +1079,6 @@ MonoBehaviour:
   invincibleDuration: 1
   hitEffectPrefab: {fileID: 0}
   cameraShake: {fileID: 0}
---- !u!114 &281972695
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281972682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b696bf39dd5644a42988ab557eea0028, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  playerHealth: {fileID: 0}
-  combatController: {fileID: 0}
-  ultimateController: {fileID: 0}
-  bossBreak: {fileID: 0}
-  normalHitKey: 106
-  heavyHitKey: 107
-  knockdownKey: 117
-  deathKey: 105
-  parryFailKey: 108
-  addUltimateKey: 103
-  addBreakKey: 98
-  visualOnly: 0
-  bypassInvincible: 1
-  normalDamage: 8
-  heavyDamage: 20
-  enableHitStop: 0
-  hitStopScale: 0.1
-  hitStopDuration: 0.06
-  addUltimatePercent: 12.5
-  addBreakPercent: 12.5
 --- !u!114 &281972696
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1225,7 +1169,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gaugeMax: 100
-  gaugePerHit: 4
+  gaugePerH: 3
   gaugePerParry: 12.5
   gaugePerPerfectDodge: 10
   allowInAir: 0
@@ -1417,26 +1361,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   source: {fileID: 281972699}
---- !u!114 &281972709
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281972682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c18f7fb825274b14bb85e79a830d83af, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  player: {fileID: 281972699}
-  addKey: 103
-  subKey: 104
-  fullKey: 102
-  clearKey: 99
-  activateKey: 114
-  printKey: 112
-  stepPercent: 12.5
 --- !u!114 &281972710
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1504,75 +1428,39 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7117a430055745e4facdcd0e7a8e65c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerRoot: {fileID: 0}
-  combatStateReaderBehaviour: {fileID: 0}
-  inputBlockerBehaviour: {fileID: 0}
-  invulnerabilityBehaviour: {fileID: 0}
-  animator: {fileID: 0}
-  sfx: {fileID: 0}
-  useLegacyInput: 0
+  playerRoot: {fileID: 281972684}
+  animator: {fileID: 281972687}
+  useLegacyInput: 1
   guardKey: 101
-  parryKey: 113
+  p_IsGuarding: IsGuarding
+  p_ParrySuccess: ParrySuccess
+  p_GuardBlock: GuardBlock
+  guardLayerName: 
   guardConeAngle: 140
-  disallowGuardDuringAttack: 1
-  endGuardImmediatelyOnAttackStart: 1
-  enforceLayerSuppressDuringAttack: 1
-  suppressLayerNamesDuringAttack: []
-  autoResumeGuardIfHolding: 1
+  disallowGuardWhileAttacking: 0
+  attackingBoolParam: IsAttacking
+  justGuardWindow: 0.18
+  requireAngleForJustGuard: 1
+  animEventParryWindow: 0.15
   guardDamageMultiplier: 0.25
-  guardChipMin: 1
-  guardStaminaCostBase: 10
-  guardStaminaPerDamage: 0.5
-  staminaMax: 100
-  staminaRegenPerSec: 15
-  guardBreakThreshold: 0
-  guardBreakStun: 1.2
-  parryStartup: 0.05
-  parryActive: 0.12
-  parryRecovery: 0.35
   parryIFrame: 0.25
-  parryRequiresGuardAngle: 1
-  parryStunToAttacker: 1
-  allowProjectileDeflect: 1
-  reflectOnParry: 1
-  reflectSpeedMultiplier: 1.1
-  projectileGuardDamageMultiplier: 0.5
-  treatAoeAsAngleBypass: 1
-  poiseOnGuard: 2
-  poiseOnParrySuccess: 12
   hitstopOnParry: 0.06
-  camShakeOnParry: 0.6
-  camShakeOnGuardBreak: 0.9
   OnRequestHitstop:
     m_PersistentCalls:
       m_Calls: []
-  OnRequestCamShake:
-    m_PersistentCalls:
-      m_Calls: []
-  guardParryTuningByBoss: {fileID: 0}
   OnGuardStart:
     m_PersistentCalls:
       m_Calls: []
   OnGuardEnd:
     m_PersistentCalls:
       m_Calls: []
-  OnGuardBlock:
-    m_PersistentCalls:
-      m_Calls: []
-  OnGuardBreak:
-    m_PersistentCalls:
-      m_Calls: []
-  OnParryStart:
-    m_PersistentCalls:
-      m_Calls: []
   OnParrySuccess:
     m_PersistentCalls:
       m_Calls: []
-  OnParryFail:
+  OnGuardBlock:
     m_PersistentCalls:
       m_Calls: []
   debugDraw: 1
-  parryabilityOverride: 1
 --- !u!114 &281972714
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1599,6 +1487,55 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   guard: {fileID: 0}
+--- !u!114 &281972716
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e3a2c4d2fc68d646b9ba8513ecf8f8f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  animator: {fileID: 281972687}
+  movementBasis: {fileID: 281972684}
+  characterController: {fileID: 281972683}
+  rigidbodyRef: {fileID: 0}
+  velocitySource: {fileID: 0}
+  p_IsGuarding: IsGuarding
+  p_GuardSpeed: GuardSpeed
+  p_MoveX: GuardMoveX
+  p_MoveY: GuardMoveY
+  normalizeSpeed: 4.02
+  deadZone: 0.15
+  dampTime: 0.1
+  use2DBlend: 1
+  useCameraAsBasis: 1
+  cameraTransform: {fileID: 0}
+  useLegacyInputFallback: 1
+  axisX: Horizontal
+  axisY: Vertical
+  minSpeedToUseFallback: 0.05
+  inputFallbackScale: 1
+--- !u!114 &281972717
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0176299eabc1da4aa815a7f164ff024, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  lockOn: {fileID: 281972688}
+  playerRoot: {fileID: 281972684}
+  yawSpeedDeg: 540
+  autoUnlockWhenFar: 1
+  maxDistance: 30
 --- !u!1 &290598377
 GameObject:
   m_ObjectHideFlags: 0
@@ -3394,6 +3331,18 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1202940489}
   m_CullTransparentMesh: 1
+--- !u!134 &1206022287
+PhysicMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  dynamicFriction: 0.6
+  staticFriction: 0.6
+  bounciness: 0
+  frictionCombine: 0
+  bounceCombine: 0
 --- !u!1 &1211366983
 GameObject:
   m_ObjectHideFlags: 0

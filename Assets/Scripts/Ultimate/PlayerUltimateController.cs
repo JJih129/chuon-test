@@ -11,11 +11,11 @@ public class PlayerUltimateController : MonoBehaviour
     [Tooltip("페이즈 코어 최대치(%)")]
     public float gaugeMax = 100f;
     [Tooltip("약/강 공격 명중 시 게이지 증가량(%)")]
-    public float gaugePerHit = 4f;
+    public float gaugePerH= 3f;
     [Tooltip("패링 성공 시 게이지 증가량(%)")]
-    public float gaugePerParry = 12.5f;
+    public float gaugePerParry =6f;
     [Tooltip("퍼펙트 회피 성공 시 게이지 증가량(%)")]
-    public float gaugePerPerfectDodge = 10f;
+    public float gaugePerPerfectDodge = 16;
 
     [Header("② 발동 조건 | 발동 전 체크할 조건들 (이동, 경직, 공중 등)")]
     [Tooltip("점프 중 발동 허용 여부")]
