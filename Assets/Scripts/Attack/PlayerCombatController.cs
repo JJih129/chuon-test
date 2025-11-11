@@ -237,7 +237,26 @@ public class PlayerCombatController : MonoBehaviour
                 if (from.nextByInput[i].input == input) return from.nextByInput[i].next;
         return null;
     }
-
+    public void EnableAttackHitbox()
+    {
+        // TODO: 무기 히트박스 On
+        // GetComponentInChildren<WeaponHitbox>()?.EnableHitbox();
+    }
+    public void DisableAttackHitbox()
+    {
+        // TODO: 무기 히트박스 Off
+        // GetComponentInChildren<WeaponHitbox>()?.DisableHitbox();
+    }
+    public void EnableComboInput()
+    {
+        // TODO: 필요 시 즉시 다음 입력 허용 플래그 세팅
+        // comboInputGate = true;
+    }
+    public void DisableComboInput()
+    {
+        // TODO: 필요 시 플래그 해제
+        // comboInputGate = false;
+    }
     // === 애니메이션 이벤트(타격 프레임)에서 호출 ===
     public void AE_Hit()
     {
@@ -376,7 +395,7 @@ public class PlayerCombatController : MonoBehaviour
     {
         movementLocked = locked;
 
-        var mv = GetComponent<PlayerMovement>();
+        var mv = GetComponent<PlayerMoveController>();
         if (mv) mv.SetExternalControl(locked);
 
         // Base BlendTree 즉시 0으로 눌러 화면상 미끄러짐 방지

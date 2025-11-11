@@ -3,38 +3,42 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class GuardLocomotionAnimator : MonoBehaviour
 {
-    // ===== 변수 헤더(한글 설명) =====
     [Header("① 애니메이터/기준")]
-    [SerializeField] private Animator animator;            // [조절값] 제어 대상
-    [SerializeField] private Transform movementBasis;      // [조절값] 전후좌우 분해 기준(보통 플레이어 루트)
+    [SerializeField] private Animator animator;            
+    [SerializeField] private Transform movementBasis;      
 
     [Header("① 속도 소스(있으면 우선)")]
-    [SerializeField] private CharacterController characterController; // [조절값]
-    [SerializeField] private Rigidbody rigidbodyRef;                  // [조절값]
-    [SerializeField] private Transform velocitySource;                // [조절값] 차분용 Transform
+    [SerializeField] private CharacterController characterController;
+    [SerializeField] private Rigidbody rigidbodyRef;
+    [SerializeField] private Transform velocitySource;
 
     [Header("② 파라미터 이름")]
-    [SerializeField] private string p_IsGuarding = "IsGuarding"; // [조절값]
-    [SerializeField] private string p_GuardSpeed = "GuardSpeed"; // [조절값]
-    [SerializeField] private string p_MoveX = "GuardMoveX";      // [조절값]
-    [SerializeField] private string p_MoveY = "GuardMoveY";      // [조절값]
+    [SerializeField] private string p_IsGuarding = "IsGuarding";
+    [SerializeField] private string p_GuardSpeed = "GuardSpeed";
+    [SerializeField] private string p_MoveX = "GuardMoveX";
+    [SerializeField] private string p_MoveY = "GuardMoveY";
 
     [Header("③ 수치 조절")]
-    [SerializeField, Range(0.5f,10f)] private float normalizeSpeed = 4f; // [조절값] 1.0 스케일 기준 속도
-    [SerializeField, Range(0f,0.3f)] private float deadZone = 0.15f;     // [조절값] 데드존
-    [SerializeField, Range(0f,0.5f)] private float dampTime = 0.1f;      // [조절값] 감쇠
-    [SerializeField] private bool use2DBlend = true;                     // [조절값] 2D 사용
+    [SerializeField, Range(0.5f,10f)] private float normalizeSpeed = 4f;
+    [SerializeField, Range(0f,0.3f)] private float deadZone = 0.15f;
+    [SerializeField, Range(0f,0.5f)] private float dampTime = 0.1f;
+    [SerializeField] private bool use2DBlend = true;
 
     [Header("③ 카메라 기준 스트레이프")]
-    [SerializeField] private bool useCameraAsBasis = true;               // [조절값]
-    [SerializeField] private Transform cameraTransform;                  // [조절값]
+    [SerializeField] private bool useCameraAsBasis = true;
+    [SerializeField] private Transform cameraTransform;
+    [SerializeField] private bool autoAssignMainCamera = true; // [추가]
 
     [Header("④ 입력 폴백(정지 속도일 때도 애니 가동)")]
-    [SerializeField] private bool useLegacyInputFallback = true;         // [조절값]
-    [SerializeField] private string axisX = "Horizontal";                // [조절값]
-    [SerializeField] private string axisY = "Vertical";                  // [조절값]
-    [SerializeField, Range(0f,1f)] private float minSpeedToUseFallback = 0.05f; // [조절값]
-    [SerializeField, Range(0.2f,2f)] private float inputFallbackScale = 1f;     // [조절값]
+    [SerializeField] private bool useLegacyInputFallback = false; // [기본값 Off 권장]
+    [SerializeField] private string axisX = "Horizontal";
+    [SerializeField] private string axisY = "Vertical";
+    [SerializeField, Range(0f,1f)] private float minSpeedToUseFallback = 0.05f;
+    [SerializeField, Range(0.2f,2f)] private float inputFallbackScale = 1f;
+
+    [Header("⑤ 드리프트 스냅")]
+    [Tooltip("이 값 미만의 가드 속도는 0으로 스냅하여 Idle을 보장")]
+    [SerializeField, Range(0f,0.3f)] private float guardIdleSnap = 0.08f; // [추가]
 
     int hIsGuard, hSpd, hX, hY;
     Vector3 prevPos; bool hasPrev;
@@ -45,6 +49,9 @@ public class GuardLocomotionAnimator : MonoBehaviour
         if (!animator) animator = GetComponentInChildren<Animator>();
         if (!movementBasis) movementBasis = transform;
         if (!velocitySource) velocitySource = movementBasis;
+
+        if (useCameraAsBasis && !cameraTransform && autoAssignMainCamera && Camera.main)
+            cameraTransform = Camera.main.transform; // [추가]
 
         hIsGuard = Animator.StringToHash(p_IsGuarding);
         hSpd     = Animator.StringToHash(p_GuardSpeed);
@@ -62,8 +69,8 @@ public class GuardLocomotionAnimator : MonoBehaviour
         float spd = v.magnitude;
 
         Transform basis = (useCameraAsBasis && cameraTransform) ? cameraTransform : movementBasis;
-        Vector3 fwd = basis.forward; fwd.y = 0f; fwd.Normalize();
-        Vector3 rgt = basis.right;  rgt.y = 0f;  rgt.Normalize();
+        Vector3 fwd = basis.forward; fwd.y = 0f; if (fwd.sqrMagnitude < 1e-6f) fwd = Vector3.forward; else fwd.Normalize();
+        Vector3 rgt = basis.right;  rgt.y = 0f; if (rgt.sqrMagnitude < 1e-6f) rgt = Vector3.right;   else rgt.Normalize();
 
         float nx = Mathf.Clamp(Vector3.Dot(v, rgt) / Mathf.Max(0.01f, normalizeSpeed), -1f, 1f);
         float ny = Mathf.Clamp(Vector3.Dot(v, fwd) / Mathf.Max(0.01f, normalizeSpeed), -1f, 1f);
@@ -72,7 +79,8 @@ public class GuardLocomotionAnimator : MonoBehaviour
         {
             float ix = Input.GetAxisRaw(axisX);
             float iy = Input.GetAxisRaw(axisY);
-            if (new Vector2(ix, iy).sqrMagnitude > deadZone * deadZone)
+            Vector2 iv = new Vector2(ix, iy);
+            if (iv.sqrMagnitude > deadZone * deadZone)
             {
                 nx = Mathf.Clamp(ix * inputFallbackScale, -1f, 1f);
                 ny = Mathf.Clamp(iy * inputFallbackScale, -1f, 1f);
@@ -85,6 +93,8 @@ public class GuardLocomotionAnimator : MonoBehaviour
         if (!prevGuarding && isGuard) { nx = 0f; ny = 0f; }
 
         float s1d = Mathf.Clamp01(Mathf.Sqrt(nx * nx + ny * ny));
+        if (s1d < guardIdleSnap) { nx = 0f; ny = 0f; s1d = 0f; } // [추가]
+
         float tx = isGuard ? nx : 0f;
         float ty = isGuard ? ny : 0f;
         float ts = isGuard ? s1d : 0f;
@@ -106,7 +116,11 @@ public class GuardLocomotionAnimator : MonoBehaviour
 
         Vector3 p = velocitySource ? velocitySource.position : transform.position;
         Vector3 vel = Vector3.zero;
-        if (hasPrev) vel = (p - prevPos) / Mathf.Max(Time.deltaTime, 1e-5f);
+        if (hasPrev)
+        {
+            float dt = Mathf.Max(Time.deltaTime, 1e-5f);
+            vel = (p - prevPos) / dt;
+        }
         prevPos = p; hasPrev = true;
         vel.y = 0f;
         return vel;

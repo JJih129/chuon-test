@@ -1,219 +1,190 @@
 ﻿using UnityEngine;
-using UnityEngine.Events;
 using System.Collections;
 
+/// 가드/패링 단일 판단자
 [DisallowMultipleComponent]
 public class PlayerGuardController : MonoBehaviour
 {
-    // ===== 변수 헤더(한글 설명) =====
-    [Header("① 전방 기준(각도 판정 기준)")]
-    [SerializeField] private Transform playerRoot;         // [조절값] 전방 벡터 기준. 비우면 transform
+    // ───────── 입력/애니 파라미터 ─────────
+    [Header("입력 설정(신규 Input System)")]
+    [Tooltip("가드키(InputActionReference). 비워도 됨")]
+    public UnityEngine.InputSystem.InputActionReference guardAction;
 
-    [Header("① 애니메이터")]
-    [SerializeField] private Animator animator;            // [조절값] 가드 파라미터/트리거 대상
+    [Header("애니메이터 파라미터 이름")]
+    [Tooltip("가드 여부 Bool")] public string guardBoolParam = "IsGuarding";
+    [Tooltip("공격 중 Bool")]  public string isAttackingBoolParam = "IsAttacking";
+    [Tooltip("블록 리액션 Trigger")] public string guardBlockTrigger = "GuardBlock";
+    [Tooltip("패링 성공 Trigger")]   public string parrySuccessTrigger = "ParrySuccess";
 
-    [Header("② 입력")]
-    [SerializeField] private bool useLegacyInput = true;   // [조절값] 레거시 입력 사용 여부
-    [SerializeField] private KeyCode guardKey = KeyCode.E; // [조절값] 가드(홀드) 키
+    // ───────── 전방 기준 ─────────
+    public enum ForwardMode { ModelForward, CameraForward }
 
-    [Header("③ 애니 파라미터 이름")]
-    [SerializeField] private string p_IsGuarding   = "IsGuarding";   // [조절값] Bool
-    [SerializeField] private string p_ParrySuccess = "ParrySuccess"; // [조절값] Trigger
-    [SerializeField] private string p_GuardBlock   = "GuardBlock";   // [조절값] Trigger
-    [SerializeField] private string guardLayerName = "GuardLayer";   // [조절값] 있으면 가중치 제어
+    [Header("가드 전방 기준/판정")]
+    [Tooltip("전방 벡터 기준")]
+    public ForwardMode forwardMode = ForwardMode.ModelForward;
+    [Tooltip("모델 Transform(선택)")] public Transform modelForwardSource;
+    [Tooltip("카메라 Transform(선택)")] public Transform cameraTransform;
+    [Tooltip("전방 반전")] public bool invertForward = false;
+    [Range(10,360)] [Tooltip("정면 허용각(전체각)")] public float frontArcDegrees = 100f;
+    [Tooltip("지면 기준 각도 판정")] public bool flattenToGround = true;
 
-    [Header("④ 전투 정책")]
-    [SerializeField, Range(30f,180f)] private float guardConeAngle = 140f; // [조절값] 정면 허용 각(도)
-    [SerializeField] private bool disallowGuardWhileAttacking = false;     // [조절값] 공격 중 가드 금지
-    [SerializeField] private string attackingBoolParam = "IsAttacking";    // [조절값] 공격 중 판단용 Bool(없으면 무시)
+    // ───────── 정책 ─────────
+    [Header("정책")]
+    [Tooltip("공격 중 가드 불가")] public bool denyGuardWhileAttacking = true;
+    [Tooltip("가드키 유지 중 공격 종료시 자동 재가드")] public bool autoResumeGuardIfHolding = true;
 
-    [Header("⑤ 저스트가드(패링키 없음)")]
-    [SerializeField, Range(0.03f,0.35f)] private float justGuardWindow = 0.15f; // [조절값] 가드 올린 직후 패링 윈도우
-    [SerializeField] private bool requireAngleForJustGuard = true;             // [조절값] 패링도 각도 요구 여부
-    [SerializeField, Range(0f,0.5f)] private float animEventParryWindow = 0.15f; // [조절값] 애니 이벤트로 연 패링창
+    // ───────── 대미지/패링 ─────────
+    [Header("대미지/패링")]
+    [Tooltip("블록 시 칩 대미지 비율")] [Range(0f,1f)] public float chipDamageOnBlock = 0.1f;
+    [Tooltip("퍼펙트 가드 사용")] public bool enablePerfectGuard = true;
+    [Tooltip("패링 기본 창(초)")] public float perfectGuardWindow = 0.12f;
 
-    [Header("⑥ 가드 피해 조정")]
-    [SerializeField, Range(0f,1f)] private float guardDamageMultiplier = 0.0f;   // [조절값] 칩 대미지 비율(0=완전막기)
+    [Header("디버그")]
+    public Animator animator;
+    public bool debugDraw = false;
 
-    [Header("⑦ 연출(옵션)")]
-    [SerializeField, Range(0f,0.4f)] private float parryIFrame = 0.25f;     // [조절값] 패링 성공 i-프레임
-    [SerializeField, Range(0f,0.2f)] private float hitstopOnParry = 0.06f;  // [조절값] 패링 히트스톱
-    public UnityEvent<float> OnRequestHitstop;                               // [이벤트] 외부 히트스톱 시스템 연동
-    public UnityEvent OnGuardStart, OnGuardEnd, OnParrySuccess, OnGuardBlock;// [이벤트] UI/사운드 등 연동
+    // 내부 상태
+    public bool IsGuarding { get; private set; }
+    public bool IsAttacking { get; private set; }
+    public bool IsParryWindowOpen => _parryOpen;
 
-    [Header("⑧ 디버그")]
-    [SerializeField] private bool debugDraw = false; // [조절값] 기즈모 표시
-
-    // 내부 캐시
-    int hIsGuarding, hParry, hBlock, guardLayerIndex = -1;
-    bool isGuarding;
-    bool guardHolding;
-    float justGuardUntil = -1f;
-
-    void Reset()
-    {
-        if (!playerRoot) playerRoot = transform;
-        if (!animator)   animator   = GetComponentInChildren<Animator>();
-    }
+    int _hashGuardBool, _hashAttackBool, _hashBlockTrig, _hashParryTrig;
+    bool _parryOpen;
+    Coroutine _parryCo;
 
     void Awake()
     {
-        if (!playerRoot) playerRoot = transform;
-        if (!animator)   animator   = GetComponentInChildren<Animator>();
+        if (!animator) animator = GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
+        _hashGuardBool  = Animator.StringToHash(guardBoolParam);
+        _hashAttackBool = Animator.StringToHash(isAttackingBoolParam);
+        _hashBlockTrig  = Animator.StringToHash(guardBlockTrigger);
+        _hashParryTrig  = Animator.StringToHash(parrySuccessTrigger);
 
-        hIsGuarding = string.IsNullOrEmpty(p_IsGuarding)   ? 0 : Animator.StringToHash(p_IsGuarding);
-        hParry      = string.IsNullOrEmpty(p_ParrySuccess) ? 0 : Animator.StringToHash(p_ParrySuccess);
-        hBlock      = string.IsNullOrEmpty(p_GuardBlock)   ? 0 : Animator.StringToHash(p_GuardBlock);
-        guardLayerIndex = string.IsNullOrEmpty(guardLayerName) ? -1 : animator.GetLayerIndex(guardLayerName);
-        if (guardLayerIndex >= 0) animator.SetLayerWeight(guardLayerIndex, 0f);
+        if (guardAction) guardAction.action.Enable();
     }
 
     void Update()
     {
-        if (useLegacyInput)
+        // 입력 유지 처리
+        if (guardAction && guardAction.action != null)
         {
-            if (Input.GetKeyDown(guardKey)) StartGuard();
-            if (Input.GetKeyUp(guardKey))   EndGuard();
+            bool pressed = guardAction.action.IsPressed();
+            if (denyGuardWhileAttacking && IsAttacking) pressed = false;
+            SetGuarding(pressed || (autoResumeGuardIfHolding && pressed));
         }
-        // 새 InputSystem이면 외부에서 StartGuard/EndGuard 호출
+
+        // 애니 파라미터 동기화(외부 스크립트가 SetBool 해도 읽음)
+        if (animator)
+        {
+            if (_hashAttackBool != 0) IsAttacking = animator.GetBool(_hashAttackBool);
+            if (_hashGuardBool  != 0) IsGuarding  = animator.GetBool(_hashGuardBool);
+        }
     }
 
-    // 외부 제어용
-    public void StartGuard()
+    // ───────── 외부 제어 API(하위호환 포함) ─────────
+    public void StartGuard() => SetGuarding(true);   // UltimateInputRouter 호환
+    public void EndGuard()   => SetGuarding(false);  // UltimateInputRouter 호환
+
+    public void SetGuarding(bool on)
     {
-        if (IsAttacking() && disallowGuardWhileAttacking) return;
-
-        guardHolding = true;
-        if (isGuarding) return;
-
-        isGuarding     = true;
-        justGuardUntil = Time.time + justGuardWindow;
-
-        if (hIsGuarding != 0) animator.SetBool(hIsGuarding, true);
-        if (guardLayerIndex >= 0) animator.SetLayerWeight(guardLayerIndex, 1f);
-        OnGuardStart?.Invoke();
+        if (animator && _hashGuardBool != 0) animator.SetBool(_hashGuardBool, on);
+        IsGuarding = on;
     }
 
-    public void EndGuard()
-    {
-        guardHolding = false;
-        if (!isGuarding) return;
-
-        isGuarding     = false;
-        justGuardUntil = -1f;
-
-        if (hIsGuarding != 0) animator.SetBool(hIsGuarding, false);
-        if (guardLayerIndex >= 0) animator.SetLayerWeight(guardLayerIndex, 0f);
-        OnGuardEnd?.Invoke();
-    }
-
-    public void ForceEndGuard() => EndGuard();
-
-    // 애니메이션 이벤트 연동용(선택)
+    // 애니메이션 이벤트용(오버로드 제공)
     public void OpenParryWindow()
     {
-        float until = Time.time + Mathf.Max(0f, animEventParryWindow);
-        if (until > justGuardUntil) justGuardUntil = until;
+        if (!enablePerfectGuard) return;
+        StartParryWindow(perfectGuardWindow);
     }
-    public void OpenParryWindowWithTimes(float startup, float active, float recovery)
+    public void OpenParryWindow(float seconds)
     {
-        StartCoroutine(CoOpenParry(startup, active));
+        if (!enablePerfectGuard) return;
+        StartParryWindow(Mathf.Max(0f, seconds));
     }
-    IEnumerator CoOpenParry(float startup, float active)
+    public void OpenParryWindow(int frames)          // 일부 프로젝트가 프레임 단위로 호출
     {
-        if (startup > 0f) yield return new WaitForSeconds(startup);
-        float until = Time.time + Mathf.Max(0f, active);
-        if (until > justGuardUntil) justGuardUntil = until;
+        if (!enablePerfectGuard) return;
+        float sec = Mathf.Max(0, frames) / 60f;      // 60fps 가정
+        StartParryWindow(sec > 0f ? sec : perfectGuardWindow);
     }
-
-    // ===== 대미지 해결 진입점(피격 시스템에서 호출) =====
-    // attackerPos: 공격자 월드 위치, isParryable: 패링 가능 타격인지, baseDamage: 원대미지
-    public float ResolveIncomingAttack(Vector3 attackerPos, bool isParryable, float baseDamage, GameObject attacker = null, Vector3? hitPoint = null)
+    public void SetParryWindow(bool open)            // bool 인자 호출 호환
     {
-        // 1) 공격 중 금지 옵션이면 즉시 실패
-        if (IsAttacking() && disallowGuardWhileAttacking)
-        {
-            ForceEndGuard();
-            return baseDamage;
-        }
-
-        // 2) 각도 판정
-        Vector3 toAttacker = attackerPos - playerRoot.position;
-        toAttacker.y = 0f;
-        if (toAttacker.sqrMagnitude < 0.0001f) return baseDamage;
-
-        float angle = Vector3.Angle(playerRoot.forward, toAttacker);
-        bool withinAngle = angle <= guardConeAngle * 0.5f;
-
-        // 3) 패링 윈도우
-        bool inJust = Time.time <= justGuardUntil;
-        if (isGuarding && isParryable && inJust && (!requireAngleForJustGuard || withinAngle))
-        {
-            if (hParry != 0) animator.SetTrigger(hParry);
-            OnParrySuccess?.Invoke();
-            if (parryIFrame > 0f) StartCoroutine(CoIFrame(parryIFrame));
-            DoHitstop(hitstopOnParry);
-            return 0f;
-        }
-
-        // 4) 일반 가드 블록
-        if (isGuarding && withinAngle)
-        {
-            if (hBlock != 0) animator.SetTrigger(hBlock);
-            OnGuardBlock?.Invoke();
-            return Mathf.Max(0f, baseDamage * guardDamageMultiplier);
-        }
-
-        // 5) 가드 실패
-        return baseDamage;
+        if (!enablePerfectGuard) return;
+        if (_parryCo != null) { StopCoroutine(_parryCo); _parryCo = null; }
+        _parryOpen = open;
+    }
+    public void CloseParryWindow()
+    {
+        if (_parryCo != null) { StopCoroutine(_parryCo); _parryCo = null; }
+        _parryOpen = false;
     }
 
-    // ===== 유틸 =====
-    bool IsAttacking()
+    void StartParryWindow(float seconds)
     {
-        if (!animator || string.IsNullOrEmpty(attackingBoolParam)) return false;
-        int h = Animator.StringToHash(attackingBoolParam);
-        // 파라미터가 없어도 예외 없이 false 처리
-        try { return animator.GetBool(h); }
-        catch { return false; }
+        if (_parryCo != null) StopCoroutine(_parryCo);
+        _parryCo = StartCoroutine(CoParry(seconds));
+    }
+    IEnumerator CoParry(float seconds)
+    {
+        _parryOpen = true;
+        yield return new WaitForSeconds(seconds);
+        _parryOpen = false;
+        _parryCo = null;
     }
 
-    IEnumerator CoIFrame(float t)
+    public void PlayBlockReaction()
     {
-        // 프로젝트에 무적 토글이 없으니 여기서는 타임스케일/레이어 조작 없이 대기만.
-        yield return new WaitForSeconds(t);
+        if (animator && _hashBlockTrig != 0) animator.SetTrigger(_hashBlockTrig);
+    }
+    public void PlayParrySuccess()
+    {
+        if (animator && _hashParryTrig != 0) animator.SetTrigger(_hashParryTrig);
     }
 
-    void DoHitstop(float seconds)
+    // ───────── 가드 판정 ─────────
+    public bool EvaluateDefense(Vector3 hitPoint, out bool isParry, out bool isBlock, out float chipMul)
     {
-        if (seconds <= 0f) return;
-        if (OnRequestHitstop != null && OnRequestHitstop.GetPersistentEventCount() > 0)
-        {
-            OnRequestHitstop.Invoke(seconds);
-            return;
-        }
-        StartCoroutine(CoHitstop(seconds));
+        isParry = false; isBlock = false; chipMul = chipDamageOnBlock;
+
+        if (!IsGuarding) return false;
+        if (denyGuardWhileAttacking && IsAttacking) return false;
+
+        Vector3 fwd = GetGuardForward().normalized;
+        Vector3 dir = (hitPoint - GetGuardOrigin()).normalized;
+
+        if (flattenToGround) { fwd.y = 0f; dir.y = 0f; fwd.Normalize(); dir.Normalize(); }
+        if (invertForward) fwd = -fwd;
+
+        float angle = Vector3.Angle(fwd, dir);
+        bool inFront = angle <= (frontArcDegrees * 0.5f);
+        if (!inFront) return false;
+
+        if (enablePerfectGuard && _parryOpen) { isParry = true; return true; }
+        isBlock = true; return true;
     }
 
-    IEnumerator CoHitstop(float t)
+    Vector3 GetGuardForward()
     {
-        float prev = Time.timeScale;
-        Time.timeScale = 0f;
-        float end = Time.unscaledTime + t;
-        while (Time.unscaledTime < end) yield return null;
-        Time.timeScale = prev;
+        if (forwardMode == ForwardMode.CameraForward && cameraTransform) return cameraTransform.forward;
+        if (modelForwardSource) return modelForwardSource.forward;
+        return transform.forward;
+    }
+    Vector3 GetGuardOrigin()
+    {
+        if (modelForwardSource) return modelForwardSource.position;
+        return transform.position;
     }
 
     void OnDrawGizmosSelected()
     {
         if (!debugDraw) return;
-        Transform t = playerRoot ? playerRoot : transform;
-        Vector3 pos = t.position + Vector3.up * 1.0f;
-        float half = guardConeAngle * 0.5f;
-        Vector3 fwd = t.forward;
+        Vector3 pos = Application.isPlaying ? GetGuardOrigin() : (modelForwardSource ? modelForwardSource.position : transform.position);
+        Vector3 fwd = Application.isPlaying ? GetGuardForward() : (modelForwardSource ? modelForwardSource.forward : transform.forward);
+        if (invertForward) fwd = -fwd;
+        if (flattenToGround) fwd.y = 0f;
+        fwd.Normalize();
         Gizmos.color = Color.cyan;
-        Gizmos.DrawRay(pos, Quaternion.AngleAxis(-half, Vector3.up) * fwd * 2f);
-        Gizmos.DrawRay(pos, Quaternion.AngleAxis(half, Vector3.up) * fwd * 2f);
-        Gizmos.DrawRay(pos, fwd * 2f);
+        Gizmos.DrawLine(pos, pos + fwd * 1.5f);
     }
 }

@@ -78,7 +78,7 @@ public class BulletProjectile : MonoBehaviour
         if (pdr != null)
         {
             var hd = CreateHitData();
-            pdr.ReceiveHit(hd);
+            pdr.ReceiveHit(damage, owner ? owner.transform : null, transform.position, /*isParryable*/ false);
             Debug.Log("[BulletProjectile] Delivered hit to PlayerDamageReceiver on " + other.gameObject.name, this);
             Destroy(gameObject);
             return;

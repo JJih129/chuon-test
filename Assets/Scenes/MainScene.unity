@@ -714,9 +714,25 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -4507900262165122138, guid: 083e13878312ec9459e67141e814a808, type: 3}
+      propertyPath: m_Layer
+      value: 13
+      objectReference: {fileID: 0}
+    - target: {fileID: -2815194613554758484, guid: 083e13878312ec9459e67141e814a808, type: 3}
+      propertyPath: m_Layer
+      value: 13
+      objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 083e13878312ec9459e67141e814a808, type: 3}
       propertyPath: m_Name
       value: elevator
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 083e13878312ec9459e67141e814a808, type: 3}
+      propertyPath: m_Layer
+      value: 13
+      objectReference: {fileID: 0}
+    - target: {fileID: 5988881256312858879, guid: 083e13878312ec9459e67141e814a808, type: 3}
+      propertyPath: m_Layer
+      value: 13
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -877,10 +893,8 @@ GameObject:
   - component: {fileID: 281972699}
   - component: {fileID: 281972702}
   - component: {fileID: 281972701}
-  - component: {fileID: 281972700}
   - component: {fileID: 281972698}
   - component: {fileID: 281972706}
-  - component: {fileID: 281972705}
   - component: {fileID: 281972704}
   - component: {fileID: 281972703}
   - component: {fileID: 281972707}
@@ -956,10 +970,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 890fab91fc9e96f42b3403ae26905404, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  runSpeed: 7
-  rotationSpeed: 10
+  playerRoot: {fileID: 281972684}
+  cameraTransform: {fileID: 963194228}
+  playerLockOn: {fileID: 281972688}
+  guardController: {fileID: 281972713}
   animator: {fileID: 281972687}
-  playerLockOn: {fileID: 0}
+  moveAction: {fileID: 0}
+  legacyFallback: 1
+  axisX: Horizontal
+  axisY: Vertical
+  runSpeed: 7
+  accel: 16
+  decel: 24
+  rotationSpeed: 720
+  rotateOnlyWhenMoving: 0
+  guardFwdMul: 0.55
+  guardBackMul: 0.45
+  guardStrafeMul: 0.6
+  gravity: 20
+  groundSnap: 0.1
+  p_Speed: speed
 --- !u!95 &281972687
 Animator:
   serializedVersion: 5
@@ -998,6 +1028,9 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 4
+  enemyMask:
+    serializedVersion: 2
+    m_Bits: 4096
   pivotName: LockPivot
   defaultPivotY: 3
   useLegacyInput: 1
@@ -1016,16 +1049,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c53e5fe843a2ef7448162e42b73c6523, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dashSpeed: 18
-  dashDuration: 0.25
-  dashCooldown: 1
-  perfectDodgeWindowFrames: 10
-  perfectDodgeSlowDuration: 0.3
-  perfectDodgeTimeScale: 0.2
-  perfectDodgeGaugeBonus: 5
-  dodgingParam: IsDodging
-  perfectDodgeTrigger: PerfectDodge
-  OnDashStarted:
+  playerRoot: {fileID: 281972684}
+  cameraTransform: {fileID: 963194228}
+  move: {fileID: 281972685}
+  playerLockOn: {fileID: 281972688}
+  animator: {fileID: 281972687}
+  ultimate: {fileID: 281972699}
+  dodgeKey: 304
+  dodgeSpeed: 18
+  dodgeDuration: 0.25
+  dodgeCooldown: 0
+  perfectWindow: 0.16
+  slowTimeScale: 0.2
+  slowDuration: 0.3
+  perfectGaugeBonus: 5
+  p_IsDodging: IsDodging
+  p_PerfectDodge: PerfectDodge
+  OnDodgeStart:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDodgeEnd:
     m_PersistentCalls:
       m_Calls: []
   OnPerfectDodge:
@@ -1075,10 +1118,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxHP: 100
   currentHP: 100
-  _isInvincible: 0
   invincibleDuration: 1
   hitEffectPrefab: {fileID: 0}
   cameraShake: {fileID: 0}
+  reactionMode: 0
+  combatController: {fileID: 281972696}
+  heavyDamageThreshold: 25
+  animator: {fileID: 281972687}
+  hitParamName: Hit
+  hurtParamName: Hurt
+  debugLog: 1
 --- !u!114 &281972696
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1186,20 +1235,6 @@ MonoBehaviour:
   - {fileID: 0}
   screenFX: {fileID: 0}
   glassCrackPrefab: {fileID: 0}
---- !u!114 &281972700
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281972682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cada66924f0670744a0d8a1281b7ddf0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  currentTarget: {fileID: 0}
-  timelineOwnsCamera: 0
 --- !u!114 &281972701
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1280,7 +1315,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   inputBlockerBehaviour: {fileID: 0}
-  guardController: {fileID: 0}
+  guardController: {fileID: 281972713}
   guardKey: 101
 --- !u!114 &281972704
 MonoBehaviour:
@@ -1297,20 +1332,6 @@ MonoBehaviour:
   inAir: 0
   staggered: 0
   attacking: 0
---- !u!114 &281972705
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281972682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cada66924f0670744a0d8a1281b7ddf0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  currentTarget: {fileID: 0}
-  timelineOwnsCamera: 0
 --- !u!114 &281972706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1414,8 +1435,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd5f714e6948ac428edecef3c80feaf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  healthBehaviour: {fileID: 0}
-  guardController: {fileID: 0}
+  health: {fileID: 0}
+  guardCtrl: {fileID: 0}
+  animator: {fileID: 0}
+  verbose: 1
 --- !u!114 &281972713
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1428,38 +1451,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7117a430055745e4facdcd0e7a8e65c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerRoot: {fileID: 281972684}
+  guardAction: {fileID: 0}
+  guardBoolParam: IsGuarding
+  isAttackingBoolParam: IsAttacking
+  guardBlockTrigger: GuardBlock
+  parrySuccessTrigger: ParrySuccess
+  forwardMode: 0
+  modelForwardSource: {fileID: 281972684}
+  cameraTransform: {fileID: 963194228}
+  invertForward: 0
+  frontArcDegrees: 119
+  flattenToGround: 1
+  denyGuardWhileAttacking: 1
+  autoResumeGuardIfHolding: 1
+  chipDamageOnBlock: 0.1
+  enablePerfectGuard: 1
+  perfectGuardWindow: 0.12
   animator: {fileID: 281972687}
-  useLegacyInput: 1
-  guardKey: 101
-  p_IsGuarding: IsGuarding
-  p_ParrySuccess: ParrySuccess
-  p_GuardBlock: GuardBlock
-  guardLayerName: 
-  guardConeAngle: 140
-  disallowGuardWhileAttacking: 0
-  attackingBoolParam: IsAttacking
-  justGuardWindow: 0.18
-  requireAngleForJustGuard: 1
-  animEventParryWindow: 0.15
-  guardDamageMultiplier: 0.25
-  parryIFrame: 0.25
-  hitstopOnParry: 0.06
-  OnRequestHitstop:
-    m_PersistentCalls:
-      m_Calls: []
-  OnGuardStart:
-    m_PersistentCalls:
-      m_Calls: []
-  OnGuardEnd:
-    m_PersistentCalls:
-      m_Calls: []
-  OnParrySuccess:
-    m_PersistentCalls:
-      m_Calls: []
-  OnGuardBlock:
-    m_PersistentCalls:
-      m_Calls: []
   debugDraw: 1
 --- !u!114 &281972714
 MonoBehaviour:
@@ -1487,6 +1495,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   guard: {fileID: 0}
+  anim: {fileID: 0}
+  attackingBoolParam: IsAttacking
 --- !u!114 &281972716
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1503,22 +1513,24 @@ MonoBehaviour:
   movementBasis: {fileID: 281972684}
   characterController: {fileID: 281972683}
   rigidbodyRef: {fileID: 0}
-  velocitySource: {fileID: 0}
+  velocitySource: {fileID: 281972684}
   p_IsGuarding: IsGuarding
   p_GuardSpeed: GuardSpeed
   p_MoveX: GuardMoveX
   p_MoveY: GuardMoveY
   normalizeSpeed: 4.02
-  deadZone: 0.15
+  deadZone: 0.18
   dampTime: 0.1
   use2DBlend: 1
   useCameraAsBasis: 1
-  cameraTransform: {fileID: 0}
-  useLegacyInputFallback: 1
+  cameraTransform: {fileID: 963194228}
+  autoAssignMainCamera: 1
+  useLegacyInputFallback: 0
   axisX: Horizontal
   axisY: Vertical
   minSpeedToUseFallback: 0.05
   inputFallbackScale: 1
+  guardIdleSnap: 0.08
 --- !u!114 &281972717
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1771,9 +1783,17 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -1554193974251969968, guid: 24253cb006f16b0409c4c45725f35df5, type: 3}
+      propertyPath: m_Layer
+      value: 13
+      objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 24253cb006f16b0409c4c45725f35df5, type: 3}
       propertyPath: m_Name
       value: object
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 24253cb006f16b0409c4c45725f35df5, type: 3}
+      propertyPath: m_Layer
+      value: 13
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3859,7 +3879,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1406020505}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.060992237, y: -0.6967108, z: 0.059660718, w: 0.71226025}
+  m_LocalRotation: {x: 0.06099281, y: -0.6967038, z: 0.059660096, w: 0.7122671}
   m_LocalPosition: {x: 5.223, y: 1.5980586, z: -2.56}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -5316,7 +5336,7 @@ GameObject:
   - component: {fileID: 1787391980}
   - component: {fileID: 1787391981}
   - component: {fileID: 1787391982}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: Enemy
   m_TagString: Enemy
   m_Icon: {fileID: 0}
@@ -5539,7 +5559,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1833898923}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.22144969, y: -0.036115553, z: 0.008207325, w: 0.97446823}
+  m_LocalRotation: {x: 0.22145003, y: -0.036075495, z: 0.008198219, w: 0.9744698}
   m_LocalPosition: {x: 3.023, y: 3.8980584, z: -6.66}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -6503,7 +6523,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2040590824}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: LockPivot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
