@@ -368,6 +368,7 @@ GameObject:
   - component: {fileID: 99273688}
   - component: {fileID: 99273690}
   - component: {fileID: 99273691}
+  - component: {fileID: 99273692}
   m_Layer: 0
   m_Name: CM_LockOnCam
   m_TagString: Untagged
@@ -481,6 +482,29 @@ MonoBehaviour:
   smoothFollow: 1
   lerpSpeed: 6
   smoothTime: 0
+--- !u!114 &99273692
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 99273687}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00b2d199b96b516448144ab30fb26aed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_ApplyAfter: 2
+  m_ChannelMask: 1
+  m_Gain: 1
+  m_Use2DDistance: 0
+  m_UseCameraSpace: 1
+  m_ReactionSettings:
+    m_SecondaryNoise: {fileID: 0}
+    m_AmplitudeGain: 1.2
+    m_FrequencyGain: 1
+    m_Duration: 1
+    m_NoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &203082384
 GameObject:
   m_ObjectHideFlags: 0
@@ -882,6 +906,7 @@ GameObject:
   m_Component:
   - component: {fileID: 281972684}
   - component: {fileID: 281972683}
+  - component: {fileID: 281972720}
   - component: {fileID: 281972694}
   - component: {fileID: 281972685}
   - component: {fileID: 281972687}
@@ -907,6 +932,8 @@ GameObject:
   - component: {fileID: 281972715}
   - component: {fileID: 281972716}
   - component: {fileID: 281972717}
+  - component: {fileID: 281972719}
+  - component: {fileID: 281972718}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -1435,10 +1462,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0cd5f714e6948ac428edecef3c80feaf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  health: {fileID: 0}
-  guardCtrl: {fileID: 0}
-  animator: {fileID: 0}
-  verbose: 1
+  health: {fileID: 281972694}
+  anim: {fileID: 0}
+  guard: {fileID: 281972713}
+  feedback: {fileID: 281972719}
+  hitTriggerParam: Hit
+  guardBlockTriggerParam: GuardBlock
+  frontArcDegrees: 100
+  chipDamageMul: 0.1
+  suppressHitAnimWhenGuarding: 1
+  lockMoveOnParry: 0.35
+  lockMoveOnBlock: 0.2
+  simpleInputBlocker: {fileID: 0}
+  moveController: {fileID: 281972685}
+  ultimateTarget: {fileID: 281972682}
+  ultimateGainOnParry: 10
+  ultimateAddMethodNames:
+  - AddGauge
+  - AddUltimateGauge
+  - AddUltimate
+  - Gain
+  - OnParryUltimateGain
+  debugLog: 0
 --- !u!114 &281972713
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1460,15 +1505,57 @@ MonoBehaviour:
   modelForwardSource: {fileID: 281972684}
   cameraTransform: {fileID: 963194228}
   invertForward: 0
-  frontArcDegrees: 119
+  frontArcDegrees: 100
   flattenToGround: 1
   denyGuardWhileAttacking: 1
   autoResumeGuardIfHolding: 1
   chipDamageOnBlock: 0.1
   enablePerfectGuard: 1
   perfectGuardWindow: 0.12
+  lockMoveOnBlock: 1
+  blockMoveLock: 0.35
+  lockMoveOnParry: 1
+  parryMoveLock: 0.45
+  stopVelocityOnLock: 1
+  disableRootMotionDuringLock: 1
+  move: {fileID: 281972685}
+  rb: {fileID: 0}
+  grantUltimateOnParry: 1
+  ultimateGainOnParry: 10
+  ultimate: {fileID: 281972699}
+  OnParrySuccess:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 281972719}
+        m_TargetAssemblyTypeName: ParryFeedbackController, Assembly-CSharp
+        m_MethodName: PlayParryFeedback
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+  OnGuardBlock:
+    m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 281972719}
+        m_TargetAssemblyTypeName: ParryFeedbackController, Assembly-CSharp
+        m_MethodName: PlayBlockFeedback
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
   animator: {fileID: 281972687}
   debugDraw: 1
+  warnMissingParams: 1
 --- !u!114 &281972714
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1494,8 +1581,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ac52b0c6c5061024ab2395f389554ab0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  guard: {fileID: 0}
-  anim: {fileID: 0}
+  guard: {fileID: 281972713}
+  anim: {fileID: 281972687}
   attackingBoolParam: IsAttacking
 --- !u!114 &281972716
 MonoBehaviour:
@@ -1548,6 +1635,190 @@ MonoBehaviour:
   yawSpeedDeg: 540
   autoUnlockWhenFar: 1
   maxDistance: 30
+--- !u!114 &281972718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 180ecf9b41d478f468eb3e9083753217, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_ImpulseDefinition:
+    m_ImpulseChannel: 1
+    m_ImpulseShape: 2
+    m_CustomImpulseShape:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    m_ImpulseDuration: 0.08
+    m_ImpulseType: 0
+    m_DissipationRate: 0.25
+    m_RawSignal: {fileID: 0}
+    m_AmplitudeGain: 1
+    m_FrequencyGain: 1
+    m_RepeatMode: 0
+    m_Randomize: 1
+    m_TimeEnvelope:
+      m_AttackShape:
+        serializedVersion: 2
+        m_Curve: []
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      m_DecayShape:
+        serializedVersion: 2
+        m_Curve: []
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      m_AttackTime: 0
+      m_SustainTime: 0.2
+      m_DecayTime: 0.7
+      m_ScaleWithImpact: 1
+      m_HoldForever: 0
+    m_ImpactRadius: 100
+    m_DirectionMode: 0
+    m_DissipationMode: 2
+    m_DissipationDistance: 100
+    m_PropagationSpeed: 343
+  m_DefaultVelocity: {x: 0, y: -1, z: 0}
+--- !u!114 &281972719
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 820236d4e0b750948a2a37e7105ee0fe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  useHitStop: 1
+  parryTimeScale: 0.05
+  parryStopDuration: 0.08
+  blockTimeScale: 0.25
+  blockStopDuration: 0.05
+  scaleFixedDeltaTime: 1
+  impulseSource: {fileID: 281972718}
+  parryVelocity: {x: 0, y: -1, z: 0}
+  blockVelocity: {x: 0, y: -0.6, z: 0}
+  parryForce: 1.5
+  blockForce: 0.8
+  fallbackShakeAmplitude: 0.2
+  fallbackShakeDuration: 0.12
+  fallbackCamera: {fileID: 0}
+  parryVfxPrefab: {fileID: 8771972552311404799, guid: 5d613915781a54749a629d79763f6a5e, type: 3}
+  blockVfxPrefab: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
+  vfxYOffset: 0.1
+  parentVfxToPlayer: 0
+  audioSource: {fileID: 281972720}
+  parryClip: {fileID: 8300000, guid: 6042db61eb35ce847acbe6f161dedb14, type: 3}
+  blockClip: {fileID: 8300000, guid: abc05311d4c2da2439e8492ad81fffe5, type: 3}
+  sfxVolume: 0.9
+  debugLog: 0
+--- !u!82 &281972720
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 0
+  MinDistance: 1.5
+  MaxDistance: 20
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &290598377
 GameObject:
   m_ObjectHideFlags: 0
@@ -2848,7 +3119,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 5000
-  field of view: 40
+  field of view: 42.939594
   orthographic: 0
   orthographic size: 10
   m_Depth: -1
@@ -2874,8 +3145,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.12719244, y: -0.0000001182411, z: 0.000000015162524, w: 0.9918781}
-  m_LocalPosition: {x: 2.223001, y: 2.5980585, z: -6.8599997}
+  m_LocalRotation: {x: 0.19262315, y: 0.027601281, z: -0.0054203384, w: 0.9808696}
+  m_LocalPosition: {x: 1.8398558, y: 4.72972, z: -9.662526}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -5789,6 +6060,7 @@ GameObject:
   - component: {fileID: 1897136317}
   - component: {fileID: 1897136319}
   - component: {fileID: 1897136320}
+  - component: {fileID: 1897136321}
   m_Layer: 0
   m_Name: FreeLook Camera
   m_TagString: Untagged
@@ -5965,6 +6237,29 @@ MonoBehaviour:
   invertScroll: 0
   minRadius: 2
   maxRadius: 8
+--- !u!114 &1897136321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1897136316}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00b2d199b96b516448144ab30fb26aed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_ApplyAfter: 2
+  m_ChannelMask: 1
+  m_Gain: 1
+  m_Use2DDistance: 0
+  m_UseCameraSpace: 1
+  m_ReactionSettings:
+    m_SecondaryNoise: {fileID: 0}
+    m_AmplitudeGain: 1.2
+    m_FrequencyGain: 1
+    m_Duration: 1
+    m_NoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &1914036229
 GameObject:
   m_ObjectHideFlags: 0

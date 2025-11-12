@@ -1,78 +1,69 @@
 using UnityEngine;
 
-/// <summary>
 /// 애니메이션 이벤트 수신기
-/// - 패링 윈도우 열기/닫기
+/// - 패링 창 열기/닫기(네이밍 호환: ParryWindow_Pulse / _Open / _Close)
 /// - 공격 시작/종료 시 Animator Bool("IsAttacking") 토글
-/// </summary>
 [DisallowMultipleComponent]
 public class AnimationEventReceiver : MonoBehaviour
 {
-    [Header("참조")] // 유니티 툴에서 조절: 연결 참조
-    [Tooltip("같은 캐릭터의 PlayerGuardController. 비우면 부모에서 자동 검색")]
+    [Header("참조: 같은 캐릭터의 컴포넌트 연결")]
+    [Tooltip("가드/패링 로직 컨트롤러")]
     public PlayerGuardController guard;
-    [Tooltip("공격 중 여부 Bool을 세팅할 Animator. 비우면 자신→부모→guard.animator 순으로 검색")]
+    [Tooltip("공격 중 여부 Bool을 세팅할 Animator")]
     public Animator anim;
 
-    [Header("파라미터 이름")] // 유니티 툴에서 조절: 파라미터명
-    [Tooltip("Animator Bool: 공격 중 여부 파라미터명")]
+    [Header("애니메이터 파라미터명")]
+    [Tooltip("공격 중 여부 Bool 파라미터명")]
     public string attackingBoolParam = "IsAttacking";
 
     int _attackingHash;
-    bool _hasAttackingParamChecked;
-    bool _hasAttackingParam;
+    bool _paramChecked, _hasAttackingBool;
+
+    void Reset()
+    {
+        if (!guard) guard = GetComponentInParent<PlayerGuardController>();
+        if (!anim)  anim  = GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
+        _attackingHash = Animator.StringToHash(attackingBoolParam);
+    }
 
     void Awake()
     {
         if (!guard) guard = GetComponentInParent<PlayerGuardController>();
-        if (!anim)  anim  = GetComponent<Animator>();
-        if (!anim && guard) anim = guard.animator;
-
+        if (!anim)  anim  = GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
         _attackingHash = Animator.StringToHash(attackingBoolParam);
     }
 
-    // ===== 패링 관련 AnimationEvent에서 호출 =====
-    public void ParryWindow_Pulse()
-    {
-        if (guard) guard.OpenParryWindow();
-    }
+    // ===== 패링 창 이벤트 =====
+    // 기존 사용명 그대로: ParryWindow_Pulse → guard.perfectGuardWindow 길이만큼 ON
+    public void ParryWindow_Pulse() { guard?.OpenParryWindow(); }
 
-    public void ParryWindow_Open(float seconds)
-    {
-        if (guard) guard.OpenParryWindow(seconds);
-    }
+    // 선택: 편의용(초 단위). 현재 GuardController가 초 인자를 받지 않으면 무시됨 없이 기본 Pulse를 호출.
+    public void ParryWindow_Open()  { guard?.OpenParryWindow(); }   // 인자 없는 오픈
+    public void ParryWindow_Close() { guard?.CloseParryWindow(); }  // 강제 종료
 
-    public void ParryWindow_Close()
-    {
-        if (guard) guard.CloseParryWindow();
-    }
-
-    // ===== 공격 상태 AnimationEvent에서 호출 =====
+    // ===== 공격 상태 이벤트 =====
     public void AE_AttackStart()
     {
         if (!anim) return;
-        EnsureHasAttackingParam();
-        if (_hasAttackingParam) anim.SetBool(_attackingHash, true);
+        EnsureParam();
+        if (_hasAttackingBool) anim.SetBool(_attackingHash, true);
     }
-
     public void AE_AttackEnd()
     {
         if (!anim) return;
-        EnsureHasAttackingParam();
-        if (_hasAttackingParam) anim.SetBool(_attackingHash, false);
+        EnsureParam();
+        if (_hasAttackingBool) anim.SetBool(_attackingHash, false);
     }
 
-    void EnsureHasAttackingParam()
+    void EnsureParam()
     {
-        if (_hasAttackingParamChecked || anim == null) return;
-        _hasAttackingParamChecked = true;
-
-        // 파라미터 존재 확인
+        if (_paramChecked || anim == null) return;
+        _paramChecked = true;
         foreach (var p in anim.parameters)
         {
             if (p.type == AnimatorControllerParameterType.Bool && p.name == attackingBoolParam)
             {
-                _hasAttackingParam = true;
+                _hasAttackingBool = true;
                 return;
             }
         }
