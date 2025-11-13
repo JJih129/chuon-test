@@ -6,47 +6,50 @@ using UnityEngine.Events;
 [DisallowMultipleComponent]
 public class PlayerDodgeController : MonoBehaviour
 {
-    // ===== 변수 헤더(한글 설명) =====
     [Header("① 참조")]
-    [SerializeField] Transform playerRoot;                 // [조절값] 진행 방향 기준
-    [SerializeField] Transform cameraTransform;            // [조절값] 입력을 월드로 변환
-    [SerializeField] PlayerMoveController move;            // [조절값] 이동 잠금 연동
-    [SerializeField] PlayerLockOn playerLockOn;            // [조절값] 락온 시 방향 결정에 영향
-    [SerializeField] Animator animator;                    // [조절값] 애니 동기화(선택)
-    [SerializeField] PlayerUltimateController ultimate;    // [조절값] 궁극기 게이지(선택)
+    [SerializeField] Transform playerRoot;
+    [SerializeField] Transform cameraTransform;
+    [SerializeField] PlayerMoveController move;     // 일반 이동 컴포넌트(있으면)
+    [SerializeField] PlayerLockOn playerLockOn;     // 락온 방향 보정(선택)
+    [SerializeField] Animator animator;             // 애니(선택)
+    [SerializeField] CombatMoveLocker moveLocker;   // ★ 이동 잠금 전담
 
-    [Header("② 회피 기본")]
-    [SerializeField] KeyCode dodgeKey = KeyCode.LeftShift; // [조절값] 회피 키
-    [SerializeField, Range(4f,28f)] float dodgeSpeed = 18f;// [조절값] 회피 속도(m/s)
-    [SerializeField, Range(0.05f,0.6f)] float dodgeDuration = 0.25f; // [조절값] 회피 시간
-    [SerializeField, Range(0f,1f)] float dodgeCooldown = 0f; // [조절값] 쿨타임(기획서: 0)
+    [Header("② 입력")]
+    [SerializeField] KeyCode dodgeKey = KeyCode.LeftShift;
 
-    [Header("③ 퍼펙트 회피")]
-    [Tooltip("적 공격 예고 후, 이 시간(초) 안에 회피 시작 시 퍼펙트 판정")]
-    [SerializeField, Range(0.03f,0.35f)] float perfectWindow = 0.16f; // [조절값] 패링급 윈도우
-    [Tooltip("퍼펙트 회피 슬로모션 타임스케일")]
-    [SerializeField, Range(0.1f,0.5f)] float slowTimeScale = 0.2f;    // [조절값]
-    [Tooltip("퍼펙트 회피 슬로모션 지속시간(초)")]
-    [SerializeField, Range(0.05f,0.6f)] float slowDuration = 0.3f;    // [조절값]
-    [Tooltip("퍼펙트 회피 시 궁극기 게이지 증가량")]
-    [SerializeField, Range(0f,50f)] float perfectGaugeBonus = 5f;     // [조절값]
+    [Header("③ 이동 조절(속도/거리 중 택1)")]
+    [Tooltip("끄면 '속도 기반', 켜면 '거리 기반' 회피")]
+    [SerializeField] bool useDistanceBased = false;
+    [SerializeField, Range(4f, 28f)]  float dodgeSpeed = 18f;
+    [SerializeField, Range(1f, 12f)]  float dodgeDistance = 5f;
+    [SerializeField, Range(0.05f, .6f)] float dodgeDuration = 0.25f;
+    [SerializeField, Range(0f, 1f)]   float dodgeCooldown = 0f;
 
-    [Header("④ Animator 파라미터")]
-    [SerializeField] string p_IsDodging = "IsDodging";     // [조절값] 회피 중 Bool
-    [SerializeField] string p_PerfectDodge = "PerfectDodge"; // [조절값] 퍼펙트 트리거
+    [Header("④ 속도 곡선(0~1)")]
+    [Tooltip("시간 정규화 t(0~1)에 대한 속도 배율")]
+    [SerializeField] AnimationCurve speedCurve = AnimationCurve.Linear(0,1, 1,1);
 
-    [Header("⑤ 이벤트")]
+    [Header("⑤ 애니 파라미터")]
+    [SerializeField] string p_IsDodging = "IsDodging";
+    [SerializeField] string p_DodgeTrigger = "Dodge";
+
+    [Header("⑥ 이동 잠금 옵션(대시 동안)")]
+    [Tooltip("회피 진행 중 일반 이동 금지")]
+    [SerializeField] bool lockMoveDuringDodge = true;
+    [SerializeField] bool zeroVelocityOnDodge = true;
+    [SerializeField] bool disableRootMotionOnDodge = true;
+
+    [Header("⑦ 이벤트")]
     public UnityEvent OnDodgeStart;
     public UnityEvent OnDodgeEnd;
-    public UnityEvent OnPerfectDodge;
 
-    // ===== 내부 =====
+    // 내부
     CharacterController cc;
     float cdTimer;
     bool isDodging;
-    float dodgeTimer;
+    float elapsed;
     Vector3 dodgeDir;
-    float lastTelegraphTime = -999f; // 가장 최근 “공격 예고” 시각
+    float baseSpeed;
 
     void Reset()
     {
@@ -55,8 +58,9 @@ public class PlayerDodgeController : MonoBehaviour
         if (!animator) animator = GetComponentInChildren<Animator>();
         if (!move) move = GetComponent<PlayerMoveController>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
-        if (!ultimate) ultimate = GetComponent<PlayerUltimateController>();
+        if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
     }
+
     void Awake()
     {
         cc = GetComponent<CharacterController>();
@@ -65,102 +69,87 @@ public class PlayerDodgeController : MonoBehaviour
         if (!animator) animator = GetComponentInChildren<Animator>();
         if (!move) move = GetComponent<PlayerMoveController>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
-        if (!ultimate) ultimate = GetComponent<PlayerUltimateController>();
+        if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
     }
 
     void Update()
     {
         cdTimer -= Time.unscaledDeltaTime;
 
-        // 진행 중
-        if (isDodging)
-        {
-            cc.Move(dodgeDir * dodgeSpeed * Time.deltaTime);
-            dodgeTimer -= Time.deltaTime;
-            if (dodgeTimer <= 0f) EndDodge();
-            return;
-        }
+        if (isDodging) { TickDodge(); return; }
 
-        // 입력
         if (Input.GetKeyDown(dodgeKey) && cdTimer <= 0f)
-        {
             StartDodge();
-        }
     }
 
-    // ===== 퍼블릭: 적이 공격 “예고”할 때 호출(선택) =====
-    // 예: 투사체 발사 직전, 근접 공격 판정 직전 등에서 playerDodge.RegisterTelegraph();
-    public void RegisterTelegraph()
-    {
-        lastTelegraphTime = Time.time;
-    }
-    public void RegisterTelegraphWithLead(float leadSeconds)
-    {
-        // 리드타임이 있으면 예고 시각을 앞당겨 판정 폭 보정
-        lastTelegraphTime = Time.time - Mathf.Max(0f, leadSeconds);
-    }
-
-    // ===== 로직 =====
     void StartDodge()
     {
-        // 방향 결정: 입력 또는 전방
+        // 방향 결정(락온시: 캐릭터 기준, 아니면 카메라 기준)
         Vector2 in2 = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-        Transform basis = cameraTransform ? cameraTransform : playerRoot;
+        Transform basis = (playerLockOn && playerLockOn.HasTarget) ? playerRoot
+                             : (cameraTransform ? cameraTransform : playerRoot);
         Vector3 fwd = Flat(basis.forward), rgt = Flat(basis.right);
         Vector3 wish = (rgt * in2.x + fwd * in2.y);
-        dodgeDir = (wish.sqrMagnitude > 0.01f) ? wish.normalized : Flat(playerRoot.forward);
+        dodgeDir = (wish.sqrMagnitude > 0.001f) ? wish.normalized : Flat(playerRoot.forward);
 
-        // 상태 전환
-        isDodging = true; dodgeTimer = dodgeDuration; cdTimer = dodgeCooldown;
-        move?.OnDodgeStart();
-        if (animator && !string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, true);
-        OnDodgeStart?.Invoke();
+        baseSpeed = useDistanceBased
+            ? Mathf.Max(0.01f, dodgeDistance / Mathf.Max(0.01f, dodgeDuration))
+            : dodgeSpeed;
 
-        // 퍼펙트 판정
-        bool perfect = (Time.time - lastTelegraphTime) <= perfectWindow;
-        if (perfect)
+        isDodging = true; elapsed = 0f;
+        cdTimer = dodgeCooldown;
+
+        // ★ 대시 동안 일반 이동 잠금
+        if (lockMoveDuringDodge && moveLocker)
+            moveLocker.Lock("DODGE", dodgeDuration, zeroVelocityOnDodge, disableRootMotionOnDodge);
+
+        if (animator)
         {
-            // 궁게이지
-            if (ultimate) ultimate.AddGauge(perfectGaugeBonus);
-
-            // 애니 트리거
-            if (animator && !string.IsNullOrEmpty(p_PerfectDodge)) animator.SetTrigger(p_PerfectDodge);
-
-            // 슬로모션(내장)
-            StartCoroutine(CoSlowmo(slowTimeScale, slowDuration));
-
-            OnPerfectDodge?.Invoke();
+            if (!string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, true);
+            if (!string.IsNullOrEmpty(p_DodgeTrigger)) animator.SetTrigger(p_DodgeTrigger);
         }
+        OnDodgeStart?.Invoke();
+    }
+
+    void TickDodge()
+    {
+        elapsed += Time.deltaTime;
+        float t = Mathf.Clamp01(elapsed / Mathf.Max(0.01f, dodgeDuration));
+        float instSpeed = baseSpeed * Mathf.Max(0f, speedCurve.Evaluate(t));
+
+        // 대시 이동(일반 이동 컴포넌트는 잠겨있어야 함)
+        cc.Move(dodgeDir * instSpeed * Time.deltaTime);
+
+        if (elapsed >= dodgeDuration) EndDodge();
     }
 
     void EndDodge()
     {
         isDodging = false;
-        move?.OnDodgeEnd();
+        // 안전 해제(자동해제 타이머가 이미 끝나도 중복 호출 무해)
+        if (lockMoveDuringDodge && moveLocker)
+            moveLocker.Unlock("DODGE");
+
         if (animator && !string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, false);
         OnDodgeEnd?.Invoke();
     }
 
-    IEnumerator CoSlowmo(float scale, float dur)
+    static Vector3 Flat(Vector3 v)
     {
-        float prevScale = Time.timeScale;
-        float prevFixed = Time.fixedDeltaTime;
-        Time.timeScale = Mathf.Clamp(scale, 0.05f, 1f);
-        Time.fixedDeltaTime = 0.02f * Time.timeScale;
-        float t = 0f;
-        while (t < dur)
-        {
-            t += Time.unscaledDeltaTime; // 슬로모션과 무관하게 흐름 유지
-            yield return null;
-        }
-        Time.timeScale = prevScale;
-        Time.fixedDeltaTime = prevFixed;
+        v.y = 0f;
+        if (v.sqrMagnitude < 0.0001f) return Vector3.forward;
+        return v.normalized;
     }
 
-    static Vector3 Flat(Vector3 v){ v.y = 0f; return v.sqrMagnitude > 0.0001f ? v.normalized : Vector3.forward; }
-
 #if UNITY_EDITOR
-    [ContextMenu("Debug/Telegraph")]
-    void DebugTele() => RegisterTelegraph();
+    void OnDrawGizmosSelected()
+    {
+        if (!Application.isPlaying && useDistanceBased)
+        {
+            Gizmos.color = new Color(0, 1, 1, 0.4f);
+            var dir = playerRoot ? Flat(playerRoot.forward) : Vector3.forward;
+            Gizmos.DrawRay(transform.position + Vector3.up * 0.05f, dir * dodgeDistance);
+        }
+    }
 #endif
 }

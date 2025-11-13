@@ -2,46 +2,70 @@ using System.Collections;
 using UnityEngine;
 using Cinemachine;
 
-/// 패링/블록 연출 총괄(히트스톱 + 카메라 쉐이크 + VFX + SFX)
+/// 패링/블록/퍼펙트회피 연출 총괄(히트스톱 + 카메라 임펄스 + VFX + SFX)
+/// - 모든 강도/지속시간은 인스펙터에서 조절
+/// - Cinemachine Impulse Source가 연결되면 우선 사용, 없으면 간이 쉐이크(Fallback) 사용
 [DisallowMultipleComponent]
 public class ParryFeedbackController : MonoBehaviour
 {
+    // ─────────────────────────────────────────────────────────────────────────────
     // ① 히트스톱(Time.timeScale)
     [Header("① 히트스톱(전역 Time.timeScale)")]
-    [SerializeField] bool useHitStop = true;                 // 사용 여부
-    [Range(0f,1f)] [SerializeField] float parryTimeScale = 0.05f;
-    [SerializeField] float parryStopDuration = 0.08f;
-    [Range(0f,1f)] [SerializeField] float blockTimeScale = 0.25f;
-    [SerializeField] float blockStopDuration = 0.05f;
+    [SerializeField] bool useHitStop = true;
+
+    [Tooltip("패링 히트스톱 타임스케일"), Range(0f,1f)] public float parryTimeScale = 0.05f;
+    [Tooltip("패링 히트스톱 지속(Realtime)")] public float parryStopDuration = 0.08f;
+
+    [Tooltip("블록 히트스톱 타임스케일"), Range(0f,1f)] public float blockTimeScale = 0.25f;
+    [Tooltip("블록 히트스톱 지속(Realtime)")] public float blockStopDuration = 0.05f;
+
+    [Tooltip("퍼펙트 회피 히트스톱 타임스케일"), Range(0f,1f)] public float dodgeTimeScale = 0.12f;
+    [Tooltip("퍼펙트 회피 히트스톱 지속(Realtime)")] public float dodgeStopDuration = 0.12f;
+
+    [Tooltip("히트스톱 동안 fixedDeltaTime도 함께 스케일링")]
     [SerializeField] bool scaleFixedDeltaTime = true;
 
+    // ─────────────────────────────────────────────────────────────────────────────
     // ② 카메라 쉐이크(Cinemachine)
     [Header("② 카메라 쉐이크(Cinemachine)")]
     [SerializeField] CinemachineImpulseSource impulseSource; // Player 쪽에 추가한 소스
-    [SerializeField] Vector3 parryVelocity = new(0f, -1f, 0f);
-    [SerializeField] Vector3 blockVelocity = new(0f, -0.6f, 0f);
-    [Range(0f, 3f)] [SerializeField] float parryForce = 1.5f; // 힘 = velocity * force
-    [Range(0f, 3f)] [SerializeField] float blockForce = 0.8f;
+
+    [Tooltip("패링 시 임펄스 방향/세기(velocity * force)")]
+    public Vector3 parryVelocity = new(0f, -1f, 0f);
+    [Range(0f, 3f)] public float parryForce = 1.5f;
+
+    [Tooltip("블록 시 임펄스 방향/세기")]
+    public Vector3 blockVelocity = new(0f, -0.6f, 0f);
+    [Range(0f, 3f)] public float blockForce = 0.8f;
+
+    [Tooltip("퍼펙트 회피 시 임펄스 방향/세기(조금 길고 가볍게)")]
+    public Vector3 dodgeVelocity = new(0f, -0.8f, 0f);
+    [Range(0f, 3f)] public float dodgeForce = 1.2f;
 
     // Fallback 단순 쉐이크(임펄스 미사용 시)
     [SerializeField] float fallbackShakeAmplitude = 0.2f;
     [SerializeField] float fallbackShakeDuration = 0.12f;
     [SerializeField] Transform fallbackCamera;
 
+    // ─────────────────────────────────────────────────────────────────────────────
     // ③ VFX
     [Header("③ VFX")]
     [SerializeField] GameObject parryVfxPrefab;
     [SerializeField] GameObject blockVfxPrefab;
+    [SerializeField] GameObject dodgeVfxPrefab;
     [SerializeField] float vfxYOffset = 0.1f;
     [SerializeField] bool parentVfxToPlayer = false;
 
+    // ─────────────────────────────────────────────────────────────────────────────
     // ④ SFX
     [Header("④ SFX")]
     [SerializeField] AudioSource audioSource;
     [SerializeField] AudioClip parryClip;
     [SerializeField] AudioClip blockClip;
+    [SerializeField] AudioClip dodgeClip;
     [Range(0f,1f)] [SerializeField] float sfxVolume = 0.9f;
 
+    // ─────────────────────────────────────────────────────────────────────────────
     // ⑤ 디버그
     [Header("⑤ 디버그")]
     [SerializeField] bool debugLog = false;
@@ -74,12 +98,21 @@ public class ParryFeedbackController : MonoBehaviour
         PlaySfx(blockClip);
     }
 
-    // ===== 외부 호출 API(무인자, 인스펙터 바인딩용) =====
-    // 이벤트가 UnityEvent(매개변수 없음)인 경우 이걸 선택하라.
-    public void PlayParryFeedback()  => PlayParryFeedback(transform.position, transform);
-    public void PlayBlockFeedback()  => PlayBlockFeedback(transform.position, transform);
+    public void PlayPerfectDodgeFeedback(Vector3 hitPoint, Transform attacker)
+    {
+        if (debugLog) Debug.Log("[ParryFX] Perfect Dodge", this);
+        if (useHitStop) StartHitStop(dodgeTimeScale, dodgeStopDuration);
+        ShakeCamera(dodgeVelocity, dodgeForce);
+        SpawnVfx(dodgeVfxPrefab, hitPoint);
+        PlaySfx(dodgeClip);
+    }
 
-    // ----- 내부 -----
+    // ===== 외부 호출 API(무인자, 인스펙터 바인딩용) =====
+    public void PlayParryFeedback()       => PlayParryFeedback(transform.position, transform);
+    public void PlayBlockFeedback()       => PlayBlockFeedback(transform.position, transform);
+    public void PlayPerfectDodgeFeedback()=> PlayPerfectDodgeFeedback(transform.position, transform);
+
+    // ─────────────────────────────────────────────────────────────────────────────
     void StartHitStop(float scale, float duration)
     {
         if (_hitStopCo != null) StopCoroutine(_hitStopCo);
