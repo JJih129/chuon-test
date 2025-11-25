@@ -6,5 +6,6 @@ public enum HitType
     Strong,
     Heavy,
     Guarded,
-    Parried
+    Parried,
+    Force 
 }

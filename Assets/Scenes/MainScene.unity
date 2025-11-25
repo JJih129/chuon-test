@@ -2526,6 +2526,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: boss
       objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: ceb28fe82609bed4b905742e0e05028e, type: 3}
+      propertyPath: m_TagString
+      value: Enemy
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: ceb28fe82609bed4b905742e0e05028e, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 6b71fe40458d9044ba00ef7bcd777dae, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -2545,6 +2553,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: ceb28fe82609bed4b905742e0e05028e, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1727032500}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: ceb28fe82609bed4b905742e0e05028e, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1727032505}
     - targetCorrespondingSourceObject: {fileID: -2422315340263230684, guid: ceb28fe82609bed4b905742e0e05028e, type: 3}
       insertIndex: -1
       addedObject: {fileID: 346066844}
@@ -2867,7 +2878,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   mainDirectional: {fileID: 705507994}
-  targetMaterial: {fileID: 2100000, guid: 34ece2c6fd0e7ea4a85bce36883d5bcb, type: 2}
+  targetMaterial: {fileID: 0}
   prop: _LightDir
 --- !u!1 &712660173
 GameObject:
@@ -2951,6 +2962,7 @@ MonoBehaviour:
   emissionColorName: _EmissionColor
   parryColor: {r: 5, g: 2.5, b: 0, a: 5}
   nonParryColor: {r: 5, g: 0, b: 0, a: 5}
+  idleColor: {r: 0, g: 0, b: 0, a: 1}
   flashDuration: 0.5
 --- !u!4 &734326099
 Transform:
@@ -3762,7 +3774,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxHP: 100
-  startHP: 0
+  startHP: 100
   invincibleOnStart: 0
   hitInvincibleDuration: 0
   startStaggered: 0
@@ -3780,15 +3792,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1626d5f61ee14c04b83b3c0c934be79d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  breakGauge: 0
-  breakThreshold: 100
+  maxBreak: 100
+  baseBreakPerHit: 10
   breakDuration: 5
+  recoveryPerSecond: 15
+  bossHealth: {fileID: 0}
+  bossAnimator: {fileID: 0}
+  breakBoolName: IsBreak
   OnBreakEnter:
     m_PersistentCalls:
       m_Calls: []
   OnBreakExit:
     m_PersistentCalls:
       m_Calls: []
+  logDebug: 0
 --- !u!114 &1066253714
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5476,15 +5493,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1626d5f61ee14c04b83b3c0c934be79d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  breakGauge: 0
-  breakThreshold: 100
+  maxBreak: 100
+  baseBreakPerHit: 10
   breakDuration: 5
+  recoveryPerSecond: 15
+  bossHealth: {fileID: 0}
+  bossAnimator: {fileID: 0}
+  breakBoolName: IsBreak
   OnBreakEnter:
     m_PersistentCalls:
       m_Calls: []
   OnBreakExit:
     m_PersistentCalls:
       m_Calls: []
+  logDebug: 0
 --- !u!114 &1727032502
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5498,7 +5520,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxHP: 100
-  startHP: 0
+  startHP: 100
   invincibleOnStart: 0
   hitInvincibleDuration: 0
   startStaggered: 0
@@ -5525,14 +5547,78 @@ MonoBehaviour:
   playerTracker: {fileID: 281972723}
   currentState: 2
   combatIdleTime: 1.5
+  introIdleDuration: 3
   moveSpeed: 4
   stoppingDistance: 1
-  allPatterns: []
+  moveAnimDamp: 0.1
+  allPatterns:
+  - patternName: a
+    animTriggerName: Attack_A
+    isParryable: 1
+    damageAmount: 15
+    cooldown: 1
+    currentCooldown: 0
+    weight: 1
+    minRange: 0
+    maxRange: 2
+    forbiddenAfter: 
+  - patternName: b
+    animTriggerName: Attack_B
+    isParryable: 1
+    damageAmount: 20
+    cooldown: 2
+    currentCooldown: 0
+    weight: 0.8
+    minRange: 0
+    maxRange: 3.5
+    forbiddenAfter: 
+  - patternName: c
+    animTriggerName: Attack_C
+    isParryable: 1
+    damageAmount: 30
+    cooldown: 5
+    currentCooldown: 0
+    weight: 0.5
+    minRange: 0
+    maxRange: 3
+    forbiddenAfter: 
+  - patternName: d
+    animTriggerName: Attack_D
+    isParryable: 1
+    damageAmount: 25
+    cooldown: 3.5
+    currentCooldown: 0
+    weight: 0.7
+    minRange: 0
+    maxRange: 8
+    forbiddenAfter: 
+  - patternName: e
+    animTriggerName: Attack_E
+    isParryable: 1
+    damageAmount: 20
+    cooldown: 6
+    currentCooldown: 0
+    weight: 0.5
+    minRange: 0
+    maxRange: 100
+    forbiddenAfter: 
 --- !u!95 &1727032504 stripped
 Animator:
   m_CorrespondingSourceObject: {fileID: 5866666021909216657, guid: ceb28fe82609bed4b905742e0e05028e, type: 3}
   m_PrefabInstance: {fileID: 480514373}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1727032505
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1727032499}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6fb9b0666c258c249abd8b089402c786, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1731719778
 GameObject:
   m_ObjectHideFlags: 3

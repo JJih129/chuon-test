@@ -1,74 +1,65 @@
-// ÆÄÀÏ¸í: BossController.cs
 using UnityEngine;
 using System.Collections.Generic;
 using System.Collections;
 using System;
 using UnityEngine.Events;
 
-// ==============================================================================
-// 1. FSM »óÅÂ Á¤ÀÇ
-// ==============================================================================
+/// <summary>
+/// ë³´ìŠ¤ FSM ìƒíƒœ ì •ì˜
+/// </summary>
 public enum BossState
 {
-    IntroIdle, Detect, Move, Attack, CombatIdle, Break, Dead
+    IntroIdle,   // ì „íˆ¬ ì‹œì‘ ì „ ì—°ì¶œìš© ëŒ€ê¸°
+    Detect,      // í”Œë ˆì´ì–´ ê±°ë¦¬/ìƒíƒœ ì²´í¬
+    Move,        // í”Œë ˆì´ì–´ì—ê²Œ ì´ë™
+    Attack,      // íŒ¨í„´ ìˆ˜í–‰ ì¤‘
+    CombatIdle,  // ê³µê²© í›„ ì ê¹ íœ´ì§€
+    Break,       // ë¸Œë ˆì´í¬(ê·¸ë¡œê¸°)
+    Dead         // ì‚¬ë§
 }
 
-// ==============================================================================
-// 2. °ø°İ ÆĞÅÏ »ó¼¼ µ¥ÀÌÅÍ ±¸Á¶ Á¤ÀÇ
-// ==============================================================================
 [System.Serializable]
 public class AttackPattern
 {
+    [Header("ê¸°ë³¸ ì •ë³´")]
     public string patternName;
-    public string animTriggerName;
+    public string animTriggerName; // ì• ë‹ˆë©”ì´í„° ìŠ¤í…Œì´íŠ¸/íŠ¸ë¦¬ê±° ì´ë¦„ (Attack_A ~ Attack_E)
     public bool isParryable;
     public int damageAmount = 10;
 
-    [Header("¹ßµ¿ Á¶°Ç")]
-    public float cooldown;
+    [Header("ì¿¨íƒ€ì„/ê°€ì¤‘ì¹˜/ê±°ë¦¬")]
+    public float cooldown = 2f;
     [HideInInspector] public float currentCooldown;
-    public float weight;
-    public float minRange;
-    public float maxRange;
+    public float weight = 1f;
+    public float minRange = 0f;
+    public float maxRange = 5f;
+
+    [Tooltip("ì´ íŒ¨í„´ ì§ì „ì— ê¸ˆì§€í•  íŒ¨í„´ ì´ë¦„ (ì—†ìœ¼ë©´ ë¹ˆ ë¬¸ìì—´)")]
     public string forbiddenAfter;
 
     public bool CanExecute(BossController boss, float distance, string lastPattern)
     {
         if (currentCooldown > 0f) return false;
         if (distance < minRange || distance > maxRange) return false;
-        if (lastPattern.Equals(forbiddenAfter)) return false;
+
+        if (!string.IsNullOrEmpty(forbiddenAfter) &&
+            lastPattern.Equals(forbiddenAfter, StringComparison.Ordinal))
+            return false;
 
         if (boss.playerTracker == null) return true;
 
-        IPlayerTracker tracker = boss.playerTracker;
-
-        switch (patternName)
-        {
-            case "¿¬¼Ó º£±â":
-                if (distance >= 1.5f && distance <= 3f)
-                {
-                    return tracker.IsAttackStoppedRecently(1.0f);
-                }
-                return false;
-            case "¾ù¹Ú º£±â":
-                return distance < 1f && tracker.IsDodgingRecently();
-            case "»ç¼± º£±â":
-                return distance >= 1f && distance <= 2.5f && tracker.IsDodgingRecently();
-            case "´ë½¬ Âî¸£±â":
-                return distance >= 2f && tracker.IsRetreating();
-        }
-
+        // í•„ìš”í•˜ë©´ ì´ë¦„ ê¸°ì¤€ìœ¼ë¡œ ì„¸ë¶€ ì¡°ê±´ ì¶”ê°€
+        // IPlayerTracker tracker = boss.playerTracker;
         return true;
     }
 }
 
-// ==============================================================================
-// 3. BossController ¸ŞÀÎ ·ÎÁ÷
-// ==============================================================================
-
+/// <summary>
+/// ë³´ìŠ¤ ë©”ì¸ ì»¨íŠ¸ë¡¤ëŸ¬ (FSM + ì´ë™ + íŒ¨í„´ ì¬ìƒ)
+/// </summary>
 public class BossController : MonoBehaviour
 {
-    [Header("¢º ÇÙ½É ÄÄÆ÷³ÍÆ® ÅëÇÕ")]
+    [Header("ì°¸ì¡° ì»´í¬ë„ŒíŠ¸")]
     public BossHealth bossHealth;
     public BossBreakController breakController;
     public Animator bossAnimator;
@@ -77,217 +68,430 @@ public class BossController : MonoBehaviour
     public Collider attackHitbox;
     public PlayerTracker playerTracker;
 
-    [Header("¢º FSM ¼³Á¤")]
-    // ¡Ú¡Ú¡Ú ÃÊ±â »óÅÂ¸¦ Dead·Î ¼³Á¤ÇÏ¿© Ã¹ SetState È£ÃâÀ» º¸ÀåÇÕ´Ï´Ù. ¡Ú¡Ú¡Ú
-    public BossState currentState = BossState.Dead;
+    [Header("FSM ì„¤ì •")]
+    public BossState currentState = BossState.IntroIdle;
     public float combatIdleTime = 1.5f;
+    public float introIdleDuration = 3.0f;
 
-    [Header("¢º ÀÌµ¿ ¼³Á¤")]
+    Coroutine _stateRoutine;
+    bool _isDead;
+
+    [Header("ì´ë™ ì„¤ì •")]
+    [Tooltip("ì‹¤ì œ ë³´ìŠ¤ ì´ë™ ì†ë„ (m/s)")]
     public float moveSpeed = 4.0f;
-    public float stoppingDistance = 1.0f; // °ø°İ ÁøÀÔ ½Ã ¸ØÃâ ÃÖ¼Ò °Å¸® (1m)
 
-    [Header("¢º °ø°İ ÆĞÅÏ µ¥ÀÌÅÍ")]
+    [Tooltip("ì´ ê±°ë¦¬ ì´ë‚´ë¡œ ë“¤ì–´ì˜¤ë©´ ì´ë™ì„ ë©ˆì¶”ê³  ê³µê²© ì¤€ë¹„")]
+    public float stoppingDistance = 1.0f;
+
+    [Tooltip("Blend Treeë¡œ ì „ë‹¬í•  MoveSpeed ë³´ê°„ ì‹œê°„ (0ì— ê°€ê¹Œìš¸ìˆ˜ë¡ ì¦‰ê° ë°˜ì‘)")]
+    [Range(0.01f, 0.5f)]
+    public float moveAnimDamp = 0.1f;
+
+    static readonly int AnimParam_MoveSpeed = Animator.StringToHash("MoveSpeed");
+    static readonly int AnimParam_IsBreak   = Animator.StringToHash("IsBreak");
+    static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
+
+    float _moveBlend; // 0~1
+
+    [Header("ê³µê²© íŒ¨í„´ ëª©ë¡")]
     public List<AttackPattern> allPatterns;
 
-    private string lastExecutedPattern = string.Empty;
-    private Coroutine _stateRoutine;
-    private AttackPattern _currentPattern;
+    string _lastExecutedPattern = string.Empty;
+    AttackPattern _currentPattern;
 
     void Awake()
     {
-        if (attackHitbox != null) attackHitbox.enabled = false;
+        if (attackHitbox != null)
+            attackHitbox.enabled = false;
 
-        bossHealth.OnDied += OnBossDied;
-        breakController.OnBreakEnter.AddListener(OnBreakEnter);
-        breakController.OnBreakExit.AddListener(OnBreakExit);
+        if (bossHealth != null)
+            bossHealth.OnDied += OnBossDied;
 
-        // ÇÊ¼ö ÄÄÆ÷³ÍÆ® ´©¶ô ½Ã ½ºÅ©¸³Æ® ºñÈ°¼ºÈ­ ¹æÁö (µğ¹ö±ë ¸ñÀûÀ¸·Î Á¦°Å)
+        if (breakController != null)
+        {
+            breakController.OnBreakEnter.AddListener(OnBreakEnter);
+            breakController.OnBreakExit.AddListener(OnBreakExit);
+        }
     }
 
     void Start()
     {
         SetState(BossState.IntroIdle);
-        Debug.Log("DEBUG: FSM Init - ÃÊ±â »óÅÂ ¼³Á¤ ¿Ï·á.");
     }
 
     void Update()
     {
-        foreach (AttackPattern pattern in allPatterns)
+        // íŒ¨í„´ ì¿¨íƒ€ì„ ê°ì†Œ
+        if (allPatterns != null)
         {
-            if (pattern.currentCooldown > 0f)
+            float dt = Time.deltaTime;
+            foreach (var p in allPatterns)
             {
-                pattern.currentCooldown -= Time.deltaTime;
+                if (p.currentCooldown > 0f)
+                    p.currentCooldown -= dt;
             }
         }
     }
 
-    // === »óÅÂ/ÀÌº¥Æ® °ü¸® ===
+    // ---------------- FSM ì „ì´ ----------------
 
     public void SetState(BossState newState)
     {
+        if (_isDead) return;
         if (currentState == newState) return;
-        if (currentState == BossState.Dead) return;
 
-        if (_stateRoutine != null) StopCoroutine(_stateRoutine);
+        if (_stateRoutine != null)
+        {
+            StopCoroutine(_stateRoutine);
+            _stateRoutine = null;
+        }
 
-        // ¡Ú¡Ú¡Ú »óÅÂ º¯°æ Àü ·Î±× (Old State È®ÀÎ) ¡Ú¡Ú¡Ú
-        Debug.Log($"[STATE DEBUG] OLD: {currentState} | NEW: {newState}");
-        Debug.Log($"FSM Transition: {currentState} -> {newState}");
-
-        // ½ÇÁ¦·Î »óÅÂ º¯¼ö¸¦ ¾÷µ¥ÀÌÆ®ÇÏ´Â ÄÚµå
+        var old = currentState;
         currentState = newState;
-
-        // ¡Ú¡Ú¡Ú »óÅÂ º¯°æ ÈÄ ·Î±× (New State È®ÀÎ) ¡Ú¡Ú¡Ú
-        Debug.Log($"[STATE DEBUG] State is now: {currentState}");
+        Debug.Log($"[BossFSM] {old} â†’ {newState}");
 
         switch (currentState)
         {
-            case BossState.IntroIdle: _stateRoutine = StartCoroutine(Co_HandleIntroIdle()); break;
-            case BossState.Detect: _stateRoutine = StartCoroutine(Co_HandleDetect()); break;
-            case BossState.Move: _stateRoutine = StartCoroutine(Co_HandleMove()); break;
-            case BossState.Attack: _stateRoutine = StartCoroutine(Co_PerformAttack()); break;
-            case BossState.CombatIdle: _stateRoutine = StartCoroutine(Co_CombatIdle()); break;
-            case BossState.Dead: break;
+            case BossState.IntroIdle:
+                _stateRoutine = StartCoroutine(Co_HandleIntroIdle());
+                break;
+            case BossState.Detect:
+                _stateRoutine = StartCoroutine(Co_HandleDetect());
+                break;
+            case BossState.Move:
+                _stateRoutine = StartCoroutine(Co_HandleMove());
+                break;
+            case BossState.Attack:
+                _stateRoutine = StartCoroutine(Co_PerformAttack());
+                break;
+            case BossState.CombatIdle:
+                _stateRoutine = StartCoroutine(Co_CombatIdle());
+                break;
+            case BossState.Break:
+                _stateRoutine = StartCoroutine(Co_HandleBreak());
+                break;
+            case BossState.Dead:
+                break;
         }
     }
 
-    private void OnBossDied() => SetState(BossState.Dead);
-    private void OnBreakEnter()
+    // ---------------- ìƒì¡´/ë¸Œë ˆì´í¬ ----------------
+
+    void OnBossDied()
     {
-        SetState(BossState.Break);
-        bossAnimator.SetBool("IsBreak", true);
+        if (_isDead) return;
+        _isDead = true;
+
+        if (_stateRoutine != null)
+        {
+            StopCoroutine(_stateRoutine);
+            _stateRoutine = null;
+        }
+
+        currentState = BossState.Dead;
+        UpdateMoveAnimation(0f);
+
+        if (bossAnimator != null)
+            bossAnimator.SetBool(AnimParam_IsDead, true);
+
+        Debug.Log("[BossFSM] Boss Dead");
     }
-    private void OnBreakExit()
+
+    void OnBreakEnter()
     {
-        bossAnimator.SetBool("IsBreak", false);
+        if (_isDead) return;
+
+        if (bossAnimator != null)
+            bossAnimator.SetBool(AnimParam_IsBreak, true);
+
+        SetState(BossState.Break);
+    }
+
+    void OnBreakExit()
+    {
+        if (_isDead) return;
+
+        if (bossAnimator != null)
+            bossAnimator.SetBool(AnimParam_IsBreak, false);
+
         SetState(BossState.Detect);
     }
 
-    // === ¾Ö´Ï¸ŞÀÌ¼Ç ÀÌº¥Æ® ¼ö½Å ¸Ş¼Òµå ===
+    // ---------------- ì• ë‹ˆë©”ì´ì…˜ ì´ë²¤íŠ¸ìš© ----------------
 
     public void OnAnimationPatternEnd()
     {
-        if (currentState == BossState.Attack)
+        if (currentState != BossState.Attack)
+            return;
+
+        if (_stateRoutine != null)
+        {
+            StopCoroutine(_stateRoutine);
+            _stateRoutine = null;
+        }
+
+        _currentPattern = null;
+        SetState(BossState.CombatIdle);
+    }
+
+    public void ActivateHitbox()
+    {
+        if (_currentPattern != null && attackHitbox != null)
+            attackHitbox.enabled = true;
+    }
+
+    public void DeactivateHitbox()
+    {
+        if (attackHitbox != null)
+            attackHitbox.enabled = false;
+    }
+
+    // ---------------- ìƒíƒœë³„ ì½”ë£¨í‹´ ----------------
+
+    IEnumerator Co_HandleIntroIdle()
+    {
+        float t = introIdleDuration;
+        while (t > 0f && !_isDead)
+        {
+            t -= Time.deltaTime;
+            UpdateMoveAnimation(0f);
+            yield return null;
+        }
+
+        if (!_isDead)
+            SetState(BossState.Detect);
+    }
+
+    IEnumerator Co_HandleDetect()
+    {
+        yield return null;
+
+        if (playerTarget == null)
+        {
+            UpdateMoveAnimation(0f);
+            yield break;
+        }
+
+        float distance = Vector3.Distance(transform.position, playerTarget.position);
+        UpdateMoveAnimation(0f);
+
+        if (distance > stoppingDistance + 1.0f)
+            SetState(BossState.Move);
+        else
+            SetState(BossState.Attack);
+    }
+
+    IEnumerator Co_HandleMove()
+    {
+        Debug.Log("[BossFSM] Move: í”Œë ˆì´ì–´ì—ê²Œ ì ‘ê·¼ ì‹œì‘");
+
+        while (currentState == BossState.Move && !_isDead)
+        {
+            if (playerTarget == null)
+            {
+                UpdateMoveAnimation(0f);
+                yield break;
+            }
+
+            Vector3 toPlayer = playerTarget.position - transform.position;
+            toPlayer.y = 0f;
+            float distance = toPlayer.magnitude;
+
+            if (distance <= stoppingDistance)
+            {
+                UpdateMoveAnimation(0f);
+                SetState(BossState.Attack);
+                yield break;
+            }
+
+            Vector3 dir = toPlayer.normalized;
+            if (dir.sqrMagnitude > 0.0001f)
+            {
+                Quaternion look = Quaternion.LookRotation(dir);
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation, look, Time.deltaTime * 5f);
+            }
+
+            transform.position += dir * moveSpeed * Time.deltaTime;
+            UpdateMoveAnimation(1f);
+
+            yield return null;
+        }
+    }
+
+    IEnumerator Co_CombatIdle()
+    {
+        float t = combatIdleTime;
+        while (t > 0f && !_isDead)
+        {
+            t -= Time.deltaTime;
+            UpdateMoveAnimation(0f);
+            yield return null;
+        }
+
+        if (!_isDead)
+            SetState(BossState.Detect);
+    }
+
+    IEnumerator Co_HandleBreak()
+    {
+        Debug.Log("[BossFSM] Break: ë¸Œë ˆì´í¬ ìƒíƒœ ì§„ì…");
+        while (currentState == BossState.Break && !_isDead)
+        {
+            UpdateMoveAnimation(0f);
+            yield return null;
+        }
+    }
+
+    IEnumerator Co_PerformAttack()
+    {
+        if (playerTarget == null || allPatterns == null || allPatterns.Count == 0)
+        {
+            SetState(BossState.CombatIdle);
+            yield break;
+        }
+
+        UpdateMoveAnimation(0f);
+
+        float distance = Vector3.Distance(transform.position, playerTarget.position);
+        AttackPattern pattern = SelectPattern(distance);
+
+        if (pattern == null)
+        {
+            Debug.LogWarning("[BossFSM] ì‚¬ìš©í•  ìˆ˜ ìˆëŠ” íŒ¨í„´ì´ ì—†ìŒ â†’ CombatIdle");
+            SetState(BossState.CombatIdle);
+            yield break;
+        }
+
+        _currentPattern      = pattern;
+        _lastExecutedPattern = pattern.patternName;
+        pattern.currentCooldown = pattern.cooldown;
+
+        if (patternVisuals != null)
+            patternVisuals.SetParryable(pattern.isParryable);
+
+        if (bossAnimator != null && !string.IsNullOrEmpty(pattern.animTriggerName))
+        {
+            bossAnimator.ResetTrigger(pattern.animTriggerName);
+            bossAnimator.SetTrigger(pattern.animTriggerName);
+        }
+
+        Debug.Log($"[BossFSM] Attack íŒ¨í„´ ì‹¤í–‰: {pattern.patternName} ({pattern.animTriggerName})");
+
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ì• ë‹ˆë©”ì´ì…˜ ì¢…ë£Œê¹Œì§€ ê¸°ë‹¤ë¦¬ëŠ” ì•ˆì „ì¥ì¹˜
+        // (Attack_A ~ E ìŠ¤í…Œì´íŠ¸ ì´ë¦„ì„ animTriggerNameê³¼ ë™ì¼í•˜ê²Œ ë§ì¶°ë‘ëŠ” ì „ì œ)
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        const float maxWait = 10f;
+        float elapsed = 0f;
+
+        bool enteredState = false;
+
+        // 1) í•´ë‹¹ Attack ìŠ¤í…Œì´íŠ¸ë¡œ ì‹¤ì œë¡œ ì§„ì…í•  ë•Œê¹Œì§€ ëŒ€ê¸°
+        while (elapsed < maxWait && currentState == BossState.Attack && !_isDead)
+        {
+            if (bossAnimator == null) break;
+
+            var info = bossAnimator.GetCurrentAnimatorStateInfo(0);
+            if (info.IsName(pattern.animTriggerName))
+            {
+                enteredState = true;
+                break;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // 2) ìŠ¤í…Œì´íŠ¸ì— ë“¤ì–´ê°”ë‹¤ë©´, í•œ ë²ˆ ì¬ìƒ ëë‚  ë•Œê¹Œì§€ (normalizedTime >= 0.99)
+        elapsed = 0f;
+        if (enteredState)
+        {
+            while (elapsed < maxWait && currentState == BossState.Attack && !_isDead)
+            {
+                if (bossAnimator == null) break;
+
+                var info = bossAnimator.GetCurrentAnimatorStateInfo(0);
+                if (!info.IsName(pattern.animTriggerName) || info.normalizedTime >= 0.99f)
+                    break;
+
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+        }
+
+        // AnimationEventê°€ ë¨¼ì € ìƒíƒœë¥¼ ë°”ê¿¨ë‹¤ë©´ ì—¬ê¸°ì„œ ì´ë¯¸ Attackì´ ì•„ë‹ ìˆ˜ ìˆìŒ
+        if (currentState == BossState.Attack && !_isDead)
         {
             _currentPattern = null;
             SetState(BossState.CombatIdle);
         }
     }
 
-    public void ActivateHitbox()
+    // ---------------- íŒ¨í„´ ì„ íƒ ----------------
+
+    AttackPattern SelectPattern(float distanceToPlayer)
     {
-        if (_currentPattern != null && attackHitbox != null)
-        {
-            attackHitbox.enabled = true;
-        }
-    }
-
-    public void DeactivateHitbox()
-    {
-        if (attackHitbox != null) attackHitbox.enabled = false;
-    }
-
-    // === FSM ÄÚ·çÆ¾ ±¸Çö (Detect ·ÎÁ÷ °³¼±) ===
-
-    private IEnumerator Co_HandleIntroIdle()
-    {
-        Debug.Log("DEBUG: Co_HandleIntroIdle - ÄÚ·çÆ¾ ½ÃÀÛ.");
-        yield return new WaitForSeconds(3.0f);
-        Debug.Log("DEBUG: Co_HandleIntroIdle - 3ÃÊ ´ë±â ¿Ï·á. Detect·Î ÀüÈ¯ ½Ãµµ.");
-        SetState(BossState.Detect);
-    }
-
-    private IEnumerator Co_HandleDetect()
-    {
-        Debug.Log("DEBUG: Detect State - ÁøÀÔ. ÇÃ·¹ÀÌ¾î Á¢±Ù ´ë±â ½ÃÀÛ.");
-
-        // 3m ÃÊ°ú ½Ã Áï½Ã Move·Î ÀüÈ¯ (ÀÌµ¿ ½ÃÀÛ)
-        float distance = Vector3.Distance(transform.position, playerTarget.position);
-        if (distance > 3f)
-        {
-            Debug.Log($"DEBUG: Detect State - 3m ÀÌ¿Ü({distance:F2}m). Move·Î ÀüÈ¯.");
-            SetState(BossState.Move);
-            yield break;
-        }
-
-        // 3m ÀÌ³»¶ó¸é °ø°İ ÁØºñ (AttackÀ¸·Î ÀüÈ¯)
-        Debug.Log($"DEBUG: Detect State - 3m ÀÌ³»({distance:F2}m). AttackÀ¸·Î ÀüÈ¯ ½Ãµµ.");
-        SetState(BossState.Attack);
-        yield break;
-    }
-
-    private IEnumerator Co_CombatIdle()
-    {
-        yield return new WaitForSeconds(combatIdleTime);
-        SetState(BossState.Detect);
-    }
-
-    // [ÃÖÁ¾ ¼öÁ¤] Move »óÅÂ: Á¤Áö °Å¸®(stoppingDistance)¸¦ »ç¿ëÇÑ ÃßÀû ¹× È¸Àü ·ÎÁ÷
-    private IEnumerator Co_HandleMove()
-    {
-        Debug.Log("DEBUG: Move State - ÇÃ·¹ÀÌ¾î ÃßÀû ½ÃÀÛ.");
-
-        while (true)
-        {
-            float distance = Vector3.Distance(transform.position, playerTarget.position);
-
-            // 1. °ø°İ ¹üÀ§ ÁøÀÔ Á¶°Ç: 3m + stoppingDistanceº¸´Ù °¡±î¿ì¸é ¸ØÃß°í °ø°İ
-            if (distance <= 3f + stoppingDistance)
-            {
-                Debug.Log("DEBUG: Move State - °ø°İ ¹üÀ§ ÁøÀÔ. AttackÀ¸·Î ÀüÈ¯.");
-                bossAnimator.SetFloat("Speed", 0f);
-                SetState(BossState.Attack);
-                yield break;
-            }
-
-            // 2. ¹æÇâ ¼³Á¤
-            Vector3 direction = (playerTarget.position - transform.position).normalized;
-            direction.y = 0f;
-
-            // 3. È¸Àü (ºÎµå·¯¿î Slerp »ç¿ë)
-            Quaternion lookRotation = Quaternion.LookRotation(direction);
-            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 5f);
-
-            // 4. ÀÌµ¿
-            transform.position += direction * moveSpeed * Time.deltaTime;
-
-            // 5. ¾Ö´Ï¸ŞÀÌ¼Ç ¾÷µ¥ÀÌÆ® 
-            bossAnimator.SetFloat("Speed", moveSpeed); // (¹æÇâ Å©±â ´ë½Å ¼Óµµ °ª Á÷Á¢ »ç¿ë)
-
-            yield return null;
-        }
-    }
-
-    private IEnumerator Co_PerformAttack()
-    {
-        // ... (ÆĞÅÏ ¼±ÅÃ ·ÎÁ÷) ...
+        if (allPatterns == null || allPatterns.Count == 0)
+            return null;
 
         List<AttackPattern> candidates = new List<AttackPattern>();
 
-        // ÆĞÅÏ ¼±ÅÃ ·ÎÁ÷ (ÆĞÅÏ µ¥ÀÌÅÍ°¡ ¾ø°Å³ª ¼±ÅÃ ½ÇÆĞ ½Ã °­Á¦ CombatIdle)
-        AttackPattern selectedPattern = (allPatterns.Count > 0) ? allPatterns[0] : null;
-
-        if (selectedPattern != null)
+        foreach (var p in allPatterns)
         {
-            // ÆĞÅÏ ½ÇÇà ¹× ¿¬Ãâ È£Ãâ (»ı·«)
-
-            Debug.Log($"DEBUG: Attack State - ÆĞÅÏ ½ÇÇà: {selectedPattern.patternName}. ¾Ö´Ï¸ŞÀÌ¼Ç ÀÌº¥Æ® ´ë±â.");
-
-            yield return new WaitUntil(() => currentState != BossState.Attack);
+            if (p == null) continue;
+            if (p.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
+                candidates.Add(p);
         }
-        else
+
+        if (candidates.Count == 0)
+            return null;
+
+        float totalWeight = 0f;
+        foreach (var p in candidates)
+            totalWeight += Mathf.Max(0f, p.weight);
+
+        if (totalWeight <= 0f)
+            return candidates[0];
+
+        float r = UnityEngine.Random.value * totalWeight;
+        float accum = 0f;
+
+        foreach (var p in candidates)
         {
-            Debug.LogWarning("DEBUG: Attack State - ½ÇÇà °¡´ÉÇÑ ÆĞÅÏ ¾øÀ½. CombatIdle·Î º¹±Í.");
-            SetState(BossState.CombatIdle);
+            float w = Mathf.Max(0f, p.weight);
+            accum += w;
+            if (r <= accum)
+                return p;
         }
+
+        return candidates[candidates.Count - 1];
     }
 
-    // === Ãæµ¹ Ã³¸® (Hitbox) ===
+    // ---------------- ì´ë™ ì• ë‹ˆ (BlendTree) ----------------
+
+    void UpdateMoveAnimation(float target01)
+    {
+        if (bossAnimator == null) return;
+
+        target01 = Mathf.Clamp01(target01);
+
+        _moveBlend = Mathf.Lerp(
+            _moveBlend,
+            target01,
+            Time.deltaTime / Mathf.Max(0.0001f, moveAnimDamp)
+        );
+
+        bossAnimator.SetFloat(AnimParam_MoveSpeed, _moveBlend);
+    }
+
+    // ---------------- íˆíŠ¸ë°•ìŠ¤ ì¶©ëŒ (ì›í•˜ë©´ ë°ë¯¸ì§€ ì²˜ë¦¬) ----------------
+
     void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Player") && _currentPattern != null)
-        {
-            // µ¥¹ÌÁö Àû¿ë ·ÎÁ÷
-        }
+        if (_currentPattern == null) return;
+
+        // PlayerDamageReceiver ì°¾ì•„ì„œ ë°ë¯¸ì§€ ì ìš©í•˜ëŠ” ë¡œì§ì€
+        // ë‚˜ì¤‘ì— í”Œë ˆì´ì–´ ìª½ ìŠ¤í™ í™•ì •ë˜ë©´ ì—¬ê¸°ì— ë¶™ì´ë©´ ë¨.
     }
 }
