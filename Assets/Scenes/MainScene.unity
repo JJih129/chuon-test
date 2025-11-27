@@ -2125,11 +2125,11 @@ MeshCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 0
+  m_IsTrigger: 1
   m_ProvidesContacts: 0
-  m_Enabled: 0
+  m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 0}
 --- !u!136 &346066845
@@ -2149,7 +2149,7 @@ CapsuleCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Radius: 0.20499077
   m_Height: 1.1243788
@@ -2170,10 +2170,10 @@ MonoBehaviour:
   baseDamage: 10
   hitType: 1
   canPerfectDodge: 1
-  attackerRoot: {fileID: 0}
+  attackerRoot: {fileID: 480514374}
   hitLayers:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 4096
   ignoreTriggerColliders: 1
   useOneShotWindow: 1
   oneShotWindow: 0.2
@@ -2352,10 +2352,10 @@ PrefabInstance:
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: -2422315340263230684, guid: bfdbf6177b8629c4188c0b56bfc48656, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 427083991}
+      addedObject: {fileID: 427083990}
     - targetCorrespondingSourceObject: {fileID: -2422315340263230684, guid: bfdbf6177b8629c4188c0b56bfc48656, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 427083990}
+      addedObject: {fileID: 427083994}
   m_SourcePrefab: {fileID: 100100000, guid: bfdbf6177b8629c4188c0b56bfc48656, type: 3}
 --- !u!1 &427083989 stripped
 GameObject:
@@ -2385,8 +2385,8 @@ MonoBehaviour:
   useOneShotWindow: 1
   oneShotWindow: 0.2
   enableLogs: 0
---- !u!136 &427083991
-CapsuleCollider:
+--- !u!64 &427083994
+MeshCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -2403,11 +2403,10 @@ CapsuleCollider:
   m_IsTrigger: 1
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.04
-  m_Height: 0.92288584
-  m_Direction: 1
-  m_Center: {x: -0.004588127, y: -0.3719948, z: 0.012796559}
+  serializedVersion: 5
+  m_Convex: 1
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 0}
 --- !u!1 &449926569
 GameObject:
   m_ObjectHideFlags: 0
@@ -5696,7 +5695,7 @@ MonoBehaviour:
   bossAnimator: {fileID: 1727032504}
   playerTarget: {fileID: 281972684}
   patternVisuals: {fileID: 734326098}
-  attackHitbox: {fileID: 346066844}
+  attackHitbox: {fileID: 346066846}
   playerTracker: {fileID: 281972723}
   currentState: 2
   combatIdleTime: 1.5

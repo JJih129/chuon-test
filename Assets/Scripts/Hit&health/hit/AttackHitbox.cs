@@ -1,13 +1,13 @@
-// Assets/Scripts/Combat/AttackHitbox.cs
+// 파일명: AttackHitbox.cs
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// 근접 공격, 보스 패턴, 플레이어 무기 등에서 공통으로 쓰는 히트박스.
-/// - Trigger Collider 기반
+/// - Trigger Collider 기반 (Box / Capsule / Sphere / MeshCollider 모두 가능)
 /// - IDamageReceiver 에 HitPayload 전달
-/// - 애니메이션 이벤트로 On/Off 하는 방식 추천 (ActivateWindow / DeactivateWindow)
+/// - 애니메이션 이벤트로 On/Off 하는 방식 권장 (ActivateWindow / DeactivateWindow)
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Collider))]
@@ -64,9 +64,7 @@ public class AttackHitbox : MonoBehaviour
     readonly HashSet<IDamageReceiver> _alreadyHit = new HashSet<IDamageReceiver>();
     Coroutine _oneShotRoutine;
 
-    /// <summary>
-    /// 현재 이 히트박스가 쓰는 Collider (외부에서 접근 필요할 때용)
-    /// </summary>
+    /// <summary>현재 이 히트박스가 쓰는 Collider (외부에서 접근 필요할 때용)</summary>
     public Collider Collider => _col;
 
     void Reset()
@@ -76,7 +74,19 @@ public class AttackHitbox : MonoBehaviour
         if (_col != null)
         {
             _col.isTrigger = true;
-            _col.enabled = false;    // 기본은 꺼둔 상태에서, 애니 이벤트로 켜는 걸 권장
+            _col.enabled   = false;    // 기본은 꺼둔 상태에서, 애니 이벤트로 켜는 걸 권장
+
+            // MeshCollider인 경우 Convex 권장
+            var meshCol = _col as MeshCollider;
+            if (meshCol != null && !meshCol.convex)
+            {
+                // 에디터에서 한 번만 보는 로그라면 여기서 자동으로 켜도 됨
+                meshCol.convex = true;
+#if UNITY_EDITOR
+                Debug.LogWarning("[AttackHitbox] MeshCollider를 Convex 로 자동 설정했습니다. " +
+                                 "무기/팔 등 이동하는 콜라이더는 Convex + Trigger 조합이 권장됩니다.", this);
+#endif
+            }
         }
 
         hitLayers = ~0;
@@ -99,6 +109,24 @@ public class AttackHitbox : MonoBehaviour
             _col.isTrigger = true;
         }
 
+        // MeshCollider 사용 시 유의사항 체크
+        var meshCol = _col as MeshCollider;
+        if (meshCol != null)
+        {
+            if (!meshCol.convex)
+            {
+                Debug.LogWarning(
+                    "[AttackHitbox] MeshCollider가 Non-Convex 입니다. " +
+                    "무기처럼 움직이는 Collider는 Rigidbody 계층 구조 상에서 Convex + Trigger 로 두는 것이 안전합니다.",
+                    this);
+            }
+
+            if (meshCol.sharedMesh == null)
+            {
+                Debug.LogWarning("[AttackHitbox] MeshCollider.sharedMesh 가 비어 있습니다.", this);
+            }
+        }
+
         // 공격자 루트 기본값은 transform.root
         if (attackerRoot == null)
             attackerRoot = transform.root;
@@ -106,7 +134,6 @@ public class AttackHitbox : MonoBehaviour
 
     void OnEnable()
     {
-        // 컴포넌트 자체를 끄고 켤 수도 있으니 방어적으로 초기화
         _alreadyHit.Clear();
     }
 
@@ -122,7 +149,6 @@ public class AttackHitbox : MonoBehaviour
 
     // ─────────────────────────────────────
     // ⑥ 애니메이션 이벤트용 On/Off 메서드
-    //     → 공격 클립에서 직접 호출해서 창을 여닫는 방식
     // ─────────────────────────────────────
 
     /// <summary>
@@ -176,17 +202,29 @@ public class AttackHitbox : MonoBehaviour
 
     // ─────────────────────────────────────
     // ⑦ 외부에서 데미지/타입 덮어쓰기용 API
-    //     (보스 패턴 / 무기 강화 등에서 사용)
     // ─────────────────────────────────────
 
     /// <summary>
     /// 코드에서 이 히트박스의 데미지/타입/퍼펙트 회피 여부를 덮어쓸 때 사용.
-    /// 예: 보스 패턴 진입 시 BossController에서 세팅.
+    /// (보스 패턴 / 무기 강화 등)
     /// </summary>
     public void Configure(float damage, HitType type, bool allowPerfectDodge, Transform attackerOverride = null)
     {
-        baseDamage = damage;
-        hitType = type;
+        baseDamage      = damage;
+        hitType         = type;
+        canPerfectDodge = allowPerfectDodge;
+
+        if (attackerOverride != null)
+            attackerRoot = attackerOverride;
+    }
+
+    /// <summary>
+    /// HitType은 기존 인스펙터 값을 유지하고, 데미지/퍼펙트 회피 여부만 덮어쓰고 싶을 때용.
+    /// (BossController에서 주로 사용)
+    /// </summary>
+    public void Configure(float damage, bool allowPerfectDodge, Transform attackerOverride = null)
+    {
+        baseDamage      = damage;
         canPerfectDodge = allowPerfectDodge;
 
         if (attackerOverride != null)
@@ -221,7 +259,7 @@ public class AttackHitbox : MonoBehaviour
 
         // 5) 히트 정보 계산
         Vector3 attackerPos = attackerRoot ? attackerRoot.position : transform.position;
-        Vector3 hitPoint = other.ClosestPoint(attackerPos);
+        Vector3 hitPoint    = other.ClosestPoint(attackerPos);
 
         Vector3 dir = hitPoint - attackerPos;
         if (dir.sqrMagnitude > 0.0001f)
