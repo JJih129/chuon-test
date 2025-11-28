@@ -937,6 +937,7 @@ GameObject:
   - component: {fileID: 281972718}
   - component: {fileID: 281972722}
   - component: {fileID: 281972723}
+  - component: {fileID: 281972724}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -1930,6 +1931,20 @@ MonoBehaviour:
   recentTimeThreshold: 3
   dodgeCountThreshold: 2
   retreatDurationThreshold: 2
+--- !u!114 &281972724
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f6094e0643ef8c40a789f13c95f9bbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  attackHitboxes:
+  - {fileID: 427083990}
 --- !u!1 &290598377
 GameObject:
   m_ObjectHideFlags: 0
@@ -3584,7 +3599,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 5000
-  field of view: 40
+  field of view: 43.77909
   orthographic: 0
   orthographic size: 10
   m_Depth: -1
@@ -3610,8 +3625,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.12719244, y: -0.0000001182411, z: 0.000000015162524, w: 0.9918781}
-  m_LocalPosition: {x: 2.223001, y: 2.5980585, z: -6.8599997}
+  m_LocalRotation: {x: 0.18901576, y: 0.34709445, z: -0.07163927, w: 0.9157873}
+  m_LocalPosition: {x: -2.2737148, y: 4.843099, z: -7.939997}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -4803,7 +4818,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1446177538
 Transform:
   m_ObjectHideFlags: 0
@@ -5772,6 +5787,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6fb9b0666c258c249abd8b089402c786, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  bossController: {fileID: 0}
+  hitboxes: []
+  autoFindOnAwake: 1
+  debugLog: 0
 --- !u!114 &1727032506
 MonoBehaviour:
   m_ObjectHideFlags: 0
