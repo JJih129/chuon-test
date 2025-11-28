@@ -1,3 +1,4 @@
+// 파일명: BossController.cs
 using UnityEngine;
 using System.Collections.Generic;
 using System.Collections;
@@ -65,7 +66,12 @@ public class BossController : MonoBehaviour
     public Animator bossAnimator;
     public Transform playerTarget;
     public PatternVisuals patternVisuals;
-    public Collider attackHitbox;
+
+    [Header("공격 히트박스 (공통 컴포넌트)")]
+    [Tooltip("보스 무기/팔 등에 붙은 AttackHitbox")]
+    public AttackHitbox attackHitbox;
+
+    [Tooltip("플레이어 행동 기반 패턴 제어용 트래커(선택)")]
     public PlayerTracker playerTracker;
 
     [Header("FSM 설정")]
@@ -101,8 +107,9 @@ public class BossController : MonoBehaviour
 
     void Awake()
     {
+        // 히트박스는 기본적으로 비활성화 상태에서 시작
         if (attackHitbox != null)
-            attackHitbox.enabled = false;
+            attackHitbox.DeactivateWindow();
 
         if (bossHealth != null)
             bossHealth.OnDied += OnBossDied;
@@ -219,6 +226,9 @@ public class BossController : MonoBehaviour
 
     // ---------------- 애니메이션 이벤트용 ----------------
 
+    /// <summary>
+    /// 공격 클립 끝에서 AnimationEvent로 호출 (또는 BossAnimationEvents에서 호출)
+    /// </summary>
     public void OnAnimationPatternEnd()
     {
         if (currentState != BossState.Attack)
@@ -234,16 +244,20 @@ public class BossController : MonoBehaviour
         SetState(BossState.CombatIdle);
     }
 
+    /// <summary>
+    /// 과거 방식(콜라이더 On/Off)을 썼던 이벤트를 위해 남겨둔 래퍼.
+    /// 지금은 AttackHitbox의 Window를 열고 닫는 방식으로 동작.
+    /// </summary>
     public void ActivateHitbox()
     {
         if (_currentPattern != null && attackHitbox != null)
-            attackHitbox.enabled = true;
+            attackHitbox.ActivateWindow();
     }
 
     public void DeactivateHitbox()
     {
         if (attackHitbox != null)
-            attackHitbox.enabled = false;
+            attackHitbox.DeactivateWindow();
     }
 
     // ---------------- 상태별 코루틴 ----------------
@@ -363,13 +377,22 @@ public class BossController : MonoBehaviour
             yield break;
         }
 
-        _currentPattern      = pattern;
-        _lastExecutedPattern = pattern.patternName;
+        _currentPattern        = pattern;
+        _lastExecutedPattern   = pattern.patternName;
         pattern.currentCooldown = pattern.cooldown;
 
+        // ① 패턴 비주얼 (가드 가능/불가 색상)
         if (patternVisuals != null)
             patternVisuals.SetParryable(pattern.isParryable);
 
+        // ② 히트박스 데미지/퍼펙트 회피 여부 세팅
+        if (attackHitbox != null)
+        {
+            // HitType은 AttackHitbox 인스펙터 기본값 사용, 데미지만 패턴 값으로 덮어씀
+            attackHitbox.Configure(pattern.damageAmount, pattern.isParryable, transform);
+        }
+
+        // ③ 애니메이션 트리거
         if (bossAnimator != null && !string.IsNullOrEmpty(pattern.animTriggerName))
         {
             bossAnimator.ResetTrigger(pattern.animTriggerName);
@@ -485,13 +508,12 @@ public class BossController : MonoBehaviour
         bossAnimator.SetFloat(AnimParam_MoveSpeed, _moveBlend);
     }
 
-    // ---------------- 히트박스 충돌 (원하면 데미지 처리) ----------------
-
+    // ---------------- (선택) 루트 보스 콜라이더 충돌 ----------------
+    // 실제 데미지 처리는 AttackHitbox가 담당하므로, 이 메서드는 비워둬도 무방.
     void OnTriggerEnter(Collider other)
     {
         if (_currentPattern == null) return;
 
-        // PlayerDamageReceiver 찾아서 데미지 적용하는 로직은
-        // 나중에 플레이어 쪽 스펙 확정되면 여기에 붙이면 됨.
+        // 필요하면 여기서도 특수 처리 가능.
     }
 }
