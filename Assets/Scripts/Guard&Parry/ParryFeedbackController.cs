@@ -1,3 +1,4 @@
+// Assets/Scripts/Combat/ParryFeedbackController.cs
 using System.Collections;
 using UnityEngine;
 using Cinemachine;
@@ -13,14 +14,23 @@ public class ParryFeedbackController : MonoBehaviour
     [Header("① 히트스톱(전역 Time.timeScale)")]
     [SerializeField] bool useHitStop = true;
 
-    [Tooltip("패링 히트스톱 타임스케일"), Range(0f,1f)] public float parryTimeScale = 0.05f;
-    [Tooltip("패링 히트스톱 지속(Realtime)")] public float parryStopDuration = 0.08f;
+    [Tooltip("패링 히트스톱 타임스케일"), Range(0f, 1f)]
+    public float parryTimeScale = 0.05f;
 
-    [Tooltip("블록 히트스톱 타임스케일"), Range(0f,1f)] public float blockTimeScale = 0.25f;
-    [Tooltip("블록 히트스톱 지속(Realtime)")] public float blockStopDuration = 0.05f;
+    [Tooltip("패링 히트스톱 지속(Realtime)")]
+    public float parryStopDuration = 0.08f;
 
-    [Tooltip("퍼펙트 회피 히트스톱 타임스케일"), Range(0f,1f)] public float dodgeTimeScale = 0.12f;
-    [Tooltip("퍼펙트 회피 히트스톱 지속(Realtime)")] public float dodgeStopDuration = 0.12f;
+    [Tooltip("블록 히트스톱 타임스케일"), Range(0f, 1f)]
+    public float blockTimeScale = 0.25f;
+
+    [Tooltip("블록 히트스톱 지속(Realtime)")]
+    public float blockStopDuration = 0.05f;
+
+    [Tooltip("퍼펙트 회피 히트스톱 타임스케일"), Range(0f, 1f)]
+    public float dodgeTimeScale = 0.12f;
+
+    [Tooltip("퍼펙트 회피 히트스톱 지속(Realtime)")]
+    public float dodgeStopDuration = 0.12f;
 
     [Tooltip("히트스톱 동안 fixedDeltaTime도 함께 스케일링")]
     [SerializeField] bool scaleFixedDeltaTime = true;
@@ -63,7 +73,7 @@ public class ParryFeedbackController : MonoBehaviour
     [SerializeField] AudioClip parryClip;
     [SerializeField] AudioClip blockClip;
     [SerializeField] AudioClip dodgeClip;
-    [Range(0f,1f)] [SerializeField] float sfxVolume = 0.9f;
+    [Range(0f, 1f)] [SerializeField] float sfxVolume = 0.9f;
 
     // ─────────────────────────────────────────────────────────────────────────────
     // ⑤ 디버그
@@ -107,10 +117,15 @@ public class ParryFeedbackController : MonoBehaviour
         PlaySfx(dodgeClip);
     }
 
+    // ★ PlayerDamageReceiver에서 쓰는 이름을 위한 래퍼
+    public void PlayGuardBlockFeedback(Vector3 hitPoint, Transform attacker)
+        => PlayBlockFeedback(hitPoint, attacker);
+
     // ===== 외부 호출 API(무인자, 인스펙터 바인딩용) =====
-    public void PlayParryFeedback()       => PlayParryFeedback(transform.position, transform);
-    public void PlayBlockFeedback()       => PlayBlockFeedback(transform.position, transform);
-    public void PlayPerfectDodgeFeedback()=> PlayPerfectDodgeFeedback(transform.position, transform);
+    public void PlayParryFeedback()        => PlayParryFeedback(transform.position, transform);
+    public void PlayBlockFeedback()        => PlayBlockFeedback(transform.position, transform);
+    public void PlayPerfectDodgeFeedback() => PlayPerfectDodgeFeedback(transform.position, transform);
+    public void PlayGuardBlockFeedback()   => PlayGuardBlockFeedback(transform.position, transform);
 
     // ─────────────────────────────────────────────────────────────────────────────
     void StartHitStop(float scale, float duration)
@@ -161,7 +176,8 @@ public class ParryFeedbackController : MonoBehaviour
     void SpawnVfx(GameObject prefab, Vector3 hitPoint)
     {
         if (!prefab) return;
-        Vector3 pos = hitPoint; pos.y += vfxYOffset;
+        Vector3 pos = hitPoint;
+        pos.y += vfxYOffset;
         var go = Instantiate(prefab, pos, Quaternion.identity);
         if (parentVfxToPlayer) go.transform.SetParent(transform);
     }

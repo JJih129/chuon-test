@@ -6,15 +6,18 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/TeamLogoScene.unity
+    guid: b4a6450fc52a45c4788eba9f3526f9b0
+  - enabled: 1
     path: Assets/Scenes/TitleScene.unity
     guid: 31a815a918c7bdb499e77551684689a0
+  - enabled: 1
+    path: Assets/Scenes/MainScene.unity
+    guid: 9fc0d4010bbf28b4594072e72b8655ab
   - enabled: 1
     path: Assets/Scenes/OptionsScene.unity
     guid: 2ac5c319eb891be4d88c12ba9c4f7f8f
   - enabled: 1
     path: Assets/Scenes/CreditsScene.unity
     guid: 36f3e85a29e3adb438dadc1d999dd25b
-  - enabled: 1
-    path: Assets/Scenes/MainScene.unity
-    guid: 9fc0d4010bbf28b4594072e72b8655ab
   m_configObjects: {}
