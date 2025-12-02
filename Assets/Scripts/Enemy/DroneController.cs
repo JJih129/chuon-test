@@ -1,212 +1,167 @@
-// DroneController.cs
-// 부모/자식 구조 자동 탐지. 수평 거리 유지(stopDistance). 안전한 발사(spawn 검사).
-using System;
 using UnityEngine;
+using DG.Tweening; // 피격 시 색깔 깜빡임용
 
+// ★ IDamageReceiver 필수 (플레이어 공격 인식용)
 [DisallowMultipleComponent]
-public class DroneController : MonoBehaviour, IHitReceiver
+public class DroneController : MonoBehaviour, IDamageReceiver
 {
-    [Header("▶ 타겟 (비워두면 Player 태그 자동 검색)")]
+    [Header("▶ 타겟")]
     public Transform target;
 
     [Header("▶ 이동 파라미터")]
-    public float moveSpeed = 1.5f;
-    public float stopDistance = 12f;
+    public float moveSpeed = 3.5f;
+    public float stopDistance = 8f;
     public float turnSpeedDeg = 360f;
 
     [Header("▶ 사격 파라미터")]
     public GameObject projectilePrefab;
     public Transform fireOrigin;
-    public float projectileSpawnForwardOffset = 0.6f;
-    public float fireDistance = 12f;
-    public float fireCooldown = 1.2f;
-    public float projectileSpeed = 12f;
-    public int projectileDamage = 15;
+    public float fireDistance = 15f;
+    public float fireCooldown = 2.0f;
+    public float projectileSpeed = 15f;
+    public int projectileDamage = 10;
 
-    [Header("▶ 체력")]
-    public int maxHP = 100;
+    [Header("▶ 체력 & 이펙트 설정")]
+    public int maxHP = 30;          // 최대 체력
+    private int currentHP;
+    
+    [Tooltip("피격 시 생성될 이펙트 (폭발, 스파크 등)")]
+    public GameObject hitVFX;       
+    
+    [Tooltip("파괴 시 생성될 이펙트 (큰 폭발)")]
     public GameObject deathVFX;
 
-    [Header("▶ 안전/디버그")]
-    public float spawnSafetyRadius = 0.25f;
-    public float spawnAdvanceStep = 0.25f;
-    public int spawnAdvanceAttempts = 6;
+    [Tooltip("피격 시 깜빡일 렌더러 (드론 몸통)")]
+    public Renderer droneRenderer; 
 
-    Rigidbody _rb;
-    Collider _col;
-    Transform _root;
-    Transform _fireOriginCached;
-    int _hp;
-    float _nextFireTime;
+    private float nextFireTime;
+    private Rigidbody rb;
+    private Color originalColor; // 원래 색 저장용
 
     void Awake()
     {
-        _root = transform.root ? transform.root : transform;
-        _rb = GetComponent<Rigidbody>() ?? GetComponentInParent<Rigidbody>() ?? GetComponentInChildren<Rigidbody>();
-        _col = GetComponent<Collider>() ?? GetComponentInParent<Collider>() ?? GetComponentInChildren<Collider>();
+        rb = GetComponent<Rigidbody>();
+        currentHP = maxHP;
 
-        if (_rb != null)
-        {
-            _rb.useGravity = false;
-            try { _rb.freezeRotation = true; } catch { }
-        }
+        // 렌더러 자동 찾기 (없으면 수동 할당 필요)
+        if (droneRenderer == null) droneRenderer = GetComponentInChildren<Renderer>();
+        if (droneRenderer != null) originalColor = droneRenderer.material.color;
 
-        if (fireOrigin != null) _fireOriginCached = fireOrigin;
-        else
-        {
-            _fireOriginCached = FindTransformByNames(_root, new string[] { "FireOrigin", "fireOrigin", "Muzzle", "muzzle", "firingPoint" })
-                                ?? FindTransformByPredicate(_root, t => t.name.ToLower().Contains("fire") || t.name.ToLower().Contains("muzzle"))
-                                ?? transform;
-        }
-
+        // 타겟(플레이어) 자동 검색
         if (target == null)
         {
             var p = GameObject.FindWithTag("Player");
             if (p) target = p.transform;
         }
-
-        _hp = Mathf.Max(1, maxHP);
-        Debug.Log($"[Drone] Awake root={_root.name} rb={(_rb? _rb.name : "null")} col={(_col? _col.name : "null")} fireOrigin={_fireOriginCached?.name}", this);
     }
 
-    Transform FindTransformByNames(Transform root, string[] names)
+    void OnEnable()
     {
-        if (root == null) return null;
-        foreach (var n in names) if (string.Equals(root.name, n, StringComparison.OrdinalIgnoreCase)) return root;
-        foreach (Transform c in root)
-        {
-            var r = FindTransformByNames(c, names);
-            if (r != null) return r;
-        }
-        return null;
-    }
-
-    Transform FindTransformByPredicate(Transform root, Func<Transform, bool> pred)
-    {
-        if (root == null) return null;
-        if (pred(root)) return root;
-        foreach (Transform c in root)
-        {
-            var r = FindTransformByPredicate(c, pred);
-            if (r != null) return r;
-        }
-        return null;
+        currentHP = maxHP; // 되살아날 때 체력 초기화
     }
 
     void FixedUpdate()
     {
         if (target == null) return;
 
-        Vector3 currentPos = _rb != null ? _rb.position : transform.position;
-        Vector3 toTarget = target.position - currentPos;
-        Vector3 flat = new Vector3(toTarget.x, 0f, toTarget.z);
-        float horizDist = flat.magnitude;
-
-        if (flat.sqrMagnitude > 0.0001f)
+        // 1. 타겟 바라보기
+        Vector3 direction = (target.position - transform.position).normalized;
+        if (direction != Vector3.zero)
         {
-            Quaternion want = Quaternion.LookRotation(flat.normalized, Vector3.up);
-            Quaternion cur = _rb != null ? _rb.rotation : transform.rotation;
-            Quaternion next = Quaternion.RotateTowards(cur, want, turnSpeedDeg * Time.fixedDeltaTime);
-            if (_rb != null) _rb.MoveRotation(next); else transform.rotation = next;
+            Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.fixedDeltaTime * 5f);
         }
 
-        if (horizDist > stopDistance + 0.05f)
+        // 2. 거리 체크 및 이동
+        float distance = Vector3.Distance(transform.position, target.position);
+        
+        if (distance > stopDistance)
         {
-            Vector3 moveDir = flat.normalized;
-            Vector3 nextPos = currentPos + moveDir * moveSpeed * Time.fixedDeltaTime;
-            if (_rb != null) _rb.MovePosition(nextPos); else transform.position = nextPos;
-        }
-        else if (horizDist < stopDistance - 0.05f)
-        {
-            Vector3 moveDir = -flat.normalized;
-            Vector3 nextPos = currentPos + moveDir * moveSpeed * Time.fixedDeltaTime;
-            if (_rb != null) _rb.MovePosition(nextPos); else transform.position = nextPos;
+            Vector3 movePos = transform.position + direction * moveSpeed * Time.fixedDeltaTime;
+            if (rb) rb.MovePosition(movePos);
+            else transform.position = movePos;
         }
 
-        if (horizDist <= fireDistance && Time.time >= _nextFireTime && projectilePrefab != null)
+        // 3. 공격
+        if (distance <= fireDistance && Time.time >= nextFireTime)
         {
-            if (TryFireSafeAndInstantiate()) _nextFireTime = Time.time + fireCooldown;
-            else Debug.Log("[Drone] Fire skipped - spawn unsafe", this);
+            Fire();
+            nextFireTime = Time.time + fireCooldown;
         }
     }
 
-    bool TryFireSafeAndInstantiate()
+    void Fire()
     {
-        Transform origin = _fireOriginCached != null ? _fireOriginCached : transform;
-        Vector3 spawnForward = (target != null) ? (new Vector3(target.position.x - origin.position.x, 0f, target.position.z - origin.position.z)).normalized : origin.forward.normalized;
-        if (spawnForward.sqrMagnitude < 0.0001f) spawnForward = origin.forward.normalized;
-
-        Vector3 spawnPos = origin.position + spawnForward * projectileSpawnForwardOffset;
-
-        for (int i = 0; i < spawnAdvanceAttempts; i++)
+        if (projectilePrefab && fireOrigin)
         {
-            Collider[] hits = Physics.OverlapSphere(spawnPos, spawnSafetyRadius);
-            bool overlapPlayer = false;
-            if (hits != null && hits.Length > 0)
-            {
-                foreach (var c in hits)
-                {
-                    if (c == null) continue;
-                    if (target != null && (c.transform.IsChildOf(target) || c.gameObject == target.gameObject)) { overlapPlayer = true; break; }
-                    if (c.gameObject.CompareTag("Player")) { overlapPlayer = true; break; }
-                }
-            }
+            GameObject bullet = Instantiate(projectilePrefab, fireOrigin.position, fireOrigin.rotation);
+            
+            // 총알 종류에 따라 초기화 (BulletProjectile 또는 TutorialProjectile)
+            var bp = bullet.GetComponent<BulletProjectile>();
+            if (bp) bp.Init(this.gameObject, projectileSpeed, projectileDamage);
+            
+            var tp = bullet.GetComponent<TutorialProjectile>();
+            if (tp) tp.owner = this.transform;
+        }
+    }
 
-            if (!overlapPlayer)
-            {
-                InstantiateProjectile(spawnPos, spawnForward);
-                return true;
-            }
+    // ======================================================================
+    // ★ IDamageReceiver 구현 (플레이어 공격을 받는 부분)
+    // ======================================================================
+    public void ReceiveHit(HitPayload payload)
+    {
+        // 1. 데미지 적용
+        TakeDamage((int)payload.damage, payload.hitPoint, payload.hitDirection);
+    }
 
-            spawnPos += spawnForward * spawnAdvanceStep;
+    public void TakeDamage(int amount, Vector3 hitPoint, Vector3 hitDir)
+    {
+        if (currentHP <= 0) return; // 이미 죽었으면 무시
+
+        currentHP -= amount;
+        Debug.Log($"[드론] 피격! 남은 체력: {currentHP}/{maxHP}");
+
+        // 2. 히트 이펙트 생성 (타격 지점에)
+        if (hitVFX != null)
+        {
+            // 타격 방향 반대로 이펙트가 튀게 회전 설정
+            Quaternion rot = Quaternion.LookRotation(-hitDir); 
+            GameObject vfx = Instantiate(hitVFX, hitPoint, rot);
+            Destroy(vfx, 1.0f); // 1초 뒤 삭제
         }
 
-        return false;
-    }
+        // 3. 피격 반응 (빨간색 깜빡임)
+        if (droneRenderer != null)
+        {
+            // 기존 트윈 멈추고 새로 시작 (연속 피격 시 꼬임 방지)
+            droneRenderer.material.DOKill(); 
+            droneRenderer.material.color = Color.red;
+            droneRenderer.material.DOColor(originalColor, 0.2f);
+        }
 
-    void InstantiateProjectile(Vector3 spawnPos, Vector3 forward)
-    {
-        Quaternion rot = target != null
-            ? Quaternion.LookRotation((new Vector3(target.position.x, spawnPos.y, target.position.z) - spawnPos).normalized, Vector3.up)
-            : Quaternion.LookRotation(forward, Vector3.up);
+        // 4. 넉백 (밀려남) 효과
+        transform.DOPunchPosition(hitDir.normalized * 0.5f, 0.2f);
 
-        var go = Instantiate(projectilePrefab, spawnPos, rot);
-
-        var homing = go.GetComponent<HomingProjectile>();
-        if (homing != null) { homing.Init(target, projectileSpeed, this.gameObject, projectileDamage); return; }
-
-        var bullet = go.GetComponent<BulletProjectile>();
-        if (bullet != null) { bullet.Init(this.gameObject, projectileSpeed, projectileDamage); return; }
-
-        go.transform.forward = forward;
-    }
-
-    public void ReceiveHit(HitData hit)
-    {
-        if (hit == null) return;
-        ApplyDamage((int)hit.damage, hit);
-    }
-
-    public void ApplyDamage(int damage, HitData hitInfo = null)
-    {
-        if (damage <= 0) return;
-        _hp -= damage;
-        _hp = Mathf.Max(0, _hp);
-        if (_hp <= 0) Die();
+        // 5. 사망 체크
+        if (currentHP <= 0)
+        {
+            Die();
+        }
     }
 
     void Die()
     {
-        if (deathVFX) Instantiate(deathVFX, transform.position, Quaternion.identity);
-        Destroy(gameObject);
-    }
+        Debug.Log("[드론] 파괴됨!");
 
-    void OnDrawGizmosSelected()
-    {
-        if (_fireOriginCached != null)
+        // 파괴 이펙트 생성
+        if (deathVFX != null)
         {
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawWireSphere(_fireOriginCached.position + _fireOriginCached.forward * projectileSpawnForwardOffset, spawnSafetyRadius);
+            GameObject vfx = Instantiate(deathVFX, transform.position, Quaternion.identity);
+            Destroy(vfx, 2.0f);
         }
+
+        // 중요: LobbyEnemy가 사망을 감지할 수 있도록 오브젝트 파괴
+        // (LobbyEnemy의 OnDisable이나 OnDestroy가 호출됨)
+        Destroy(gameObject);
     }
 }

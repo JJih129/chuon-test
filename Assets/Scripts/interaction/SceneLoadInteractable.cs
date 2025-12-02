@@ -6,7 +6,7 @@ public class SceneLoadInteractable : BaseInteractable
 {
     [Header("■ 이동할 씬 설정")]
     [Tooltip("빌드 세팅(Build Settings)에 등록된 씬 이름이어야 합니다.")]
-    public string sceneName = "GameScene";
+    public string sceneName = "Lobby";
 
     [Header("■ 옵션")]
     [Tooltip("상호작용 시 로그를 띄울까요?")]
