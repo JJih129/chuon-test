@@ -35,9 +35,14 @@ public class LobbyManager : MonoBehaviour
     public float doorOpenHeight = 4.0f;
     public float doorOpenSpeed = 2.0f;
 
-    // ★ [수정됨] 상태 저장을 위한 변수 분리
-    private bool isDoorReached = false; // 문 앞에 도착했는가?
-    private bool isBoarded = false;     // 탑승했는가?
+    [Header("■ 네비게이션 & 트리거 (길 안내 목표점)")]
+    public GuidePathSystem guideSystem; 
+    public Transform triggerApproach; // ★ [추가됨] 문 앞(바깥) 트리거 연결
+    public Transform triggerBoard;    // 안쪽(Board) 트리거 연결
+
+    // 상태 변수
+    private bool isDoorReached = false;
+    private bool isBoarded = false;
 
     private void Awake()
     {
@@ -131,8 +136,6 @@ public class LobbyManager : MonoBehaviour
     IEnumerator Sequence_PostCombat()
     {
         UpdateQuestUI("전투 완료", "모든 적을 처치했습니다.");
-        
-        // ★ 여기서 상태 변수 초기화 (혹시 모를 오작동 방지)
         isDoorReached = false;
 
         yield return new WaitForSeconds(1.0f);
@@ -146,13 +149,17 @@ public class LobbyManager : MonoBehaviour
 
         UpdateQuestUI("이동", "프론트 뒤편 엘리베이터로 이동하세요.");
 
-        // ★ [수정됨] 이제 미리 밟아놨어도(isDoorReached가 true여도) 바로 통과됨
+        // ★ [수정됨] 문이 아니라 '문 앞 트리거(발판)' 위치로 안내선 그리기
+        if (guideSystem && triggerApproach)
+        {
+            guideSystem.ShowPath(triggerApproach);
+        }
+
         yield return new WaitUntil(() => isDoorReached == true);
 
         StartCoroutine(Sequence_AtElevator());
     }
 
-    // ★ [수정됨] 트리거 밟는 즉시 상태를 true로 저장
     public void OnReachElevator() 
     { 
         isDoorReached = true; 
@@ -164,6 +171,20 @@ public class LobbyManager : MonoBehaviour
     // ──────────────────────────────────────────────
     IEnumerator Sequence_AtElevator()
     {
+        // ★ 도착하자마자 문 열기
+        if (doorLeft)
+        {
+            Collider col = doorLeft.GetComponent<Collider>();
+            if (col) col.isTrigger = true; 
+            doorLeft.transform.DOLocalMoveY(doorLeft.transform.localPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
+        }
+        if (doorRight) 
+        {
+            Collider col = doorRight.GetComponent<Collider>();
+            if (col) col.isTrigger = true; 
+            doorRight.transform.DOLocalMoveY(doorRight.transform.localPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
+        }
+
         yield return StartCoroutine(PlayDialogue("추온", "아무리 봐도 정상적인 엘리베이터는 아닌 거 같은데?", 2.5f));
         yield return StartCoroutine(PlayDialogue("EGO", "그러게, 내 데이터베이스에도 이 엘리베이터에 대한 정보는 없어.", 2.5f));
 
@@ -171,23 +192,21 @@ public class LobbyManager : MonoBehaviour
 
         UpdateQuestUI("이동", "엘리베이터에 탑승하세요.");
 
-        // 문 열기 (로컬 좌표 기준)
-        if (doorLeft) 
-            doorLeft.transform.DOLocalMoveY(doorLeft.transform.localPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
-        
-        if (doorRight) 
-            doorRight.transform.DOLocalMoveY(doorRight.transform.localPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
+        // ★ [길 안내 갱신] 엘리베이터 안쪽(버튼)으로 안내
+        if (guideSystem && triggerBoard)
+        {
+            guideSystem.ShowPath(triggerBoard);
+        }
 
-        // ★ 탑승 대기 변수 초기화
         isBoarded = false;
-
-        // ★ 탑승할 때까지 대기
         yield return new WaitUntil(() => isBoarded == true);
+
+        // 탑승했으니 길 안내 끄기
+        if (guideSystem) guideSystem.HidePath();
 
         StartCoroutine(Sequence_Inside());
     }
 
-    // ★ [수정됨] 탑승 즉시 상태 저장
     public void OnEnterElevator() 
     { 
         isBoarded = true; 

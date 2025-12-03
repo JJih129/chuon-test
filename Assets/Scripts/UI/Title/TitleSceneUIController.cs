@@ -25,6 +25,15 @@ public class TitleSceneUIController : MonoBehaviour
             return;
         }
 
-        SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
+        // ★ [수정됨] SceneFader가 있으면 페이드 아웃 후 이동, 없으면 그냥 이동
+        if (SceneFader.Instance != null)
+        {
+            SceneFader.Instance.FadeOutAndLoadScene(gameSceneName);
+        }
+        else
+        {
+            // 혹시 씬에 SceneFader를 안 넣어놨을 때를 대비한 안전장치
+            SceneManager.LoadScene(gameSceneName, LoadSceneMode.Single);
+        }
     }
 }

@@ -6,78 +6,58 @@ using UnityEngine.InputSystem;
 public class PlayerMoveController : MonoBehaviour
 {
     // ─────────[① 참조 설정]─────────
-    [Header("① 참조 설정(필수)")]
-    [Tooltip("이동/회전을 적용할 루트(캐릭터가 실제로 도는 트랜스폼)")]
-    [SerializeField] private Transform playerRoot;                      // 조절값
-    [Tooltip("카메라 기준 이동용 트랜스폼(비우면 MainCamera 자동 할당)")]
-    [SerializeField] private Transform cameraTransform;                 // 조절값
-    [Tooltip("락온 컨트롤러(락온 여부/타깃 확인)")]
-    [SerializeField] private PlayerLockOn playerLockOn;                 // 조절값
-    [Tooltip("가드 컨트롤러(가드 중 속도 배수 적용)")]
-    [SerializeField] private PlayerGuardController guardController;     // 조절값
-    [Tooltip("Animator(선택). speed 파라미터만 갱신")]
-    [SerializeField] private Animator animator;                         // 조절값
+    [Header("① 참조 설정")]
+    [Tooltip("캐릭터 모델링 루트 (회전할 대상)")]
+    [SerializeField] private Transform playerRoot;
+    [Tooltip("카메라 트랜스폼 (이동 기준)")]
+    [SerializeField] private Transform cameraTransform;
+    [Tooltip("락온 시스템")]
+    [SerializeField] private PlayerLockOn playerLockOn;
+    [Tooltip("가드 시스템")]
+    [SerializeField] private PlayerGuardController guardController;
+    [Tooltip("애니메이터")]
+    [SerializeField] private Animator animator;
 
     // ─────────[② 입력 설정]─────────
-    [Header("② 입력 설정(신규 Input System 우선)")]
-    [Tooltip("Move 액션(Vector2). 할당 시 Input System 사용, 없으면 WASD 폴백")]
-    [SerializeField] private InputActionReference moveAction;           // 조절값
-    [Tooltip("WASD 폴백 사용 여부(신규 액션이 없을 때만 동작)")]
-    [SerializeField] private bool legacyFallback = true;                // 조절값
-    [Tooltip("레거시 입력 축 이름(Horizontal/Vertical)")]
-    [SerializeField] private string axisX = "Horizontal";               // 조절값
-    [SerializeField] private string axisY = "Vertical";                 // 조절값
+    [Header("② 입력 설정")]
+    [SerializeField] private InputActionReference moveAction;
+    [SerializeField] private bool legacyFallback = true;
+    [SerializeField] private string axisX = "Horizontal";
+    [SerializeField] private string axisY = "Vertical";
 
     // ─────────[③ 이동/회전]─────────
-    [Header("③ 이동/회전(걷기/점프 없음)")]
-    [Tooltip("달리기 속도(m/s)")]
-    [SerializeField, Range(1f,10f)] private float runSpeed = 4.5f;      // 조절값
-    [Tooltip("가속/감속(m/s²)")]
-    [SerializeField, Range(2f,30f)] private float accel = 16f;          // 조절값
-    [SerializeField, Range(2f,30f)] private float decel = 24f;          // 조절값
-    [Tooltip("회전 속도(도/초) — 비락온에서만 적용")]
-    [SerializeField, Range(90f,1080f)] private float rotationSpeed = 720f; // 조절값
-    [Tooltip("이동 입력이 있을 때만 회전할지 여부")]
-    [SerializeField] private bool rotateOnlyWhenMoving = true;          // 조절값
+    [Header("③ 이동/회전")]
+    [SerializeField, Range(1f, 10f)] private float runSpeed = 4.5f;
+    [SerializeField, Range(2f, 30f)] private float accel = 16f;
+    [SerializeField, Range(2f, 30f)] private float decel = 24f;
+    [SerializeField, Range(90f, 1080f)] private float rotationSpeed = 720f;
+    [SerializeField] private bool rotateOnlyWhenMoving = true;
 
     // ─────────[④ 가드 중 속도 배수]─────────
     [Header("④ 가드 중 속도 배수")]
-    [Tooltip("전진 시 배수")]
-    [SerializeField, Range(0.1f,1f)] private float guardFwdMul = 0.8f;  // 조절값
-    [Tooltip("후진 시 배수")]
-    [SerializeField, Range(0.1f,1f)] private float guardBackMul = 0.6f; // 조절값
-    [Tooltip("좌우 스트레이프 배수")]
-    [SerializeField, Range(0.1f,1f)] private float guardStrafeMul = 0.7f; // 조절값
+    [SerializeField, Range(0.1f, 1f)] private float guardFwdMul = 0.8f;
+    [SerializeField, Range(0.1f, 1f)] private float guardBackMul = 0.6f;
+    [SerializeField, Range(0.1f, 1f)] private float guardStrafeMul = 0.7f;
 
-    // ─────────[⑤ 중력 설정]─────────
-    [Header("⑤ 중력/접지")]
-    [Tooltip("중력 가속도(|g|, m/s²)")]
-    [SerializeField, Range(5f,30f)] private float gravity = 20f;        // 조절값
-    [Tooltip("지면 스냅용 Y속도")]
-    [SerializeField, Range(0.01f,0.3f)] private float groundSnap = 0.1f;// 조절값
+    // ─────────[⑤ 중력]─────────
+    [Header("⑤ 중력")]
+    [SerializeField, Range(5f, 30f)] private float gravity = 20f;
+    [SerializeField, Range(0.01f, 0.3f)] private float groundSnap = 0.1f;
 
-    // ─────────[⑥ 애니 파라미터]─────────
-    [Header("⑥ 애니 파라미터(선택)")]
-    [Tooltip("이동 속도 정규화 파라미터명(없으면 비워두기)")]
-    [SerializeField] private string p_Speed = "speed";                  // 조절값
+    [Header("⑥ 애니 파라미터")]
+    [SerializeField] private string p_Speed = "speed";
 
-    // ───────── 내부 상태 ─────────
+    // 내부 상태
     private CharacterController _cc;
-    private Vector3 _velXZ;                 // 평면 속도
-    private float _velY;                    // 수직 속도
-    private bool _externLocked;             // 연출/회피 중 이동 잠금
-
-    void Reset()
-    {
-        if (!playerRoot) playerRoot = transform;
-        if (!animator) animator = GetComponentInChildren<Animator>();
-        if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
-        if (!guardController) guardController = GetComponent<PlayerGuardController>();
-    }
+    private Vector3 _velXZ;
+    private float _velY;
+    private bool _externLocked; // 외부에서 이동을 막았는지 여부
 
     void Awake()
     {
         _cc = GetComponent<CharacterController>();
+        
+        // 참조 자동 할당 시도
         if (!playerRoot) playerRoot = transform;
         if (!cameraTransform && Camera.main) cameraTransform = Camera.main.transform;
         if (!animator) animator = GetComponentInChildren<Animator>();
@@ -85,46 +65,60 @@ public class PlayerMoveController : MonoBehaviour
         if (!guardController) guardController = GetComponent<PlayerGuardController>();
     }
 
-    void OnEnable()  { if (moveAction?.action != null) moveAction.action.Enable(); }
+    void OnEnable() { if (moveAction?.action != null) moveAction.action.Enable(); }
     void OnDisable() { if (moveAction?.action != null) moveAction.action.Disable(); }
+
+    void Start()
+    {
+        // 시작 시 잠금 해제 및 초기화
+        _externLocked = false;
+        _velXZ = Vector3.zero;
+        SetAnimSpeed(0f);
+    }
 
     void Update()
     {
-        // 외부 잠금 시 정지
-        if (_externLocked) { MoveWithGravity(Vector3.zero); SetAnimSpeed(0f); return; }
+        // 1. 일시정지 체크 (커서 문제 해결용 필수 코드)
+        if (Time.timeScale == 0f) return;
 
-        // 입력
+        // 2. 외부 잠금 체크 (공격, 피격, 대쉬 중일 때 이동 금지)
+        if (_externLocked)
+        {
+            MoveWithGravity(Vector3.zero);
+            SetAnimSpeed(0f);
+            return;
+        }
+
+        // 3. 입력 받기 (Input System & Legacy & 비상용 강제 입력 통합)
         Vector2 input = ReadMoveInput();
 
-        // 락온 여부
+        // 4. 방향 및 회전 계산
         bool locked = playerLockOn && playerLockOn.IsLocked;
-
-        // 기준 축: 비락온=카메라, 락온=자기 전/우(스트레이프)
         Vector3 fwd, right;
-        if (locked)
+
+        if (locked) // 락온 상태: 타겟 중심 이동
         {
             fwd = Flat(playerRoot.forward);
             right = Flat(playerRoot.right);
         }
-        else
+        else // 일반 상태: 카메라 기준 이동
         {
             var cam = cameraTransform ? cameraTransform : (Camera.main ? Camera.main.transform : playerRoot);
             fwd = Flat(cam.forward);
             right = Flat(cam.right);
         }
 
-        // 목표 속도
         Vector3 wishDir = (right * input.x + fwd * input.y);
         if (wishDir.sqrMagnitude > 1e-6f) wishDir.Normalize();
 
+        // 5. 속도 계산 (가속/감속)
         float targetSpeed = ComputeTargetSpeed(input, IsGuarding());
         Vector3 targetVel = wishDir * targetSpeed;
 
-        // 가감속
         float dt = Time.deltaTime;
         _velXZ = MoveTowardsXZ(_velXZ, targetVel, accel, decel, dt);
 
-        // 회전(비락온에서만 적용)
+        // 6. 캐릭터 회전
         if (!locked)
         {
             bool shouldRotate = !rotateOnlyWhenMoving || _velXZ.sqrMagnitude > 0.0004f;
@@ -135,22 +129,27 @@ public class PlayerMoveController : MonoBehaviour
             }
         }
 
-        // 이동 + 중력
+        // 7. 최종 이동 적용 (중력 포함)
         MoveWithGravity(_velXZ);
-
-        // 애니 속도
         SetAnimSpeed(Mathf.Clamp01(_velXZ.magnitude / Mathf.Max(0.01f, runSpeed)));
     }
 
-    // ───────── 외부 훅(호환용) ─────────
-    // 연출/패링/공격 등에서 이동 잠금
+    // ──────────────────────────────────────────────
+    // 외부 제어 함수 (이게 없어서 에러가 났었습니다)
+    // ──────────────────────────────────────────────
+
+    // 공격이나 피격 시 이동을 막기 위해 호출하는 함수
     public void SetExternalControl(bool locked)
     {
         _externLocked = locked;
-        if (locked) { _velXZ = Vector3.zero; SetAnimSpeed(0f); }
+        if (locked)
+        {
+            _velXZ = Vector3.zero;
+            SetAnimSpeed(0f);
+        }
     }
 
-    // 회피 시작/종료 훅
+    // 회피 시작 시 호출
     public void OnDodgeStart()
     {
         _externLocked = true;
@@ -158,51 +157,69 @@ public class PlayerMoveController : MonoBehaviour
         SetAnimSpeed(0f);
     }
 
+    // 회피 종료 시 호출
     public void OnDodgeEnd()
     {
         _externLocked = false;
     }
 
-    // ───────── 유틸 ─────────
+    // ──────────────────────────────────────────────
+    // 내부 유틸리티
+    // ──────────────────────────────────────────────
+
     Vector2 ReadMoveInput()
     {
-        if (moveAction?.action != null)
+        // 1. New Input System Action이 연결되어 있다면 사용
+        if (moveAction != null && moveAction.action != null)
             return moveAction.action.ReadValue<Vector2>();
 
-        if (!legacyFallback) return Vector2.zero;
+        // 2. Legacy Input (Project Settings가 Both/Old일 때)
+        Vector2 input = Vector2.zero;
+        if (legacyFallback)
+        {
+            try
+            {
+                input.x = Input.GetAxisRaw(axisX);
+                input.y = Input.GetAxisRaw(axisY);
+            }
+            catch { }
+        }
 
-        float x = Input.GetAxisRaw(axisX);
-        float y = Input.GetAxisRaw(axisY);
-        Vector2 v = new Vector2(x, y);
-        return v.sqrMagnitude > 1f ? v.normalized : v;
+        // 3. ★ [비상용] 강제 키보드 입력 체크
+        // (설정이 꼬여서 위 1,2번이 다 실패해도 이건 작동함)
+        if (input == Vector2.zero && Keyboard.current != null)
+        {
+            if (Keyboard.current.wKey.isPressed) input.y += 1;
+            if (Keyboard.current.sKey.isPressed) input.y -= 1;
+            if (Keyboard.current.dKey.isPressed) input.x += 1;
+            if (Keyboard.current.aKey.isPressed) input.x -= 1;
+        }
+
+        return input.sqrMagnitude > 1f ? input.normalized : input;
     }
 
     float ComputeTargetSpeed(Vector2 input, bool guarding)
     {
         if (input.sqrMagnitude <= 1e-6f) return 0f;
         if (!guarding) return runSpeed;
+        
         float f = input.y;
-        if (f >  0.5f) return runSpeed * guardFwdMul;
+        if (f > 0.5f) return runSpeed * guardFwdMul;
         if (f < -0.5f) return runSpeed * guardBackMul;
         return runSpeed * guardStrafeMul;
     }
 
-    bool IsGuarding()
-    {
-        if (guardController) return guardController.IsGuarding;
-        return false;
-    }
+    bool IsGuarding() => guardController && guardController.IsGuarding;
 
     void MoveWithGravity(Vector3 vXZ)
     {
-        bool grounded = _cc.isGrounded;
-        if (grounded && _velY < 0f) _velY = -groundSnap;
+        if (_cc.isGrounded && _velY < 0f) _velY = -groundSnap;
         _velY -= gravity * Time.deltaTime;
 
         _cc.Move(vXZ * Time.deltaTime + Vector3.up * _velY * Time.deltaTime);
     }
 
-    static Vector3 Flat(Vector3 v){ v.y = 0f; return v.sqrMagnitude > 0.0001f ? v.normalized : Vector3.forward; }
+    static Vector3 Flat(Vector3 v) { v.y = 0f; return v.sqrMagnitude > 0.0001f ? v.normalized : Vector3.forward; }
 
     static Vector3 MoveTowardsXZ(Vector3 cur, Vector3 tgt, float acc, float dec, float dt)
     {

@@ -135,8 +135,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 0}
-  moveSpeed: 1.5
-  stopDistance: 12
+  moveSpeed: 4
+  stopDistance: 6
   turnSpeedDeg: 360
   projectilePrefab: {fileID: 8435155017831554217, guid: 6223a8a1443270348820c3414b053728, type: 3}
   fireOrigin: {fileID: 6001470594460420104}

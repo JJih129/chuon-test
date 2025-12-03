@@ -67,6 +67,9 @@ public class BossController : MonoBehaviour
     public Transform playerTarget;
     public PatternVisuals patternVisuals;
 
+    [Header("물리 이동")]
+    [SerializeField] Rigidbody rb;
+    
     [Header("공격 히트박스 (공통 컴포넌트)")]
     [Tooltip("보스 무기/팔 등에 붙은 AttackHitbox")]
     public AttackHitbox attackHitbox;
