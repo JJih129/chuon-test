@@ -1,74 +1,110 @@
 using UnityEngine;
-using UnityEngine.AI; // 네비게이션 필수
+using UnityEngine.AI;
+using System.Collections.Generic;
 
-[RequireComponent(typeof(LineRenderer))]
 public class GuidePathSystem : MonoBehaviour
 {
     [Header("■ 설정")]
-    public Transform player;       // 플레이어 (출발지)
-    public Transform target;       // 목표 (도착지)
-    public float pathHeight = 0.5f; // 바닥에서 얼마나 띄울지
-    public float textureScrollSpeed = 2.0f; // 무늬 이동 속도
+    public Transform player;       
+    [Tooltip("LineRenderer가 붙은 프리팹을 넣으세요")]
+    public GameObject linePrefab; // ★ 프리팹 연결 변수
+    
+    public float pathHeight = 0.5f; 
+    public float textureScrollSpeed = 2.0f; 
 
-    private NavMeshPath path;
-    private LineRenderer line;
-    private bool isActive = false;
+    // 활성화된 라인들 관리
+    private List<LineRenderer> activeLines = new List<LineRenderer>();
+    private List<Transform> currentTargets = new List<Transform>();
+    private NavMeshPath navMeshPath;
 
     void Awake()
     {
-        line = GetComponent<LineRenderer>();
-        path = new NavMeshPath();
+        navMeshPath = new NavMeshPath();
         
-        // 플레이어 자동 찾기
         if (player == null)
         {
             var p = GameObject.FindWithTag("Player");
             if (p) player = p.transform;
         }
-
-        // 처음엔 끄기
-        HidePath();
     }
 
     void Update()
     {
-        if (!isActive || player == null || target == null) return;
+        if (player == null || currentTargets.Count == 0) return;
 
-        // 1. 경로 계산 (플레이어 -> 타겟)
-        if (NavMesh.CalculatePath(player.position, target.position, NavMesh.AllAreas, path))
+        // 타겟 개수만큼 라인 그리기
+        for (int i = 0; i < currentTargets.Count; i++)
         {
-            // 2. LineRenderer에 점 찍기
-            line.positionCount = path.corners.Length;
-            
-            for (int i = 0; i < path.corners.Length; i++)
+            // 라인이 모자라면 생성 안 함 (안전장치)
+            if (i >= activeLines.Count) break;
+
+            if (currentTargets[i] != null)
             {
-                // 바닥에 파묻히지 않게 살짝 위로 올림
-                Vector3 pos = path.corners[i];
-                pos.y += pathHeight;
-                line.SetPosition(i, pos);
+                DrawPath(activeLines[i], currentTargets[i].position);
             }
         }
 
-        // 3. 텍스처 흐르는 애니메이션 (화살표가 움직이는 느낌)
-        if (line.material)
+        // 텍스트 흐르는 애니메이션
+        float offset = Time.time * -textureScrollSpeed;
+        foreach (var line in activeLines)
         {
-            float offset = Time.time * -textureScrollSpeed;
-            line.material.mainTextureOffset = new Vector2(offset, 0);
+            if (line != null && line.material != null) 
+                line.material.mainTextureOffset = new Vector2(offset, 0);
         }
     }
 
-    // 외부에서 호출: 길 안내 시작
-    public void ShowPath(Transform newTarget)
+    void DrawPath(LineRenderer line, Vector3 targetPos)
     {
-        target = newTarget;
-        isActive = true;
-        line.enabled = true;
+        // 플레이어 -> 타겟 경로 계산
+        if (NavMesh.CalculatePath(player.position, targetPos, NavMesh.AllAreas, navMeshPath))
+        {
+            line.positionCount = navMeshPath.corners.Length;
+            for (int j = 0; j < navMeshPath.corners.Length; j++)
+            {
+                Vector3 pos = navMeshPath.corners[j];
+                pos.y += pathHeight;
+                line.SetPosition(j, pos);
+            }
+            line.enabled = true;
+        }
+        else
+        {
+            line.enabled = false; // 길 없으면 숨김
+        }
     }
 
-    // 외부에서 호출: 길 안내 끄기
+    // ★ [핵심] 타겟을 여러 개 받아서 각각 라인을 생성함
+    public void ShowPath(params Transform[] newTargets)
+    {
+        // 기존 라인 싹 지우기
+        HidePath();
+
+        if (newTargets == null || linePrefab == null) return;
+
+        // 타겟 등록
+        currentTargets.AddRange(newTargets);
+
+        // 타겟 개수만큼 라인 프리팹 생성
+        for (int i = 0; i < currentTargets.Count; i++)
+        {
+            GameObject lineObj = Instantiate(linePrefab, transform); // 자식으로 생성
+            LineRenderer lr = lineObj.GetComponent<LineRenderer>();
+            if (lr)
+            {
+                lr.enabled = true;
+                activeLines.Add(lr);
+            }
+        }
+    }
+
     public void HidePath()
     {
-        isActive = false;
-        line.enabled = false;
+        // 생성했던 라인들 모두 삭제
+        foreach (var line in activeLines)
+        {
+            if (line != null) Destroy(line.gameObject);
+        }
+        activeLines.Clear();
+        currentTargets.Clear();
     }
 }

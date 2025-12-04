@@ -120,7 +120,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   owner: {fileID: 0}
-  speed: 18
+  speed: 12
   damage: 10
   lifetime: 6
 --- !u!54 &-5945804517855672905

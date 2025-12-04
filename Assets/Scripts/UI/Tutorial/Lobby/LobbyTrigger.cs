@@ -2,43 +2,56 @@ using UnityEngine;
 
 public class LobbyTrigger : MonoBehaviour
 {
-    // 인스펙터에서 설정: Approach(문앞), Board(안쪽)
     public enum TriggerType { Approach, Board }
     public TriggerType type;
 
-    // 중복 작동 방지
     private bool isTriggered = false;
 
+    // 들어갈 때 감지
     void OnTriggerEnter(Collider other)
     {
-        // 1. 무엇이 닿았는지 확인 (로그 출력)
-        // Debug.Log($"[LobbyTrigger] 무언가 닿음: {other.name} (태그: {other.tag})");
+        CheckTrigger(other);
+    }
 
-        if (isTriggered) return;
+    // ★ [추가됨] 이미 들어가서 서 있을 때도 감지 (이게 있어야 미리 가도 작동함)
+    void OnTriggerStay(Collider other)
+    {
+        CheckTrigger(other);
+    }
 
-        // 2. 플레이어 태그 확인
+    void CheckTrigger(Collider other)
+    {
+        // 이미 완료된 상태면 무시 (매니저가 변수를 초기화하면 다시 작동함)
+        if (isTriggered) 
+        {
+            // 매니저 상태를 확인해서, 매니저가 '아직 안 밟았다(false)'고 생각하면 다시 신호 보냄
+            if (LobbyManager.Instance != null)
+            {
+                if (type == TriggerType.Board && !LobbyManager.Instance.IsBoarded) 
+                    isTriggered = false; // 다시 작동하도록 리셋
+                else if (type == TriggerType.Approach && !LobbyManager.Instance.IsDoorReached)
+                    isTriggered = false;
+            }
+            
+            if(isTriggered) return; 
+        }
+
         if (other.CompareTag("Player"))
         {
-            Debug.Log($"[LobbyTrigger] 플레이어 감지 성공! 타입: {type}");
+            Debug.Log($"[LobbyTrigger] 플레이어 감지됨 (Stay/Enter)! 타입: {type}");
 
             if (LobbyManager.Instance != null)
             {
-                isTriggered = true; // 한 번만 작동하게 잠금
-
                 if (type == TriggerType.Approach)
                 {
-                    Debug.Log(">> 매니저에게 '문 앞 도착' 신호 보냄");
                     LobbyManager.Instance.OnReachElevator();
+                    isTriggered = true;
                 }
                 else if (type == TriggerType.Board)
                 {
-                    Debug.Log(">> 매니저에게 '탑승 완료' 신호 보냄");
                     LobbyManager.Instance.OnEnterElevator();
+                    isTriggered = true;
                 }
-            }
-            else
-            {
-                Debug.LogError("LobbyManager가 씬에 없습니다!");
             }
         }
     }

@@ -65,7 +65,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -0.426, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 1.3828, y: 1.3934, z: 1.2954}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3185845829881089570}
@@ -135,16 +135,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 0}
-  moveSpeed: 4
+  moveSpeed: 3
   stopDistance: 6
   turnSpeedDeg: 360
   projectilePrefab: {fileID: 8435155017831554217, guid: 6223a8a1443270348820c3414b053728, type: 3}
   fireOrigin: {fileID: 6001470594460420104}
   fireDistance: 12
-  fireCooldown: 4
-  projectileSpeed: 12
-  projectileDamage: 15
-  maxHP: 100
+  fireCooldown: 6
+  projectileSpeed: 8
+  projectileDamage: 10
+  maxHP: 90
   hitVFX: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
   deathVFX: {fileID: 0}
   droneRenderer: {fileID: 0}
