@@ -1,13 +1,13 @@
 // 파일명: BossController.cs
-using UnityEngine;
-using System.Collections.Generic;
-using System.Collections;
-using System;
-using UnityEngine.Events;
+// 보스 FSM + 이동 + 패턴 + 근접 백스텝 + 사망 시 루트 파괴
+// 트리거는 PlayAnimTrigger() 하나로 관리해서 한 번에 하나만 켜지도록 설계.
+// 공격 진입 전 플레이어 쪽으로 회전 보정(스냅/짧은 회전) 지원.
 
-/// <summary>
-/// 보스 FSM 상태 정의
-/// </summary>
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+using System;
+
 public enum BossState
 {
     IntroIdle,   // 전투 시작 전 연출용 대기
@@ -22,17 +22,32 @@ public enum BossState
 [System.Serializable]
 public class AttackPattern
 {
-    [Header("기본 정보")]
+    [Header("기본 정보 (한글 설명)")]
+    [Tooltip("패턴 이름(디버그/금지 패턴 조건에 사용)")]
     public string patternName;
-    public string animTriggerName; // 애니메이터 스테이트/트리거 이름 (Attack_A ~ Attack_E)
+
+    [Tooltip("애니메이터 트리거/스테이트 이름 (예: Attack_A, Attack_B 등)")]
+    public string animTriggerName;
+
+    [Tooltip("이 공격이 패링 가능한 공격인지 여부")]
     public bool isParryable;
+
+    [Tooltip("이 패턴의 기본 데미지량")]
     public int damageAmount = 10;
 
-    [Header("쿨타임/가중치/거리")]
+    [Header("쿨타임 / 가중치 / 거리 조건 (한글 설명)")]
+    [Tooltip("패턴 사용 후 다시 사용할 때까지의 쿨타임(초)")]
     public float cooldown = 2f;
+
     [HideInInspector] public float currentCooldown;
+
+    [Tooltip("패턴 선택 시 랜덤 가중치 (값이 클수록 선택될 확률↑)")]
     public float weight = 1f;
+
+    [Tooltip("플레이어와의 최소 거리 조건 (이보다 가까우면 사용 안 함)")]
     public float minRange = 0f;
+
+    [Tooltip("플레이어와의 최대 거리 조건 (이보다 멀면 사용 안 함)")]
     public float maxRange = 5f;
 
     [Tooltip("이 패턴 직전에 금지할 패턴 이름 (없으면 빈 문자열)")]
@@ -49,27 +64,33 @@ public class AttackPattern
 
         if (boss.playerTracker == null) return true;
 
-        // 필요하면 이름 기준으로 세부 조건 추가
-        // IPlayerTracker tracker = boss.playerTracker;
+        // 필요하면 이름 기준으로 세부 조건 추가 가능
         return true;
     }
 }
 
-/// <summary>
-/// 보스 메인 컨트롤러 (FSM + 이동 + 패턴 재생)
-/// </summary>
 public class BossController : MonoBehaviour
 {
-    [Header("참조 컴포넌트")]
+    [Header("참조 컴포넌트 (한글 설명)")]
+    [Tooltip("보스 체력/사망 이벤트 담당 컴포넌트")]
     public BossHealth bossHealth;
+
+    [Tooltip("브레이크(그로기) 상태 관리 컴포넌트")]
     public BossBreakController breakController;
+
+    [Tooltip("보스 애니메이터 (Move/Break/Dead/Attack 파라미터 전달용)")]
     public Animator bossAnimator;
+
+    [Tooltip("플레이어 위치 트래킹용 Transform")]
     public Transform playerTarget;
+
+    [Tooltip("공격 패턴 비주얼(가드 가능/불가 표시 등)")]
     public PatternVisuals patternVisuals;
 
-    [Header("물리 이동")]
-    [SerializeField] Rigidbody rb;
-    
+    [Header("물리 이동 설정 (한글 설명)")]
+    [Tooltip("보스 이동에 사용할 Rigidbody (없으면 Transform 직접 이동)")]
+    [SerializeField] private Rigidbody rb;
+
     [Header("공격 히트박스 (공통 컴포넌트)")]
     [Tooltip("보스 무기/팔 등에 붙은 AttackHitbox")]
     public AttackHitbox attackHitbox;
@@ -77,15 +98,23 @@ public class BossController : MonoBehaviour
     [Tooltip("플레이어 행동 기반 패턴 제어용 트래커(선택)")]
     public PlayerTracker playerTracker;
 
-    [Header("FSM 설정")]
+    [Header("FSM 기본/타이밍 설정 (한글 설명)")]
+    [Tooltip("현재 보스 FSM 상태 (디버그 확인용)")]
     public BossState currentState = BossState.IntroIdle;
-    public float combatIdleTime = 1.5f;
-    public float introIdleDuration = 3.0f;
 
-    Coroutine _stateRoutine;
-    bool _isDead;
+    [Tooltip("인트로 연출용 대기 시간 (초). 0이면 바로 전투 시작.")]
+    public float introIdleDuration = 0.5f;
 
-    [Header("이동 설정")]
+    [Tooltip("공격 후 CombatIdle 상태 유지 시간(초). 0이면 바로 다음 상태로 이동.")]
+    public float combatIdleTime = 0.3f;
+
+    [Tooltip("공격 상태에서 애니메이션 종료를 기다리는 최대 시간 (초). 안전장치 역할")]
+    public float maxAttackStateWaitTime = 2.0f;
+
+    private Coroutine _stateRoutine;
+    private bool _isDead;
+
+    [Header("이동 설정 (한글 설명)")]
     [Tooltip("실제 보스 이동 속도 (m/s)")]
     public float moveSpeed = 4.0f;
 
@@ -96,21 +125,67 @@ public class BossController : MonoBehaviour
     [Range(0.01f, 0.5f)]
     public float moveAnimDamp = 0.1f;
 
-    static readonly int AnimParam_MoveSpeed = Animator.StringToHash("MoveSpeed");
-    static readonly int AnimParam_IsBreak   = Animator.StringToHash("IsBreak");
-    static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
+    private static readonly int AnimParam_MoveSpeed = Animator.StringToHash("MoveSpeed");
+    private static readonly int AnimParam_IsBreak   = Animator.StringToHash("IsBreak");
+    private static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
 
-    float _moveBlend; // 0~1
+    private float _moveBlend; // 0~1
 
-    [Header("공격 패턴 목록")]
+    [Header("공격 패턴 목록 (한글 설명)")]
+    [Tooltip("보스가 사용할 수 있는 모든 공격 패턴 리스트")]
     public List<AttackPattern> allPatterns;
 
-    string _lastExecutedPattern = string.Empty;
-    AttackPattern _currentPattern;
+    private string _lastExecutedPattern = string.Empty;
+    private AttackPattern _currentPattern;
+
+    [Header("공격 전 회전 보정 (한글 설명)")]
+    [Tooltip("Attack/백스텝 시작 전에 플레이어 방향으로 회전 보정을 할지 여부")]
+    public bool snapRotationToPlayerOnAttack = true;
+
+    [Tooltip("공격 전 회전 보정 시간(초). 0이면 한 프레임 안에 바로 스냅 회전")]
+    public float preAttackRotateTime = 0.0f;
+
+    [Tooltip("공격 전 회전 보정에 사용할 회전 속도(도/초). preAttackRotateTime > 0일 때 사용")]
+    public float preAttackRotateSpeed = 720f;
+
+    [Header("근접 회피(백스텝) 설정 (한글 설명)")]
+    [Tooltip("플레이어와 너무 가까울 때 백스텝 애니메이션을 사용할지 여부")]
+    public bool useBackstepWhenTooClose = true;
+
+    [Tooltip("이 거리보다 가까워지면 백스텝을 시도 (m)")]
+    public float backstepTriggerDistance = 1.0f;
+
+    [Tooltip("백스텝 애니메이션 트리거 이름 (Animator 트리거 파라미터와 동일하게 설정)")]
+    public string backstepAnimTriggerName = "Backstep";
+
+    [Tooltip("백스텝 중 뒤로 빠지는 시간(초). 루트 모션 사용 시 0으로 두고 애니메이션만 재생 가능")]
+    public float backstepDuration = 0.6f;
+
+    [Tooltip("백스텝 중 뒤로 빠지는 속도(m/s). 루트 모션을 쓴다면 0으로 두는 것을 권장")]
+    public float backstepSpeed = 4.5f;
+
+    [Tooltip("백스텝 재사용 쿨타임(초). 너무 자주 쓰지 않도록 제한")]
+    public float backstepCooldown = 3.0f;
+
+    private float _backstepCooldownTimer;
+
+    [Header("사망시 오브젝트 정리 (한글 설명)")]
+    [Tooltip("보스 사망 시 자동으로 오브젝트를 파괴할지 여부")]
+    public bool autoDestroyOnDead = true;
+
+    [Tooltip("사망 애니메이션 연출 후 실제 삭제까지 대기 시간(초)")]
+    public float destroyDelayAfterDead = 1.0f;
+
+    [Tooltip("비워두면 transform.root를 기준으로 파괴, 지정하면 해당 Transform 기준으로 전체 제거")]
+    public Transform rootToDestroyOnDead;
+
+    [Tooltip("보스 사망 시 함께 파괴할 추가 오브젝트들 (HP바, 락온 피벗, 사운드 오브젝트 등)")]
+    public Transform[] extraObjectsToDestroyOnDead;
+
+    private Coroutine _destroyRoutine;
 
     void Awake()
     {
-        // 히트박스는 기본적으로 비활성화 상태에서 시작
         if (attackHitbox != null)
             attackHitbox.DeactivateWindow();
 
@@ -141,9 +216,13 @@ public class BossController : MonoBehaviour
                     p.currentCooldown -= dt;
             }
         }
+
+        // 백스텝 쿨타임 감소
+        if (_backstepCooldownTimer > 0f)
+            _backstepCooldownTimer -= Time.deltaTime;
     }
 
-    // ---------------- FSM 전이 ----------------
+    // ==================== FSM 전이 ====================
 
     public void SetState(BossState newState)
     {
@@ -181,11 +260,12 @@ public class BossController : MonoBehaviour
                 _stateRoutine = StartCoroutine(Co_HandleBreak());
                 break;
             case BossState.Dead:
+                // Dead 상태에서는 별도 코루틴 없음
                 break;
         }
     }
 
-    // ---------------- 생존/브레이크 ----------------
+    // ==================== 생존/브레이크 ====================
 
     void OnBossDied()
     {
@@ -204,7 +284,13 @@ public class BossController : MonoBehaviour
         if (bossAnimator != null)
             bossAnimator.SetBool(AnimParam_IsDead, true);
 
+        if (attackHitbox != null)
+            attackHitbox.DeactivateWindow();
+
         Debug.Log("[BossFSM] Boss Dead");
+
+        if (autoDestroyOnDead && _destroyRoutine == null)
+            _destroyRoutine = StartCoroutine(Co_DestroyHierarchyAfterDead());
     }
 
     void OnBreakEnter()
@@ -227,11 +313,43 @@ public class BossController : MonoBehaviour
         SetState(BossState.Detect);
     }
 
-    // ---------------- 애니메이션 이벤트용 ----------------
+    // ==================== 사망 후 파괴 처리 ====================
+
+    IEnumerator Co_DestroyHierarchyAfterDead()
+    {
+        if (destroyDelayAfterDead > 0f)
+            yield return new WaitForSeconds(destroyDelayAfterDead);
+
+        FinalizeDeathAndDestroy();
+    }
 
     /// <summary>
-    /// 공격 클립 끝에서 AnimationEvent로 호출 (또는 BossAnimationEvents에서 호출)
+    /// Dead 애니 끝에서 AnimationEvent로 직접 호출하고 싶을 때 사용 가능.
     /// </summary>
+    public void FinalizeDeathAndDestroy()
+    {
+        if (!_isDead)
+            return;
+
+        if (extraObjectsToDestroyOnDead != null)
+        {
+            for (int i = 0; i < extraObjectsToDestroyOnDead.Length; ++i)
+            {
+                Transform t = extraObjectsToDestroyOnDead[i];
+                if (t != null)
+                    Destroy(t.gameObject);
+            }
+        }
+
+        Transform root = rootToDestroyOnDead != null ? rootToDestroyOnDead : transform.root;
+        if (root != null)
+            Destroy(root.gameObject);
+        else
+            Destroy(gameObject);
+    }
+
+    // ==================== 애니메이션 이벤트용 ====================
+
     public void OnAnimationPatternEnd()
     {
         if (currentState != BossState.Attack)
@@ -247,10 +365,6 @@ public class BossController : MonoBehaviour
         SetState(BossState.CombatIdle);
     }
 
-    /// <summary>
-    /// 과거 방식(콜라이더 On/Off)을 썼던 이벤트를 위해 남겨둔 래퍼.
-    /// 지금은 AttackHitbox의 Window를 열고 닫는 방식으로 동작.
-    /// </summary>
     public void ActivateHitbox()
     {
         if (_currentPattern != null && attackHitbox != null)
@@ -263,7 +377,91 @@ public class BossController : MonoBehaviour
             attackHitbox.DeactivateWindow();
     }
 
-    // ---------------- 상태별 코루틴 ----------------
+    // ==================== 트리거 통합 유틸 ====================
+
+    /// <summary>
+    /// 모든 공격/백스텝 트리거를 Reset한 뒤, 이번에 쓸 트리거 하나만 Set.
+    /// 트리거가 겹치면서 애니 상태 꼬이는 문제를 예방하기 위한 유틸.
+    /// </summary>
+    void PlayAnimTrigger(string triggerName)
+    {
+        if (bossAnimator == null || string.IsNullOrEmpty(triggerName))
+            return;
+
+        // 1) 공격 패턴 트리거 전부 Reset
+        if (allPatterns != null)
+        {
+            foreach (var p in allPatterns)
+            {
+                if (p != null && !string.IsNullOrEmpty(p.animTriggerName))
+                    bossAnimator.ResetTrigger(p.animTriggerName);
+            }
+        }
+
+        // 2) 백스텝 트리거 Reset
+        if (!string.IsNullOrEmpty(backstepAnimTriggerName))
+            bossAnimator.ResetTrigger(backstepAnimTriggerName);
+
+        // 3) 이번에 쓸 트리거만 Set
+        bossAnimator.SetTrigger(triggerName);
+    }
+
+    // ==================== 회전 보정 유틸 ====================
+
+    /// <summary>
+    /// 플레이어 방향으로 즉시 스냅 회전 (Y축만).
+    /// </summary>
+    void FaceToPlayerInstant()
+    {
+        if (playerTarget == null) return;
+
+        Vector3 to = playerTarget.position - transform.position;
+        to.y = 0f;
+        if (to.sqrMagnitude < 0.0001f) return;
+
+        transform.rotation = Quaternion.LookRotation(to.normalized);
+    }
+
+    /// <summary>
+    /// 일정 시간 동안 플레이어 방향으로 부드럽게 회전 (마지막에 한 번 더 스냅).
+    /// </summary>
+    IEnumerator Co_FacePlayerShort(float duration, float speedDegPerSec)
+    {
+        if (playerTarget == null || duration <= 0f)
+        {
+            FaceToPlayerInstant();
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration && !_isDead)
+        {
+            RotateTowardsPlayer(Time.deltaTime, speedDegPerSec);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // 마지막에 한 번 더 정확히 맞춰주기
+        FaceToPlayerInstant();
+    }
+
+    /// <summary>
+    /// 1프레임 동안 플레이어를 향해 회전 (RotateTowards).
+    /// </summary>
+    void RotateTowardsPlayer(float deltaTime, float speedDegPerSec)
+    {
+        if (playerTarget == null) return;
+
+        Vector3 to = playerTarget.position - transform.position;
+        to.y = 0f;
+        if (to.sqrMagnitude < 0.0001f) return;
+
+        Quaternion targetRot = Quaternion.LookRotation(to.normalized);
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation, targetRot, speedDegPerSec * deltaTime);
+    }
+
+    // ==================== 상태별 코루틴 ====================
 
     IEnumerator Co_HandleIntroIdle()
     {
@@ -329,9 +527,13 @@ public class BossController : MonoBehaviour
                     transform.rotation, look, Time.deltaTime * 5f);
             }
 
-            transform.position += dir * moveSpeed * Time.deltaTime;
-            UpdateMoveAnimation(1f);
+            Vector3 delta = dir * moveSpeed * Time.deltaTime;
+            if (rb != null)
+                rb.MovePosition(rb.position + delta);
+            else
+                transform.position += delta;
 
+            UpdateMoveAnimation(1f);
             yield return null;
         }
     }
@@ -360,9 +562,12 @@ public class BossController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 공격 상태 진입 시: (회전 보정) → 근접이면 백스텝, 아니면 일반 공격 패턴 수행
+    /// </summary>
     IEnumerator Co_PerformAttack()
     {
-        if (playerTarget == null || allPatterns == null || allPatterns.Count == 0)
+        if (playerTarget == null)
         {
             SetState(BossState.CombatIdle);
             yield break;
@@ -370,9 +575,40 @@ public class BossController : MonoBehaviour
 
         UpdateMoveAnimation(0f);
 
-        float distance = Vector3.Distance(transform.position, playerTarget.position);
-        AttackPattern pattern = SelectPattern(distance);
+        // 0) 공격 시작 전에 플레이어 쪽으로 회전 보정
+        if (snapRotationToPlayerOnAttack)
+        {
+            if (preAttackRotateTime > 0f)
+                yield return StartCoroutine(Co_FacePlayerShort(preAttackRotateTime, preAttackRotateSpeed));
+            else
+                FaceToPlayerInstant();
+        }
 
+        // 1) 거리 다시 측정 후 백스텝 여부 결정
+        float distance = Vector3.Distance(transform.position, playerTarget.position);
+
+        if (useBackstepWhenTooClose &&
+            distance < backstepTriggerDistance &&
+            _backstepCooldownTimer <= 0f)
+        {
+            yield return StartCoroutine(Co_Backstep());
+
+            _backstepCooldownTimer = backstepCooldown;
+
+            if (!_isDead)
+                SetState(BossState.CombatIdle);
+
+            yield break;
+        }
+
+        // 2) 일반 공격 패턴
+        if (allPatterns == null || allPatterns.Count == 0)
+        {
+            SetState(BossState.CombatIdle);
+            yield break;
+        }
+
+        AttackPattern pattern = SelectPattern(distance);
         if (pattern == null)
         {
             Debug.LogWarning("[BossFSM] 사용할 수 있는 패턴이 없음 → CombatIdle");
@@ -380,73 +616,32 @@ public class BossController : MonoBehaviour
             yield break;
         }
 
-        _currentPattern        = pattern;
-        _lastExecutedPattern   = pattern.patternName;
+        _currentPattern         = pattern;
+        _lastExecutedPattern    = pattern.patternName;
         pattern.currentCooldown = pattern.cooldown;
 
-        // ① 패턴 비주얼 (가드 가능/불가 색상)
         if (patternVisuals != null)
             patternVisuals.SetParryable(pattern.isParryable);
 
-        // ② 히트박스 데미지/퍼펙트 회피 여부 세팅
         if (attackHitbox != null)
-        {
-            // HitType은 AttackHitbox 인스펙터 기본값 사용, 데미지만 패턴 값으로 덮어씀
             attackHitbox.Configure(pattern.damageAmount, pattern.isParryable, transform);
-        }
 
-        // ③ 애니메이션 트리거
-        if (bossAnimator != null && !string.IsNullOrEmpty(pattern.animTriggerName))
-        {
-            bossAnimator.ResetTrigger(pattern.animTriggerName);
-            bossAnimator.SetTrigger(pattern.animTriggerName);
-        }
+        if (!string.IsNullOrEmpty(pattern.animTriggerName))
+            PlayAnimTrigger(pattern.animTriggerName);
 
         Debug.Log($"[BossFSM] Attack 패턴 실행: {pattern.patternName} ({pattern.animTriggerName})");
 
-        // ─────────────────────────────
-        // 애니메이션 종료까지 기다리는 안전장치
-        // (Attack_A ~ E 스테이트 이름을 animTriggerName과 동일하게 맞춰두는 전제)
-        // ─────────────────────────────
-        const float maxWait = 10f;
+        // 이름 기반 스테이트 대기가 아니라,
+        // "Attack 상태 + 최대 대기 시간" 기준으로만 기다리는 방식 (안전장치).
+        float maxWait = Mathf.Max(0.1f, maxAttackStateWaitTime);
         float elapsed = 0f;
 
-        bool enteredState = false;
-
-        // 1) 해당 Attack 스테이트로 실제로 진입할 때까지 대기
         while (elapsed < maxWait && currentState == BossState.Attack && !_isDead)
         {
-            if (bossAnimator == null) break;
-
-            var info = bossAnimator.GetCurrentAnimatorStateInfo(0);
-            if (info.IsName(pattern.animTriggerName))
-            {
-                enteredState = true;
-                break;
-            }
-
             elapsed += Time.deltaTime;
             yield return null;
         }
 
-        // 2) 스테이트에 들어갔다면, 한 번 재생 끝날 때까지 (normalizedTime >= 0.99)
-        elapsed = 0f;
-        if (enteredState)
-        {
-            while (elapsed < maxWait && currentState == BossState.Attack && !_isDead)
-            {
-                if (bossAnimator == null) break;
-
-                var info = bossAnimator.GetCurrentAnimatorStateInfo(0);
-                if (!info.IsName(pattern.animTriggerName) || info.normalizedTime >= 0.99f)
-                    break;
-
-                elapsed += Time.deltaTime;
-                yield return null;
-            }
-        }
-
-        // AnimationEvent가 먼저 상태를 바꿨다면 여기서 이미 Attack이 아닐 수 있음
         if (currentState == BossState.Attack && !_isDead)
         {
             _currentPattern = null;
@@ -454,7 +649,44 @@ public class BossController : MonoBehaviour
         }
     }
 
-    // ---------------- 패턴 선택 ----------------
+    /// <summary>
+    /// 플레이어와 너무 가까울 때 실행되는 백스텝 전용 코루틴
+    /// (루트 모션 백스텝이면 backstepSpeed=0으로 두는 걸 권장)
+    /// </summary>
+    IEnumerator Co_Backstep()
+    {
+        if (playerTarget == null)
+            yield break;
+
+        // 백스텝도 먼저 플레이어를 바라보고 시작
+        FaceToPlayerInstant();
+
+        if (attackHitbox != null)
+            attackHitbox.DeactivateWindow();
+
+        if (!string.IsNullOrEmpty(backstepAnimTriggerName))
+            PlayAnimTrigger(backstepAnimTriggerName);
+
+        float elapsed = 0f;
+        Vector3 backDir = -transform.forward;
+
+        while (elapsed < backstepDuration && !_isDead)
+        {
+            if (backstepSpeed > 0f)
+            {
+                Vector3 delta = backDir * backstepSpeed * Time.deltaTime;
+                if (rb != null)
+                    rb.MovePosition(rb.position + delta);
+                else
+                    transform.position += delta;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+    }
+
+    // ==================== 패턴 선택 ====================
 
     AttackPattern SelectPattern(float distanceToPlayer)
     {
@@ -494,7 +726,7 @@ public class BossController : MonoBehaviour
         return candidates[candidates.Count - 1];
     }
 
-    // ---------------- 이동 애니 (BlendTree) ----------------
+    // ==================== 이동 애니 (BlendTree) ====================
 
     void UpdateMoveAnimation(float target01)
     {
@@ -511,12 +743,11 @@ public class BossController : MonoBehaviour
         bossAnimator.SetFloat(AnimParam_MoveSpeed, _moveBlend);
     }
 
-    // ---------------- (선택) 루트 보스 콜라이더 충돌 ----------------
-    // 실제 데미지 처리는 AttackHitbox가 담당하므로, 이 메서드는 비워둬도 무방.
+    // ==================== (선택) 루트 콜라이더 충돌 ====================
+
     void OnTriggerEnter(Collider other)
     {
         if (_currentPattern == null) return;
-
-        // 필요하면 여기서도 특수 처리 가능.
+        // 필요하면 여기서 특수 처리 추가.
     }
 }

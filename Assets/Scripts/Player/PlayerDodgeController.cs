@@ -6,42 +6,61 @@ using UnityEngine.Events;
 [DisallowMultipleComponent]
 public class PlayerDodgeController : MonoBehaviour
 {
-    [Header("① 참조")]
-    [SerializeField] Transform playerRoot;
-    [SerializeField] Transform cameraTransform;
-    [SerializeField] PlayerMoveController move;     // 일반 이동 컴포넌트(있으면)
-    [SerializeField] PlayerLockOn playerLockOn;     // 락온 방향 보정(선택)
-    [SerializeField] Animator animator;             // 애니(선택)
-    [SerializeField] CombatMoveLocker moveLocker;   // ★ 이동 잠금 전담
+    [Header("① 참조 (한글 설명)")]
+    [SerializeField] Transform playerRoot;          // [조절값] 플레이어 루트 트랜스폼 (없으면 자기 자신)
+    [SerializeField] Transform cameraTransform;     // [조절값] 회피 방향 계산에 사용할 카메라 트랜스폼
+    [SerializeField] PlayerMoveController move;     // [조절값] 일반 이동 컴포넌트 참조(있으면 사용)
+    [SerializeField] PlayerLockOn playerLockOn;     // [조절값] 락온 상태에서 방향 기준용
+    [SerializeField] Animator animator;             // [조절값] 회피 애니메이션 재생용 애니메이터
+    [SerializeField] CombatMoveLocker moveLocker;   // [조절값] 회피 중 이동 잠금 전담 컴포넌트
 
-    [Header("② 입력")]
-    [SerializeField] KeyCode dodgeKey = KeyCode.LeftShift;
+    [Header("② 입력 (한글 설명)")]
+    [SerializeField] KeyCode dodgeKey = KeyCode.LeftShift; // [조절값] 회피 입력 키
 
-    [Header("③ 이동 조절(속도/거리 중 택1)")]
+    [Header("③ 이동 조절(속도/거리 중 택1) (한글 설명)")]
     [Tooltip("끄면 '속도 기반', 켜면 '거리 기반' 회피")]
-    [SerializeField] bool useDistanceBased = false;
-    [SerializeField, Range(4f, 28f)]  float dodgeSpeed = 18f;
-    [SerializeField, Range(1f, 12f)]  float dodgeDistance = 5f;
-    [SerializeField, Range(0.05f, .6f)] float dodgeDuration = 0.25f;
-    [SerializeField, Range(0f, 1f)]   float dodgeCooldown = 0f;
+    [SerializeField] bool useDistanceBased = false;            // [조절값] true=거리 기반, false=속도 기반
+    [SerializeField, Range(4f, 28f)]  float dodgeSpeed = 18f;  // [조절값] 속도 기반 회피시 이동 속도(m/s)
+    [SerializeField, Range(1f, 12f)]  float dodgeDistance = 5f;// [조절값] 거리 기반 회피시 총 이동 거리(m)
+    [SerializeField, Range(0.05f, .6f)] float dodgeDuration = 0.25f; // [조절값] 회피에 걸리는 시간(초)
+    [SerializeField, Range(0f, 1f)]   float dodgeCooldown = 0f;      // [조절값] 회피 쿨타임(초)
 
-    [Header("④ 속도 곡선(0~1)")]
+    [Header("④ 속도 곡선(0~1) (한글 설명)")]
     [Tooltip("시간 정규화 t(0~1)에 대한 속도 배율")]
-    [SerializeField] AnimationCurve speedCurve = AnimationCurve.Linear(0,1, 1,1);
+    [SerializeField] AnimationCurve speedCurve = AnimationCurve.Linear(0, 1, 1, 1); // [조절값] 회피 속도 곡선
 
-    [Header("⑤ 애니 파라미터")]
-    [SerializeField] string p_IsDodging = "IsDodging";
-    [SerializeField] string p_DodgeTrigger = "Dodge";
+    [Header("⑤ 애니 파라미터 (한글 설명)")]
+    [SerializeField] string p_IsDodging = "IsDodging";  // [조절값] 회피 중 여부 Bool 파라미터 이름
+    [SerializeField] string p_DodgeTrigger = "Dodge";   // [조절값] 회피 트리거 파라미터 이름
 
-    [Header("⑥ 이동 잠금 옵션(대시 동안)")]
+    [Header("⑥ 이동 잠금 옵션(대시 동안) (한글 설명)")]
     [Tooltip("회피 진행 중 일반 이동 금지")]
-    [SerializeField] bool lockMoveDuringDodge = true;
-    [SerializeField] bool zeroVelocityOnDodge = true;
-    [SerializeField] bool disableRootMotionOnDodge = true;
+    [SerializeField] bool lockMoveDuringDodge = true;   // [조절값] 회피 중 이동 잠금 여부
+    [SerializeField] bool zeroVelocityOnDodge = true;   // [조절값] 회피 시작 시 속도를 0으로 만들지 여부
+    [SerializeField] bool disableRootMotionOnDodge = true; // [조절값] 회피 중 루트모션 비활성화 여부
 
-    [Header("⑦ 이벤트")]
-    public UnityEvent OnDodgeStart;
-    public UnityEvent OnDodgeEnd;
+    [Header("⑦ 이벤트 (한글 설명)")]
+    public UnityEvent OnDodgeStart; // [조절값] 회피 시작 시 호출되는 이벤트(외부 연동용)
+    public UnityEvent OnDodgeEnd;   // [조절값] 회피 종료 시 호출되는 이벤트(외부 연동용)
+
+    [Header("⑧ 회피 사운드 설정 (한글 설명)")]
+    [Tooltip("회피 시작 시 재생할 사운드를 출력할 AudioSource (비워두면 자동 생성/검색)")]
+    [SerializeField] AudioSource dodgeAudioSource;          // [조절값] 회피 사운드용 오디오 소스
+
+    [Tooltip("회피 시작 시 재생할 사운드 클립들 (여러 개 넣으면 랜덤 재생)")]
+    [SerializeField] AudioClip[] dodgeStartClips;           // [조절값] 회피 시작 SFX 리스트
+
+    [Tooltip("회피 종료 시 재생할 사운드 클립들 (선택, 비워두면 사용 안 함)")]
+    [SerializeField] AudioClip[] dodgeEndClips;             // [조절값] 회피 종료 SFX 리스트
+
+    [Tooltip("회피 사운드 전체 볼륨 (0~1)")]
+    [SerializeField, Range(0f, 1f)] float dodgeVolume = 1f; // [조절값] 회피 사운드 볼륨
+
+    [Tooltip("같은 사운드를 반복 재생할 때 단조로움을 줄이기 위한 랜덤 피치 범위 (x=최소, y=최대). 둘 다 1이면 고정 피치.")]
+    [SerializeField] Vector2 dodgePitchRandomRange = new Vector2(0.95f, 1.05f); // [조절값] 피치 랜덤 범위
+
+    [Tooltip("회피 종료 시에도 사운드를 재생할지 여부 (true면 종료 SFX 사용)")]
+    [SerializeField] bool playEndSound = false;             // [조절값] 회피 종료 사운드 사용 여부
 
     // 내부
     CharacterController cc;
@@ -70,13 +89,19 @@ public class PlayerDodgeController : MonoBehaviour
         if (!move) move = GetComponent<PlayerMoveController>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
         if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
+
+        EnsureDodgeAudioSource();
     }
 
     void Update()
     {
         cdTimer -= Time.unscaledDeltaTime;
 
-        if (isDodging) { TickDodge(); return; }
+        if (isDodging)
+        {
+            TickDodge();
+            return;
+        }
 
         if (Input.GetKeyDown(dodgeKey) && cdTimer <= 0f)
             StartDodge();
@@ -96,7 +121,8 @@ public class PlayerDodgeController : MonoBehaviour
             ? Mathf.Max(0.01f, dodgeDistance / Mathf.Max(0.01f, dodgeDuration))
             : dodgeSpeed;
 
-        isDodging = true; elapsed = 0f;
+        isDodging = true;
+        elapsed = 0f;
         cdTimer = dodgeCooldown;
 
         // ★ 대시 동안 일반 이동 잠금
@@ -108,6 +134,10 @@ public class PlayerDodgeController : MonoBehaviour
             if (!string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, true);
             if (!string.IsNullOrEmpty(p_DodgeTrigger)) animator.SetTrigger(p_DodgeTrigger);
         }
+
+        // 회피 시작 사운드 재생
+        PlayDodgeStartSound();
+
         OnDodgeStart?.Invoke();
     }
 
@@ -131,6 +161,11 @@ public class PlayerDodgeController : MonoBehaviour
             moveLocker.Unlock("DODGE");
 
         if (animator && !string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, false);
+
+        // 회피 종료 사운드 (옵션)
+        if (playEndSound)
+            PlayDodgeEndSound();
+
         OnDodgeEnd?.Invoke();
     }
 
@@ -139,6 +174,67 @@ public class PlayerDodgeController : MonoBehaviour
         v.y = 0f;
         if (v.sqrMagnitude < 0.0001f) return Vector3.forward;
         return v.normalized;
+    }
+
+    // ==================== 회피 사운드 유틸 ====================
+
+    void EnsureDodgeAudioSource()
+    {
+        if (dodgeAudioSource != null) return;
+
+        // 1) 자기 오브젝트에서 AudioSource 검색
+        dodgeAudioSource = GetComponent<AudioSource>();
+        if (dodgeAudioSource != null) return;
+
+        // 2) 없으면 새로 추가 (3D 사운드 기본값)
+        dodgeAudioSource = gameObject.AddComponent<AudioSource>();
+        dodgeAudioSource.playOnAwake  = false;
+        dodgeAudioSource.spatialBlend = 1.0f;                       // 3D 사운드
+        dodgeAudioSource.rolloffMode  = AudioRolloffMode.Linear;
+        dodgeAudioSource.maxDistance  = 30f;
+    }
+
+    void PlayDodgeStartSound()
+    {
+        if (dodgeAudioSource == null) return;
+
+        AudioClip clip = GetRandomClip(dodgeStartClips);
+        if (clip == null) return;
+
+        float pitch = 1f;
+        if (dodgePitchRandomRange.y >= dodgePitchRandomRange.x && dodgePitchRandomRange.y > 0f)
+        {
+            pitch = Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
+        }
+
+        dodgeAudioSource.pitch = pitch;
+        dodgeAudioSource.PlayOneShot(clip, dodgeVolume);
+    }
+
+    void PlayDodgeEndSound()
+    {
+        if (dodgeAudioSource == null) return;
+
+        AudioClip clip = GetRandomClip(dodgeEndClips);
+        if (clip == null) return;
+
+        float pitch = 1f;
+        if (dodgePitchRandomRange.y >= dodgePitchRandomRange.x && dodgePitchRandomRange.y > 0f)
+        {
+            pitch = Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
+        }
+
+        dodgeAudioSource.pitch = pitch;
+        dodgeAudioSource.PlayOneShot(clip, dodgeVolume);
+    }
+
+    AudioClip GetRandomClip(AudioClip[] clips)
+    {
+        if (clips == null || clips.Length == 0)
+            return null;
+
+        int idx = Random.Range(0, clips.Length);
+        return clips[idx];
     }
 
 #if UNITY_EDITOR

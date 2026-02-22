@@ -1,43 +1,60 @@
-// Assets/Scripts/Boss/BossHitReaction.cs
 using UnityEngine;
 
 /// <summary>
-/// 보스가 데미지를 받을 때 발생하는 비주얼/애니메이션 반응 전담 컴포넌트.
+/// 보스가 데미지를 받을 때 발생하는 비주얼/애니메이션/사운드 반응 전담 컴포넌트.
 /// - BossHealth.OnDamagedWithType 를 구독해서,
 ///   * 히트 이펙트 스폰
 ///   * Hit / Stagger 애니메이션 트리거 호출
+///   * 히트 사운드 재생
 /// 를 담당한다.
 /// </summary>
 [DisallowMultipleComponent]
 public class BossHitReaction : MonoBehaviour
 {
-    [Header("참조")]
+    [Header("참조 (한글 설명)")]
     [Tooltip("같은 오브젝트 또는 부모에 있는 BossHealth를 지정. 비워두면 자동 검색.")]
     public BossHealth bossHealth;
     
     [Tooltip("보스 애니메이터. Hit / Stagger 트리거를 보낼 대상.")]
     public Animator bossAnimator;
 
-    [Header("히트 이펙트")]
+    [Header("히트 이펙트 (한글 설명)")]
     [Tooltip("일반 공격 피격 시 사용할 VFX 프리팹 (선택).")]
     public GameObject normalHitVfx;
 
     [Tooltip("강공격/경직 공격 피격 시 사용할 VFX 프리팹 (선택).")]
     public GameObject heavyHitVfx;
 
-    [Tooltip("이펙트 생성 위치 기준 트랜스폼 (없으면 피격 지점 사용).")]
+    [Tooltip("이펙트 생성 위치 기준 트랜스폼 (없으면 보스 중심 위치 사용).")]
     public Transform vfxPivot;
 
-    [Header("애니메이션 파라미터 이름")]
+    [Header("애니메이션 파라미터 이름 (한글 설명)")]
     [Tooltip("일반 피격 시 사용할 트리거 이름 (예: \"Hit\"). 비워두면 애니는 호출하지 않음.")]
     public string hitTriggerName = "Hit";
 
     [Tooltip("경직/강공격 피격 시 사용할 트리거 이름 (예: \"Stagger\").")]
     public string staggerTriggerName = "Stagger";
 
-    [Header("경직 조건")]
-    [Tooltip("이 HitType에 해당할 경우 경직 애니메이션을 사용한다.")]
+    [Header("경직 조건 (한글 설명)")]
+    [Tooltip("이 HitType에 해당할 경우 경직 애니메이션과 헤비 이펙트/사운드를 사용한다.")]
     public HitType staggerHitType = HitType.Heavy;  // 프로젝트의 HitType 정의에 맞게 값만 맞춰서 사용
+
+    [Header("히트 사운드 설정 (한글 설명)")]
+    [Tooltip("히트 사운드를 재생할 AudioSource (없으면 런타임에 이 오브젝트에 자동 추가).")]
+    public AudioSource audioSource;   // [조절값]
+
+    [Tooltip("일반 피격 시 재생할 사운드 클립들 (여러 개 넣으면 랜덤으로 하나 재생).")]
+    public AudioClip[] normalHitClips;    // [조절값]
+
+    [Tooltip("경직/강공격 피격 시 재생할 사운드 클립들 (여러 개 넣으면 랜덤으로 하나 재생).")]
+    public AudioClip[] heavyHitClips;     // [조절값]
+
+    [Tooltip("히트 사운드 기본 볼륨 (0~1)")]
+    [Range(0f, 1f)]
+    public float hitVolume = 1f;         // [조절값]
+
+    [Tooltip("같은 사운드가 반복될 때의 단조로움을 줄이기 위한 랜덤 피치 범위 (x = 최소, y = 최대). 둘 다 1이면 피치 고정.")]
+    public Vector2 randomPitchRange = new Vector2(0.95f, 1.05f); // [조절값]
 
     void Awake()
     {
@@ -54,9 +71,12 @@ public class BossHitReaction : MonoBehaviour
             return;
         }
 
-        // BossHealth에서 제공하는 이벤트 구독 (이미 정의된 시그니처에 맞춰 사용)
+        // 히트 이벤트 구독
         // IHealth.OnDamagedWithType: Action<int, HitType> 형태라고 가정
         bossHealth.OnDamagedWithType += HandleDamagedWithType;
+
+        // 히트 사운드용 AudioSource 준비 (없으면 자동 생성)
+        EnsureAudioSource();
     }
 
     void OnDestroy()
@@ -67,7 +87,7 @@ public class BossHitReaction : MonoBehaviour
 
     /// <summary>
     /// BossHealth에서 데미지를 받은 직후 호출되는 콜백.
-    /// 여기서 이펙트/애니를 모두 처리한다.
+    /// 여기서 이펙트/애니/사운드를 모두 처리한다.
     /// </summary>
     void HandleDamagedWithType(int damage, HitType hitType)
     {
@@ -76,7 +96,12 @@ public class BossHitReaction : MonoBehaviour
 
         // 2) 애니메이션 트리거
         PlayHitAnimation(hitType);
+
+        // 3) 사운드 재생
+        PlayHitSound(hitType);
     }
+
+    // ==================== VFX ====================
 
     void SpawnHitVfx(HitType hitType)
     {
@@ -93,6 +118,8 @@ public class BossHitReaction : MonoBehaviour
         Vector3 spawnPos = vfxPivot ? vfxPivot.position : transform.position;
         Instantiate(prefab, spawnPos, Quaternion.identity);
     }
+
+    // ==================== 애니메이션 ====================
 
     void PlayHitAnimation(HitType hitType)
     {
@@ -112,5 +139,66 @@ public class BossHitReaction : MonoBehaviour
             bossAnimator.ResetTrigger(hitTriggerName);
             bossAnimator.SetTrigger(hitTriggerName);
         }
+    }
+
+    // ==================== 사운드 ====================
+
+    void EnsureAudioSource()
+    {
+        if (audioSource != null) return;
+
+        // 먼저 자기 오브젝트에서 AudioSource 찾아보고
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource != null) return;
+
+        // 없으면 새로 추가 (3D 히트 사운드 용도)
+        audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource.playOnAwake = false;
+        audioSource.spatialBlend = 1.0f;       // 3D 사운드
+        audioSource.rolloffMode = AudioRolloffMode.Linear;
+        audioSource.maxDistance = 30f;         // 필요 시 조절
+    }
+
+    void PlayHitSound(HitType hitType)
+    {
+        if (audioSource == null) return;
+
+        AudioClip clip = GetClipForHitType(hitType);
+        if (clip == null) return;
+
+        // 랜덤 피치 적용
+        float pitch = 1f;
+        if (randomPitchRange.y > 0f && randomPitchRange.y >= randomPitchRange.x)
+        {
+            pitch = Random.Range(randomPitchRange.x, randomPitchRange.y);
+        }
+
+        audioSource.pitch = pitch;
+
+        // PlayOneShot 사용: 같은 프레임에 여러 히트가 들어와도 겹쳐서 재생 가능
+        audioSource.PlayOneShot(clip, hitVolume);
+    }
+
+    AudioClip GetClipForHitType(HitType hitType)
+    {
+        // 경직 타입이면 헤비 클립 우선
+        if (hitType == staggerHitType)
+        {
+            AudioClip heavy = GetRandomClip(heavyHitClips);
+            if (heavy != null)
+                return heavy;
+        }
+
+        // 나머지는 일반 히트
+        return GetRandomClip(normalHitClips);
+    }
+
+    AudioClip GetRandomClip(AudioClip[] clips)
+    {
+        if (clips == null || clips.Length == 0)
+            return null;
+
+        int idx = Random.Range(0, clips.Length);
+        return clips[idx];
     }
 }

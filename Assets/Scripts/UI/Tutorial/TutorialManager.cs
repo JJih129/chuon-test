@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;          
+using TMPro;
 using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
@@ -15,24 +15,23 @@ public class TutorialManager : MonoBehaviour
     public static TutorialManager Instance;
 
     [Header("■ 대화창 UI")]
-    // ★ [에러 해결] 이 변수들이 누락되어 에러가 발생했습니다.
-    public TextMeshProUGUI centerTitleText; // 중앙 타이틀 텍스트
+    public TextMeshProUGUI centerTitleText;    // 중앙 타이틀 텍스트
     public CanvasGroup dialogueGroup;
     public TextMeshProUGUI speakerText;
     public TextMeshProUGUI contentText;
 
     [Header("■ 퀘스트 UI")]
-    public CanvasGroup questPanelGroup;     
-    public Image questPanelBg;              
-    public TextMeshProUGUI questTitleText;  
-    public TextMeshProUGUI questDescriptionText; 
-    public GameObject comboGuidePanel;      
+    public CanvasGroup questPanelGroup;        // 퀘스트 전체 패널 (배경 포함)
+    public Image questPanelBg;                 // 퀘스트 패널 배경 이미지
+    public TextMeshProUGUI questTitleText;
+    public TextMeshProUGUI questDescriptionText;
+    public GameObject comboGuidePanel;
 
     [Header("■ 게임 오브젝트")]
-    public GameObject movementGoal;    
-    public GameObject attackDummy;     
-    public GameObject droneEnemy;      
-    public PlayerHealth playerHealth;  
+    public GameObject movementGoal;
+    public GameObject attackDummy;
+    public GameObject droneEnemy;
+    public PlayerHealth playerHealth;
 
     [Header("■ 대화 설정")]
     [Tooltip("대사 간격 (초)")]
@@ -48,12 +47,12 @@ public class TutorialManager : MonoBehaviour
     public float textTypingSpeed = 0.05f;
 
     [Header("■ 훈련 설정")]
-    public int targetDodgeCount = 2;   
-    public int targetGuardCount = 3;   
-    public int targetParryCount = 1;   
+    public int targetDodgeCount = 2;
+    public int targetGuardCount = 3;
+    public int targetParryCount = 1;
 
     // ──────────────────────────────────────────────
-    // ★ [에러 해결] 상태 변수 (내부 로직용)
+    // 상태 변수 (내부 로직용)
     // ──────────────────────────────────────────────
     private TutorialStep currentStep = TutorialStep.None;
     private int currentDodgeCount = 0;
@@ -62,9 +61,6 @@ public class TutorialManager : MonoBehaviour
     private int maxAttackCount = 4;
     private int currentGuardCount = 0;
     private int currentParryCount = 0;
-
-    private Color originalColor = new Color(0, 0, 0, 0.5f); 
-    // ──────────────────────────────────────────────
 
     private void Awake()
     {
@@ -75,20 +71,25 @@ public class TutorialManager : MonoBehaviour
     void Start()
     {
         // 중앙 타이틀 초기화
-        if (centerTitleText) 
+        if (centerTitleText)
         {
             centerTitleText.text = "";
             centerTitleText.gameObject.SetActive(true);
         }
 
-        // UI 초기화 (퀘스트 패널은 항상 켜짐)
+        // 대화창은 처음에 안 보이게
         if (dialogueGroup) dialogueGroup.alpha = 0;
-        if (questPanelGroup) { 
-            questPanelGroup.alpha = 1; 
-            questPanelGroup.interactable = false; 
+
+        // 퀘스트 패널:
+        //  - 인스펙터에 설정한 알파/색상을 그대로 사용한다.
+        //  - 상호작용/레이캐스트만 비활성 (단순 정보용 패널이므로)
+        if (questPanelGroup)
+        {
+            questPanelGroup.interactable = false;
             questPanelGroup.blocksRaycasts = false;
+            // questPanelGroup.alpha 를 여기서 건드리지 않음
         }
-        if (questPanelBg) questPanelBg.color = originalColor;
+        // questPanelBg.color 도 인스펙터 값 그대로 사용 (강제 덮어쓰기 제거)
 
         // 오브젝트 숨기기
         if (comboGuidePanel) comboGuidePanel.SetActive(false);
@@ -117,20 +118,20 @@ public class TutorialManager : MonoBehaviour
     IEnumerator Sequence_Intro()
     {
         // 중앙 타이틀 연출 시작
-        if (centerTitleText) 
+        if (centerTitleText)
         {
             centerTitleText.text = "가상현실 부팅 완료.";
             centerTitleText.DOFade(1, 0.5f);
         }
 
         yield return StartCoroutine(PlayDialogue("EGO", "가상현실 부팅 완료.", introDelay));
-        
+
         if (centerTitleText) centerTitleText.DOFade(0, 0.5f); // 중앙 타이틀 사라짐
 
         yield return StartCoroutine(PlayDialogue("EGO", "내일 싸우러 가기 전 마지막 훈련을 진행해 보자고.", introDelay));
         yield return StartCoroutine(PlayDialogue("추온", "알겠어, 대비는 철저히 하는게 좋겠지.", introDelay));
-        
-        if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
+
+     
         StartCoroutine(Sequence_Movement());
     }
 
@@ -139,31 +140,48 @@ public class TutorialManager : MonoBehaviour
         yield return StartCoroutine(PlayDialogue("EGO", "자 우선 몸 좀 풀어볼까? WASD로 움직여볼래?", moveDelay));
         yield return StartCoroutine(PlayDialogue("EGO", "좋아, 이번엔 마우스를 움직여 주위를 둘러봐.", moveDelay));
         yield return StartCoroutine(PlayDialogue("EGO", "한 녀석을 집중해서 보려면 마우스 휠을 입력해 고정 할 수 있어.", moveDelay));
-        
+
         if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
 
         currentStep = TutorialStep.Movement;
         if (movementGoal) movementGoal.SetActive(true);
-        
-        PunchEffect(); 
+
+        PunchEffect();
         UpdateMovementUI();
     }
 
     void OnDodgeAction()
     {
-        if (currentDodgeCount < targetDodgeCount) {
-            currentDodgeCount++; PunchEffect(); UpdateMovementUI(); CheckMovementComplete();
+        if (currentDodgeCount < targetDodgeCount)
+        {
+            currentDodgeCount++;
+            PunchEffect();
+            UpdateMovementUI();
+            CheckMovementComplete();
         }
     }
-    public void OnGoalReached() {
-        if (!isGoalReached) { isGoalReached = true; PunchEffect(); UpdateMovementUI(); CheckMovementComplete(); }
+
+    public void OnGoalReached()
+    {
+        if (!isGoalReached)
+        {
+            isGoalReached = true;
+            PunchEffect();
+            UpdateMovementUI();
+            CheckMovementComplete();
+        }
     }
-    void UpdateMovementUI() {
+
+    void UpdateMovementUI()
+    {
         string goalStr = isGoalReached ? "<color=green>(완료)</color>" : "(미완료)";
         UpdateQuestUI("기초 기동", $"1. 지정된 위치로 이동 {goalStr}\n2. Shift 회피 ({currentDodgeCount}/{targetDodgeCount})");
     }
-    void CheckMovementComplete() {
-        if (isGoalReached && currentDodgeCount >= targetDodgeCount) {
+
+    void CheckMovementComplete()
+    {
+        if (isGoalReached && currentDodgeCount >= targetDodgeCount)
+        {
             if (movementGoal) movementGoal.SetActive(false);
             StartCoroutine(Sequence_Attack());
         }
@@ -175,26 +193,30 @@ public class TutorialManager : MonoBehaviour
         yield return StartCoroutine(PlayDialogue("EGO", "몸이 좀 풀린 것 같네! 이제 검을 휘둘러보자.", attackDelay));
         yield return StartCoroutine(PlayDialogue("EGO", "마우스 좌클릭으로 약공격, 우클릭으로 강공격을 할 수 있어.", attackDelay));
         yield return StartCoroutine(PlayDialogue("EGO", "오케이 이번엔 콤보를 사용해보자. 약공격을 4번 연속 입력하면 돼.", attackDelay));
-        
+
         if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
-        if (comboGuidePanel) {
+        if (comboGuidePanel)
+        {
             comboGuidePanel.SetActive(true);
             comboGuidePanel.transform.DOPunchScale(Vector3.one * 0.1f, 0.3f);
         }
         currentStep = TutorialStep.Attack;
         if (attackDummy) attackDummy.SetActive(true);
-        
-        PunchEffect(); 
+
+        PunchEffect();
         UpdateQuestUI("전투 훈련", $"허수아비를 공격하세요.\n({currentAttackCount} / {maxAttackCount})");
     }
 
     public void OnEnemyHit()
     {
         if (currentStep != TutorialStep.Attack) return;
+
         currentAttackCount++;
         UpdateQuestUI("전투 훈련", $"허수아비를 공격하세요.\n({currentAttackCount} / {maxAttackCount})");
         PunchEffect();
-        if (currentAttackCount >= maxAttackCount) {
+
+        if (currentAttackCount >= maxAttackCount)
+        {
             if (attackDummy) attackDummy.SetActive(false);
             if (comboGuidePanel) comboGuidePanel.SetActive(false);
             StartCoroutine(Sequence_MidTalk());
@@ -205,7 +227,6 @@ public class TutorialManager : MonoBehaviour
     {
         currentStep = TutorialStep.None;
         yield return StartCoroutine(PlayDialogue("추온", "오늘은 컨디션이 좋네, 검이 가벼워.", attackDelay));
-        if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
         StartCoroutine(Sequence_Defense());
     }
 
@@ -216,29 +237,46 @@ public class TutorialManager : MonoBehaviour
         if (droneEnemy) droneEnemy.SetActive(true);
         yield return StartCoroutine(PlayDialogue("EGO", "간단하게 몇 번 연습해보자고.", defenseDelay));
         if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
-        
+
         currentStep = TutorialStep.Defense;
         PunchEffect();
         UpdateDefenseUI();
     }
 
-    public void OnPlayerGuardSuccess() {
+    public void OnPlayerGuardSuccess()
+    {
         if (currentStep != TutorialStep.Defense) return;
-        if (currentGuardCount < targetGuardCount) {
-            currentGuardCount++; PunchEffect(); UpdateDefenseUI(); CheckDefenseComplete();
+        if (currentGuardCount < targetGuardCount)
+        {
+            currentGuardCount++;
+            PunchEffect();
+            UpdateDefenseUI();
+            CheckDefenseComplete();
         }
     }
-    public void OnPlayerParrySuccess() {
+
+    public void OnPlayerParrySuccess()
+    {
         if (currentStep != TutorialStep.Defense) return;
-        if (currentParryCount < targetParryCount) {
-            currentParryCount++; PunchEffect(); UpdateDefenseUI(); CheckDefenseComplete();
+        if (currentParryCount < targetParryCount)
+        {
+            currentParryCount++;
+            PunchEffect();
+            UpdateDefenseUI();
+            CheckDefenseComplete();
         }
     }
-    void UpdateDefenseUI() {
-        UpdateQuestUI("방어 훈련", $"드론 공격 방어\n1. 가드 ({currentGuardCount}/{targetGuardCount})\n2. 패링 ({currentParryCount}/{targetParryCount})");
+
+    void UpdateDefenseUI()
+    {
+        UpdateQuestUI("방어 훈련",
+            $"드론 공격 방어\n1. 가드 ({currentGuardCount}/{targetGuardCount})\n2. 패링 ({currentParryCount}/{targetParryCount})");
     }
-    void CheckDefenseComplete() {
-        if (currentGuardCount >= targetGuardCount && currentParryCount >= targetParryCount) {
+
+    void CheckDefenseComplete()
+    {
+        if (currentGuardCount >= targetGuardCount && currentParryCount >= targetParryCount)
+        {
             if (droneEnemy) droneEnemy.SetActive(false);
             StartCoroutine(Sequence_Heal());
         }
@@ -249,16 +287,17 @@ public class TutorialManager : MonoBehaviour
         currentStep = TutorialStep.None;
         yield return StartCoroutine(PlayDialogue("추온", "실패하면 위험하겠어, 이 감각을 잊지말자.", healDelay));
         yield return StartCoroutine(PlayDialogue("EGO", "체력 회복은 Q를 입력해 회복 앰플을 사용하여 회복 할 수 있어.", healDelay));
-        if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
-        
+       
+
         currentStep = TutorialStep.Heal;
         if (playerHealth) playerHealth.ApplyDamage(50);
-        
+
         PunchEffect();
         UpdateQuestUI("회복 훈련", "체력이 손실되었습니다.\n'Q' 키를 눌러 앰플을 사용하세요.");
     }
 
-    void OnHealAction() {
+    void OnHealAction()
+    {
         if (playerHealth) playerHealth.Heal(50);
         PunchEffect();
         StartCoroutine(Sequence_Complete());
@@ -269,8 +308,8 @@ public class TutorialManager : MonoBehaviour
         currentStep = TutorialStep.Complete;
         yield return StartCoroutine(PlayDialogue("EGO", "좋아! 훈련은 모두 끝났어. 이제 실전이다.", completeDelay));
         if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
+
         UpdateQuestUI("튜토리얼 완료", "모든 훈련을 마쳤습니다.\n수고하셨습니다.");
-        
         PunchEffect();
     }
 
@@ -279,35 +318,41 @@ public class TutorialManager : MonoBehaviour
     // ──────────────────────────────────────────────
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
-        dialogueGroup.alpha = 1;
+        if (dialogueGroup) dialogueGroup.alpha = 1;
         if (speakerText) speakerText.text = speaker;
+
         if (contentText)
         {
             contentText.text = "";
             foreach (char c in content)
             {
                 contentText.text += c;
-                yield return new WaitForSeconds(textTypingSpeed); 
+                yield return new WaitForSeconds(textTypingSpeed);
             }
         }
         yield return new WaitForSeconds(waitTime);
     }
 
-    void ShowQuestPanel() { 
-        if (questPanelGroup) { 
-            questPanelGroup.alpha = 1; 
-            questPanelGroup.interactable = true; 
-            questPanelGroup.transform.DOPunchScale(Vector3.one * 0.15f, 0.5f); 
-        } 
+    void ShowQuestPanel()
+    {
+        // 필요하면 나중에 특정 타이밍에 호출해서 강조 연출용으로 사용
+        if (questPanelGroup)
+        {
+            questPanelGroup.alpha = 1;   // 보이게 유지
+            questPanelGroup.interactable = true;
+            questPanelGroup.transform.DOPunchScale(Vector3.one * 0.15f, 0.5f);
+        }
     }
-    
-    void UpdateQuestUI(string title, string desc) { 
-        if (questTitleText) questTitleText.text = title; 
-        if (questDescriptionText) questDescriptionText.text = desc; 
+
+    void UpdateQuestUI(string title, string desc)
+    {
+        if (questTitleText) questTitleText.text = title;
+        if (questDescriptionText) questDescriptionText.text = desc;
     }
-    
-    void PunchEffect() { 
-        if (questPanelGroup) 
-            questPanelGroup.transform.DOPunchScale(Vector3.one * 0.05f, 0.2f); 
+
+    void PunchEffect()
+    {
+        if (questPanelGroup)
+            questPanelGroup.transform.DOPunchScale(Vector3.one * 0.05f, 0.2f);
     }
 }

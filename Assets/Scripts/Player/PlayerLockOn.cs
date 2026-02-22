@@ -1,40 +1,47 @@
-// Assets/Scripts/Player/PlayerLockOn.cs
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public class PlayerLockOn : MonoBehaviour
 {
-    [Header("탐색 범위/시야")]
-    [SerializeField, Min(0f)] private float lockOnRange = 18f;
-    [SerializeField, Range(10f, 180f)] private float lockOnFOV = 70f;
-    [SerializeField] private LayerMask obstacleMask = 0;          // 시야를 가리는 장애물 마스크(없으면 0)
-    [SerializeField] private LayerMask enemyMask = 1 << 9;        // Enemy 레이어 가정(프로젝트에 맞게 조정)
+    [Header("탐색 범위/시야 (한글 설명)")]
+    [SerializeField, Min(0f)] private float lockOnRange = 18f;                // [조절값] 락온 탐색 최대 거리
+    [SerializeField, Range(10f, 180f)] private float lockOnFOV = 70f;         // [조절값] 카메라 중심 기준 허용 시야각
+    [SerializeField] private LayerMask obstacleMask = 0;                      // [조절값] 시야를 가리는 장애물 레이어 마스크(없으면 0)
+    [SerializeField] private LayerMask enemyMask = 1 << 9;                    // [조절값] 적 레이어 마스크 (프로젝트에 맞게 조정)
 
-    [Header("타깃 피벗 생성/추적")]
-    [SerializeField] private string pivotName = "LockPivot";       // 타깃 루트 하위에 잠금 기준점 생성/사용
-    [SerializeField] private float defaultPivotY = 1.3f;           // 렌더러 없을 때의 기본 높이
+    [Header("타깃 피벗 생성/추적 (한글 설명)")]
+    [SerializeField] private string pivotName = "LockPivot";                  // [조절값] 타깃 루트 하위에 생성할 락온 기준점 이름
+    [SerializeField] private float defaultPivotY = 1.3f;                       // [조절값] Render가 없을 때 기본 높이
 
-    [Header("입력(레거시) - Tab/MiddleMouse 토글")]
-    [SerializeField] private bool useLegacyInput = true;
-    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
-    [SerializeField] private KeyCode toggleKeyAlt = KeyCode.Mouse2;
+    [Header("입력(레거시) - Tab/MiddleMouse 토글 (한글 설명)")]
+    [SerializeField] private bool useLegacyInput = true;                      // [조절값] 구 Input 시스템(Tab/휠 클릭) 사용 여부
+    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;                 // [조절값] 락온 토글 키 1
+    [SerializeField] private KeyCode toggleKeyAlt = KeyCode.Mouse2;           // [조절값] 락온 토글 키 2 (휠 클릭)
 
-    [Header("카메라 연동")]
-    [SerializeField] private LockOnCameraManager cameraMgr;        // 락온 카메라 매니저(선택)
+    [Header("카메라 연동 (한글 설명)")]
+    [SerializeField] private LockOnCameraManager cameraMgr;                    // [조절값] 락온 카메라 매니저 참조
+
+    [Header("자동 해제 옵션 (한글 설명)")]
+    [Tooltip("락온 중 타깃 Transform이 파괴되거나 비활성화되면 자동으로 락온을 해제할지 여부")]
+    [SerializeField] private bool autoUnlockWhenTargetDisabled = true;        // [조절값]
 
     // ===== 외부에서 참조하는 공개 상태/헬퍼 =====
-    public Transform CurrentTarget { get; private set; }           // 현재 타깃의 "피벗" 트랜스폼
-    public bool IsLocked => CurrentTarget != null;                 // 기존 호환
-    public bool IsLockOn => IsLocked;                              // 기존 호환
-    public bool HasTarget => CurrentTarget != null;                // ▼ PlayerDodgeController가 기대하던 프로퍼티
-    public Transform Target => CurrentTarget;                      // 타깃 피벗 직접 접근용
+    public Transform CurrentTarget { get; private set; }                       // 현재 타깃의 '피벗' Transform
+    public bool IsLocked => CurrentTarget != null;                             // 기존 호환용
+    public bool IsLockOn => IsLocked;                                          // 기존 호환용
+    public bool HasTarget => CurrentTarget != null;                            // PlayerDodgeController 호환용
+    public Transform Target => CurrentTarget;                                  // 타깃 피벗 직접 접근용
     public Vector3 TargetPosition => CurrentTarget ? CurrentTarget.position : transform.position;
+
     public Vector3 DirectionFrom(Vector3 origin)
-        => (TargetPosition - origin).sqrMagnitude > 0.0001f ? (TargetPosition - origin).normalized : transform.forward;
+        => (TargetPosition - origin).sqrMagnitude > 0.0001f
+            ? (TargetPosition - origin).normalized
+            : transform.forward;
 
-    Transform _playerPivot;                                        // 플레이어 쪽 피벗(카메라 기준)
-    Transform _cam;                                                // Camera.main 캐시
+    Transform _playerPivot;                                                    // 플레이어 쪽 락온 피벗
+    Transform _cam;                                                            // Camera.main 캐시
 
+    private bool _lockModeActive;
     void Awake()
     {
         // 플레이어 쪽 피벗 확보 후 카메라 매니저에 전달
@@ -53,9 +60,22 @@ public class PlayerLockOn : MonoBehaviour
 
     void Update()
     {
+        // 0) 락온 중인데 타겟이 죽었거나 비활성화된 경우 자동으로 카메라 해제
+        //    - CurrentTarget == null : Destroy 된 경우
+        //    - activeInHierarchy == false : SetActive(false) 된 경우
+        if (_lockModeActive && (!CurrentTarget || !CurrentTarget.gameObject.activeInHierarchy))
+        {
+            _lockModeActive = false;
+            cameraMgr?.EndLockOn();   // freeLookDriver.enabled = true, 카메라 우선순위 복구
+        }
+
+        // 1) 입력으로 락온 토글(Tab, 휠 클릭 등)
         if (useLegacyInput && (Input.GetKeyDown(toggleKey) || Input.GetKeyDown(toggleKeyAlt)))
         {
-            if (IsLocked) Unlock();
+            if (IsLocked)
+            {
+                Unlock();
+            }
             else
             {
                 var enemyRoot = FindBestTarget();
@@ -64,16 +84,21 @@ public class PlayerLockOn : MonoBehaviour
         }
     }
 
+
     // === 외부 제어용 API ===
     public void LockTo(Transform enemyRoot)
     {
         // 대상 루트에서 피벗을 확보(없으면 생성)
         CurrentTarget = EnsurePivot(enemyRoot, pivotName, defaultPivotY);
-        cameraMgr?.StartLockOn(CurrentTarget);
+
+        _lockModeActive = CurrentTarget;           // 피벗이 있으면 락온 모드 ON
+        if (CurrentTarget)
+            cameraMgr?.StartLockOn(CurrentTarget);
     }
 
     public void Unlock()
     {
+        _lockModeActive = false;                   // 락온 모드 OFF
         CurrentTarget = null;
         cameraMgr?.EndLockOn();
     }
@@ -158,7 +183,7 @@ public class PlayerLockOn : MonoBehaviour
         go.transform.position = worldPos;
         go.transform.rotation = Quaternion.identity;
 
-        // 선택: 타깃 모델의 스케일/본 이동에 따라 Y를 따라가도록 보조 컴포넌트
+        // 타깃 모델의 스케일/본 이동에 따라 Y를 따라가도록 보조 컴포넌트
         var follower = go.AddComponent<LockPivotFollower>();
         follower.sourceRenderer = rend;
         follower.yOffset = rend ? go.transform.position.y - rend.bounds.center.y : defaultY;
