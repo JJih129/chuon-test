@@ -1,48 +1,48 @@
-using System.Collections;
+ï»¿using System.Collections;
 using UnityEngine;
 
 // BossUIController.cs
-// ¼³¸í: ÇÃ·¹ÀÌ¾î¿Í º¸½º °Å¸® ±â¹İÀ¸·Î »ó´Ü HP(ÀÌ¹ÌÁö)¿Í ºê·¹ÀÌÅ© HUD¸¦ ÇÔ²² ¹ÙÀÎµù/ÇØÁ¦.
-// - BossHUDImage (ImageÇü HP) ¿Í BossBreakHUD(ImageÇü ºê·¹ÀÌÅ©)¸¦ ÇÔ²² »ç¿ëÇÏµµ·Ï ¼³°è.
+// ì„¤ëª…: í”Œë ˆì´ì–´ì™€ ë³´ìŠ¤ ê±°ë¦¬ ê¸°ë°˜ìœ¼ë¡œ ìƒë‹¨ HP(ì´ë¯¸ì§€)ì™€ ë¸Œë ˆì´í¬ HUDë¥¼ í•¨ê»˜ ë°”ì¸ë”©/í•´ì œ.
+// - BossHUDImage (Imageí˜• HP) ì™€ BossBreakHUD(Imageí˜• ë¸Œë ˆì´í¬)ë¥¼ í•¨ê»˜ ì‚¬ìš©í•˜ë„ë¡ ì„¤ê³„.
 
 public class BossUIController : MonoBehaviour
 {
-    [Header("¢º ÂüÁ¶ (ÇÊ¼ö)")]
-    [Tooltip("ÇÃ·¹ÀÌ¾î Transform. °Å¸® °è»ê ±âÁØ.")]
+    [Header("â–¶ ì°¸ì¡° (í•„ìˆ˜)")]
+    [Tooltip("í”Œë ˆì´ì–´ Transform. ê±°ë¦¬ ê³„ì‚° ê¸°ì¤€.")]
     public Transform player;
 
-    [Tooltip("»ó´Ü HUD ·çÆ®(GameObject). ±âº»ÀûÀ¸·Î ºñÈ°¼ºÈ­ ÇØ³õÀ½.")]
+    [Tooltip("ìƒë‹¨ HUD ë£¨íŠ¸(GameObject). ê¸°ë³¸ì ìœ¼ë¡œ ë¹„í™œì„±í™” í•´ë†“ìŒ.")]
     public GameObject topHudRoot;
 
-    [Tooltip("ImageÇü HP HUD ÄÄÆ÷³ÍÆ® (TopHudRoot¿¡ ºÙ¿©³õÀ½).")]
+    [Tooltip("Imageí˜• HP HUD ì»´í¬ë„ŒíŠ¸ (TopHudRootì— ë¶™ì—¬ë†“ìŒ).")]
     public BossHUD hpHud;
 
-    [Tooltip("ºê·¹ÀÌÅ© HUD ÄÄÆ÷³ÍÆ® (Image ±â¹İ).")]
+    [Tooltip("ë¸Œë ˆì´í¬ HUD ì»´í¬ë„ŒíŠ¸ (Image ê¸°ë°˜).")]
     public BossBreakHUD breakHud;
 
-    [Tooltip("º¸½ºÀÇ Ã¼·Â ÄÄÆ÷³ÍÆ® (IHealth ±¸ÇöÃ¼).")]
+    [Tooltip("ë³´ìŠ¤ì˜ ì²´ë ¥ ì»´í¬ë„ŒíŠ¸ (IHealth êµ¬í˜„ì²´).")]
     public MonoBehaviour healthBehaviour;
 
-    [Tooltip("º¸½ºÀÇ ºê·¹ÀÌÅ© ÄÁÆ®·Ñ·¯ (¾øÀ¸¸é ÀÚµ¿ Å½»ö).")]
+    [Tooltip("ë³´ìŠ¤ì˜ ë¸Œë ˆì´í¬ ì»¨íŠ¸ë¡¤ëŸ¬ (ì—†ìœ¼ë©´ ìë™ íƒìƒ‰).")]
     public BossBreakController breakController;
 
-    [Header("¢º °Å¸®/Å¸ÀÌ¹Ö (Æ©´×)")]
-    [Tooltip("º¸½º HUD°¡ Ç¥½ÃµÉ ÃÖ´ë °Å¸®(¹ÌÅÍ).")]
+    [Header("â–¶ ê±°ë¦¬/íƒ€ì´ë° (íŠœë‹)")]
+    [Tooltip("ë³´ìŠ¤ HUDê°€ í‘œì‹œë  ìµœëŒ€ ê±°ë¦¬(ë¯¸í„°).")]
     public float showDistance = 18f;
 
-    [Tooltip("¼û±è È÷½ºÅ×¸®½Ã½º(¹ÌÅÍ). showDistance + °ªÀÌ hide ±âÁØ.")]
+    [Tooltip("ìˆ¨ê¹€ íˆìŠ¤í…Œë¦¬ì‹œìŠ¤(ë¯¸í„°). showDistance + ê°’ì´ hide ê¸°ì¤€.")]
     public float hideHysteresis = 2f;
 
-    [Tooltip("°Å¸® Ã¼Å© ÁÖ±â(ÃÊ). 0ÀÌ¸é ¸Å ÇÁ·¹ÀÓ Ã¼Å©.")]
+    [Tooltip("ê±°ë¦¬ ì²´í¬ ì£¼ê¸°(ì´ˆ). 0ì´ë©´ ë§¤ í”„ë ˆì„ ì²´í¬.")]
     public float pollInterval = 0.12f;
 
-    [Tooltip("±ÙÁ¢ ÈÄ HUD°¡ ÄÑÁö±â Àü µô·¹ÀÌ(ÃÊ).")]
+    [Tooltip("ê·¼ì ‘ í›„ HUDê°€ ì¼œì§€ê¸° ì „ ë”œë ˆì´(ì´ˆ).")]
     public float showDelay = 0.05f;
 
-    [Tooltip("¹üÀ§ ÀÌÅ» ÈÄ HUD°¡ ²¨Áö±â Àü µô·¹ÀÌ(ÃÊ).")]
+    [Tooltip("ë²”ìœ„ ì´íƒˆ í›„ HUDê°€ êº¼ì§€ê¸° ì „ ë”œë ˆì´(ì´ˆ).")]
     public float hideDelay = 0.12f;
 
-    // ³»ºÎ
+    // ë‚´ë¶€
     IHealth boundHealth;
     float showSqr;
     float hideSqr;
@@ -57,15 +57,25 @@ public class BossUIController : MonoBehaviour
 
         if (topHudRoot != null) topHudRoot.SetActive(false);
 
-        // Ä³½ºÆÃ/ÀÚµ¿Å½»ö
+        // ìºìŠ¤íŒ…/ìë™íƒìƒ‰
         boundHealth = healthBehaviour as IHealth;
         if (breakController == null)
             breakController = GetComponent<BossBreakController>();
         if (breakHud == null && topHudRoot != null)
             breakHud = topHudRoot.GetComponentInChildren<BossBreakHUD>();
+        if (breakHud != null && breakController != null)
+        {
+            if (breakHud.hudRoot == topHudRoot)
+            {
+                breakHud.showOnBreakEnter = false;
+                breakHud.hideOnBreakExit = false;
+            }
+
+            breakHud.BindBreakController(breakController);
+        }
 
         if (boundHealth == null)
-            Debug.LogWarning($"[BossUIController] healthBehaviourÀÌ IHealth¸¦ ±¸ÇöÇÏÁö ¾Ê½À´Ï´Ù: {healthBehaviour?.GetType().Name}");
+            Debug.LogWarning($"[BossUIController] healthBehaviourì´ IHealthë¥¼ êµ¬í˜„í•˜ì§€ ì•ŠìŠµë‹ˆë‹¤: {healthBehaviour?.GetType().Name}");
     }
 
     void OnEnable()
@@ -127,7 +137,7 @@ public class BossUIController : MonoBehaviour
         if (isVisible) return;
         if (hpHud == null || topHudRoot == null)
         {
-            Debug.LogWarning("[BossUIController] hpHud ¶Ç´Â topHudRoot ¹ÌÇÒ´ç.");
+            Debug.LogWarning("[BossUIController] hpHud ë˜ëŠ” topHudRoot ë¯¸í• ë‹¹.");
             return;
         }
 
@@ -137,7 +147,7 @@ public class BossUIController : MonoBehaviour
         if (boundHealth != null)
             hpHud.Bind(boundHealth);
 
-        // ºê·¹ÀÌÅ© HUD ·çÆ® È°¼ºÈ­(ºê·¹ÀÌÅ© ÀÌ¹ÌÁö´Â breakHud°¡ ÀÚÃ¼ÀûÀ¸·Î °»½Å)
+        // ë¸Œë ˆì´í¬ HUD ë£¨íŠ¸ í™œì„±í™”(ë¸Œë ˆì´í¬ ì´ë¯¸ì§€ëŠ” breakHudê°€ ìì²´ì ìœ¼ë¡œ ê°±ì‹ )
         if (breakHud != null && breakHud.hudRoot != null)
             breakHud.hudRoot.SetActive(true);
 
@@ -154,7 +164,7 @@ public class BossUIController : MonoBehaviour
         isVisible = false;
     }
 
-    // °­Á¦ ¼û±è Áï½Ã
+    // ê°•ì œ ìˆ¨ê¹€ ì¦‰ì‹œ
     public void ForceHideImmediate()
     {
         if (hpHud != null) hpHud.Unbind();
@@ -163,3 +173,4 @@ public class BossUIController : MonoBehaviour
         isVisible = false;
     }
 }
+

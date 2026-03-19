@@ -1,39 +1,68 @@
-// Assets/Scripts/Player/PlayerAnimationEvents.cs
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public class PlayerAnimationEvents : MonoBehaviour
 {
-    [Header("공격 히트박스들 (플레이어 무기)")]
+    [Header("Attack hitboxes driven by animation events")]
     [SerializeField] private AttackHitbox[] attackHitboxes;
+    [SerializeField] private PlayerReferences playerReferences;
 
-    // 안전하게 인덱스 체크
-    private AttackHitbox GetHitbox(int index)
+    void Awake()
     {
-        if (attackHitboxes == null || attackHitboxes.Length == 0) return null;
-        if (index < 0 || index >= attackHitboxes.Length) return null;
+        AutoWire();
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+            AutoWire();
+    }
+#endif
+
+    void AutoWire()
+    {
+        if (!playerReferences)
+            playerReferences = GetComponent<PlayerReferences>() ?? GetComponentInParent<PlayerReferences>(true);
+
+        if (HasUsableHitboxes(attackHitboxes))
+            return;
+
+        if (playerReferences != null && playerReferences.AttackHitboxes != null && playerReferences.AttackHitboxes.Length > 0)
+            attackHitboxes = playerReferences.AttackHitboxes;
+    }
+
+    AttackHitbox GetHitbox(int index)
+    {
+        RefreshHitboxes();
+
+        if (attackHitboxes == null || attackHitboxes.Length == 0)
+            return null;
+
+        if (index < 0 || index >= attackHitboxes.Length)
+            return null;
+
         return attackHitboxes[index];
     }
 
-    // 애니메이션 이벤트: 무기 충돌 시작 프레임
     public void ActivateHitbox(int index)
     {
         var hitbox = GetHitbox(index);
-        if (hitbox == null) return;
+        if (hitbox == null)
+            return;
 
         hitbox.ActivateWindow();
     }
 
-    // 애니메이션 이벤트: 무기 충돌 종료 프레임
     public void DeactivateHitbox(int index)
     {
         var hitbox = GetHitbox(index);
-        if (hitbox == null) return;
+        if (hitbox == null)
+            return;
 
         hitbox.DeactivateWindow();
     }
 
-    // 한 개만 쓰는 경우 편의용 (파라미터 없는 이벤트)
     public void ActivateHitbox()
     {
         ActivateHitbox(0);
@@ -42,5 +71,32 @@ public class PlayerAnimationEvents : MonoBehaviour
     public void DeactivateHitbox()
     {
         DeactivateHitbox(0);
+    }
+
+    static bool HasUsableHitboxes(AttackHitbox[] hitboxes)
+    {
+        if (hitboxes == null || hitboxes.Length == 0)
+            return false;
+
+        foreach (var hitbox in hitboxes)
+        {
+            if (hitbox && hitbox.gameObject.activeInHierarchy)
+                return true;
+        }
+
+        return false;
+    }
+
+    void RefreshHitboxes()
+    {
+        if (!playerReferences)
+            playerReferences = GetComponent<PlayerReferences>() ?? GetComponentInParent<PlayerReferences>(true);
+
+        if (playerReferences == null)
+            return;
+
+        var preferredHitboxes = playerReferences.AttackHitboxes;
+        if (HasUsableHitboxes(preferredHitboxes))
+            attackHitboxes = preferredHitboxes;
     }
 }

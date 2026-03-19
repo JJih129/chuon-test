@@ -24,6 +24,7 @@ public class TutorialDummy : MonoBehaviour, IDamageReceiver
         // 1. 쿨타임 체크 (짧은 시간에 너무 많이 호출되는 것 방지)
         if (Time.time - lastHitTime < hitCooldown) return;
         lastHitTime = Time.time;
+        TryGrantBasicAttackGauge(payload.attacker);
 
         // 2. 타격감 연출 (DOTween Shake)
         // 기존 트윈이 있으면 멈추고 새로 시작 (부자연스러운 떨림 방지)
@@ -43,5 +44,18 @@ public class TutorialDummy : MonoBehaviour, IDamageReceiver
         {
             TutorialManager.Instance.OnEnemyHit();
         }
+    }
+
+    void TryGrantBasicAttackGauge(Transform attacker)
+    {
+        if (attacker == null)
+            return;
+
+        var ultimate = attacker.GetComponent<PlayerUltimateController>();
+        if (ultimate == null)
+            ultimate = attacker.GetComponentInParent<PlayerUltimateController>();
+
+        if (ultimate != null && ultimate.gaugePerH > 0f)
+            ultimate.AddGauge(ultimate.gaugePerH);
     }
 }

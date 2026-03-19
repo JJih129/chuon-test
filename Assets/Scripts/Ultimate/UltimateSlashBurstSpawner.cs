@@ -4,6 +4,7 @@ using System;
 public class UltimateSlashBurstSpawner : MonoBehaviour
 {
     [Header("Anchors")]
+    [SerializeField] PlayerReferences playerReferences;
     [SerializeField] Transform player;     // 플레이어 루트
     [SerializeField] Transform spawnRoot;  // Player/UltimateSpawnRoot
 
@@ -26,6 +27,10 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
 
     void EnsureSpawnRoot()
     {
+        if (!playerReferences) playerReferences = GetComponent<PlayerReferences>();
+        if (!player && playerReferences != null) player = playerReferences.PlayerRoot;
+        if (!spawnRoot && playerReferences != null) spawnRoot = playerReferences.UltimateSpawnRoot;
+        if (!player) player = transform;
         if (spawnRoot) return;
         var go = new GameObject("UltimateSpawnRoot");
         spawnRoot = go.transform;
@@ -37,7 +42,8 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
     // ⬇️ “한 줄”만 생성 (index에 따라 항상 같은 방향/모양)
     public void EmitOneSlash(int index, int totalCount, int patternSeed, float life = 0.7f)
     {
-        if (!player) player = transform;
+        if (!playerReferences) playerReferences = GetComponent<PlayerReferences>();
+        if (!player) player = playerReferences != null ? playerReferences.PlayerRoot : transform;
         EnsureSpawnRoot();
 
         // 고정 시드 + 인덱스로 안정적인 난수 시퀀스

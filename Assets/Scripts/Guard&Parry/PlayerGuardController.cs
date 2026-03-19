@@ -142,13 +142,19 @@ public class PlayerGuardController : MonoBehaviour
     // 이동 잠금
     int _moveLockRef = 0;
     bool _prevRootMotion;
+    IInputBlocker _inputBlocker;
+    PlayerReferences _playerReferences;
 
     void Awake()
     {
-        if (!animator) animator = GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
+        _playerReferences = GetComponent<PlayerReferences>();
+        if (!animator) animator = _playerReferences != null && _playerReferences.MainAnimator != null
+            ? _playerReferences.MainAnimator
+            : GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
         if (!move)     move     = GetComponent<PlayerMoveController>();
         if (!rb)       rb       = GetComponent<Rigidbody>();
         if (!ultimate) ultimate = GetComponent<PlayerUltimateController>();
+        _inputBlocker = GetComponent<IInputBlocker>();
 
         CacheAnimatorParams();
 
@@ -157,10 +163,22 @@ public class PlayerGuardController : MonoBehaviour
 
     void Update()
     {
-        // 1) 입력 처리
-        if (guardAction && guardAction.action != null)
+        if (animator && _hasAttackBool) IsAttacking = animator.GetBool(_hashAttackBool);
+
+        if (IsInputBlocked())
         {
-            bool holding = guardAction.action.IsPressed();
+            if (IsGuarding) SetGuarding(false);
+            if (_parryOpen) CloseParryWindow();
+            return;
+        }
+
+        // 1) 입력 처리
+        bool hasGuardAction = guardAction && guardAction.action != null;
+        if (hasGuardAction || ShouldUseLegacyGuardFallback())
+        {
+            bool holding = hasGuardAction
+                ? guardAction.action.IsPressed()
+                : Input.GetKey(KeyCode.E);
             if (denyGuardWhileAttacking && IsAttacking) holding = false;
             if (autoResumeGuardIfHolding && holding) SetGuarding(true);
             else if (!holding) SetGuarding(false);
@@ -169,9 +187,13 @@ public class PlayerGuardController : MonoBehaviour
         // 2) 애니 파라미터 동기화(외부가 SetBool 해도 읽어온다)
         if (animator)
         {
-            if (_hasAttackBool) IsAttacking = animator.GetBool(_hashAttackBool);
             if (_hasGuardBool)  IsGuarding  = animator.GetBool(_hashGuardBool);
         }
+    }
+
+    bool ShouldUseLegacyGuardFallback()
+    {
+        return guardAction == null || guardAction.action == null;
     }
 
     // ───────────────────── 외부 제어 API(하위 호환) ─────────────────────
@@ -339,5 +361,10 @@ public class PlayerGuardController : MonoBehaviour
         Vector3 l = left * fwd; Vector3 r = right * fwd;
         Gizmos.DrawLine(pos, pos + l * 1.2f);
         Gizmos.DrawLine(pos, pos + r * 1.2f);
+    }
+
+    bool IsInputBlocked()
+    {
+        return _inputBlocker != null && _inputBlocker.IsBlocked;
     }
 }

@@ -67,12 +67,19 @@ public class PlayerCombatController : MonoBehaviour
 
     // 참조
     private PlayerMoveController moveController;
+    private IInputBlocker inputBlocker;
+    private PlayerReferences playerReferences;
 
     // ───────────────── 라이프사이클 ─────────────────
     void Awake()
     {
-        if (!animator) animator = GetComponent<Animator>();
+        playerReferences = GetComponent<PlayerReferences>();
+        if (!animator) animator = playerReferences != null && playerReferences.MainAnimator != null
+            ? playerReferences.MainAnimator
+            : GetComponent<Animator>();
+        RefreshWeaponHitbox();
         moveController = GetComponent<PlayerMoveController>();
+        inputBlocker = GetComponent<IInputBlocker>();
     }
 
     void Start()
@@ -109,6 +116,22 @@ public class PlayerCombatController : MonoBehaviour
         if (inHit)
         {
             UpdateHitState();
+            return;
+        }
+
+        if (IsInputBlocked())
+        {
+            ClearBufferedInputs();
+
+            if (inAttack)
+            {
+                DisableAttackHitbox();
+                EndAttack();
+            }
+
+            if (!string.IsNullOrEmpty(speedParam))
+                animator.SetFloat(speedParam, 0f, 0.1f, Time.deltaTime);
+
             return;
         }
 
@@ -247,12 +270,14 @@ public class PlayerCombatController : MonoBehaviour
     // 애니메이션에서 호출 (공격 판정 켜기)
     public void EnableAttackHitbox()
     {
+        RefreshWeaponHitbox();
         if (weaponHitbox != null) weaponHitbox.ActivateWindow();
     }
 
     // 애니메이션에서 호출 (공격 판정 끄기)
     public void DisableAttackHitbox()
     {
+        RefreshWeaponHitbox();
         if (weaponHitbox != null) weaponHitbox.DeactivateWindow();
     }
 
@@ -380,5 +405,28 @@ public class PlayerCombatController : MonoBehaviour
         if (!animator) return;
         if (layerIndex < 0 || layerIndex >= animator.layerCount) return;
         animator.SetLayerWeight(layerIndex, Mathf.Clamp01(weight01));
+    }
+
+    private void ClearBufferedInputs()
+    {
+        inputQueue.Clear();
+    }
+
+    private bool IsInputBlocked()
+    {
+        return inputBlocker != null && inputBlocker.IsBlocked;
+    }
+
+    private void RefreshWeaponHitbox()
+    {
+        if (playerReferences == null)
+            playerReferences = GetComponent<PlayerReferences>();
+
+        if (playerReferences == null)
+            return;
+
+        var preferredHitbox = playerReferences.PrimaryAttackHitbox;
+        if (preferredHitbox != null && preferredHitbox.gameObject.activeInHierarchy)
+            weaponHitbox = preferredHitbox;
     }
 }

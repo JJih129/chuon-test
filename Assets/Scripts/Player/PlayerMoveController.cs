@@ -52,17 +52,21 @@ public class PlayerMoveController : MonoBehaviour
     private Vector3 _velXZ;
     private float _velY;
     private bool _externLocked; // 외부에서 이동을 막았는지 여부
+    private IInputBlocker _inputBlocker;
+    private PlayerReferences _playerReferences;
 
     void Awake()
     {
         _cc = GetComponent<CharacterController>();
+        _playerReferences = GetComponent<PlayerReferences>();
         
         // 참조 자동 할당 시도
-        if (!playerRoot) playerRoot = transform;
+        if (!playerRoot) playerRoot = _playerReferences ? _playerReferences.PlayerRoot : transform;
         if (!cameraTransform && Camera.main) cameraTransform = Camera.main.transform;
-        if (!animator) animator = GetComponentInChildren<Animator>();
+        if (!animator) animator = _playerReferences && _playerReferences.MainAnimator ? _playerReferences.MainAnimator : GetComponentInChildren<Animator>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
         if (!guardController) guardController = GetComponent<PlayerGuardController>();
+        _inputBlocker = GetComponent<IInputBlocker>();
     }
 
     void OnEnable() { if (moveAction?.action != null) moveAction.action.Enable(); }
@@ -84,6 +88,14 @@ public class PlayerMoveController : MonoBehaviour
         // 2. 외부 잠금 체크 (공격, 피격, 대쉬 중일 때 이동 금지)
         if (_externLocked)
         {
+            MoveWithGravity(Vector3.zero);
+            SetAnimSpeed(0f);
+            return;
+        }
+
+        if (IsInputBlocked())
+        {
+            _velXZ = Vector3.zero;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
             return;
@@ -232,5 +244,10 @@ public class PlayerMoveController : MonoBehaviour
     {
         if (!animator || string.IsNullOrEmpty(p_Speed)) return;
         animator.SetFloat(p_Speed, spd01);
+    }
+
+    bool IsInputBlocked()
+    {
+        return _inputBlocker != null && _inputBlocker.IsBlocked;
     }
 }

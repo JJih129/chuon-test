@@ -1,4 +1,4 @@
-// (원본을 크게 변경하지 않고 안전성만 보강)
+﻿// (?먮낯???ш쾶 蹂寃쏀븯吏 ?딄퀬 ?덉쟾?깅쭔 蹂닿컯)
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -31,7 +31,7 @@ public class IntegratedBossUI : MonoBehaviour
         _instance = this;
 
         if (mainCamera == null) mainCamera = Camera.main;
-        lockOnController = FindObjectOfType<SimpleLockOnController>() as ILockOnController;
+        ResolveLockOnController();
 
         showSqr = showDistance * showDistance;
         float hideDist = showDistance + Mathf.Max(0f, hideHysteresis);
@@ -80,6 +80,7 @@ public class IntegratedBossUI : MonoBehaviour
     void EvaluateAll()
     {
         if (player == null) return;
+        if (lockOnController == null) ResolveLockOnController();
 
         var list = new List<(ProximityBossUI comp, float sqr, float dist)>();
         foreach (var c in registered)
@@ -91,7 +92,9 @@ public class IntegratedBossUI : MonoBehaviour
         }
         list.Sort((a, b) => a.sqr.CompareTo(b.sqr));
 
-        Transform currentLock = lockOnController != null ? lockOnController.GetCurrentTarget() : null;
+        Transform currentLock = (lockOnController != null && lockOnController.IsLockedOn())
+            ? lockOnController.GetCurrentTarget()
+            : null;
 
         int shownWorld = 0;
         var toShowTop = list.Count > 0 ? list[0].comp : null;
@@ -102,7 +105,7 @@ public class IntegratedBossUI : MonoBehaviour
             if (entry.comp == null) continue;
 
             bool lockok = true;
-            if (requireLockOn && currentLock != entry.comp.transform) lockok = false;
+            if (requireLockOn && !IsSameLockTarget(currentLock, entry.comp)) lockok = false;
 
             bool withinShow = entry.sqr <= showSqr;
             bool withinHide = entry.sqr <= hideSqr;
@@ -118,7 +121,7 @@ public class IntegratedBossUI : MonoBehaviour
             {
                 if (activeBars.ContainsKey(entry.comp) && withinHide && lockok)
                 {
-                    // 유지
+                    // ?좎?
                 }
                 else
                 {
@@ -130,7 +133,7 @@ public class IntegratedBossUI : MonoBehaviour
         if (toShowTop != null)
         {
             bool lockok = true;
-            if (requireLockOn && currentLock != toShowTop.transform) lockok = false;
+            if (requireLockOn && !IsSameLockTarget(currentLock, toShowTop)) lockok = false;
             float dSqr = (player.position - toShowTop.transform.position).sqrMagnitude;
             if (lockok && dSqr <= showSqr)
             {
@@ -139,6 +142,46 @@ public class IntegratedBossUI : MonoBehaviour
             }
         }
         UnbindTopHUD();
+    }
+
+    void ResolveLockOnController()
+    {
+        if (player != null)
+        {
+            var playerLockOn = player.GetComponent<PlayerLockOn>();
+            if (playerLockOn != null)
+            {
+                lockOnController = playerLockOn;
+                return;
+            }
+
+            lockOnController = player.GetComponent<ILockOnController>();
+            if (lockOnController != null)
+                return;
+        }
+
+        var fallbackPlayerLockOn = FindFirstObjectByType<PlayerLockOn>();
+        if (fallbackPlayerLockOn != null)
+        {
+            lockOnController = fallbackPlayerLockOn;
+            return;
+        }
+
+        lockOnController = null;
+    }
+
+    bool IsSameLockTarget(Transform currentLock, ProximityBossUI comp)
+    {
+        if (currentLock == null || comp == null)
+            return false;
+
+        if (currentLock == comp.transform)
+            return true;
+
+        if (comp.pivot != null && currentLock == comp.pivot)
+            return true;
+
+        return currentLock.root == comp.transform.root;
     }
 
     void ShowWorldBar(ProximityBossUI comp)
@@ -154,7 +197,7 @@ public class IntegratedBossUI : MonoBehaviour
         }
         else
         {
-            // 바인딩 실패 시 안전하게 풀에 반환
+            // 諛붿씤???ㅽ뙣 ???덉쟾?섍쾶 ???諛섑솚
             bar.ResetForPool();
             hpBarPool.Return(bar);
             return;
@@ -190,3 +233,4 @@ public class IntegratedBossUI : MonoBehaviour
         topBossHUDRoot.SetActive(false);
     }
 }
+

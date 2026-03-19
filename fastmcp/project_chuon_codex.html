@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project ChuOn Codex Guide</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --panel: rgba(255, 251, 244, 0.88);
+      --ink: #1f1b18;
+      --muted: #63574e;
+      --line: rgba(77, 61, 45, 0.18);
+      --accent: #0c6b58;
+      --accent-2: #b55d2a;
+      --shadow: 0 16px 40px rgba(43, 29, 17, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "Noto Sans", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(181, 93, 42, 0.18), transparent 28%),
+        radial-gradient(circle at top right, rgba(12, 107, 88, 0.14), transparent 26%),
+        linear-gradient(180deg, #f8f3ea 0%, var(--bg) 54%, #ece5d7 100%);
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 24px auto 48px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 32px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background:
+        linear-gradient(140deg, rgba(255, 255, 255, 0.82), rgba(255, 246, 234, 0.7)),
+        linear-gradient(120deg, rgba(12, 107, 88, 0.08), rgba(181, 93, 42, 0.08));
+      box-shadow: var(--shadow);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -80px -80px auto;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(12, 107, 88, 0.12), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 14px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(12, 107, 88, 0.1);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 14px;
+      font-size: clamp(34px, 5vw, 58px);
+      line-height: 0.96;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .hero-grid,
+    .grid {
+      display: grid;
+      gap: 18px;
+      margin-top: 22px;
+    }
+
+    .hero-grid {
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+
+    .grid {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      margin-top: 20px;
+    }
+
+    .panel {
+      padding: 22px 22px 20px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 12px;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .panel h2 {
+      font-size: 26px;
+    }
+
+    .panel h3 {
+      font-size: 20px;
+    }
+
+    .meta {
+      display: grid;
+      gap: 10px;
+    }
+
+    .meta strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .pill-list,
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .pill,
+    .tag {
+      padding: 8px 12px;
+      border: 1px solid rgba(12, 107, 88, 0.14);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.65);
+      font-size: 13px;
+    }
+
+    .tag {
+      border-color: rgba(181, 93, 42, 0.16);
+      background: rgba(181, 93, 42, 0.08);
+    }
+
+    .path {
+      display: block;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #1f1b18;
+      color: #f7f0e5;
+      text-decoration: none;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-all;
+    }
+
+    .path + .path {
+      margin-top: 10px;
+    }
+
+    ol {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    code,
+    pre {
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    pre {
+      margin: 0;
+      padding: 14px 16px;
+      overflow: auto;
+      border-radius: 18px;
+      background: #201d1a;
+      color: #f8f2ea;
+      line-height: 1.6;
+      font-size: 13px;
+    }
+
+    .note {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .callout {
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent-2);
+      border-radius: 0 16px 16px 0;
+      background: rgba(181, 93, 42, 0.08);
+      color: var(--ink);
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100% - 18px, 1180px);
+      }
+
+      .hero,
+      .panel {
+        padding: 20px;
+        border-radius: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="eyebrow">Codex Project Page</div>
+      <h1>Project ChuOn FastMCP and Codex Guide</h1>
+      <p>
+        This page is a project-specific reference for Codex work inside the Project-ChuOn Unity repository.
+        It summarizes the active Unity version, main scene flow, script domains, and the FastMCP bridge files
+        that were added for scene, object, prefab, and Play Mode control.
+      </p>
+
+      <div class="hero-grid">
+        <div class="panel meta">
+          <div>
+            <strong>Unity Version</strong>
+            <span>2022.3.62f3</span>
+          </div>
+          <div>
+            <strong>Render Pipeline</strong>
+            <span>Universal Render Pipeline 14.x</span>
+          </div>
+        </div>
+        <div class="panel meta">
+          <div>
+            <strong>Input Stack</strong>
+            <span>Input System 1.14.0</span>
+          </div>
+          <div>
+            <strong>Timeline</strong>
+            <span>Timeline 1.7.7</span>
+          </div>
+        </div>
+        <div class="panel meta">
+          <div>
+            <strong>Bridge Port</strong>
+            <span>127.0.0.1:18777</span>
+          </div>
+          <div>
+            <strong>Server Name</strong>
+            <span>project-chuon-dev-server</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <h2>Main Scenes</h2>
+        <ul class="pill-list">
+          <li class="pill">BootScene</li>
+          <li class="pill">TitleScene</li>
+          <li class="pill">Lobby</li>
+          <li class="pill">MainScene</li>
+          <li class="pill">Tutorial</li>
+          <li class="pill">OptionsScene</li>
+          <li class="pill">CreditsScene</li>
+          <li class="pill">TeamLogoScene</li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <h2>Core Script Domains</h2>
+        <ul class="tag-list">
+          <li class="tag">Player</li>
+          <li class="tag">Combat</li>
+          <li class="tag">Guard&amp;Parry</li>
+          <li class="tag">Enemy</li>
+          <li class="tag">interaction</li>
+          <li class="tag">UI</li>
+          <li class="tag">Ultimate</li>
+          <li class="tag">Boss</li>
+          <li class="tag">Camera</li>
+          <li class="tag">Anime</li>
+          <li class="tag">Hit&amp;health</li>
+          <li class="tag">Interface</li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <h2>FastMCP Files</h2>
+        <a class="path" href="fastmcp_server.py">fastmcp/fastmcp_server.py</a>
+        <a class="path" href="tools/unity_tools.py">fastmcp/tools/unity_tools.py</a>
+        <a class="path" href="../Assets/Editor/FastMCPUnityBridge.cs">Assets/Editor/FastMCPUnityBridge.cs</a>
+        <a class="path" href="../Assets/Editor/FastMCPUnityAPI.cs">Assets/Editor/FastMCPUnityAPI.cs</a>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <h3>Primary Tool Surface</h3>
+        <pre>health_check()
+open_unity()
+open_scene("MainScene")
+get_scene_graph_json()
+create_gameobject("DebugAnchor")
+add_component("DebugAnchor", "BoxCollider")
+create_prefab("DebugAnchor", "DebugAnchor")
+refresh_assets()
+enter_playmode()
+exit_playmode()</pre>
+      </article>
+
+      <article class="panel">
+        <h3>Recommended Workflow</h3>
+        <ol>
+          <li>Start Unity and wait for editor compilation to settle.</li>
+          <li>Run <code>health_check</code> to verify project root, editor log, and bridge port.</li>
+          <li>Open one target scene such as <code>MainScene</code>, <code>Lobby</code>, or <code>Tutorial</code>.</li>
+          <li>Use scene graph and targeted object commands before editing runtime scripts.</li>
+          <li>Refresh assets after generated scripts or scaffolds are written from FastMCP.</li>
+          <li>Use Play Mode tools only after the bridge reports a healthy editor state.</li>
+        </ol>
+      </article>
+
+      <article class="panel">
+        <h3>Generated Script Defaults</h3>
+        <p class="note">
+          The current FastMCP server generates Unity scripts under <code>Assets/Scripts/Generated</code> and feature
+          scaffolds under <code>Assets/Scripts/Features</code>. The default namespace for scaffolds is
+          <code>ProjectChuOn</code>.
+        </p>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <h3>Editor Bridge Scope</h3>
+        <p class="note">
+          The Unity editor bridge currently supports scene creation and opening, hierarchy reads, object creation and
+          deletion, transform edits, component add and remove, prefab save and instantiate, asset search, inspector
+          value writes, asset refresh, Play Mode entry and exit, and a basic 3D player rig generator.
+        </p>
+      </article>
+
+      <article class="panel">
+        <h3>Run Command Template</h3>
+        <pre>python fastmcp/fastmcp_server.py</pre>
+        <div class="callout">
+          This repository does not currently include its own local Python runtime. Run the server from an environment
+          where the <code>fastmcp</code> package is already installed.
+        </div>
+      </article>
+
+      <article class="panel">
+        <h3>Project Notes</h3>
+        <p class="note">
+          This is a Unity action project with scene flow centered around boot, title, lobby, tutorial, and main combat
+          scenes. The script layout suggests active work across combat, player state, guard or parry logic, UI, enemy
+          behaviors, and ultimate skill presentation.
+        </p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

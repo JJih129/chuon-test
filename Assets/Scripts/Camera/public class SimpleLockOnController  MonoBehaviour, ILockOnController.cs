@@ -1,24 +1,24 @@
-// 파일명: SimpleLockOnController.cs
-// 목적: 레거시 참조(IntegratedBossUI 등) 호환용 어댑터
-// 동작: 내부적으로 PlayerLockOn과 동기화하여 currentTarget을 제공
-// 삭제 금지: 오래된 코드가 이 타입을 직접 참조하므로 유지 필요
+﻿// ?뚯씪紐? SimpleLockOnController.cs
+// 紐⑹쟻: ?덇굅??李몄“(IntegratedBossUI ?? ?명솚???대뙌??
+// ?숈옉: ?대??곸쑝濡?PlayerLockOn怨??숆린?뷀븯??currentTarget???쒓났
+// ??젣 湲덉?: ?ㅻ옒??肄붾뱶媛 ????낆쓣 吏곸젒 李몄“?섎?濡??좎? ?꾩슂
 
 using UnityEngine;
 
 public class SimpleLockOnController : MonoBehaviour, ILockOnController
 {
-    // ===== 변수 헤더(한글 설명) =====
-    [Header("① 참조")]
-    [Tooltip("새 락온 시스템. 비워두면 GetComponent로 자동 탐색")]
-    [SerializeField] private PlayerLockOn playerLockOn; // [조절값]
+    // ===== 蹂???ㅻ뜑(?쒓? ?ㅻ챸) =====
+    [Header("??李몄“")]
+    [Tooltip("???쎌삩 ?쒖뒪?? 鍮꾩썙?먮㈃ GetComponent濡??먮룞 ?먯깋")]
+    [SerializeField] private PlayerLockOn playerLockOn; // [議곗젅媛?
 
-    [Header("② 현재 락온 대상(읽기 전용처럼 사용)")]
-    [Tooltip("레거시 호환용. 내부적으로 PlayerLockOn.CurrentTarget과 동기화됨")]
-    public Transform currentTarget; // [호환값]
+    [Header("???꾩옱 ?쎌삩 ????쎄린 ?꾩슜泥섎읆 ?ъ슜)")]
+    [Tooltip("?덇굅???명솚?? ?대??곸쑝濡?PlayerLockOn.CurrentTarget怨??숆린?붾맖")]
+    public Transform currentTarget; // [?명솚媛?
 
-    [Header("③ 타임라인 카메라 권한 플래그(호환)")]
-    [Tooltip("타임라인이 카메라를 가져가면 true로 설정(필요 시 이벤트 연결)")]
-    public bool timelineOwnsCamera = false; // [호환값]
+    [Header("????꾨씪??移대찓??沅뚰븳 ?뚮옒洹??명솚)")]
+    [Tooltip("??꾨씪?몄씠 移대찓?쇰? 媛?멸?硫?true濡??ㅼ젙(?꾩슂 ???대깽???곌껐)")]
+    public bool timelineOwnsCamera = false; // [?명솚媛?
 
     void Reset()
     {
@@ -32,27 +32,33 @@ public class SimpleLockOnController : MonoBehaviour, ILockOnController
 
     void LateUpdate()
     {
-        // 매 프레임 PlayerLockOn과 동기화
+        // 留??꾨젅??PlayerLockOn怨??숆린??
         if (playerLockOn)
             currentTarget = playerLockOn.CurrentTarget;
     }
 
-    // ===== ILockOnController 호환 구현 =====
+    // ===== ILockOnController ?명솚 援ы쁽 =====
     public Transform GetCurrentTarget()
     {
         return playerLockOn ? playerLockOn.CurrentTarget : currentTarget;
     }
 
+    public bool IsLockedOn()
+    {
+        return playerLockOn && playerLockOn.IsLockedOn();
+    }
+
     public void GiveCameraControlToTimeline(bool give)
     {
         timelineOwnsCamera = give;
-        // 필요하면 여기서 카메라 우선순위/입력 비활성화를 연결
-        // 예: LockOnCameraManager에 위임
+        if (playerLockOn != null)
+            playerLockOn.GiveCameraControlToTimeline(give);
     }
 
-    // 레거시 코드에서 IsLockOn(bool) 형태를 호출할 수 있어 보조 API 제공
+    // ?덇굅??肄붾뱶?먯꽌 IsLockOn(bool) ?뺥깭瑜??몄텧?????덉뼱 蹂댁“ API ?쒓났
     public bool IsLockOn()
     {
-        return playerLockOn && playerLockOn.IsLocked;
+        return IsLockedOn();
     }
 }
+

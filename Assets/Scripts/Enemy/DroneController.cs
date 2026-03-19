@@ -111,7 +111,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     public void ReceiveHit(HitPayload payload)
     {
         // 1. 데미지 적용
+        int beforeHp = currentHP;
         TakeDamage((int)payload.damage, payload.hitPoint, payload.hitDirection);
+
+        if (currentHP < beforeHp)
+            TryGrantBasicAttackGauge(payload.attacker);
     }
 
     public void TakeDamage(int amount, Vector3 hitPoint, Vector3 hitDir)
@@ -163,5 +167,18 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         // 중요: LobbyEnemy가 사망을 감지할 수 있도록 오브젝트 파괴
         // (LobbyEnemy의 OnDisable이나 OnDestroy가 호출됨)
         Destroy(gameObject);
+    }
+
+    void TryGrantBasicAttackGauge(Transform attacker)
+    {
+        if (attacker == null)
+            return;
+
+        var ultimate = attacker.GetComponent<PlayerUltimateController>();
+        if (ultimate == null)
+            ultimate = attacker.GetComponentInParent<PlayerUltimateController>();
+
+        if (ultimate != null && ultimate.gaugePerH > 0f)
+            ultimate.AddGauge(ultimate.gaugePerH);
     }
 }

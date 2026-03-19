@@ -6,10 +6,15 @@ public class AnimationLockManager : MonoBehaviour
     public Animator animator;
     Coroutine[] blendCoroutines = new Coroutine[8];
     bool isLocked = false;
+    PlayerReferences playerReferences;
 
     void Awake()
     {
-        if (animator == null) animator = GetComponentInChildren<Animator>();
+        playerReferences = GetComponent<PlayerReferences>();
+        if (animator == null)
+            animator = playerReferences != null
+                ? playerReferences.MainAnimator ?? GetComponentInChildren<Animator>()
+                : GetComponentInChildren<Animator>();
     }
 
     // 부드럽게 레이어 가중치 요청

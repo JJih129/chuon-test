@@ -1,18 +1,101 @@
-// 파일명: SimpleCombatStateReader.cs
-// 역할: 임시 스위치로 상태를 마킹하는 가장 단순한 리더
-// Animator/StateMachine/전투컨트롤러가 있다면 그 값으로 반환하도록 교체 권장
-
 using UnityEngine;
 
+[DisallowMultipleComponent]
 public class SimpleCombatStateReader : MonoBehaviour, ICombatStateReader
 {
-    // ===== 변수 헤더(한글 설명) =====
-    [Header("상태 플래그(테스트용)")]
-    public bool inAir = false;
-    public bool staggered = false;
-    public bool attacking = false;
+    [Header("Fallback State Flags")]
+    public bool inAir;
+    public bool staggered;
+    public bool attacking;
+    public bool guarding;
+    public bool dodging;
 
-    public bool IsInAir() => inAir;
-    public bool IsStaggered() => staggered;
-    public bool IsAttacking() => attacking;
+    [Header("Runtime Sources")]
+    [SerializeField] CharacterController characterController;
+    [SerializeField] PlayerCombatController combatController;
+    [SerializeField] PlayerGuardController guardController;
+    [SerializeField] PlayerDodgeController dodgeController;
+    [SerializeField] PlayerHealth playerHealth;
+
+    void Reset()
+    {
+        AutoWire();
+    }
+
+    void Awake()
+    {
+        AutoWire();
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+            AutoWire();
+    }
+#endif
+
+    public bool IsInAir()
+    {
+        if (characterController != null && characterController.enabled)
+            return !characterController.isGrounded;
+
+        return inAir;
+    }
+
+    public bool IsStaggered()
+    {
+        if (combatController != null && combatController.IsInHit)
+            return true;
+
+        if (playerHealth != null && (playerHealth.IsDead || playerHealth.IsStaggered))
+            return true;
+
+        return staggered;
+    }
+
+    public bool IsAttacking()
+    {
+        if (combatController != null && combatController.IsAttacking)
+            return true;
+
+        if (guardController != null && guardController.IsAttacking)
+            return true;
+
+        return attacking;
+    }
+
+    public bool IsGuarding()
+    {
+        if (guardController != null)
+            return guardController.IsGuarding;
+
+        return guarding;
+    }
+
+    public bool IsDodging()
+    {
+        if (dodgeController != null)
+            return dodgeController.IsDodging;
+
+        return dodging;
+    }
+
+    void AutoWire()
+    {
+        if (characterController == null)
+            characterController = GetComponent<CharacterController>();
+
+        if (combatController == null)
+            combatController = GetComponent<PlayerCombatController>();
+
+        if (guardController == null)
+            guardController = GetComponent<PlayerGuardController>();
+
+        if (dodgeController == null)
+            dodgeController = GetComponent<PlayerDodgeController>();
+
+        if (playerHealth == null)
+            playerHealth = GetComponent<PlayerHealth>();
+    }
 }

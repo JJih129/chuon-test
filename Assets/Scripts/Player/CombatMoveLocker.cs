@@ -37,11 +37,13 @@ public class CombatMoveLocker : MonoBehaviour
     readonly Dictionary<string, LockOptions> _reasons = new Dictionary<string, LockOptions>();
     bool _applied; // 현재 잠금 적용 상태
     Animator _cachedAnimator;
+    PlayerReferences _playerReferences;
 
     void Awake()
     {
+        _playerReferences = GetComponent<PlayerReferences>();
         if (!rootMotionAnimator)
-            _cachedAnimator = GetComponentInChildren<Animator>(true);
+            _cachedAnimator = _playerReferences != null ? _playerReferences.MainAnimator ?? GetComponentInChildren<Animator>(true) : GetComponentInChildren<Animator>(true);
         else
             _cachedAnimator = rootMotionAnimator;
     }
@@ -157,8 +159,9 @@ public class CombatMoveLocker : MonoBehaviour
 #if UNITY_EDITOR
     void OnValidate()
     {
+        _playerReferences = GetComponent<PlayerReferences>();
         if (!rootMotionAnimator)
-            _cachedAnimator = GetComponentInChildren<Animator>(true);
+            _cachedAnimator = _playerReferences != null ? _playerReferences.MainAnimator ?? GetComponentInChildren<Animator>(true) : GetComponentInChildren<Animator>(true);
         else
             _cachedAnimator = rootMotionAnimator;
     }

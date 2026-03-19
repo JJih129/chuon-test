@@ -5,6 +5,7 @@ public class GuardLocomotionAnimator : MonoBehaviour
 {
     [Header("① 애니메이터/기준")]
     [SerializeField] private Animator animator;            
+    [SerializeField] private PlayerReferences playerReferences;
     [SerializeField] private Transform movementBasis;      
 
     [Header("① 속도 소스(있으면 우선)")]
@@ -46,7 +47,10 @@ public class GuardLocomotionAnimator : MonoBehaviour
 
     void Awake()
     {
-        if (!animator) animator = GetComponentInChildren<Animator>();
+        if (!playerReferences) playerReferences = GetComponent<PlayerReferences>();
+        if (!animator) animator = playerReferences != null && playerReferences.MainAnimator != null
+            ? playerReferences.MainAnimator
+            : GetComponentInChildren<Animator>();
         if (!movementBasis) movementBasis = transform;
         if (!velocitySource) velocitySource = movementBasis;
 

@@ -34,6 +34,7 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
             return;
 
         HitType type = overrideHitType ? overrideType : payload.hitType;
+        int beforeHp = bossHealth.CurrentHP;
 
         // IHealth 구현 기반 BossHealth.TakeDamage(...)
         bossHealth.TakeDamage(
@@ -41,5 +42,21 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
             type,
             payload.hitPoint
         );
+
+        if (bossHealth.CurrentHP < beforeHp)
+            TryGrantBasicAttackGauge(payload.attacker);
+    }
+
+    void TryGrantBasicAttackGauge(Transform attacker)
+    {
+        if (attacker == null)
+            return;
+
+        var ultimate = attacker.GetComponent<PlayerUltimateController>();
+        if (ultimate == null)
+            ultimate = attacker.GetComponentInParent<PlayerUltimateController>();
+
+        if (ultimate != null && ultimate.gaugePerH > 0f)
+            ultimate.AddGauge(ultimate.gaugePerH);
     }
 }

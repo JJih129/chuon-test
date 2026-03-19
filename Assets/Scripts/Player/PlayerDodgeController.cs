@@ -6,6 +6,7 @@ using UnityEngine.Events;
 [DisallowMultipleComponent]
 public class PlayerDodgeController : MonoBehaviour
 {
+    public bool IsDodging => isDodging;
     [Header("① 참조 (한글 설명)")]
     [SerializeField] Transform playerRoot;          // [조절값] 플레이어 루트 트랜스폼 (없으면 자기 자신)
     [SerializeField] Transform cameraTransform;     // [조절값] 회피 방향 계산에 사용할 카메라 트랜스폼
@@ -69,12 +70,17 @@ public class PlayerDodgeController : MonoBehaviour
     float elapsed;
     Vector3 dodgeDir;
     float baseSpeed;
+    IInputBlocker inputBlocker;
+    PlayerReferences playerReferences;
 
     void Reset()
     {
-        if (!playerRoot) playerRoot = transform;
+        playerReferences = GetComponent<PlayerReferences>();
+        if (!playerRoot) playerRoot = playerReferences != null ? playerReferences.PlayerRoot : transform;
         if (!cameraTransform && Camera.main) cameraTransform = Camera.main.transform;
-        if (!animator) animator = GetComponentInChildren<Animator>();
+        if (!animator) animator = playerReferences != null && playerReferences.MainAnimator != null
+            ? playerReferences.MainAnimator
+            : GetComponentInChildren<Animator>();
         if (!move) move = GetComponent<PlayerMoveController>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
         if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
@@ -83,12 +89,16 @@ public class PlayerDodgeController : MonoBehaviour
     void Awake()
     {
         cc = GetComponent<CharacterController>();
-        if (!playerRoot) playerRoot = transform;
+        playerReferences = GetComponent<PlayerReferences>();
+        if (!playerRoot) playerRoot = playerReferences != null ? playerReferences.PlayerRoot : transform;
         if (!cameraTransform && Camera.main) cameraTransform = Camera.main.transform;
-        if (!animator) animator = GetComponentInChildren<Animator>();
+        if (!animator) animator = playerReferences != null && playerReferences.MainAnimator != null
+            ? playerReferences.MainAnimator
+            : GetComponentInChildren<Animator>();
         if (!move) move = GetComponent<PlayerMoveController>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
         if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
+        inputBlocker = GetComponent<IInputBlocker>();
 
         EnsureDodgeAudioSource();
     }
@@ -96,6 +106,13 @@ public class PlayerDodgeController : MonoBehaviour
     void Update()
     {
         cdTimer -= Time.unscaledDeltaTime;
+
+        if (IsInputBlocked())
+        {
+            if (isDodging)
+                EndDodge();
+            return;
+        }
 
         if (isDodging)
         {
@@ -235,6 +252,11 @@ public class PlayerDodgeController : MonoBehaviour
 
         int idx = Random.Range(0, clips.Length);
         return clips[idx];
+    }
+
+    bool IsInputBlocked()
+    {
+        return inputBlocker != null && inputBlocker.IsBlocked;
     }
 
 #if UNITY_EDITOR

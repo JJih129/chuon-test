@@ -62,6 +62,7 @@ public class PlayerHealth : MonoBehaviour, IHealth
     private bool _hitExists, _hurtExists, _hitIsTrigger, _hurtIsTrigger;
     private RuntimeAnimatorController _cachedCtrl;
     private bool _didRescanAfterSwap;
+    private PlayerReferences _playerReferences;
 
     // ── IHealth ───────────────────────────────────────────────
     public int CurrentHP => currentHP;
@@ -226,13 +227,17 @@ public class PlayerHealth : MonoBehaviour, IHealth
     // ── Wiring / Animator cache ────────────────────────────────
     void AutoWire()
     {
+        if (!_playerReferences)
+            _playerReferences = GetComponent<PlayerReferences>();
+
         if (!combatController)
             combatController = GetComponent<PlayerCombatController>()
                              ?? GetComponentInParent<PlayerCombatController>()
                              ?? GetComponentInChildren<PlayerCombatController>(true);
 
         if (!animator)
-            animator = GetComponentInChildren<Animator>(true)
+            animator = (_playerReferences && _playerReferences.MainAnimator ? _playerReferences.MainAnimator : null)
+                    ?? GetComponentInChildren<Animator>(true)
                     ?? GetComponent<Animator>()
                     ?? GetComponentInParent<Animator>(true);
     }

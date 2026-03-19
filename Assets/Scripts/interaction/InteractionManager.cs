@@ -57,6 +57,8 @@ public class InteractionManager : MonoBehaviour
     InteractionPromptUIController _promptUI;
     Camera _cam;
     Transform _promptAnchor;
+    IInputBlocker _inputBlocker;
+    ILockOnController _lockOnController;
 
     float _lastHitTime = -10f;
     float _startTime;
@@ -77,6 +79,8 @@ public class InteractionManager : MonoBehaviour
         _startTime = Time.time;
         _cam = Camera.main;
         if (!cameraTransform && _cam) cameraTransform = _cam.transform;
+        TryResolveInputBlocker();
+        TryResolveLockOnController();
 
         if (promptPrefab)
         {
@@ -143,6 +147,7 @@ public class InteractionManager : MonoBehaviour
         // 짧은 시작 지연으로 초기 깜박임 방지
         if (Time.time - _startTime < 0.12f) return;
 
+        if (IsInputBlocked()) { ClearHover(); return; }
         if (IsLockOn()) { ClearHover(); return; }
         if (hideWhenAiming && IsAiming()) { ClearHover(); return; }
 
@@ -221,6 +226,9 @@ public class InteractionManager : MonoBehaviour
 
     bool GetInteractPressed()
     {
+        if (IsInputBlocked())
+            return false;
+
         if (inputRouter != null)
         {
             var t = inputRouter.GetType();
@@ -236,23 +244,14 @@ public class InteractionManager : MonoBehaviour
 
     bool IsLockOn()
     {
-        if (lockOnReader != null)
-        {
-            var t = lockOnReader.GetType();
-            var p = t.GetProperty("IsLockedOn");
-            if (p != null)
-            {
-                var v = p.GetValue(lockOnReader, null);
-                if (v is bool b) return b;
-            }
-            var m = t.GetMethod("IsLockedOn");
-            if (m != null)
-            {
-                var r = m.Invoke(lockOnReader, null);
-                if (r is bool b2) return b2;
-            }
-        }
-        return false;
+        if (_lockOnController == null)
+            TryResolveLockOnController();
+
+        if (_lockOnController != null)
+            return _lockOnController.IsLockedOn();
+
+        return TryReadLegacyBool(lockOnReader, "IsLockedOn")
+            || TryReadLegacyBool(lockOnReader, "IsLockOn");
     }
 
     bool IsAiming()
@@ -268,5 +267,95 @@ public class InteractionManager : MonoBehaviour
             }
         }
         return false;
+    }
+
+    void TryResolveInputBlocker()
+    {
+        if (_inputBlocker != null)
+            return;
+
+        _inputBlocker = GetComponent<IInputBlocker>();
+        if (_inputBlocker != null)
+            return;
+
+        var root = PlayerRoot;
+        if (root != null)
+            _inputBlocker = root.GetComponent<IInputBlocker>();
+    }
+
+    void TryResolveLockOnController()
+    {
+        if (_lockOnController != null)
+            return;
+
+        if (lockOnReader is ILockOnController directLockOn)
+        {
+            _lockOnController = directLockOn;
+            return;
+        }
+
+        var root = PlayerRoot;
+        if (root != null)
+        {
+            var playerLockOn = root.GetComponent<PlayerLockOn>();
+            if (playerLockOn != null)
+            {
+                _lockOnController = playerLockOn;
+                return;
+            }
+
+            _lockOnController = root.GetComponent<ILockOnController>();
+            if (_lockOnController != null)
+                return;
+        }
+
+        var fallbackPlayerLockOn = FindFirstObjectByType<PlayerLockOn>();
+        if (fallbackPlayerLockOn != null)
+            _lockOnController = fallbackPlayerLockOn;
+    }
+
+    bool TryReadLegacyBool(UnityEngine.Object source, string name)
+    {
+        if (source == null)
+            return false;
+
+        var type = source.GetType();
+        var property = type.GetProperty(name);
+        if (property != null)
+        {
+            var propertyValue = property.GetValue(source, null);
+            if (propertyValue is bool propertyBool)
+                return propertyBool;
+        }
+
+        var method = type.GetMethod(name);
+        if (method != null)
+        {
+            var result = method.Invoke(source, null);
+            if (result is bool methodBool)
+                return methodBool;
+        }
+
+        return false;
+    }
+
+    public bool SetInteractionInputBlocked(bool blocked)
+    {
+        if (_inputBlocker == null)
+            TryResolveInputBlocker();
+
+        if (_inputBlocker == null)
+            return false;
+
+        _inputBlocker.BlockAll(blocked);
+        return true;
+    }
+
+    bool IsInputBlocked()
+    {
+        if (_inputBlocker == null)
+            TryResolveInputBlocker();
+
+        return _inputBlocker != null && _inputBlocker.IsBlocked;
     }
 }

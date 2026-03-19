@@ -9,6 +9,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
 {
+    private PlayerReferences _playerReferences;
+
     //======================================================================
     // ① 필수 참조
     //======================================================================
@@ -81,8 +83,9 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
 
     void Awake()
     {
+        _playerReferences = GetComponent<PlayerReferences>();
         if (!health)        health        = GetComponent<PlayerHealth>();
-        if (!anim)          anim          = GetComponentInChildren<Animator>();
+        if (!anim)          anim          = _playerReferences != null ? _playerReferences.MainAnimator ?? GetComponentInChildren<Animator>() : GetComponentInChildren<Animator>();
         if (!guard)         guard         = GetComponent<PlayerGuardController>();
         if (!perfectDodge)  perfectDodge  = GetComponent<PerfectDodgeController>();
         if (!feedback)      feedback      = GetComponent<ParryFeedbackController>();
@@ -133,6 +136,7 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
             feedback?.PlayParryFeedback(hitPoint, attacker);
             LockMove(lockMoveOnParry);
             TryNotifyUltimateGain(ultimateGainOnParry);
+            TryNotifyParryBreak(attacker);
 
             if (TutorialManager.Instance != null)
                 TutorialManager.Instance.OnPlayerParrySuccess();
@@ -249,5 +253,15 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
                 }
             }
         }
+    }
+
+    void TryNotifyParryBreak(Transform attacker)
+    {
+        if (attacker == null) return;
+
+        var breakController = attacker.GetComponentInParent<BossBreakController>();
+        if (breakController == null) return;
+
+        breakController.AddBreak(0f, BossBreakController.BreakSource.Parry);
     }
 }

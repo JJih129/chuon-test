@@ -1,15 +1,15 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using System.Collections;
 
-// [Çì´õ] ÇÃ·¹ÀÌ¾î¸¦ ÁöÁ¤ ÁöÁ¡À¸·Î ÀÌµ¿½ÃÅ°´Â »óÈ£ÀÛ¿ë
-// - targetPoint: ÀÌµ¿ ¸ñÀûÁö(Transform). ÇÊ¼ö
-// - faceTargetForward: µµÂø ÈÄ targetPointÀÇ ¾ÕÀ» º¸°Ô È¸Àü
-// - moveMode: ÀÌµ¿ ¹æ½Ä(Áï½Ã ¿öÇÁ / ºÎµå·´°Ô ÀÌµ¿)
-// - moveDuration: ºÎµå·´°Ô ÀÌµ¿½Ã ¼Ò¿ä ½Ã°£(ÃÊ)
-// - useNavMeshAgentIfFound: ÇÃ·¹ÀÌ¾î¿¡ NavMeshAgent ÀÖÀ¸¸é SetDestination »ç¿ë
-// - blockInputDuringMove: ÀÌµ¿ Áß ÀÔ·Â Â÷´Ü(ÇÁ·ÎÁ§Æ® ¶ó¿ìÅÍ ÀÖÀ¸¸é Block, ¾øÀ¸¸é ¹«½Ã)
-// - playSfx: SFX Àç»ı ¿©ºÎ
-// - sfx: AudioSource ÂüÁ¶
+// [í—¤ë”] í”Œë ˆì´ì–´ë¥¼ ì§€ì • ì§€ì ìœ¼ë¡œ ì´ë™ì‹œí‚¤ëŠ” ìƒí˜¸ì‘ìš©
+// - targetPoint: ì´ë™ ëª©ì ì§€(Transform). í•„ìˆ˜
+// - faceTargetForward: ë„ì°© í›„ targetPointì˜ ì•ì„ ë³´ê²Œ íšŒì „
+// - moveMode: ì´ë™ ë°©ì‹(ì¦‰ì‹œ ì›Œí”„ / ë¶€ë“œëŸ½ê²Œ ì´ë™)
+// - moveDuration: ë¶€ë“œëŸ½ê²Œ ì´ë™ì‹œ ì†Œìš” ì‹œê°„(ì´ˆ)
+// - useNavMeshAgentIfFound: í”Œë ˆì´ì–´ì— NavMeshAgent ìˆìœ¼ë©´ SetDestination ì‚¬ìš©
+// - blockInputDuringMove: ì´ë™ ì¤‘ ì…ë ¥ ì°¨ë‹¨(í”„ë¡œì íŠ¸ ë¼ìš°í„° ìˆìœ¼ë©´ Block, ì—†ìœ¼ë©´ ë¬´ì‹œ)
+// - playSfx: SFX ì¬ìƒ ì—¬ë¶€
+// - sfx: AudioSource ì°¸ì¡°
 public class MoveToPointInteractable : BaseInteractable
 {
     public Transform targetPoint;
@@ -29,7 +29,7 @@ public class MoveToPointInteractable : BaseInteractable
     {
         if (!targetPoint) return false;
 
-        // InteractionManager·ÎºÎÅÍ ÇÃ·¹ÀÌ¾î È¹µæ
+        // InteractionManagerë¡œë¶€í„° í”Œë ˆì´ì–´ íšë“
         Transform player = null;
         if (invoker is InteractionManager im) player = im.PlayerRoot;
         if (!player)
@@ -47,7 +47,7 @@ public class MoveToPointInteractable : BaseInteractable
     {
         if (playSfx && sfx) sfx.Play();
 
-        // ÀÔ·Â Â÷´Ü ½Ãµµ(ÇÁ·ÎÁ§Æ® ¶ó¿ìÅÍ ¹İ¿µ: UltimateInputRouter¿¡ Block/Unblock ¸Ş¼­µå°¡ ÀÖ´Ù°í °¡Á¤)
+        // ì…ë ¥ ì°¨ë‹¨ ì‹œë„(í”„ë¡œì íŠ¸ ë¼ìš°í„° ë°˜ì˜: UltimateInputRouterì— Block/Unblock ë©”ì„œë“œê°€ ìˆë‹¤ê³  ê°€ì •)
         object router = null;
         if (FindObjectOfType<InteractionManager>() is InteractionManager im)
             router = im.inputRouter;
@@ -58,14 +58,14 @@ public class MoveToPointInteractable : BaseInteractable
             if (m != null) m.Invoke(router, null);
         }
 
-        // NavMeshAgent ¿ì¼±
+        // NavMeshAgent ìš°ì„ 
         if (useNavMeshAgentIfFound)
         {
             var agent = player.GetComponent<UnityEngine.AI.NavMeshAgent>();
             if (agent && agent.isActiveAndEnabled)
             {
                 agent.SetDestination(targetPoint.position);
-                // °£´ÜÇÑ µµÂø ´ë±â
+                // ê°„ë‹¨í•œ ë„ì°© ëŒ€ê¸°
                 float timeout = 3f;
                 while (timeout > 0f && agent.pathPending) { timeout -= Time.deltaTime; yield return null; }
                 while (agent.remainingDistance > agent.stoppingDistance + 0.05f) { yield return null; }
@@ -110,3 +110,4 @@ public class MoveToPointInteractable : BaseInteractable
         }
     }
 }
+

@@ -16,6 +16,7 @@ public sealed class AnimationEventReceiver : MonoBehaviour
     [SerializeField] private PerfectDodgeController perfectDodge;
     [Tooltip("애니메이터(공격 플래그 동기화용)")]
     [SerializeField] private Animator anim;
+    [SerializeField] private PlayerReferences playerReferences;
 
     [Header("애니메이터 파라미터명")]
     [Tooltip("공격 중 여부 Bool 파라미터명(예: IsAttacking)")]
@@ -49,7 +50,8 @@ public sealed class AnimationEventReceiver : MonoBehaviour
 
     private void TryAutoWire()
     {
-        if (anim == null)        anim = GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
+        if (playerReferences == null) playerReferences = GetComponentInParent<PlayerReferences>(true);
+        if (anim == null)        anim = playerReferences != null ? playerReferences.MainAnimator ?? GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>() : GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
         if (guard == null)       guard = GetComponentInParent<PlayerGuardController>(true);
         if (perfectDodge == null)perfectDodge = GetComponentInParent<PerfectDodgeController>(true);
     }

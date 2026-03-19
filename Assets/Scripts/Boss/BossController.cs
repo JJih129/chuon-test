@@ -297,8 +297,17 @@ public class BossController : MonoBehaviour
     {
         if (_isDead) return;
 
+        if (attackHitbox != null)
+            attackHitbox.DeactivateWindow();
+
+        _currentPattern = null;
+        UpdateMoveAnimation(0f);
+
         if (bossAnimator != null)
+        {
             bossAnimator.SetBool(AnimParam_IsBreak, true);
+            bossAnimator.CrossFadeInFixedTime("Break", 0.05f, 0);
+        }
 
         SetState(BossState.Break);
     }

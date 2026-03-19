@@ -6,6 +6,7 @@ using UnityEngine.Events;
 [DisallowMultipleComponent]
 public class PerfectDodgeController : MonoBehaviour
 {
+    [SerializeField] private PlayerReferences playerReferences;
     [Header("① 퍼펙트 회피 창(초)")]
     [Tooltip("Pulse 호출 시 열리는 기본 윈도우 길이의 하한/상한")]
     [Min(0f)] public float minWindow = 0.08f;
@@ -65,6 +66,7 @@ public class PerfectDodgeController : MonoBehaviour
 
     void Awake()
     {
+        if (!playerReferences) playerReferences = GetComponent<PlayerReferences>();
         _initialFixedDelta = Time.fixedDeltaTime;
 
         if (animatorsToAffect.Count == 0)
@@ -73,7 +75,7 @@ public class PerfectDodgeController : MonoBehaviour
                 animatorsToAffect.AddRange(GetComponentsInChildren<Animator>(true));
             else
             {
-                var a = GetComponent<Animator>();
+                var a = playerReferences != null ? playerReferences.MainAnimator ?? GetComponent<Animator>() : GetComponent<Animator>();
                 if (a != null) animatorsToAffect.Add(a);
             }
         }
