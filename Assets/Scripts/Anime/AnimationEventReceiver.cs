@@ -27,7 +27,7 @@ public sealed class AnimationEventReceiver : MonoBehaviour
     private bool _hasAttackingBool;
 
     // 퍼펙트 회피 창 기본 지속시간(클립 이벤트에 인자를 안 넘긴 경우)
-    private const float DefaultPerfectDodgeWindow = 0.16f;
+    private const float DefaultPerfectDodgeWindow = 0.22f;
 
     private void Reset()      => TryAutoWire();
     private void Awake()

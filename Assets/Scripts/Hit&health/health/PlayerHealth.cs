@@ -55,6 +55,7 @@ public class PlayerHealth : MonoBehaviour, IHealth
     // 내부 상태
     private bool _isInvincible;
     private float _invTimer;
+    private float _realtimeInvincibleUntil;
     private bool _isStaggered;
 
     // Animator 캐시
@@ -139,7 +140,11 @@ public class PlayerHealth : MonoBehaviour, IHealth
     public void ApplyDamage(int amount)
     {
         if (amount <= 0) { if (debugLog) Debug.Log("[Health] Skip(amount<=0)", this); return; }
-        if (_isInvincible) { if (debugLog) Debug.Log("[Health] Skip(invincible)", this); return; }
+        if (_isInvincible || Time.realtimeSinceStartup < _realtimeInvincibleUntil)
+        {
+            if (debugLog) Debug.Log("[Health] Skip(invincible)", this);
+            return;
+        }
         if (IsDead) { if (debugLog) Debug.Log("[Health] Skip(dead)", this); return; }
 
         int before = currentHP;
@@ -192,6 +197,16 @@ public class PlayerHealth : MonoBehaviour, IHealth
     {
         isInvincible = seconds > 0f;
         _invTimer = seconds;
+    }
+
+    public void SetInvincibleRealtime(float seconds)
+    {
+        if (seconds <= 0f)
+            return;
+
+        float nextEnd = Time.realtimeSinceStartup + seconds;
+        if (nextEnd > _realtimeInvincibleUntil)
+            _realtimeInvincibleUntil = nextEnd;
     }
 
     // ── Reaction ───────────────────────────────────────────────

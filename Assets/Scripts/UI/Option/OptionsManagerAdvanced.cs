@@ -12,6 +12,10 @@ using UnityEngine.Audio;
 [DisallowMultipleComponent]
 public class OptionsManagerAdvanced : MonoBehaviour
 {
+    const float GeneratedRowSpacing = 56f;
+
+    bool _loggedMissingMixerWarning;
+
     [Header("▶ 비디오 설정")]
     public Dropdown resolutionDropdown;
     public Toggle fullscreenToggle;
@@ -63,8 +67,24 @@ public class OptionsManagerAdvanced : MonoBehaviour
     const string K_SUB_BG = "opt_sub_bg";
     const string K_CAM_SHAKE = "opt_cam_shake";
 
+    public bool IsWaitingForRebind => _waitingForKey;
+    public Button CurrentRebindButton => _currentRebindButton;
+
     void Awake()
     {
+        AudioOptionsRuntime.RefreshFromPrefs();
+        VideoOptionsRuntime.RefreshFromPrefs();
+
+        OnBrightnessChanged -= VideoOptionsRuntime.SetBrightness;
+        OnBrightnessChanged += VideoOptionsRuntime.SetBrightness;
+        OnMotionBlurToggled -= VideoOptionsRuntime.SetMotionBlurEnabled;
+        OnMotionBlurToggled += VideoOptionsRuntime.SetMotionBlurEnabled;
+
+        if (OnCameraShakeStrengthChanged == null)
+            OnCameraShakeStrengthChanged += CameraShake.SetGlobalStrength;
+
+        EnsureRuntimeOptionRows();
+
         _resolutions = Screen.resolutions;
         if (resolutionDropdown != null) resolutionDropdown.options.Clear();
         int currentIndex = 0;
@@ -167,6 +187,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
         }
 
         ApplyAudioInitial();
+        ApplyRuntimeAvailabilityState();
     }
 
     void Start()
@@ -227,22 +248,160 @@ public class OptionsManagerAdvanced : MonoBehaviour
 
     void SetAudioParam(string exposedName, float linear01)
     {
-        if (audioMixer == null) return;
+        linear01 = Mathf.Clamp01(linear01);
+        ApplyRuntimeAudioState(exposedName, linear01);
+
+        if (audioMixer == null)
+        {
+            ApplyAudioFallback(exposedName, linear01);
+            return;
+        }
+
         float dB = (linear01 <= 0.0001f) ? -80f : 20f * Mathf.Log10(Mathf.Clamp(linear01, 0.0001f, 1f));
         audioMixer.SetFloat(exposedName, dB);
+        SaveAudioPref(exposedName, linear01);
+    }
+
+    void ApplyAudioInitial()
+    {
+        SetAudioParam(paramMaster, PlayerPrefs.GetFloat(K_MASTER, 1f));
+        SetAudioParam(paramMusic,  PlayerPrefs.GetFloat(K_MUSIC, 1f));
+        SetAudioParam(paramSfx,    PlayerPrefs.GetFloat(K_SFX, 1f));
+        SetAudioParam(paramVoice,  PlayerPrefs.GetFloat(K_VOICE, 1f));
+    }
+
+    void ApplyAudioFallback(string exposedName, float linear01)
+    {
+        SaveAudioPref(exposedName, linear01);
+
+        if (exposedName == paramMaster)
+        {
+            return;
+        }
+
+        if (_loggedMissingMixerWarning)
+            return;
+
+        _loggedMissingMixerWarning = true;
+        Debug.Log("[OptionsManagerAdvanced] AudioMixer is not assigned. Only master volume is applied at runtime via AudioListener.volume.");
+    }
+
+    void SaveAudioPref(string exposedName, float linear01)
+    {
         if (exposedName == paramMaster) PlayerPrefs.SetFloat(K_MASTER, linear01);
         if (exposedName == paramMusic)  PlayerPrefs.SetFloat(K_MUSIC, linear01);
         if (exposedName == paramSfx)    PlayerPrefs.SetFloat(K_SFX, linear01);
         if (exposedName == paramVoice)  PlayerPrefs.SetFloat(K_VOICE, linear01);
     }
 
-    void ApplyAudioInitial()
+    void ApplyRuntimeAudioState(string exposedName, float linear01)
     {
-        if (audioMixer == null) return;
-        SetAudioParam(paramMaster, PlayerPrefs.GetFloat(K_MASTER, 1f));
-        SetAudioParam(paramMusic,  PlayerPrefs.GetFloat(K_MUSIC, 1f));
-        SetAudioParam(paramSfx,    PlayerPrefs.GetFloat(K_SFX, 1f));
-        SetAudioParam(paramVoice,  PlayerPrefs.GetFloat(K_VOICE, 1f));
+        if (exposedName == paramMaster) AudioOptionsRuntime.SetMasterVolume(linear01);
+        if (exposedName == paramMusic)  AudioOptionsRuntime.SetMusicVolume(linear01);
+        if (exposedName == paramSfx)    AudioOptionsRuntime.SetSfxVolume(linear01);
+        if (exposedName == paramVoice)  AudioOptionsRuntime.SetVoiceVolume(linear01);
+    }
+
+    void EnsureRuntimeOptionRows()
+    {
+        if (cameraShakeSlider == null)
+            cameraShakeSlider = CreateGeneratedSliderRow(masterSlider != null ? masterSlider : sfxSlider, "CameraShake_Row", "Camera Shake", "Slider_CameraShake");
+    }
+
+    Slider CreateGeneratedSliderRow(Slider templateSlider, string rowName, string labelText, string sliderName)
+    {
+        if (templateSlider == null)
+            return null;
+
+        var templateRow = templateSlider.transform.parent as RectTransform;
+        var parent = templateRow != null ? templateRow.parent as RectTransform : null;
+        if (templateRow == null || parent == null)
+            return null;
+
+        var generatedRowObject = Instantiate(templateRow.gameObject, parent, false);
+        generatedRowObject.name = rowName;
+
+        var generatedRow = generatedRowObject.GetComponent<RectTransform>();
+        if (generatedRow != null)
+        {
+            generatedRow.SetAsLastSibling();
+            generatedRow.anchoredPosition = new Vector2(templateRow.anchoredPosition.x, CalculateGeneratedRowY(parent));
+        }
+
+        var label = generatedRowObject.GetComponentInChildren<Text>(true);
+        if (label != null)
+            label.text = labelText;
+
+        var slider = generatedRowObject.GetComponentInChildren<Slider>(true);
+        if (slider == null)
+            return null;
+
+        slider.gameObject.name = sliderName;
+        slider.onValueChanged.RemoveAllListeners();
+        return slider;
+    }
+
+    float CalculateGeneratedRowY(RectTransform parent)
+    {
+        var rowRects = new List<RectTransform>();
+        foreach (Transform child in parent)
+        {
+            var rect = child as RectTransform;
+            if (rect == null)
+                continue;
+
+            if (child.GetComponentInChildren<Slider>(true) == null)
+                continue;
+
+            rowRects.Add(rect);
+        }
+
+        if (rowRects.Count == 0)
+            return -GeneratedRowSpacing;
+
+        rowRects.Sort((a, b) => b.anchoredPosition.y.CompareTo(a.anchoredPosition.y));
+        var lastRow = rowRects[rowRects.Count - 1];
+        var spacing = GeneratedRowSpacing;
+
+        if (rowRects.Count >= 2)
+        {
+            var previousRow = rowRects[rowRects.Count - 2];
+            var measuredSpacing = Mathf.Abs(lastRow.anchoredPosition.y - previousRow.anchoredPosition.y);
+            if (measuredSpacing > 1f)
+                spacing = measuredSpacing;
+        }
+
+        return lastRow.anchoredPosition.y - spacing;
+    }
+
+    void ApplyRuntimeAvailabilityState()
+    {
+        var hasMixer = audioMixer != null;
+        SetRowAvailability(masterSlider, true);
+        SetRowAvailability(musicSlider, hasMixer);
+        SetRowAvailability(sfxSlider, hasMixer);
+        SetRowAvailability(voiceSlider, hasMixer);
+        SetRowAvailability(cameraShakeSlider, true);
+    }
+
+    void SetRowAvailability(Selectable selectable, bool available)
+    {
+        if (selectable == null)
+            return;
+
+        selectable.interactable = available;
+
+        var row = selectable.transform.parent as RectTransform;
+        if (row == null)
+            return;
+
+        var canvasGroup = row.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+            canvasGroup = row.gameObject.AddComponent<CanvasGroup>();
+
+        canvasGroup.alpha = available ? 1f : 0.45f;
+        canvasGroup.blocksRaycasts = true;
+        canvasGroup.interactable = true;
     }
 
     void StartRebind(Button b)
@@ -263,6 +422,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
         PlayerPrefs.SetString(keyName, kc.ToString());
         PlayerPrefs.Save();
         _keybinds[keyName] = kc;
+        _currentRebindButton = null;
     }
 
     void Update()
@@ -295,6 +455,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
     {
         ApplyAudioInitial();
         OnBrightnessChanged?.Invoke(PlayerPrefs.GetFloat(K_BRIGHT, 1f));
+        OnMotionBlurToggled?.Invoke(PlayerPrefs.GetInt(K_MBLUR, 1) == 1);
         OnSubtitleSizeChanged?.Invoke(PlayerPrefs.GetFloat(K_SUB_SIZE, 1f));
         OnSubtitleBgToggled?.Invoke(PlayerPrefs.GetInt(K_SUB_BG, 1) == 1);
         OnCameraShakeStrengthChanged?.Invoke(PlayerPrefs.GetFloat(K_CAM_SHAKE, 1f));

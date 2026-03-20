@@ -19,15 +19,40 @@ public class PlayerReferences : MonoBehaviour
     [SerializeField] private AttackHitbox[] attackHitboxes;
 
     public Transform PlayerRoot => playerRoot ? playerRoot : transform;
-    public Transform VisualRoot => visualRoot ? visualRoot : visualRig ? visualRig.VisualRoot : null;
-    public PlayerVisualRig VisualRig => visualRig;
+    public Transform VisualRoot
+    {
+        get
+        {
+            if (visualRoot)
+                return visualRoot;
+
+            var resolvedRig = VisualRig;
+            if (resolvedRig != null)
+            {
+                visualRoot = resolvedRig.VisualRoot;
+                return visualRoot;
+            }
+
+            return null;
+        }
+    }
+    public PlayerVisualRig VisualRig
+    {
+        get
+        {
+            if (visualRig == null)
+                visualRig = ResolvePreferredVisualRig();
+
+            return visualRig;
+        }
+    }
     public Transform LockPivot => lockPivot;
     public Transform UltimateSpawnRoot => ultimateSpawnRoot;
     public Transform CameraPivot => cameraPivot;
     public Transform WeaponSocket => weaponSocket;
     public Transform VFXRoot => vfxRoot;
     public Transform UIAnchor => uiAnchor;
-    public Animator MainAnimator => mainAnimator ? mainAnimator : visualRig ? visualRig.MainAnimator : null;
+    public Animator MainAnimator => mainAnimator ? mainAnimator : VisualRig ? VisualRig.MainAnimator : null;
     public AttackHitbox[] AttackHitboxes
     {
         get
@@ -54,7 +79,7 @@ public class PlayerReferences : MonoBehaviour
             if (HasValidObjects(attackHitboxes))
                 return FilterValidObjects(attackHitboxes);
 
-            return visualRig ? visualRig.AttackHitboxes : null;
+            return VisualRig ? VisualRig.AttackHitboxes : null;
         }
     }
     public AttackHitbox PrimaryAttackHitbox
@@ -83,6 +108,11 @@ public class PlayerReferences : MonoBehaviour
             AutoWire();
     }
 #endif
+
+    public void SyncSerializedReferences()
+    {
+        AutoWire();
+    }
 
     void AutoWire()
     {

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 
 // [헤더] 플레이어를 지정 지점으로 이동시키는 상호작용
@@ -45,18 +45,14 @@ public class MoveToPointInteractable : BaseInteractable
 
     IEnumerator CoMove(Transform player)
     {
-        if (playSfx && sfx) sfx.Play();
+        if (playSfx && sfx && sfx.clip) sfx.PlayOneShot(sfx.clip, AudioOptionsRuntime.ScaleSfx(sfx.volume));
 
-        // 입력 차단 시도(프로젝트 라우터 반영: UltimateInputRouter에 Block/Unblock 메서드가 있다고 가정)
-        object router = null;
-        if (FindObjectOfType<InteractionManager>() is InteractionManager im)
-            router = im.inputRouter;
+        var interactionManager = FindFirstObjectByType<InteractionManager>();
+        var localInputBlocker = player.GetComponent<IInputBlocker>() ?? player.GetComponentInParent<IInputBlocker>();
+        var inputBlocked = false;
 
-        if (blockInputDuringMove && router != null)
-        {
-            var m = router.GetType().GetMethod("BlockAllInputs");
-            if (m != null) m.Invoke(router, null);
-        }
+        if (blockInputDuringMove)
+            inputBlocked = TrySetInputBlocked(interactionManager, localInputBlocker, true);
 
         // NavMeshAgent 우선
         if (useNavMeshAgentIfFound)
@@ -72,11 +68,8 @@ public class MoveToPointInteractable : BaseInteractable
                 if (faceTargetForward)
                     player.rotation = Quaternion.LookRotation(targetPoint.forward, Vector3.up);
 
-                if (blockInputDuringMove && router != null)
-                {
-                    var u = router.GetType().GetMethod("UnblockAllInputs");
-                    if (u != null) u.Invoke(router, null);
-                }
+                if (inputBlocked)
+                    TrySetInputBlocked(interactionManager, localInputBlocker, false);
                 yield break;
             }
         }
@@ -103,11 +96,22 @@ public class MoveToPointInteractable : BaseInteractable
             }
         }
 
-        if (blockInputDuringMove && router != null)
+        if (inputBlocked)
+            TrySetInputBlocked(interactionManager, localInputBlocker, false);
+    }
+
+    static bool TrySetInputBlocked(InteractionManager interactionManager, IInputBlocker inputBlocker, bool blocked)
+    {
+        if (interactionManager != null && interactionManager.SetInteractionInputBlocked(blocked))
+            return true;
+
+        if (inputBlocker != null)
         {
-            var u = router.GetType().GetMethod("UnblockAllInputs");
-            if (u != null) u.Invoke(router, null);
+            inputBlocker.BlockAll(blocked);
+            return true;
         }
+
+        return false;
     }
 }
 

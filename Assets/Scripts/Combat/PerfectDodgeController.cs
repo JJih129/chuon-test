@@ -6,103 +6,102 @@ using UnityEngine.Events;
 [DisallowMultipleComponent]
 public class PerfectDodgeController : MonoBehaviour
 {
+    public bool IsWindowOpen => _windowOpen;
+    public float RemainingWindow => _remain;
+
     [SerializeField] private PlayerReferences playerReferences;
-    [Header("① 퍼펙트 회피 창(초)")]
-    [Tooltip("Pulse 호출 시 열리는 기본 윈도우 길이의 하한/상한")]
+    [SerializeField] private PlayerDodgeController dodgeController;
+
+    [Header("Perfect Dodge Window")]
     [Min(0f)] public float minWindow = 0.08f;
     [Min(0f)] public float maxWindow = 0.50f;
 
-    [Header("② 슬로우모션")]
-    [Range(0.01f, 1f)] public float slowTimeScale = 0.12f;
-    [Min(0.01f)] public float slowDuration = 0.10f;
-    [Tooltip("물리까지 느리게(권장 On)")] public bool adjustFixedDelta = true;
+    [Header("Perfect Dodge Time")]
+    [Range(0.01f, 1f)] public float initialFreezeTimeScale = 0.04f;
+    [Min(0f)] public float initialFreezeDuration = 0.03f;
+    [Range(0.01f, 1f)] public float slowTimeScale = 0.28f;
+    [Min(0.01f)] public float slowDuration = 0.12f;
+    [SerializeField] private PlayerHealth playerHealth;
+    [Min(0f)] public float perfectDodgeInvincibleRealtime = 0.50f;
+    [Tooltip("Adjust fixedDeltaTime while the slow effect is active.")]
+    public bool adjustFixedDelta = true;
+    public AnimationCurve slowRecoverCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
 
-    [Header("③ 애니메이터 강제 스케일 적용")]
-    [Tooltip("슬로우 동안 Animator.UpdateMode = Normal 강제")]
+    [Header("Animator Override")]
+    [Tooltip("Force affected animators to scaled-time update while the slow effect is active.")]
     public bool forceAnimatorsToScaled = true;
-    [Tooltip("비워두면 자식 포함 자동 수집")]
+    [Tooltip("Collect child animators automatically when the explicit list is empty.")]
     public bool includeChildAnimators = true;
-    [Tooltip("일부 Unscaled 에셋 대응: Animator.speed = timeScale 강제")]
+    [Tooltip("Drive animator speed to match the active time scale.")]
     public bool overrideAnimatorSpeed = true;
     public List<Animator> animatorsToAffect = new List<Animator>();
 
-    [Header("④ 이동 잠금(CombatMoveLocker 연동)")]
-    [SerializeField] CombatMoveLocker moveLocker;
-    [Tooltip("윈도우가 열려있는 동안 일반 이동 금지")]
+    [Header("Movement Lock")]
+    [SerializeField] private CombatMoveLocker moveLocker;
     public bool lockMoveWhileWindow = true;
-    [Tooltip("0이면 '윈도우가 닫힐 때까지' 잠금, >0이면 고정 시간만 잠금")]
     [Min(0f)] public float lockWindowFixedDuration = 0f;
-    [Tooltip("윈도우 잠금 시 속도 0으로")] public bool zeroVelocityOnWindow = true;
-    [Tooltip("윈도우 잠금 시 루트모션 OFF")] public bool disableRootMotionOnWindow = false;
+    public bool zeroVelocityOnWindow = true;
+    public bool disableRootMotionOnWindow = false;
 
-    [Tooltip("슬로우 연출 동안 일반 이동 금지")]
     public bool lockMoveDuringSlow = true;
-    [Tooltip("슬로우 잠금 시 속도 0")] public bool zeroVelocityOnSlow = false;
-    [Tooltip("슬로우 잠금 시 루트모션 OFF")] public bool disableRootMotionOnSlow = false;
+    public bool zeroVelocityOnSlow = false;
+    public bool disableRootMotionOnSlow = false;
 
-    [Header("⑤ 피드백/게이지(선택)")]
+    [Header("Feedback")]
     public ParryFeedbackController feedback;
     public bool autoFeedback = true;
     public PlayerUltimateController ultimate;
     public float ultimateGainOnPerfect = 7f;
     public bool autoUltimateGain = true;
 
-    [Header("⑥ UnityEvent (인스펙터 연결)")]
+    [Header("Events")]
     public UnityEvent OnWindowOpened;
     public UnityEvent OnWindowClosed;
     public UnityEvent OnPerfectDodge;
 
-    [Header("⑦ 디버그")]
+    [Header("Debug")]
     public bool enableLogs = true;
 
-    // 내부 상태
-    float _remain;
-    bool _windowOpen;
-    float _initialFixedDelta;
-    Coroutine _coSlow;
-    Coroutine _coClose;
-    readonly Dictionary<Animator, (AnimatorUpdateMode mode, float speed)> _animatorBackup
+    private float _remain;
+    private bool _windowOpen;
+    private float _initialFixedDelta;
+    private Coroutine _coSlow;
+    private Coroutine _coClose;
+    private readonly Dictionary<Animator, (AnimatorUpdateMode mode, float speed)> _animatorBackup
         = new Dictionary<Animator, (AnimatorUpdateMode, float)>();
 
     void Awake()
     {
         if (!playerReferences) playerReferences = GetComponent<PlayerReferences>();
-        _initialFixedDelta = Time.fixedDeltaTime;
+        if (!dodgeController) dodgeController = GetComponent<PlayerDodgeController>();
+        if (!playerHealth) playerHealth = GetComponent<PlayerHealth>();
+        if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
 
-        if (animatorsToAffect.Count == 0)
-        {
-            if (includeChildAnimators)
-                animatorsToAffect.AddRange(GetComponentsInChildren<Animator>(true));
-            else
-            {
-                var a = playerReferences != null ? playerReferences.MainAnimator ?? GetComponent<Animator>() : GetComponent<Animator>();
-                if (a != null) animatorsToAffect.Add(a);
-            }
-        }
+        _initialFixedDelta = Time.fixedDeltaTime;
+        EnsureAnimatorList();
+
+        if (slowRecoverCurve == null || slowRecoverCurve.length == 0)
+            slowRecoverCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
     }
 
-    // ===== 애니 이벤트 진입점 =====
-    // PerfectDodgeWindow_Pulse(0.16)
     public void PerfectDodgeWindow_Pulse(float seconds) => PerfectDodgeWindow_Open(seconds);
-    // PerfectDodgeWindow_Pulse()
     public void PerfectDodgeWindow_Pulse() => PerfectDodgeWindow_Open(0.16f);
 
     public void PerfectDodgeWindow_Open(float seconds)
     {
         seconds = Mathf.Clamp(seconds, minWindow, maxWindow);
-        _remain += seconds;
+        _remain = _windowOpen ? Mathf.Max(_remain, seconds) : seconds;
 
         if (!_windowOpen)
         {
             _windowOpen = true;
 
-            // 이동 잠금(윈도우)
             if (lockMoveWhileWindow && moveLocker)
             {
                 if (lockWindowFixedDuration > 0f)
                     moveLocker.Lock("PD_WINDOW", lockWindowFixedDuration, zeroVelocityOnWindow, disableRootMotionOnWindow);
                 else
-                    moveLocker.Lock("PD_WINDOW", 0f, zeroVelocityOnWindow, disableRootMotionOnWindow); // 닫힐 때 수동 해제
+                    moveLocker.Lock("PD_WINDOW", 0f, zeroVelocityOnWindow, disableRootMotionOnWindow);
             }
 
             OnWindowOpened?.Invoke();
@@ -111,12 +110,13 @@ public class PerfectDodgeController : MonoBehaviour
         StartCloseTimer(_remain);
 
         if (enableLogs)
-            Debug.Log($"[PD] Window OPEN (+{seconds:0.000}s) | remain={_remain:0.000}s", this);
+            Debug.Log($"[PD] Window open +{seconds:0.000}s (remain={_remain:0.000}s)", this);
     }
 
     public void PerfectDodgeWindow_Close()
     {
         if (!_windowOpen) return;
+
         _windowOpen = false;
         _remain = 0f;
 
@@ -124,21 +124,27 @@ public class PerfectDodgeController : MonoBehaviour
             moveLocker.Unlock("PD_WINDOW");
 
         OnWindowClosed?.Invoke();
-        if (enableLogs) Debug.Log("[PD] Window CLOSE", this);
+
+        if (enableLogs)
+            Debug.Log("[PD] Window close", this);
     }
 
-    // (선택) 클립 말미에 달면 슬로우 즉시 종료
     public void PerfectDodge_EndSlow() => ForceEndSlow();
 
     void StartCloseTimer(float seconds)
     {
-        if (_coClose != null) { StopCoroutine(_coClose); _coClose = null; }
+        if (_coClose != null)
+        {
+            StopCoroutine(_coClose);
+            _coClose = null;
+        }
+
         _coClose = StartCoroutine(CoCloseAfter(seconds));
     }
 
     IEnumerator CoCloseAfter(float seconds)
     {
-        var end = Time.realtimeSinceStartup + seconds;
+        float end = Time.realtimeSinceStartup + seconds;
         while (Time.realtimeSinceStartup < end)
             yield return null;
 
@@ -146,94 +152,170 @@ public class PerfectDodgeController : MonoBehaviour
         _coClose = null;
     }
 
-    // PlayerDamageReceiver에서 일반피해 직전 분기:
-    // if (perfectDodge && perfectDodge.ResolvePerfectDodge(hitPoint, attacker)) return;
     public bool ResolvePerfectDodge(Vector3 hitPoint, Transform attacker)
     {
         if (!_windowOpen) return false;
 
-        PerfectDodgeWindow_Close();           // 창 닫기
-        StartSlow(slowTimeScale, slowDuration); // 슬로우 시작
+        PerfectDodgeWindow_Close();
+        if (dodgeController != null)
+            dodgeController.ApplyPerfectDodgeSideStep(attacker);
+        if (playerHealth != null && perfectDodgeInvincibleRealtime > 0f)
+            playerHealth.SetInvincibleRealtime(perfectDodgeInvincibleRealtime);
+        StartSlow(slowTimeScale, slowDuration);
 
-        if (autoFeedback && feedback) feedback.PlayPerfectDodgeFeedback();
-        if (autoUltimateGain && ultimate) ultimate.AddGauge(ultimateGainOnPerfect);
+        if (autoFeedback && feedback)
+            feedback.PlayPerfectDodgeFeedback(hitPoint, attacker);
+
+        if (autoUltimateGain && ultimate)
+            ultimate.AddGauge(ultimateGainOnPerfect);
+
         OnPerfectDodge?.Invoke();
 
         if (enableLogs)
-            Debug.Log($"[PD] PERFECT! slow={slowTimeScale:0.000} for {slowDuration:0.000}s", this);
+            Debug.Log(
+                $"[PD] Perfect dodge freeze={initialFreezeTimeScale:0.000}/{initialFreezeDuration:0.000}s slow={slowTimeScale:0.000}/{slowDuration:0.000}s",
+                this);
 
         return true;
     }
 
-    // ===== 슬로우 =====
     void StartSlow(float scale, float duration)
     {
-        ForceEndSlow(); // 중복 슬로우 정리
+        ForceEndSlow();
+        EnsureAnimatorList();
 
-        if (forceAnimatorsToScaled) ApplyAnimatorEnforcement(scale);
+        if (forceAnimatorsToScaled)
+            BeginAnimatorEnforcement();
 
-        Time.timeScale = Mathf.Clamp(scale, 0.01f, 1f);
-        if (adjustFixedDelta) Time.fixedDeltaTime = _initialFixedDelta * Time.timeScale;
-
-        // 이동 잠금(슬로우)
+        float totalDuration = Mathf.Max(0f, initialFreezeDuration) + Mathf.Max(0.01f, duration);
         if (lockMoveDuringSlow && moveLocker)
-            moveLocker.Lock("PD_SLOW", duration, zeroVelocityOnSlow, disableRootMotionOnSlow);
+            moveLocker.Lock("PD_SLOW", totalDuration, zeroVelocityOnSlow, disableRootMotionOnSlow);
 
-        _coSlow = StartCoroutine(CoSlowMotion(duration));
+        _coSlow = StartCoroutine(CoPerfectDodgeTimeEffect(Mathf.Clamp(scale, 0.01f, 1f), Mathf.Max(0.01f, duration)));
     }
 
-    IEnumerator CoSlowMotion(float duration)
+    IEnumerator CoPerfectDodgeTimeEffect(float slowScale, float recoverDuration)
     {
-        float end = Time.realtimeSinceStartup + duration;
-        while (Time.realtimeSinceStartup < end)
-            yield return null;
+        float freezeDuration = Mathf.Max(0f, initialFreezeDuration);
+        if (freezeDuration > 0f)
+        {
+            ApplyTimeScale(Mathf.Clamp(initialFreezeTimeScale, 0.01f, 1f));
 
-        ForceEndSlow();
-        if (enableLogs) Debug.Log("[PD] Slow END(Auto)", this);
+            float freezeEnd = Time.realtimeSinceStartup + freezeDuration;
+            while (Time.realtimeSinceStartup < freezeEnd)
+                yield return null;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < recoverDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / recoverDuration);
+            float eased = Mathf.Clamp01(slowRecoverCurve.Evaluate(t));
+            float currentScale = Mathf.Lerp(slowScale, 1f, eased);
+            ApplyTimeScale(currentScale);
+            yield return null;
+        }
+
+        CompleteSlow(false);
+
+        if (enableLogs)
+            Debug.Log("[PD] Slow end (auto)", this);
     }
 
     [ContextMenu("Force end slow (debug)")]
     public void ForceEndSlow()
     {
-        if (_coSlow != null) { StopCoroutine(_coSlow); _coSlow = null; }
+        if (_coSlow != null)
+        {
+            StopCoroutine(_coSlow);
+            _coSlow = null;
+        }
 
-        if (Time.timeScale != 1f) Time.timeScale = 1f;
-        if (adjustFixedDelta && Mathf.Abs(Time.fixedDeltaTime - _initialFixedDelta) > 0.0001f)
-            Time.fixedDeltaTime = _initialFixedDelta;
+        CompleteSlow(true);
+    }
 
+    void CompleteSlow(bool clearCoroutineReference)
+    {
+        ApplyTimeScale(1f);
         RestoreAnimators();
 
-        // 슬로우용 잠금 해제
         if (lockMoveDuringSlow && moveLocker)
             moveLocker.Unlock("PD_SLOW");
 
-        if (enableLogs) Debug.Log("[PD] Slow END → timeScale=1", this);
+        if (clearCoroutineReference)
+            _coSlow = null;
+
+        if (enableLogs)
+            Debug.Log("[PD] Slow reset -> timeScale=1", this);
     }
 
-    // ===== 애니메이터 강제/원복 =====
-    void ApplyAnimatorEnforcement(float scale)
+    void ApplyTimeScale(float scale)
+    {
+        scale = Mathf.Clamp(scale, 0.0001f, 1f);
+        Time.timeScale = scale;
+
+        if (adjustFixedDelta)
+            Time.fixedDeltaTime = _initialFixedDelta * scale;
+
+        if (forceAnimatorsToScaled && overrideAnimatorSpeed)
+            ApplyAnimatorSpeed(scale);
+    }
+
+    void EnsureAnimatorList()
+    {
+        if (animatorsToAffect.Count > 0) return;
+
+        if (includeChildAnimators)
+        {
+            animatorsToAffect.AddRange(GetComponentsInChildren<Animator>(true));
+            return;
+        }
+
+        Animator animator = playerReferences != null
+            ? playerReferences.MainAnimator ?? GetComponent<Animator>()
+            : GetComponent<Animator>();
+
+        if (animator != null)
+            animatorsToAffect.Add(animator);
+    }
+
+    void BeginAnimatorEnforcement()
     {
         _animatorBackup.Clear();
-        foreach (var a in animatorsToAffect)
+
+        foreach (Animator animator in animatorsToAffect)
         {
-            if (!a) continue;
-            if (!_animatorBackup.ContainsKey(a))
-                _animatorBackup.Add(a, (a.updateMode, a.speed));
-            a.updateMode = AnimatorUpdateMode.Normal;
-            if (overrideAnimatorSpeed) a.speed = scale;
+            if (!animator) continue;
+            if (_animatorBackup.ContainsKey(animator)) continue;
+
+            _animatorBackup.Add(animator, (animator.updateMode, animator.speed));
+            animator.updateMode = AnimatorUpdateMode.Normal;
+        }
+    }
+
+    void ApplyAnimatorSpeed(float scale)
+    {
+        foreach (Animator animator in animatorsToAffect)
+        {
+            if (!animator) continue;
+            animator.speed = scale;
         }
     }
 
     void RestoreAnimators()
     {
         if (_animatorBackup.Count == 0) return;
-        foreach (var kv in _animatorBackup)
+
+        foreach (KeyValuePair<Animator, (AnimatorUpdateMode mode, float speed)> kv in _animatorBackup)
         {
-            var a = kv.Key;
-            if (!a) continue;
-            a.updateMode = kv.Value.mode;
-            a.speed = kv.Value.speed;
+            Animator animator = kv.Key;
+            if (!animator) continue;
+
+            animator.updateMode = kv.Value.mode;
+            animator.speed = kv.Value.speed;
         }
+
         _animatorBackup.Clear();
     }
 }

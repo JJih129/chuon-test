@@ -73,6 +73,8 @@ public class PlayerUltimateController : MonoBehaviour
 
     public float Gauge { get; private set; }
     public bool IsCinematic => _isCinematic;
+    public bool DidApplyInputBlockThisCinematic { get; private set; }
+    public bool DidFreezeWorldTimeThisCinematic { get; private set; }
 
     bool _isCinematic;
     float _cachedTimeScale = 1f;
@@ -120,19 +122,68 @@ public class PlayerUltimateController : MonoBehaviour
         UI_UltimateGauge.UpdateValue(Gauge / gaugeMax);
     }
 
-    public bool TryActivate()
+    public bool CanActivate(out string reason)
     {
-        if (_isCinematic) return false;
-        if (ignoreActivationWhenBlocked && _input != null && _input.IsBlocked) return false;
-        if (Gauge < gaugeMax) return false;
+        reason = string.Empty;
+
+        if (_isCinematic)
+        {
+            reason = "Ultimate cinematic is already running.";
+            return false;
+        }
+
+        if (ignoreActivationWhenBlocked && _input != null && _input.IsBlocked)
+        {
+            reason = "Global input blocker is active.";
+            return false;
+        }
+
+        if (Gauge < gaugeMax)
+        {
+            reason = "Ultimate gauge is not full.";
+            return false;
+        }
+
         if (_combat != null)
         {
-            if (blockWhenStaggered && _combat.IsStaggered()) return false;
-            if (!allowInAir && _combat.IsInAir()) return false;
-            if (blockWhenAttacking && _combat.IsAttacking()) return false;
-            if (blockWhenGuarding && _combat.IsGuarding()) return false;
-            if (blockWhenDodging && _combat.IsDodging()) return false;
+            if (blockWhenStaggered && _combat.IsStaggered())
+            {
+                reason = "Player is staggered.";
+                return false;
+            }
+
+            if (!allowInAir && _combat.IsInAir())
+            {
+                reason = "Player is airborne.";
+                return false;
+            }
+
+            if (blockWhenAttacking && _combat.IsAttacking())
+            {
+                reason = "Player is attacking.";
+                return false;
+            }
+
+            if (blockWhenGuarding && _combat.IsGuarding())
+            {
+                reason = "Player is guarding.";
+                return false;
+            }
+
+            if (blockWhenDodging && _combat.IsDodging())
+            {
+                reason = "Player is dodging.";
+                return false;
+            }
         }
+
+        return true;
+    }
+
+    public bool TryActivate()
+    {
+        if (!CanActivate(out _))
+            return false;
 
         StartCoroutine(Co_Cinematic());
         return true;
@@ -155,10 +206,16 @@ public class PlayerUltimateController : MonoBehaviour
     IEnumerator Co_Cinematic()
     {
         _isCinematic = true;
+        DidApplyInputBlockThisCinematic = false;
+        DidFreezeWorldTimeThisCinematic = false;
         Gauge = 0f;
         UI_UltimateGauge.UpdateValue(0f);
 
-        if (lockInputDuringCinematic) _input?.BlockAll(true);
+        if (lockInputDuringCinematic)
+        {
+            _input?.BlockAll(true);
+            DidApplyInputBlockThisCinematic = _input != null;
+        }
         if (invulnerableDuringCinematic) _invul?.SetInvulnerable(true);
         _lockOn?.GiveCameraControlToTimeline(true);
 
@@ -174,6 +231,7 @@ public class PlayerUltimateController : MonoBehaviour
             _cachedFixedDeltaTime = Time.fixedDeltaTime;
             Time.timeScale = 0f;
             Time.fixedDeltaTime = 0f;
+            DidFreezeWorldTimeThisCinematic = true;
         }
 
         if (director != null)
@@ -232,9 +290,38 @@ public class PlayerUltimateController : MonoBehaviour
             return;
         }
 
-        var boss = GameObject.FindWithTag("Boss");
-        if (boss != null && boss.TryGetComponent<IUltimateTarget>(out var fallbackTarget))
+        var fallbackTarget = FindFallbackUltimateTarget();
+        if (fallbackTarget != null)
             fallbackTarget.ApplyUltimateDamage(damage);
+    }
+
+    IUltimateTarget FindFallbackUltimateTarget()
+    {
+        GameObject taggedBoss = null;
+        try
+        {
+            taggedBoss = GameObject.FindWithTag("Boss");
+        }
+        catch (UnityException)
+        {
+            taggedBoss = null;
+        }
+
+        if (taggedBoss != null)
+        {
+            var taggedTarget = ResolveLockedUltimateTarget(taggedBoss.transform);
+            if (taggedTarget != null)
+                return taggedTarget;
+        }
+
+        var behaviours = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        foreach (var behaviour in behaviours)
+        {
+            if (behaviour is IUltimateTarget target)
+                return target;
+        }
+
+        return null;
     }
 
     IUltimateTarget ResolveLockedUltimateTarget(Transform target)

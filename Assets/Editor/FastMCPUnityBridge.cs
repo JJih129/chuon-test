@@ -254,6 +254,21 @@ public static class FastMCPUnityBridge
             case "search_assets": return SearchAssets(args);
             case "set_inspector_value": return SetInspectorValue(args);
             case "refresh_assets": return RefreshAssets();
+            case "sync_pause_options_chrome": return SyncPauseOptionsChrome();
+            case "sync_player_wiring": return SyncPlayerWiring();
+            case "run_gameplay_regression_checks": return RunGameplayRegressionChecks();
+            case "start_playmode_smoke_test": return StartPlayModeSmokeTest();
+            case "get_playmode_smoke_test_status": return GetPlayModeSmokeTestStatus();
+            case "start_boss_ultimate_scenario_test": return StartBossUltimateScenarioTest();
+            case "get_boss_ultimate_scenario_test_status": return GetBossUltimateScenarioTestStatus();
+            case "start_guard_parry_break_scenario_test": return StartGuardParryBreakScenarioTest();
+            case "get_guard_parry_break_scenario_test_status": return GetGuardParryBreakScenarioTestStatus();
+            case "start_ui_flow_scenario_test": return StartUiFlowScenarioTest();
+            case "get_ui_flow_scenario_test_status": return GetUiFlowScenarioTestStatus();
+            case "start_pause_ui_scenario_test": return StartPauseUiScenarioTest();
+            case "get_pause_ui_scenario_test_status": return GetPauseUiScenarioTestStatus();
+            case "start_full_validation_suite": return StartFullValidationSuite();
+            case "get_full_validation_suite_status": return GetFullValidationSuiteStatus();
             case "enter_playmode": return EnterPlayMode();
             case "exit_playmode": return ExitPlayMode();
             case "create_basic_3d_player_rig": return CreateBasic3DPlayerRig(args);
@@ -554,6 +569,113 @@ public static class FastMCPUnityBridge
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
         return Ok("Assets refreshed");
+    }
+
+    private static Response SyncPlayerWiring()
+    {
+        PlayerWiringSyncUtility.SyncSummary summary = PlayerWiringSyncUtility.RunFromFastMcp();
+        return Ok(summary.Details);
+    }
+
+    private static Response SyncPauseOptionsChrome()
+    {
+        PauseOptionsChromeSyncUtility.SyncSummary summary = PauseOptionsChromeSyncUtility.RunFromFastMcp();
+        return Ok(summary.Details);
+    }
+
+    private static Response RunGameplayRegressionChecks()
+    {
+        GameplayRegressionValidator.ValidationSummary summary = GameplayRegressionValidator.RunFromFastMcp();
+        if (summary.HasErrors)
+        {
+            return Fail(summary.Details);
+        }
+
+        return Ok(summary.Details);
+    }
+
+    private static Response StartPlayModeSmokeTest()
+    {
+        PlayModeSmokeTestRunner.SmokeStatus status = PlayModeSmokeTestRunner.StartFromFastMcp();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response GetPlayModeSmokeTestStatus()
+    {
+        PlayModeSmokeTestRunner.SmokeStatus status = PlayModeSmokeTestRunner.GetStatus();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response StartBossUltimateScenarioTest()
+    {
+        BossUltimateScenarioTestRunner.ScenarioStatus status = BossUltimateScenarioTestRunner.StartFromFastMcp();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response GetBossUltimateScenarioTestStatus()
+    {
+        BossUltimateScenarioTestRunner.ScenarioStatus status = BossUltimateScenarioTestRunner.GetStatus();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response StartGuardParryBreakScenarioTest()
+    {
+        GuardParryBreakScenarioTestRunner.ScenarioStatus status = GuardParryBreakScenarioTestRunner.StartFromFastMcp();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response GetGuardParryBreakScenarioTestStatus()
+    {
+        GuardParryBreakScenarioTestRunner.ScenarioStatus status = GuardParryBreakScenarioTestRunner.GetStatus();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response StartUiFlowScenarioTest()
+    {
+        UIFlowScenarioTestRunner.ScenarioStatus status = UIFlowScenarioTestRunner.StartFromFastMcp();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response GetUiFlowScenarioTestStatus()
+    {
+        UIFlowScenarioTestRunner.ScenarioStatus status = UIFlowScenarioTestRunner.GetStatus();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response StartPauseUiScenarioTest()
+    {
+        PauseUiScenarioTestRunner.ScenarioStatus status = PauseUiScenarioTestRunner.StartFromFastMcp();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response GetPauseUiScenarioTestStatus()
+    {
+        PauseUiScenarioTestRunner.ScenarioStatus status = PauseUiScenarioTestRunner.GetStatus();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response StartFullValidationSuite()
+    {
+        FullValidationSuiteRunner.SuiteStatus status = FullValidationSuiteRunner.StartFromFastMcp();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
+    }
+
+    private static Response GetFullValidationSuiteStatus()
+    {
+        FullValidationSuiteRunner.SuiteStatus status = FullValidationSuiteRunner.GetStatus();
+        string dataJson = JsonUtility.ToJson(status, true);
+        return Ok(status.details, dataJson);
     }
 
     private static Response EnterPlayMode()

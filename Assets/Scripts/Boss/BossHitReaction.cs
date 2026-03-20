@@ -176,7 +176,7 @@ public class BossHitReaction : MonoBehaviour
         audioSource.pitch = pitch;
 
         // PlayOneShot 사용: 같은 프레임에 여러 히트가 들어와도 겹쳐서 재생 가능
-        audioSource.PlayOneShot(clip, hitVolume);
+        audioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(hitVolume));
     }
 
     AudioClip GetClipForHitType(HitType hitType)

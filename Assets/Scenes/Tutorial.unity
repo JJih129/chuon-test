@@ -1,4 +1,4 @@
-﻿%YAML 1.1
+%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!29 &1
 OcclusionCullingSettings:
@@ -1270,14 +1270,24 @@ MonoBehaviour:
   cameraTransform: {fileID: 963194228}
   move: {fileID: 281972685}
   playerLockOn: {fileID: 281972688}
+  combatController: {fileID: 281972696}
+  guardController: {fileID: 281972713}
+  perfectDodgeController: {fileID: 281972721}
   animator: {fileID: 281972687}
   moveLocker: {fileID: 281972722}
   dodgeKey: 304
+  denyDodgeWhileAttacking: 1
+  denyDodgeWhileGuarding: 1
+  denyDodgeWhileInHit: 1
   useDistanceBased: 0
   dodgeSpeed: 8.4
   dodgeDistance: 10.36
   dodgeDuration: 0.4
   dodgeCooldown: 1
+  sideStepOnPerfectDodge: 1
+  perfectDodgeRewindNormalizedTime: 0.28
+  openPerfectDodgeWindowOnDodgeStart: 1
+  perfectDodgeStartWindow: 0.22
   speedCurve:
     serializedVersion: 2
     m_Curve:
@@ -1303,7 +1313,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   p_IsDodging: IsDodging
-  p_DodgeTrigger: Dodge
+  p_DodgeTrigger: 
   lockMoveDuringDodge: 1
   zeroVelocityOnDodge: 1
   disableRootMotionOnDodge: 1
@@ -1473,6 +1483,9 @@ MonoBehaviour:
   ignoreActivationWhenBlocked: 1
   allowInAir: 0
   blockWhenStaggered: 1
+  blockWhenAttacking: 1
+  blockWhenGuarding: 1
+  blockWhenDodging: 1
   invulnerableDuringCinematic: 1
   lockInputDuringCinematic: 1
   restoreCameraAndLockOn: 1
@@ -1568,6 +1581,13 @@ MonoBehaviour:
   inAir: 0
   staggered: 0
   attacking: 0
+  guarding: 0
+  dodging: 0
+  characterController: {fileID: 281972683}
+  combatController: {fileID: 281972696}
+  guardController: {fileID: 281972713}
+  dodgeController: {fileID: 281972690}
+  playerHealth: {fileID: 281972694}
 --- !u!114 &281972706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1595,7 +1615,7 @@ MonoBehaviour:
   playerReferences: {fileID: 0}
   player: {fileID: 281972684}
   spawnRoot: {fileID: 2067460293}
-  slashPrefab: {fileID: 1026432215412769207, guid: 0ff61853b5776c0428a32a9da797d79e, type: 3}
+  slashPrefab: {fileID: 731477240177266880, guid: 8b20002c2b69a9d44ab5bae8e1d923cd, type: 3}
   forwardOffset: 3
   heightOffset: 1.4
   length: 6
@@ -1673,7 +1693,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   health: {fileID: 281972694}
-  anim: {fileID: 0}
+  anim: {fileID: 281972687}
   guard: {fileID: 281972713}
   perfectDodge: {fileID: 281972721}
   feedback: {fileID: 281972719}
@@ -1919,6 +1939,7 @@ MonoBehaviour:
   blockStopDuration: 0.05
   dodgeTimeScale: 0.12
   dodgeStopDuration: 0.12
+  usePerfectDodgeHitStop: 0
   scaleFixedDeltaTime: 1
   impulseSource: {fileID: 281972718}
   parryVelocity: {x: 0, y: -1, z: 0}
@@ -2050,11 +2071,40 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerReferences: {fileID: 0}
+  dodgeController: {fileID: 0}
   minWindow: 0.08
   maxWindow: 0.5
-  slowTimeScale: 0.069
-  slowDuration: 0.5
+  initialFreezeTimeScale: 0.04
+  initialFreezeDuration: 0.03
+  slowTimeScale: 0.12
+  slowDuration: 2
+  playerHealth: {fileID: 281972694}
+  perfectDodgeInvincibleRealtime: 0.5
   adjustFixedDelta: 1
+  slowRecoverCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   forceAnimatorsToScaled: 1
   includeChildAnimators: 1
   overrideAnimatorSpeed: 1
@@ -2081,7 +2131,7 @@ MonoBehaviour:
   OnPerfectDodge:
     m_PersistentCalls:
       m_Calls: []
-  enableLogs: 1
+  enableLogs: 0
 --- !u!114 &281972722
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2130,6 +2180,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   attackHitboxes:
   - {fileID: 1562990574}
+  playerReferences: {fileID: 281972726}
 --- !u!54 &281972725
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -2180,7 +2231,6 @@ MonoBehaviour:
   uiAnchor: {fileID: 0}
   mainAnimator: {fileID: 281972687}
   attackHitboxes:
-  - {fileID: 427083990}
   - {fileID: 1562990574}
 --- !u!1 &290598377
 GameObject:
@@ -9727,5 +9777,3 @@ SceneRoots:
   - {fileID: 1617817563}
   - {fileID: 1035295622}
   - {fileID: 1492635409}
-
-

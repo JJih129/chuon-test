@@ -1232,14 +1232,24 @@ MonoBehaviour:
   cameraTransform: {fileID: 0}
   move: {fileID: 710101040890137229}
   playerLockOn: {fileID: 3629856975197315660}
+  combatController: {fileID: 3625136038103508255}
+  guardController: {fileID: 6669824055994905385}
+  perfectDodgeController: {fileID: 171033920233620033}
   animator: {fileID: 5777839405900600649}
   moveLocker: {fileID: 2996402383616999470}
   dodgeKey: 304
+  denyDodgeWhileAttacking: 1
+  denyDodgeWhileGuarding: 1
+  denyDodgeWhileInHit: 1
   useDistanceBased: 0
   dodgeSpeed: 8.4
   dodgeDistance: 12
   dodgeDuration: 0.4
   dodgeCooldown: 1
+  sideStepOnPerfectDodge: 1
+  perfectDodgeRewindNormalizedTime: 0.28
+  openPerfectDodgeWindowOnDodgeStart: 1
+  perfectDodgeStartWindow: 0.22
   speedCurve:
     serializedVersion: 2
     m_Curve:
@@ -1265,7 +1275,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   p_IsDodging: IsDodging
-  p_DodgeTrigger: Dodge
+  p_DodgeTrigger: 
   lockMoveDuringDodge: 1
   zeroVelocityOnDodge: 1
   disableRootMotionOnDodge: 1
@@ -1367,6 +1377,9 @@ MonoBehaviour:
   ignoreActivationWhenBlocked: 1
   allowInAir: 0
   blockWhenStaggered: 1
+  blockWhenAttacking: 1
+  blockWhenGuarding: 1
+  blockWhenDodging: 1
   invulnerableDuringCinematic: 1
   lockInputDuringCinematic: 1
   restoreCameraAndLockOn: 1
@@ -1519,6 +1532,13 @@ MonoBehaviour:
   inAir: 0
   staggered: 0
   attacking: 0
+  guarding: 0
+  dodging: 0
+  characterController: {fileID: 7261877498965566706}
+  combatController: {fileID: 3625136038103508255}
+  guardController: {fileID: 6669824055994905385}
+  dodgeController: {fileID: 3985815088285802993}
+  playerHealth: {fileID: 192257646706784962}
 --- !u!114 &30617296786033422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1534,7 +1554,7 @@ MonoBehaviour:
   playerReferences: {fileID: 0}
   player: {fileID: 9217704258761649807}
   spawnRoot: {fileID: 3737384201610072036}
-  slashPrefab: {fileID: 1026432215412769207, guid: 0ff61853b5776c0428a32a9da797d79e, type: 3}
+  slashPrefab: {fileID: 731477240177266880, guid: 8b20002c2b69a9d44ab5bae8e1d923cd, type: 3}
   forwardOffset: 3
   heightOffset: 1.4
   length: 6
@@ -1612,7 +1632,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   health: {fileID: 192257646706784962}
-  anim: {fileID: 0}
+  anim: {fileID: 5777839405900600649}
   guard: {fileID: 6669824055994905385}
   perfectDodge: {fileID: 171033920233620033}
   feedback: {fileID: 2570013235222381821}
@@ -1805,6 +1825,7 @@ MonoBehaviour:
   blockStopDuration: 0.05
   dodgeTimeScale: 0.12
   dodgeStopDuration: 0.12
+  usePerfectDodgeHitStop: 0
   scaleFixedDeltaTime: 1
   impulseSource: {fileID: 5469350674181791896}
   parryVelocity: {x: 0, y: -1, z: 0}
@@ -1840,11 +1861,40 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerReferences: {fileID: 0}
+  dodgeController: {fileID: 0}
   minWindow: 0.08
   maxWindow: 0.5
-  slowTimeScale: 0.069
-  slowDuration: 0.5
+  initialFreezeTimeScale: 0.04
+  initialFreezeDuration: 0.03
+  slowTimeScale: 0.12
+  slowDuration: 2
+  playerHealth: {fileID: 192257646706784962}
+  perfectDodgeInvincibleRealtime: 0.5
   adjustFixedDelta: 1
+  slowRecoverCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
   forceAnimatorsToScaled: 1
   includeChildAnimators: 1
   overrideAnimatorSpeed: 1
@@ -1871,7 +1921,7 @@ MonoBehaviour:
   OnPerfectDodge:
     m_PersistentCalls:
       m_Calls: []
-  enableLogs: 1
+  enableLogs: 0
 --- !u!114 &5469350674181791896
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1972,7 +2022,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   attackHitboxes:
-  - {fileID: 3244256319976129946}
+  - {fileID: 924390471944210529}
+  playerReferences: {fileID: 245853775745863209}
 --- !u!114 &245853775745863209
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1987,7 +2038,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerRoot: {fileID: 9217704258761649807}
   visualRoot: {fileID: 733261426487139155}
-  visualRig: {fileID: 0}
+  visualRig: {fileID: 7430387327515106773}
   lockPivot: {fileID: 8891424320520245772}
   ultimateSpawnRoot: {fileID: 3737384201610072036}
   cameraPivot: {fileID: 0}
@@ -1996,7 +2047,7 @@ MonoBehaviour:
   uiAnchor: {fileID: 0}
   mainAnimator: {fileID: 5777839405900600649}
   attackHitboxes:
-  - {fileID: 3244256319976129946}
+  - {fileID: 924390471944210529}
 --- !u!1 &3795597417212057411
 GameObject:
   m_ObjectHideFlags: 0
@@ -3917,17 +3968,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: b177ba39274dbb749b3c3b25847ad67e, type: 3}
---- !u!114 &3244256319976129946 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 5161784340198999757, guid: b177ba39274dbb749b3c3b25847ad67e, type: 3}
-  m_PrefabInstance: {fileID: 7685320666584843095}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7d6bd9c8dedfa8b458e8b9613e938618, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!4 &7719653014271842433 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 109786138930076630, guid: b177ba39274dbb749b3c3b25847ad67e, type: 3}

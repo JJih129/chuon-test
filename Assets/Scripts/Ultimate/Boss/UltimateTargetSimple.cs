@@ -135,7 +135,7 @@ public class UltimateTargetSimple : MonoBehaviour, IUltimateTarget
         }
         if (hitSFX && audioSource)
         {
-            audioSource.PlayOneShot(hitSFX);
+            audioSource.PlayOneShot(hitSFX, AudioOptionsRuntime.ScaleSfx(1f));
         }
     }
 

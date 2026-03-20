@@ -24,6 +24,7 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
     [SerializeField] float baseScroll = 2.0f;
 
     const float Golden = 137.507764f; // 분포용
+    bool _warnedMissingSlashPrefab;
 
     void EnsureSpawnRoot()
     {
@@ -45,6 +46,16 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
         if (!playerReferences) playerReferences = GetComponent<PlayerReferences>();
         if (!player) player = playerReferences != null ? playerReferences.PlayerRoot : transform;
         EnsureSpawnRoot();
+
+        if (!slashPrefab)
+        {
+            if (!_warnedMissingSlashPrefab)
+            {
+                Debug.LogWarning("[Ultimate] UltimateSlashBurstSpawner.slashPrefab is not assigned. Slash burst VFX will be skipped.", this);
+                _warnedMissingSlashPrefab = true;
+            }
+            return;
+        }
 
         // 고정 시드 + 인덱스로 안정적인 난수 시퀀스
         var rng = new System.Random(patternSeed + index * 9973);

@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -7,63 +6,64 @@ using UnityEngine.Events;
 public class PlayerDodgeController : MonoBehaviour
 {
     public bool IsDodging => isDodging;
-    [Header("① 참조 (한글 설명)")]
-    [SerializeField] Transform playerRoot;          // [조절값] 플레이어 루트 트랜스폼 (없으면 자기 자신)
-    [SerializeField] Transform cameraTransform;     // [조절값] 회피 방향 계산에 사용할 카메라 트랜스폼
-    [SerializeField] PlayerMoveController move;     // [조절값] 일반 이동 컴포넌트 참조(있으면 사용)
-    [SerializeField] PlayerLockOn playerLockOn;     // [조절값] 락온 상태에서 방향 기준용
-    [SerializeField] Animator animator;             // [조절값] 회피 애니메이션 재생용 애니메이터
-    [SerializeField] CombatMoveLocker moveLocker;   // [조절값] 회피 중 이동 잠금 전담 컴포넌트
 
-    [Header("② 입력 (한글 설명)")]
-    [SerializeField] KeyCode dodgeKey = KeyCode.LeftShift; // [조절값] 회피 입력 키
+    [Header("References")]
+    [SerializeField] Transform playerRoot;
+    [SerializeField] Transform cameraTransform;
+    [SerializeField] PlayerMoveController move;
+    [SerializeField] PlayerLockOn playerLockOn;
+    [SerializeField] PlayerCombatController combatController;
+    [SerializeField] PlayerGuardController guardController;
+    [SerializeField] PerfectDodgeController perfectDodgeController;
+    [SerializeField] Animator animator;
+    [SerializeField] CombatMoveLocker moveLocker;
 
-    [Header("③ 이동 조절(속도/거리 중 택1) (한글 설명)")]
-    [Tooltip("끄면 '속도 기반', 켜면 '거리 기반' 회피")]
-    [SerializeField] bool useDistanceBased = false;            // [조절값] true=거리 기반, false=속도 기반
-    [SerializeField, Range(4f, 28f)]  float dodgeSpeed = 18f;  // [조절값] 속도 기반 회피시 이동 속도(m/s)
-    [SerializeField, Range(1f, 12f)]  float dodgeDistance = 5f;// [조절값] 거리 기반 회피시 총 이동 거리(m)
-    [SerializeField, Range(0.05f, .6f)] float dodgeDuration = 0.25f; // [조절값] 회피에 걸리는 시간(초)
-    [SerializeField, Range(0f, 1f)]   float dodgeCooldown = 0f;      // [조절값] 회피 쿨타임(초)
+    [Header("Input")]
+    [SerializeField] KeyCode dodgeKey = KeyCode.LeftShift;
 
-    [Header("④ 속도 곡선(0~1) (한글 설명)")]
-    [Tooltip("시간 정규화 t(0~1)에 대한 속도 배율")]
-    [SerializeField] AnimationCurve speedCurve = AnimationCurve.Linear(0, 1, 1, 1); // [조절값] 회피 속도 곡선
+    [Header("Start Gate")]
+    [SerializeField] bool denyDodgeWhileAttacking = true;
+    [SerializeField] bool denyDodgeWhileGuarding = true;
+    [SerializeField] bool denyDodgeWhileInHit = true;
 
-    [Header("⑤ 애니 파라미터 (한글 설명)")]
-    [SerializeField] string p_IsDodging = "IsDodging";  // [조절값] 회피 중 여부 Bool 파라미터 이름
-    [SerializeField] string p_DodgeTrigger = "Dodge";   // [조절값] 회피 트리거 파라미터 이름
+    [Header("Movement")]
+    [Tooltip("False = speed based, true = distance based")]
+    [SerializeField] bool useDistanceBased = false;
+    [SerializeField, Range(4f, 28f)] float dodgeSpeed = 18f;
+    [SerializeField, Range(1f, 12f)] float dodgeDistance = 5f;
+    [SerializeField, Range(0.05f, 0.6f)] float dodgeDuration = 0.25f;
+    [SerializeField, Range(0f, 1f)] float dodgeCooldown = 0f;
 
-    [Header("⑥ 이동 잠금 옵션(대시 동안) (한글 설명)")]
-    [Tooltip("회피 진행 중 일반 이동 금지")]
-    [SerializeField] bool lockMoveDuringDodge = true;   // [조절값] 회피 중 이동 잠금 여부
-    [SerializeField] bool zeroVelocityOnDodge = true;   // [조절값] 회피 시작 시 속도를 0으로 만들지 여부
-    [SerializeField] bool disableRootMotionOnDodge = true; // [조절값] 회피 중 루트모션 비활성화 여부
+    [Header("Perfect Dodge Redirect")]
+    [SerializeField] bool sideStepOnPerfectDodge = true;
+    [SerializeField, Range(0f, 1f)] float perfectDodgeRewindNormalizedTime = 0.28f;
+    [SerializeField] bool openPerfectDodgeWindowOnDodgeStart = true;
+    [SerializeField, Range(0.05f, 0.35f)] float perfectDodgeStartWindow = 0.22f;
 
-    [Header("⑦ 이벤트 (한글 설명)")]
-    public UnityEvent OnDodgeStart; // [조절값] 회피 시작 시 호출되는 이벤트(외부 연동용)
-    public UnityEvent OnDodgeEnd;   // [조절값] 회피 종료 시 호출되는 이벤트(외부 연동용)
+    [Header("Speed Curve")]
+    [SerializeField] AnimationCurve speedCurve = AnimationCurve.Linear(0, 1, 1, 1);
 
-    [Header("⑧ 회피 사운드 설정 (한글 설명)")]
-    [Tooltip("회피 시작 시 재생할 사운드를 출력할 AudioSource (비워두면 자동 생성/검색)")]
-    [SerializeField] AudioSource dodgeAudioSource;          // [조절값] 회피 사운드용 오디오 소스
+    [Header("Animator Params")]
+    [SerializeField] string p_IsDodging = "IsDodging";
+    [SerializeField] string p_DodgeTrigger = "";
 
-    [Tooltip("회피 시작 시 재생할 사운드 클립들 (여러 개 넣으면 랜덤 재생)")]
-    [SerializeField] AudioClip[] dodgeStartClips;           // [조절값] 회피 시작 SFX 리스트
+    [Header("Move Lock")]
+    [SerializeField] bool lockMoveDuringDodge = true;
+    [SerializeField] bool zeroVelocityOnDodge = true;
+    [SerializeField] bool disableRootMotionOnDodge = true;
 
-    [Tooltip("회피 종료 시 재생할 사운드 클립들 (선택, 비워두면 사용 안 함)")]
-    [SerializeField] AudioClip[] dodgeEndClips;             // [조절값] 회피 종료 SFX 리스트
+    [Header("Events")]
+    public UnityEvent OnDodgeStart;
+    public UnityEvent OnDodgeEnd;
 
-    [Tooltip("회피 사운드 전체 볼륨 (0~1)")]
-    [SerializeField, Range(0f, 1f)] float dodgeVolume = 1f; // [조절값] 회피 사운드 볼륨
+    [Header("Audio")]
+    [SerializeField] AudioSource dodgeAudioSource;
+    [SerializeField] AudioClip[] dodgeStartClips;
+    [SerializeField] AudioClip[] dodgeEndClips;
+    [SerializeField, Range(0f, 1f)] float dodgeVolume = 1f;
+    [SerializeField] Vector2 dodgePitchRandomRange = new Vector2(0.95f, 1.05f);
+    [SerializeField] bool playEndSound = false;
 
-    [Tooltip("같은 사운드를 반복 재생할 때 단조로움을 줄이기 위한 랜덤 피치 범위 (x=최소, y=최대). 둘 다 1이면 고정 피치.")]
-    [SerializeField] Vector2 dodgePitchRandomRange = new Vector2(0.95f, 1.05f); // [조절값] 피치 랜덤 범위
-
-    [Tooltip("회피 종료 시에도 사운드를 재생할지 여부 (true면 종료 SFX 사용)")]
-    [SerializeField] bool playEndSound = false;             // [조절값] 회피 종료 사운드 사용 여부
-
-    // 내부
     CharacterController cc;
     float cdTimer;
     bool isDodging;
@@ -72,36 +72,28 @@ public class PlayerDodgeController : MonoBehaviour
     float baseSpeed;
     IInputBlocker inputBlocker;
     PlayerReferences playerReferences;
+    bool hasIsDodgingParam;
+    bool hasDodgeTriggerParam;
 
     void Reset()
     {
-        playerReferences = GetComponent<PlayerReferences>();
-        if (!playerRoot) playerRoot = playerReferences != null ? playerReferences.PlayerRoot : transform;
-        if (!cameraTransform && Camera.main) cameraTransform = Camera.main.transform;
-        if (!animator) animator = playerReferences != null && playerReferences.MainAnimator != null
-            ? playerReferences.MainAnimator
-            : GetComponentInChildren<Animator>();
-        if (!move) move = GetComponent<PlayerMoveController>();
-        if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
-        if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
+        CacheReferences();
     }
 
     void Awake()
     {
         cc = GetComponent<CharacterController>();
-        playerReferences = GetComponent<PlayerReferences>();
-        if (!playerRoot) playerRoot = playerReferences != null ? playerReferences.PlayerRoot : transform;
-        if (!cameraTransform && Camera.main) cameraTransform = Camera.main.transform;
-        if (!animator) animator = playerReferences != null && playerReferences.MainAnimator != null
-            ? playerReferences.MainAnimator
-            : GetComponentInChildren<Animator>();
-        if (!move) move = GetComponent<PlayerMoveController>();
-        if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
-        if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
+        CacheReferences();
         inputBlocker = GetComponent<IInputBlocker>();
-
         EnsureDodgeAudioSource();
     }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        // Runtime animator cache is initialized in Awake().
+    }
+#endif
 
     void Update()
     {
@@ -120,19 +112,18 @@ public class PlayerDodgeController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(dodgeKey) && cdTimer <= 0f)
+        if (Input.GetKeyDown(dodgeKey) && cdTimer <= 0f && CanStartDodge())
             StartDodge();
     }
 
     void StartDodge()
     {
-        // 방향 결정(락온시: 캐릭터 기준, 아니면 카메라 기준)
-        Vector2 in2 = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
-        Transform basis = (playerLockOn && playerLockOn.HasTarget) ? playerRoot
-                             : (cameraTransform ? cameraTransform : playerRoot);
-        Vector3 fwd = Flat(basis.forward), rgt = Flat(basis.right);
-        Vector3 wish = (rgt * in2.x + fwd * in2.y);
-        dodgeDir = (wish.sqrMagnitude > 0.001f) ? wish.normalized : Flat(playerRoot.forward);
+        Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+        Transform basis = GetDodgeBasis();
+        Vector3 forward = Flat(basis.forward);
+        Vector3 right = Flat(basis.right);
+        Vector3 wish = right * input.x + forward * input.y;
+        dodgeDir = wish.sqrMagnitude > 0.001f ? wish.normalized : Flat(playerRoot.forward);
 
         baseSpeed = useDistanceBased
             ? Mathf.Max(0.01f, dodgeDistance / Mathf.Max(0.01f, dodgeDuration))
@@ -142,107 +133,218 @@ public class PlayerDodgeController : MonoBehaviour
         elapsed = 0f;
         cdTimer = dodgeCooldown;
 
-        // ★ 대시 동안 일반 이동 잠금
-        if (lockMoveDuringDodge && moveLocker)
+        if (lockMoveDuringDodge && moveLocker != null)
             moveLocker.Lock("DODGE", dodgeDuration, zeroVelocityOnDodge, disableRootMotionOnDodge);
 
-        if (animator)
+        if (animator != null)
         {
-            if (!string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, true);
-            if (!string.IsNullOrEmpty(p_DodgeTrigger)) animator.SetTrigger(p_DodgeTrigger);
+            if (hasIsDodgingParam)
+                animator.SetBool(p_IsDodging, true);
+            if (hasDodgeTriggerParam)
+                animator.SetTrigger(p_DodgeTrigger);
         }
 
-        // 회피 시작 사운드 재생
-        PlayDodgeStartSound();
+        if (openPerfectDodgeWindowOnDodgeStart && perfectDodgeController != null)
+            perfectDodgeController.PerfectDodgeWindow_Pulse(perfectDodgeStartWindow);
 
+        PlayDodgeStartSound();
         OnDodgeStart?.Invoke();
+    }
+
+    public void ApplyPerfectDodgeSideStep(Transform attacker)
+    {
+        if (!sideStepOnPerfectDodge || !isDodging)
+            return;
+
+        dodgeDir = GetPerfectDodgeSideDirection(attacker);
+
+        float rewindTime = Mathf.Clamp01(perfectDodgeRewindNormalizedTime) * Mathf.Max(0.01f, dodgeDuration);
+        if (elapsed > rewindTime)
+            elapsed = rewindTime;
     }
 
     void TickDodge()
     {
         elapsed += Time.deltaTime;
         float t = Mathf.Clamp01(elapsed / Mathf.Max(0.01f, dodgeDuration));
-        float instSpeed = baseSpeed * Mathf.Max(0f, speedCurve.Evaluate(t));
+        float instantSpeed = baseSpeed * Mathf.Max(0f, speedCurve.Evaluate(t));
 
-        // 대시 이동(일반 이동 컴포넌트는 잠겨있어야 함)
-        cc.Move(dodgeDir * instSpeed * Time.deltaTime);
+        cc.Move(dodgeDir * instantSpeed * Time.deltaTime);
 
-        if (elapsed >= dodgeDuration) EndDodge();
+        if (elapsed >= dodgeDuration)
+            EndDodge();
     }
 
     void EndDodge()
     {
         isDodging = false;
-        // 안전 해제(자동해제 타이머가 이미 끝나도 중복 호출 무해)
-        if (lockMoveDuringDodge && moveLocker)
+
+        if (lockMoveDuringDodge && moveLocker != null)
             moveLocker.Unlock("DODGE");
 
-        if (animator && !string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, false);
+        if (animator != null && hasIsDodgingParam)
+            animator.SetBool(p_IsDodging, false);
 
-        // 회피 종료 사운드 (옵션)
         if (playEndSound)
             PlayDodgeEndSound();
 
         OnDodgeEnd?.Invoke();
     }
 
-    static Vector3 Flat(Vector3 v)
+    void CacheReferences()
     {
-        v.y = 0f;
-        if (v.sqrMagnitude < 0.0001f) return Vector3.forward;
-        return v.normalized;
+        playerReferences = GetComponent<PlayerReferences>();
+
+        if (playerRoot == null)
+            playerRoot = playerReferences != null ? playerReferences.PlayerRoot : transform;
+        if (cameraTransform == null && Camera.main != null)
+            cameraTransform = Camera.main.transform;
+        if (animator == null)
+        {
+            animator = playerReferences != null && playerReferences.MainAnimator != null
+                ? playerReferences.MainAnimator
+                : GetComponentInChildren<Animator>();
+        }
+        if (move == null)
+            move = GetComponent<PlayerMoveController>();
+        if (playerLockOn == null)
+            playerLockOn = GetComponent<PlayerLockOn>();
+        if (combatController == null)
+            combatController = GetComponent<PlayerCombatController>();
+        if (guardController == null)
+            guardController = GetComponent<PlayerGuardController>();
+        if (perfectDodgeController == null)
+            perfectDodgeController = GetComponent<PerfectDodgeController>();
+        if (moveLocker == null)
+            moveLocker = GetComponent<CombatMoveLocker>();
+
+        RefreshAnimatorParameterCache();
     }
 
-    // ==================== 회피 사운드 유틸 ====================
+    bool CanStartDodge()
+    {
+        if (denyDodgeWhileAttacking && combatController != null && combatController.IsAttacking)
+            return false;
+
+        if (denyDodgeWhileGuarding && guardController != null && guardController.IsGuarding)
+            return false;
+
+        if (denyDodgeWhileInHit && combatController != null && combatController.IsInHit)
+            return false;
+
+        return true;
+    }
+
+    static Vector3 Flat(Vector3 value)
+    {
+        value.y = 0f;
+        if (value.sqrMagnitude < 0.0001f)
+            return Vector3.forward;
+        return value.normalized;
+    }
+
+    Transform GetDodgeBasis()
+    {
+        if (playerLockOn != null && playerLockOn.HasTarget && playerRoot != null)
+            return playerRoot;
+
+        if (cameraTransform != null)
+            return cameraTransform;
+
+        return playerRoot != null ? playerRoot : transform;
+    }
+
+    void RefreshAnimatorParameterCache()
+    {
+        hasIsDodgingParam = HasAnimatorParameter(animator, p_IsDodging, AnimatorControllerParameterType.Bool);
+        hasDodgeTriggerParam = HasAnimatorParameter(animator, p_DodgeTrigger, AnimatorControllerParameterType.Trigger);
+    }
+
+    static bool HasAnimatorParameter(Animator targetAnimator, string parameterName, AnimatorControllerParameterType expectedType)
+    {
+        if (targetAnimator == null || string.IsNullOrWhiteSpace(parameterName))
+            return false;
+
+        if (targetAnimator.runtimeAnimatorController == null)
+            return false;
+
+        foreach (var parameter in targetAnimator.parameters)
+        {
+            if (parameter.type == expectedType && parameter.name == parameterName)
+                return true;
+        }
+
+        return false;
+    }
+
+    Vector3 GetPerfectDodgeSideDirection(Transform attacker)
+    {
+        Transform basis = GetDodgeBasis();
+        Vector3 right = Flat(basis.right);
+        float horizontalInput = Input.GetAxisRaw("Horizontal");
+
+        if (Mathf.Abs(horizontalInput) > 0.1f)
+            return right * Mathf.Sign(horizontalInput);
+
+        if (attacker != null)
+        {
+            Vector3 toAttacker = Flat(attacker.position - transform.position);
+            float attackerSide = Vector3.Dot(right, toAttacker);
+            if (Mathf.Abs(attackerSide) > 0.01f)
+                return attackerSide > 0f ? -right : right;
+        }
+
+        return Random.value < 0.5f ? -right : right;
+    }
 
     void EnsureDodgeAudioSource()
     {
-        if (dodgeAudioSource != null) return;
+        if (dodgeAudioSource != null)
+            return;
 
-        // 1) 자기 오브젝트에서 AudioSource 검색
         dodgeAudioSource = GetComponent<AudioSource>();
-        if (dodgeAudioSource != null) return;
+        if (dodgeAudioSource != null)
+            return;
 
-        // 2) 없으면 새로 추가 (3D 사운드 기본값)
         dodgeAudioSource = gameObject.AddComponent<AudioSource>();
-        dodgeAudioSource.playOnAwake  = false;
-        dodgeAudioSource.spatialBlend = 1.0f;                       // 3D 사운드
-        dodgeAudioSource.rolloffMode  = AudioRolloffMode.Linear;
-        dodgeAudioSource.maxDistance  = 30f;
+        dodgeAudioSource.playOnAwake = false;
+        dodgeAudioSource.spatialBlend = 1f;
+        dodgeAudioSource.rolloffMode = AudioRolloffMode.Linear;
+        dodgeAudioSource.maxDistance = 30f;
     }
 
     void PlayDodgeStartSound()
     {
-        if (dodgeAudioSource == null) return;
+        if (dodgeAudioSource == null)
+            return;
 
         AudioClip clip = GetRandomClip(dodgeStartClips);
-        if (clip == null) return;
+        if (clip == null)
+            return;
 
-        float pitch = 1f;
-        if (dodgePitchRandomRange.y >= dodgePitchRandomRange.x && dodgePitchRandomRange.y > 0f)
-        {
-            pitch = Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
-        }
-
-        dodgeAudioSource.pitch = pitch;
-        dodgeAudioSource.PlayOneShot(clip, dodgeVolume);
+        dodgeAudioSource.pitch = GetRandomPitch();
+        dodgeAudioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(dodgeVolume));
     }
 
     void PlayDodgeEndSound()
     {
-        if (dodgeAudioSource == null) return;
+        if (dodgeAudioSource == null)
+            return;
 
         AudioClip clip = GetRandomClip(dodgeEndClips);
-        if (clip == null) return;
+        if (clip == null)
+            return;
 
-        float pitch = 1f;
+        dodgeAudioSource.pitch = GetRandomPitch();
+        dodgeAudioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(dodgeVolume));
+    }
+
+    float GetRandomPitch()
+    {
         if (dodgePitchRandomRange.y >= dodgePitchRandomRange.x && dodgePitchRandomRange.y > 0f)
-        {
-            pitch = Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
-        }
+            return Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
 
-        dodgeAudioSource.pitch = pitch;
-        dodgeAudioSource.PlayOneShot(clip, dodgeVolume);
+        return 1f;
     }
 
     AudioClip GetRandomClip(AudioClip[] clips)
@@ -250,8 +352,8 @@ public class PlayerDodgeController : MonoBehaviour
         if (clips == null || clips.Length == 0)
             return null;
 
-        int idx = Random.Range(0, clips.Length);
-        return clips[idx];
+        int index = Random.Range(0, clips.Length);
+        return clips[index];
     }
 
     bool IsInputBlocked()
@@ -264,8 +366,8 @@ public class PlayerDodgeController : MonoBehaviour
     {
         if (!Application.isPlaying && useDistanceBased)
         {
-            Gizmos.color = new Color(0, 1, 1, 0.4f);
-            var dir = playerRoot ? Flat(playerRoot.forward) : Vector3.forward;
+            Gizmos.color = new Color(0f, 1f, 1f, 0.4f);
+            Vector3 dir = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             Gizmos.DrawRay(transform.position + Vector3.up * 0.05f, dir * dodgeDistance);
         }
     }

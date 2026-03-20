@@ -17,7 +17,7 @@ public class SystemBootLoader : MonoBehaviour
 {
     [Header("■ 기본 설정")]
     [Tooltip("부팅 후 이동할 다음 씬 이름")]
-    public string nextSceneName = "LobbyScene";
+    public string nextSceneName = "Tutorial";
 
     [Tooltip("로그 한 줄과 한 줄 사이의 간격(초). 작을수록 더 빨리 내려옴")]
     public float typingSpeed = 0.02f;
@@ -91,6 +91,11 @@ public class SystemBootLoader : MonoBehaviour
     // 내부 상태
     private string finalLogState;                        // 전체 로그 텍스트(필요 시 재사용)
     private readonly Queue<string> visibleLines = new Queue<string>(); // 화면에 보이는 로그 버퍼
+    private AsyncOperation pendingSceneLoad;
+    private bool awaitingPlayerInput;
+    private bool forceContinueRequested;
+
+    public bool IsAwaitingPlayerInput => awaitingPlayerInput;
 
     void Awake()
     {
@@ -126,6 +131,8 @@ public class SystemBootLoader : MonoBehaviour
         // 1. 비동기 씬 로딩 시작 (자동 전환은 막아둠)
         AsyncOperation op = SceneManager.LoadSceneAsync(nextSceneName);
         op.allowSceneActivation = false;
+        pendingSceneLoad = op;
+        forceContinueRequested = false;
 
         StringBuilder fullLogBuilder = new StringBuilder();
         int totalLogs = bootLogs.Length;
@@ -216,6 +223,8 @@ public class SystemBootLoader : MonoBehaviour
         if (pressAnyKeyText == null)
         {
             yield return new WaitForSeconds(1.0f);
+            awaitingPlayerInput = false;
+            pendingSceneLoad = null;
             op.allowSceneActivation = true;
             yield break;
         }
@@ -229,6 +238,7 @@ public class SystemBootLoader : MonoBehaviour
         }
 
         // 여기서부터 PRESS ANY KEY 표시 (로그 + 로딩 완료 후)
+        awaitingPlayerInput = true;
         pressAnyKeyText.gameObject.SetActive(true);
         pressAnyKeyText.text = "PRESS ANY KEY . . .";
 
@@ -240,7 +250,7 @@ public class SystemBootLoader : MonoBehaviour
 
         // READY 퍼센트는 이미 100%로 고정된 상태에서,
         // 플레이어 실제 입력을 기다림.
-        while (!IsAnyKeyPressedThisFrame())
+        while (!IsAnyKeyPressedThisFrame() && !forceContinueRequested)
         {
             yield return null;
         }
@@ -248,6 +258,8 @@ public class SystemBootLoader : MonoBehaviour
         // 점멸 종료 및 숨김
         blinkTween.Kill();
         pressAnyKeyText.gameObject.SetActive(false);
+        awaitingPlayerInput = false;
+        forceContinueRequested = false;
 
         // 6. 페이드 아웃 후 씬 활성화
         if (SceneFader.Instance != null && SceneFader.Instance.fadeCanvasGroup != null)
@@ -257,12 +269,23 @@ public class SystemBootLoader : MonoBehaviour
                 .DOFade(1f, 1.0f)
                 .OnComplete(() =>
                 {
+                    pendingSceneLoad = null;
                     op.allowSceneActivation = true;
                 });
         }
         else
         {
+            pendingSceneLoad = null;
             op.allowSceneActivation = true;
         }
+    }
+
+    public bool ForceProceedForAutomation()
+    {
+        if (!awaitingPlayerInput || pendingSceneLoad == null)
+            return false;
+
+        forceContinueRequested = true;
+        return true;
     }
 }

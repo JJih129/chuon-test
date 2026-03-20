@@ -31,6 +31,7 @@ public class ParryFeedbackController : MonoBehaviour
 
     [Tooltip("퍼펙트 회피 히트스톱 지속(Realtime)")]
     public float dodgeStopDuration = 0.12f;
+    [SerializeField] bool usePerfectDodgeHitStop = false;
 
     [Tooltip("히트스톱 동안 fixedDeltaTime도 함께 스케일링")]
     [SerializeField] bool scaleFixedDeltaTime = true;
@@ -111,7 +112,7 @@ public class ParryFeedbackController : MonoBehaviour
     public void PlayPerfectDodgeFeedback(Vector3 hitPoint, Transform attacker)
     {
         if (debugLog) Debug.Log("[ParryFX] Perfect Dodge", this);
-        if (useHitStop) StartHitStop(dodgeTimeScale, dodgeStopDuration);
+        if (useHitStop && usePerfectDodgeHitStop) StartHitStop(dodgeTimeScale, dodgeStopDuration);
         ShakeCamera(dodgeVelocity, dodgeForce);
         SpawnVfx(dodgeVfxPrefab, hitPoint);
         PlaySfx(dodgeClip);
@@ -185,6 +186,6 @@ public class ParryFeedbackController : MonoBehaviour
     void PlaySfx(AudioClip clip)
     {
         if (!clip || !audioSource) return;
-        audioSource.PlayOneShot(clip, sfxVolume);
+        audioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(sfxVolume));
     }
 }

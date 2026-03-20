@@ -103,6 +103,8 @@ public class BossBreakHUD : MonoBehaviour
     void OnBreakEnter()
     {
         if (showOnBreakEnter && hudRoot != null) SetHUDVisible(true);
+        if (!isActiveAndEnabled || breakFillImage == null)
+            return;
         if (flashRoutine != null) StopCoroutine(flashRoutine);
         flashRoutine = StartCoroutine(FlashFill());
     }

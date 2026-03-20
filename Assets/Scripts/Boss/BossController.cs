@@ -90,6 +90,11 @@ public class BossController : MonoBehaviour
     [Header("물리 이동 설정 (한글 설명)")]
     [Tooltip("보스 이동에 사용할 Rigidbody (없으면 Transform 직접 이동)")]
     [SerializeField] private Rigidbody rb;
+    [SerializeField] private CapsuleCollider bodyCollider;
+    [SerializeField] private LayerMask movementCollisionMask = ~0;
+    [SerializeField] private float movementSkin = 0.03f;
+    [SerializeField] private bool useCollisionAwareMovement = true;
+    [SerializeField] private bool useCollisionAwareRootMotion = true;
 
     [Header("공격 히트박스 (공통 컴포넌트)")]
     [Tooltip("보스 무기/팔 등에 붙은 AttackHitbox")]
@@ -111,6 +116,9 @@ public class BossController : MonoBehaviour
     [Tooltip("공격 상태에서 애니메이션 종료를 기다리는 최대 시간 (초). 안전장치 역할")]
     public float maxAttackStateWaitTime = 2.0f;
 
+    [Header("Debug")]
+    [SerializeField] private bool enableStateLogs = false;
+
     private Coroutine _stateRoutine;
     private bool _isDead;
 
@@ -125,11 +133,19 @@ public class BossController : MonoBehaviour
     [Range(0.01f, 0.5f)]
     public float moveAnimDamp = 0.1f;
 
+    [Header("Obstacle Avoidance")]
+    [SerializeField] private float obstacleProbeDistance = 2.2f;
+    [SerializeField] private float obstacleProbeAngle = 35f;
+    [SerializeField] private float obstacleSideProbeAngle = 65f;
+    [SerializeField] private float detourCommitTime = 0.35f;
+
     private static readonly int AnimParam_MoveSpeed = Animator.StringToHash("MoveSpeed");
     private static readonly int AnimParam_IsBreak   = Animator.StringToHash("IsBreak");
     private static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
 
     private float _moveBlend; // 0~1
+    private Vector3 _cachedDetourDirection;
+    private float _cachedDetourUntil;
 
     [Header("공격 패턴 목록 (한글 설명)")]
     [Tooltip("보스가 사용할 수 있는 모든 공격 패턴 리스트")]
@@ -186,6 +202,11 @@ public class BossController : MonoBehaviour
 
     void Awake()
     {
+        if (rb == null)
+            rb = GetComponent<Rigidbody>();
+        if (bodyCollider == null)
+            bodyCollider = GetComponent<CapsuleCollider>();
+
         if (attackHitbox != null)
             attackHitbox.DeactivateWindow();
 
@@ -222,6 +243,25 @@ public class BossController : MonoBehaviour
             _backstepCooldownTimer -= Time.deltaTime;
     }
 
+    void OnAnimatorMove()
+    {
+        if (_isDead || bossAnimator == null || !bossAnimator.applyRootMotion)
+            return;
+
+        if (!useCollisionAwareRootMotion || currentState != BossState.Attack)
+            return;
+
+        Vector3 delta = bossAnimator.deltaPosition;
+        delta.y = 0f;
+
+        if (delta.sqrMagnitude > 0.000001f)
+            ApplyMovementDelta(delta);
+
+        Quaternion deltaRotation = bossAnimator.deltaRotation;
+        if (deltaRotation != Quaternion.identity)
+            transform.rotation *= deltaRotation;
+    }
+
     // ==================== FSM 전이 ====================
 
     public void SetState(BossState newState)
@@ -237,7 +277,7 @@ public class BossController : MonoBehaviour
 
         var old = currentState;
         currentState = newState;
-        Debug.Log($"[BossFSM] {old} → {newState}");
+        LogState($"[BossFSM] {old} → {newState}");
 
         switch (currentState)
         {
@@ -265,6 +305,22 @@ public class BossController : MonoBehaviour
         }
     }
 
+    void LogState(string message)
+    {
+        if (!enableStateLogs)
+            return;
+
+        Debug.Log(message);
+    }
+
+    void LogStateWarning(string message)
+    {
+        if (!enableStateLogs)
+            return;
+
+        Debug.LogWarning(message);
+    }
+
     // ==================== 생존/브레이크 ====================
 
     void OnBossDied()
@@ -287,7 +343,7 @@ public class BossController : MonoBehaviour
         if (attackHitbox != null)
             attackHitbox.DeactivateWindow();
 
-        Debug.Log("[BossFSM] Boss Dead");
+        LogState("[BossFSM] Boss Dead");
 
         if (autoDestroyOnDead && _destroyRoutine == null)
             _destroyRoutine = StartCoroutine(Co_DestroyHierarchyAfterDead());
@@ -507,7 +563,7 @@ public class BossController : MonoBehaviour
 
     IEnumerator Co_HandleMove()
     {
-        Debug.Log("[BossFSM] Move: 플레이어에게 접근 시작");
+        LogState("[BossFSM] Move: 플레이어에게 접근 시작");
 
         while (currentState == BossState.Move && !_isDead)
         {
@@ -528,7 +584,7 @@ public class BossController : MonoBehaviour
                 yield break;
             }
 
-            Vector3 dir = toPlayer.normalized;
+            Vector3 dir = GetChaseDirection(toPlayer);
             if (dir.sqrMagnitude > 0.0001f)
             {
                 Quaternion look = Quaternion.LookRotation(dir);
@@ -537,10 +593,7 @@ public class BossController : MonoBehaviour
             }
 
             Vector3 delta = dir * moveSpeed * Time.deltaTime;
-            if (rb != null)
-                rb.MovePosition(rb.position + delta);
-            else
-                transform.position += delta;
+            ApplyMovementDelta(delta);
 
             UpdateMoveAnimation(1f);
             yield return null;
@@ -563,7 +616,7 @@ public class BossController : MonoBehaviour
 
     IEnumerator Co_HandleBreak()
     {
-        Debug.Log("[BossFSM] Break: 브레이크 상태 진입");
+        LogState("[BossFSM] Break: 브레이크 상태 진입");
         while (currentState == BossState.Break && !_isDead)
         {
             UpdateMoveAnimation(0f);
@@ -620,7 +673,7 @@ public class BossController : MonoBehaviour
         AttackPattern pattern = SelectPattern(distance);
         if (pattern == null)
         {
-            Debug.LogWarning("[BossFSM] 사용할 수 있는 패턴이 없음 → CombatIdle");
+            LogStateWarning("[BossFSM] 사용할 수 있는 패턴이 없음 → CombatIdle");
             SetState(BossState.CombatIdle);
             yield break;
         }
@@ -638,7 +691,7 @@ public class BossController : MonoBehaviour
         if (!string.IsNullOrEmpty(pattern.animTriggerName))
             PlayAnimTrigger(pattern.animTriggerName);
 
-        Debug.Log($"[BossFSM] Attack 패턴 실행: {pattern.patternName} ({pattern.animTriggerName})");
+        LogState($"[BossFSM] Attack 패턴 실행: {pattern.patternName} ({pattern.animTriggerName})");
 
         // 이름 기반 스테이트 대기가 아니라,
         // "Attack 상태 + 최대 대기 시간" 기준으로만 기다리는 방식 (안전장치).
@@ -684,10 +737,7 @@ public class BossController : MonoBehaviour
             if (backstepSpeed > 0f)
             {
                 Vector3 delta = backDir * backstepSpeed * Time.deltaTime;
-                if (rb != null)
-                    rb.MovePosition(rb.position + delta);
-                else
-                    transform.position += delta;
+                ApplyMovementDelta(delta);
             }
 
             elapsed += Time.deltaTime;
@@ -750,6 +800,236 @@ public class BossController : MonoBehaviour
         );
 
         bossAnimator.SetFloat(AnimParam_MoveSpeed, _moveBlend);
+    }
+
+    Vector3 GetChaseDirection(Vector3 toPlayer)
+    {
+        Vector3 desired = toPlayer;
+        desired.y = 0f;
+
+        if (desired.sqrMagnitude <= 0.0001f)
+            return Vector3.zero;
+
+        desired.Normalize();
+
+        if (_cachedDetourUntil > Time.time)
+        {
+            bool detourStillOpen = HasMovementClearance(transform.position, _cachedDetourDirection, obstacleProbeDistance * 0.85f);
+            bool directPathStillBlocked = !HasMovementClearance(transform.position, desired, obstacleProbeDistance * 0.75f);
+            if (detourStillOpen && directPathStillBlocked)
+                return _cachedDetourDirection;
+        }
+
+        _cachedDetourUntil = 0f;
+
+        if (HasMovementClearance(transform.position, desired, obstacleProbeDistance))
+            return desired;
+
+        Vector3 detour = FindDetourDirection(desired);
+        if (detour.sqrMagnitude > 0.0001f)
+        {
+            _cachedDetourDirection = detour;
+            _cachedDetourUntil = Time.time + detourCommitTime;
+            return detour;
+        }
+
+        return desired;
+    }
+
+    Vector3 FindDetourDirection(Vector3 desired)
+    {
+        float[] angles =
+        {
+            obstacleProbeAngle,
+            -obstacleProbeAngle,
+            obstacleSideProbeAngle,
+            -obstacleSideProbeAngle,
+            90f,
+            -90f
+        };
+
+        Vector3 bestDirection = Vector3.zero;
+        float bestScore = float.MinValue;
+
+        for (int i = 0; i < angles.Length; i++)
+        {
+            Vector3 candidate = Quaternion.AngleAxis(angles[i], Vector3.up) * desired;
+            float clearance = MeasureMovementClearance(transform.position, candidate, obstacleProbeDistance);
+            if (clearance <= movementSkin)
+                continue;
+
+            float alignment = Vector3.Dot(candidate, desired);
+            float score = alignment + (clearance / Mathf.Max(0.01f, obstacleProbeDistance));
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestDirection = candidate.normalized;
+            }
+        }
+
+        return bestDirection;
+    }
+
+    bool HasMovementClearance(Vector3 startPos, Vector3 direction, float distance)
+    {
+        return MeasureMovementClearance(startPos, direction, distance) >= distance - movementSkin;
+    }
+
+    float MeasureMovementClearance(Vector3 startPos, Vector3 direction, float distance)
+    {
+        if (bodyCollider == null || !bodyCollider.enabled)
+            return distance;
+
+        if (distance <= 0.0001f || direction.sqrMagnitude <= 0.0001f)
+            return 0f;
+
+        direction.y = 0f;
+        direction.Normalize();
+
+        GetCapsuleWorld(startPos, out Vector3 point1, out Vector3 point2, out float radius);
+
+        RaycastHit[] hits = Physics.CapsuleCastAll(
+            point1,
+            point2,
+            radius,
+            direction,
+            distance + movementSkin,
+            movementCollisionMask,
+            QueryTriggerInteraction.Ignore);
+
+        float nearestDistance = distance + movementSkin;
+        bool found = false;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit hit = hits[i];
+            if (hit.collider == null)
+                continue;
+            if (hit.collider.transform.IsChildOf(transform))
+                continue;
+            if (playerTarget != null && hit.collider.transform.IsChildOf(playerTarget))
+                continue;
+
+            found = true;
+            if (hit.distance < nearestDistance)
+                nearestDistance = hit.distance;
+        }
+
+        return found ? Mathf.Max(0f, nearestDistance - movementSkin) : distance;
+    }
+
+    void ApplyMovementDelta(Vector3 delta)
+    {
+        if (delta.sqrMagnitude <= 0.000001f)
+            return;
+
+        Vector3 startPos = rb != null ? rb.position : transform.position;
+        Vector3 resolved = useCollisionAwareMovement ? ResolveMovementDelta(startPos, delta) : delta;
+        Vector3 targetPos = startPos + resolved;
+
+        if (rb != null)
+            rb.MovePosition(targetPos);
+        else
+            transform.position = targetPos;
+    }
+
+    Vector3 ResolveMovementDelta(Vector3 startPos, Vector3 delta)
+    {
+        if (bodyCollider == null || !bodyCollider.enabled)
+            return delta;
+
+        Vector3 currentPos = startPos;
+        Vector3 remaining = delta;
+        Vector3 moved = Vector3.zero;
+
+        for (int i = 0; i < 2; i++)
+        {
+            if (remaining.sqrMagnitude <= 0.000001f)
+                break;
+
+            if (!TrySweep(currentPos, remaining, out RaycastHit hit))
+            {
+                moved += remaining;
+                break;
+            }
+
+            float distance = remaining.magnitude;
+            Vector3 dir = remaining / distance;
+            float safeDistance = Mathf.Max(0f, hit.distance - movementSkin);
+            Vector3 safeMove = dir * safeDistance;
+
+            moved += safeMove;
+            currentPos += safeMove;
+
+            Vector3 leftover = remaining - dir * safeDistance;
+            remaining = Vector3.ProjectOnPlane(leftover, hit.normal);
+            remaining.y = 0f;
+        }
+
+        return moved;
+    }
+
+    bool TrySweep(Vector3 currentPos, Vector3 delta, out RaycastHit nearestHit)
+    {
+        nearestHit = default;
+
+        float distance = delta.magnitude;
+        if (distance <= 0.000001f)
+            return false;
+
+        GetCapsuleWorld(currentPos, out Vector3 point1, out Vector3 point2, out float radius);
+
+        RaycastHit[] hits = Physics.CapsuleCastAll(
+            point1,
+            point2,
+            radius,
+            delta / distance,
+            distance + movementSkin,
+            movementCollisionMask,
+            QueryTriggerInteraction.Ignore);
+
+        bool found = false;
+        float nearestDistance = float.MaxValue;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit hit = hits[i];
+            if (hit.collider == null)
+                continue;
+            if (hit.collider.transform.IsChildOf(transform))
+                continue;
+
+            if (!found || hit.distance < nearestDistance)
+            {
+                found = true;
+                nearestDistance = hit.distance;
+                nearestHit = hit;
+            }
+        }
+
+        return found;
+    }
+
+    void GetCapsuleWorld(Vector3 currentPos, out Vector3 point1, out Vector3 point2, out float radius)
+    {
+        Vector3 lossy = transform.lossyScale;
+        Vector3 scaledCenter = Vector3.Scale(bodyCollider.center, lossy);
+        Vector3 center = currentPos + transform.rotation * scaledCenter;
+
+        int direction = bodyCollider.direction;
+        Vector3 axis = direction == 0 ? transform.right : (direction == 2 ? transform.forward : transform.up);
+
+        float axisScale = direction == 0 ? Mathf.Abs(lossy.x) : (direction == 2 ? Mathf.Abs(lossy.z) : Mathf.Abs(lossy.y));
+        float radiusScaleA = direction == 0 ? Mathf.Abs(lossy.y) : Mathf.Abs(lossy.x);
+        float radiusScaleB = direction == 2 ? Mathf.Abs(lossy.y) : Mathf.Abs(lossy.z);
+        radius = Mathf.Max(0.01f, bodyCollider.radius * Mathf.Max(radiusScaleA, radiusScaleB) - movementSkin);
+
+        float height = Mathf.Max(bodyCollider.height * axisScale, radius * 2f);
+        float half = Mathf.Max(0f, (height * 0.5f) - radius);
+
+        point1 = center + axis * half;
+        point2 = center - axis * half;
     }
 
     // ==================== (선택) 루트 콜라이더 충돌 ====================

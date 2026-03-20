@@ -23,6 +23,21 @@ public static class FastMCPUnityAPI
     public static void SearchAssets(string filterName, string searchType) { Execute("search_assets", filterName, searchType); }
     public static void SetInspectorValue(string objectName, string componentName, string fieldName, string value) { Execute("set_inspector_value", objectName, componentName, fieldName, value); }
     public static void RefreshAssets() { Execute("refresh_assets"); }
+    public static void SyncPauseOptionsChrome() { PauseOptionsChromeSyncUtility.RunFromFastMcp(); }
+    public static void SyncPlayerWiring() { PlayerWiringSyncUtility.RunFromFastMcp(); }
+    public static void RunGameplayRegressionChecks() { GameplayRegressionValidator.RunFromFastMcp(); }
+    public static void StartPlayModeSmokeTest() { PlayModeSmokeTestRunner.StartFromFastMcp(); }
+    public static void GetPlayModeSmokeTestStatus() { Debug.Log(JsonUtility.ToJson(PlayModeSmokeTestRunner.GetStatus(), true)); }
+    public static void StartBossUltimateScenarioTest() { BossUltimateScenarioTestRunner.StartFromFastMcp(); }
+    public static void GetBossUltimateScenarioTestStatus() { Debug.Log(JsonUtility.ToJson(BossUltimateScenarioTestRunner.GetStatus(), true)); }
+    public static void StartGuardParryBreakScenarioTest() { GuardParryBreakScenarioTestRunner.StartFromFastMcp(); }
+    public static void GetGuardParryBreakScenarioTestStatus() { Debug.Log(JsonUtility.ToJson(GuardParryBreakScenarioTestRunner.GetStatus(), true)); }
+    public static void StartUiFlowScenarioTest() { UIFlowScenarioTestRunner.StartFromFastMcp(); }
+    public static void GetUiFlowScenarioTestStatus() { Debug.Log(JsonUtility.ToJson(UIFlowScenarioTestRunner.GetStatus(), true)); }
+    public static void StartPauseUiScenarioTest() { PauseUiScenarioTestRunner.StartFromFastMcp(); }
+    public static void GetPauseUiScenarioTestStatus() { Debug.Log(JsonUtility.ToJson(PauseUiScenarioTestRunner.GetStatus(), true)); }
+    public static void StartFullValidationSuite() { FullValidationSuiteRunner.StartFromFastMcp(); }
+    public static void GetFullValidationSuiteStatus() { Debug.Log(JsonUtility.ToJson(FullValidationSuiteRunner.GetStatus(), true)); }
     public static void EnterPlayMode() { Execute("enter_playmode"); }
     public static void ExitPlayMode() { Execute("exit_playmode"); }
     public static void CreateBasic3DPlayerRig(string playerName) { Execute("create_basic_3d_player_rig", playerName); }

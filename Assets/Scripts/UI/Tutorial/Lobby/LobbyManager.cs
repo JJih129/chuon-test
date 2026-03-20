@@ -28,7 +28,7 @@ public class LobbyManager : MonoBehaviour
 
     [Header("■ 엘리베이터 상호작용")]
     public GameObject elevatorPanel;
-    public string nextSceneName = "HangarScene";
+    public string nextSceneName = "MainScene";
 
     [Header("■ 엘리베이터 문 설정")]
     public Transform doorLeft;

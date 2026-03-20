@@ -37,6 +37,11 @@ public class PlayerVisualRig : MonoBehaviour
     }
 #endif
 
+    public void SyncSerializedReferences()
+    {
+        AutoWire();
+    }
+
     void AutoWire()
     {
         if (!visualRoot)

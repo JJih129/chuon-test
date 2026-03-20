@@ -1,10 +1,10 @@
 using UnityEngine;
 
-// [Çì´õ] ¿¤¸®º£ÀÌÅÍ È£Ãâ/Ãş ¼±ÅÃ »óÈ£ÀÛ¿ë
-// - elevator: Á¦¾îÇÒ ElevatorController
-// - targetStopIndex: ÀÌµ¿ÇÒ Á¤Â÷ ÀÎµ¦½º(0ºÎÅÍ)
-// - usePlayerAsRider: »óÈ£ÀÛ¿ëÇÑ ÇÃ·¹ÀÌ¾î¸¦ Å¾½Â Ã³¸®
-// - playSfx: SFX Àç»ı
+// [í—¤ë”] ì—˜ë¦¬ë² ì´í„° í˜¸ì¶œ/ì¸µ ì„ íƒ ìƒí˜¸ì‘ìš©
+// - elevator: ì œì–´í•  ElevatorController
+// - targetStopIndex: ì´ë™í•  ì •ì°¨ ì¸ë±ìŠ¤(0ë¶€í„°)
+// - usePlayerAsRider: ìƒí˜¸ì‘ìš©í•œ í”Œë ˆì´ì–´ë¥¼ íƒ‘ìŠ¹ ì²˜ë¦¬
+// - playSfx: SFX ì¬ìƒ
 // - sfx: AudioSource
 public class ElevatorPanelInteractable : BaseInteractable
 {
@@ -16,7 +16,7 @@ public class ElevatorPanelInteractable : BaseInteractable
 
     public override string GetPromptText()
     {
-        return string.IsNullOrEmpty(promptText) ? $"F: {targetStopIndex}Ãş È£Ãâ" : promptText;
+        return string.IsNullOrEmpty(promptText) ? $"F: {targetStopIndex}ì¸µ í˜¸ì¶œ" : promptText;
     }
 
     public override bool TryInteract(object invoker = null)
@@ -34,7 +34,7 @@ public class ElevatorPanelInteractable : BaseInteractable
             }
         }
 
-        if (playSfx && sfx) sfx.Play();
+        if (playSfx && sfx && sfx.clip) sfx.PlayOneShot(sfx.clip, AudioOptionsRuntime.ScaleSfx(sfx.volume));
         elevator.CallTo(targetStopIndex, rider);
         return true;
     }

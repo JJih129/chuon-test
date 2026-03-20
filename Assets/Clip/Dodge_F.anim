@@ -381085,6 +381085,6 @@ AnimationClip:
     functionName: PerfectDodgeWindow_Pulse
     data: 
     objectReferenceParameter: {fileID: 0}
-    floatParameter: 0.2
+    floatParameter: 0.28
     intParameter: 0
     messageOptions: 0

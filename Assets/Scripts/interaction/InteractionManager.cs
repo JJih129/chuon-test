@@ -228,17 +228,6 @@ public class InteractionManager : MonoBehaviour
     {
         if (IsInputBlocked())
             return false;
-
-        if (inputRouter != null)
-        {
-            var t = inputRouter.GetType();
-            var m = t.GetMethod("IsInteractPressed");
-            if (m != null)
-            {
-                var r = m.Invoke(inputRouter, null);
-                if (r is bool b) return b;
-            }
-        }
         return Input.GetKeyDown(interactKey);
     }
 
@@ -247,25 +236,11 @@ public class InteractionManager : MonoBehaviour
         if (_lockOnController == null)
             TryResolveLockOnController();
 
-        if (_lockOnController != null)
-            return _lockOnController.IsLockedOn();
-
-        return TryReadLegacyBool(lockOnReader, "IsLockedOn")
-            || TryReadLegacyBool(lockOnReader, "IsLockOn");
+        return _lockOnController != null && _lockOnController.IsLockedOn();
     }
 
     bool IsAiming()
     {
-        if (inputRouter != null)
-        {
-            var t = inputRouter.GetType();
-            var m = t.GetMethod("IsAiming");
-            if (m != null)
-            {
-                var r = m.Invoke(inputRouter, null);
-                if (r is bool b) return b;
-            }
-        }
         return false;
     }
 
@@ -288,12 +263,6 @@ public class InteractionManager : MonoBehaviour
         if (_lockOnController != null)
             return;
 
-        if (lockOnReader is ILockOnController directLockOn)
-        {
-            _lockOnController = directLockOn;
-            return;
-        }
-
         var root = PlayerRoot;
         if (root != null)
         {
@@ -312,31 +281,6 @@ public class InteractionManager : MonoBehaviour
         var fallbackPlayerLockOn = FindFirstObjectByType<PlayerLockOn>();
         if (fallbackPlayerLockOn != null)
             _lockOnController = fallbackPlayerLockOn;
-    }
-
-    bool TryReadLegacyBool(UnityEngine.Object source, string name)
-    {
-        if (source == null)
-            return false;
-
-        var type = source.GetType();
-        var property = type.GetProperty(name);
-        if (property != null)
-        {
-            var propertyValue = property.GetValue(source, null);
-            if (propertyValue is bool propertyBool)
-                return propertyBool;
-        }
-
-        var method = type.GetMethod(name);
-        if (method != null)
-        {
-            var result = method.Invoke(source, null);
-            if (result is bool methodBool)
-                return methodBool;
-        }
-
-        return false;
     }
 
     public bool SetInteractionInputBlocked(bool blocked)

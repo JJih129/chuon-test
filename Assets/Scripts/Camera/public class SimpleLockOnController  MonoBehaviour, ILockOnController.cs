@@ -5,6 +5,8 @@
 
 using UnityEngine;
 
+[AddComponentMenu("")]
+[DisallowMultipleComponent]
 public class SimpleLockOnController : MonoBehaviour, ILockOnController
 {
     // ===== 蹂???ㅻ뜑(?쒓? ?ㅻ챸) =====
