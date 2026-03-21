@@ -29,6 +29,7 @@ public class PlayerHealth : MonoBehaviour, IHealth
     [SerializeField] private GameObject hitEffectPrefab;
     [Tooltip("카메라 셰이크(선택)")]
     [SerializeField] private CameraShake cameraShake;
+    [SerializeField] private bool useCombatFeelPolicy = true;
     [Tooltip("리액션 재생 모드 선택")]
     [SerializeField] private ReactionMode reactionMode = ReactionMode.CombatController;
 
@@ -50,19 +51,17 @@ public class PlayerHealth : MonoBehaviour, IHealth
 
     // ⑤ 디버그
     [Header("⑤ 디버그")]
-    [SerializeField] private bool debugLog = true;
+    [SerializeField] private bool debugLog = false;
 
     // 내부 상태
     private bool _isInvincible;
     private float _invTimer;
     private float _realtimeInvincibleUntil;
     private bool _isStaggered;
-
     // Animator 캐시
     private int _hitHash, _hurtHash;
     private bool _hitExists, _hurtExists, _hitIsTrigger, _hurtIsTrigger;
     private RuntimeAnimatorController _cachedCtrl;
-    private bool _didRescanAfterSwap;
     private PlayerReferences _playerReferences;
 
     // ── IHealth ───────────────────────────────────────────────
@@ -70,7 +69,18 @@ public class PlayerHealth : MonoBehaviour, IHealth
     public int MaxHP => maxHP;
     public bool IsDead => currentHP <= 0;
     public bool IsStaggered => _isStaggered;
-    public bool isInvincible { get => _isInvincible; set { _isInvincible = value; if (!value) _invTimer = 0f; } }
+    public bool isInvincible
+    {
+        get => _isInvincible;
+        set
+        {
+            _isInvincible = value;
+            if (!value)
+                _invTimer = 0f;
+
+            RefreshRuntimeTickState();
+        }
+    }
 
     public event Action<int, int> OnHPChanged;
     public event Action<int, int> OnHealthChanged;
@@ -113,25 +123,20 @@ public class PlayerHealth : MonoBehaviour, IHealth
         }
 
         RaiseHpEvents();
+        RefreshRuntimeTickState();
     }
 
     void Update()
     {
-        if (_isInvincible)
+        if (!_isInvincible)
         {
-            _invTimer -= Time.deltaTime;
-            if (_invTimer <= 0f) isInvincible = false;
+            RefreshRuntimeTickState();
+            return;
         }
 
-        if (reactionMode == ReactionMode.AnimatorParam && animator)
-        {
-            if (_cachedCtrl != animator.runtimeAnimatorController && !_didRescanAfterSwap)
-            {
-                _didRescanAfterSwap = true;
-                CacheAnimatorParams();
-                if (debugLog) Debug.Log("[Health] Animator controller swapped -> re-scan params", this);
-            }
-        }
+        _invTimer -= Time.deltaTime;
+        if (_invTimer <= 0f)
+            isInvincible = false;
     }
 
     // ── Damage: 일반(리액션 포함) ──────────────────────────────
@@ -150,8 +155,14 @@ public class PlayerHealth : MonoBehaviour, IHealth
         int before = currentHP;
         currentHP = Mathf.Max(0, currentHP - amount);
 
-        if (hitEffectPrefab) Instantiate(hitEffectPrefab, transform.position, Quaternion.identity);
-        if (cameraShake) cameraShake.Shake(0.25f, 0.15f);
+        if (hitEffectPrefab) TransientVfxPool.Spawn(hitEffectPrefab, transform.position, Quaternion.identity);
+        if (cameraShake)
+        {
+            CombatFeelPreset preset = useCombatFeelPolicy
+                ? CombatFeelPolicy.GetPlayerHitPreset(amount, heavyDamageThreshold)
+                : new CombatFeelPreset(1f, 0f, 0f, 0.25f, 0.15f, 1f, 1f, 1f);
+            cameraShake.Shake(preset.CameraShakeAmplitude, preset.CameraShakeDuration);
+        }
 
         // 리액션: 일반 히트만 재생
         PlayReaction(amount);
@@ -228,6 +239,12 @@ public class PlayerHealth : MonoBehaviour, IHealth
         // AnimatorParam 모드
         if (!animator) { if (debugLog) Debug.LogWarning("[Health] Animator NULL (AnimatorParam mode)", this); return; }
 
+        if (_cachedCtrl != animator.runtimeAnimatorController)
+        {
+            CacheAnimatorParams();
+            if (debugLog) Debug.Log("[Health] Animator controller swapped -> lazy re-scan params", this);
+        }
+
         if (_hitExists) { SetParam(animator, _hitHash, hitParamName, _hitIsTrigger); return; }
         if (_hurtExists){ SetParam(animator, _hurtHash, hurtParamName, _hurtIsTrigger); return; }
 
@@ -259,7 +276,6 @@ public class PlayerHealth : MonoBehaviour, IHealth
 
     void CacheAnimatorParams()
     {
-        _didRescanAfterSwap = false;
         _cachedCtrl = animator ? animator.runtimeAnimatorController : null;
         _hitExists = _hurtExists = _hitIsTrigger = _hurtIsTrigger = false;
         _hitHash = _hurtHash = 0;
@@ -281,6 +297,11 @@ public class PlayerHealth : MonoBehaviour, IHealth
                 _hurtIsTrigger = (p.type == AnimatorControllerParameterType.Trigger);
             }
         }
+    }
+
+    void RefreshRuntimeTickState()
+    {
+        enabled = _isInvincible;
     }
 
     void SetParam(Animator anim, int hash, string name, bool isTrigger)

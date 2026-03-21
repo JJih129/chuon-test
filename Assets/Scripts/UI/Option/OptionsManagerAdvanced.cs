@@ -2,6 +2,8 @@
 // 비디오/오디오/입력 옵션매니저 (경고 대응된 전체 파일)
 // (파일 본문은 업로드된 버전과 동일하되 refreshRate 사용을 피하도록 작성)
 
+#pragma warning disable CS0618
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -74,6 +76,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
     {
         AudioOptionsRuntime.RefreshFromPrefs();
         VideoOptionsRuntime.RefreshFromPrefs();
+        FramePacingRuntime.RefreshFromPrefs();
 
         OnBrightnessChanged -= VideoOptionsRuntime.SetBrightness;
         OnBrightnessChanged += VideoOptionsRuntime.SetBrightness;
@@ -142,7 +145,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
         {
             vSyncToggle.onValueChanged.RemoveAllListeners();
             vSyncToggle.onValueChanged.AddListener(OnVSyncToggled);
-            vSyncToggle.isOn = PlayerPrefs.GetInt(K_VSYNC, QualitySettings.vSyncCount > 0 ? 1 : 0) == 1;
+            vSyncToggle.isOn = PlayerPrefs.GetInt(K_VSYNC, 0) == 1;
         }
 
         if (brightnessSlider != null)
@@ -156,7 +159,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
         {
             motionBlurToggle.onValueChanged.RemoveAllListeners();
             motionBlurToggle.onValueChanged.AddListener(v => { PlayerPrefs.SetInt(K_MBLUR, v ? 1 : 0); OnMotionBlurToggled?.Invoke(v); });
-            motionBlurToggle.isOn = PlayerPrefs.GetInt(K_MBLUR, 1) == 1;
+            motionBlurToggle.isOn = PlayerPrefs.GetInt(K_MBLUR, 0) == 1;
         }
 
         if (masterSlider != null) { masterSlider.onValueChanged.RemoveAllListeners(); masterSlider.onValueChanged.AddListener(v => SetAudioParam(paramMaster, v)); masterSlider.value = PlayerPrefs.GetFloat(K_MASTER, 1f); }
@@ -195,8 +198,10 @@ public class OptionsManagerAdvanced : MonoBehaviour
         int idx = PlayerPrefs.GetInt(K_RES, resolutionDropdown != null ? resolutionDropdown.value : 0);
         bool fs = PlayerPrefs.GetInt(K_FULLSCREEN, Screen.fullScreen ? 1 : 0) == 1;
         ApplyResolutionIndex(idx, fs);
-        bool vs = PlayerPrefs.GetInt(K_VSYNC, QualitySettings.vSyncCount > 0 ? 1 : 0) == 1;
+        bool vs = PlayerPrefs.GetInt(K_VSYNC, 0) == 1;
         QualitySettings.vSyncCount = vs ? 1 : 0;
+        FramePacingRuntime.RefreshFromPrefs();
+        enabled = _waitingForKey;
     }
 
     void OnResolutionChanged(int idx)
@@ -216,6 +221,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
     {
         PlayerPrefs.SetInt(K_VSYNC, v ? 1 : 0);
         QualitySettings.vSyncCount = v ? 1 : 0;
+        FramePacingRuntime.RefreshFromPrefs();
     }
 
     void ApplyResolutionIndex(int idx, bool fullscreen)
@@ -409,6 +415,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
         if (_waitingForKey) return;
         _currentRebindButton = b;
         _waitingForKey = true;
+        enabled = true;
         var label = b.GetComponentInChildren<Text>();
         if (label != null) label.text = "Press any key...";
     }
@@ -423,19 +430,23 @@ public class OptionsManagerAdvanced : MonoBehaviour
         PlayerPrefs.Save();
         _keybinds[keyName] = kc;
         _currentRebindButton = null;
+        enabled = false;
     }
 
     void Update()
     {
-        if (_waitingForKey && _currentRebindButton != null)
+        if (!_waitingForKey || _currentRebindButton == null)
         {
-            foreach (KeyCode kc in Enum.GetValues(typeof(KeyCode)))
+            enabled = false;
+            return;
+        }
+
+        foreach (KeyCode kc in Enum.GetValues(typeof(KeyCode)))
+        {
+            if (Input.GetKeyDown(kc))
             {
-                if (Input.GetKeyDown(kc))
-                {
-                    FinishRebind(_currentRebindButton, kc);
-                    break;
-                }
+                FinishRebind(_currentRebindButton, kc);
+                break;
             }
         }
     }
@@ -455,10 +466,13 @@ public class OptionsManagerAdvanced : MonoBehaviour
     {
         ApplyAudioInitial();
         OnBrightnessChanged?.Invoke(PlayerPrefs.GetFloat(K_BRIGHT, 1f));
-        OnMotionBlurToggled?.Invoke(PlayerPrefs.GetInt(K_MBLUR, 1) == 1);
+        OnMotionBlurToggled?.Invoke(PlayerPrefs.GetInt(K_MBLUR, 0) == 1);
         OnSubtitleSizeChanged?.Invoke(PlayerPrefs.GetFloat(K_SUB_SIZE, 1f));
         OnSubtitleBgToggled?.Invoke(PlayerPrefs.GetInt(K_SUB_BG, 1) == 1);
         OnCameraShakeStrengthChanged?.Invoke(PlayerPrefs.GetFloat(K_CAM_SHAKE, 1f));
+        FramePacingRuntime.RefreshFromPrefs();
         Debug.Log("[OptionsManagerAdvanced] LoadAll applied.");
     }
 }
+
+#pragma warning restore CS0618

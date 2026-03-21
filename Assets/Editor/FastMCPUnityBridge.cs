@@ -124,6 +124,12 @@ public static class FastMCPUnityBridge
             _thread.Start();
             Debug.Log(string.Format("[FastMCPBridge] Listening on {0}:{1}", Host, Port));
         }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+        {
+            Debug.LogWarning(string.Format(
+                "[FastMCPBridge] Port {0} is already in use. Another Unity bridge may already be running.",
+                Port));
+        }
         catch (Exception ex)
         {
             Debug.LogError("[FastMCPBridge] Failed to start: " + ex);

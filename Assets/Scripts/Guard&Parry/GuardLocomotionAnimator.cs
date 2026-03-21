@@ -44,6 +44,11 @@ public class GuardLocomotionAnimator : MonoBehaviour
     int hIsGuard, hSpd, hX, hY;
     Vector3 prevPos; bool hasPrev;
     bool prevGuarding;
+    float _lastSpeedValue = float.NaN;
+    float _lastXValue = float.NaN;
+    float _lastYValue = float.NaN;
+
+    const float AnimatorWriteEpsilon = 0.0025f;
 
     void Awake()
     {
@@ -68,6 +73,11 @@ public class GuardLocomotionAnimator : MonoBehaviour
         if (!animator) return;
 
         bool isGuard = hIsGuard != 0 && animator.GetBool(hIsGuard);
+        if (!isGuard && !prevGuarding)
+        {
+            ApplyAnimatorValues(0f, 0f, 0f);
+            return;
+        }
 
         Vector3 v = GetWorldVelocity();
         float spd = v.magnitude;
@@ -103,14 +113,38 @@ public class GuardLocomotionAnimator : MonoBehaviour
         float ty = isGuard ? ny : 0f;
         float ts = isGuard ? s1d : 0f;
 
-        if (hSpd != 0) animator.SetFloat(hSpd, ts, dampTime, Time.deltaTime);
-        if (use2DBlend)
-        {
-            if (hX != 0) animator.SetFloat(hX, tx, dampTime, Time.deltaTime);
-            if (hY != 0) animator.SetFloat(hY, ty, dampTime, Time.deltaTime);
-        }
+        ApplyAnimatorValues(ts, tx, ty);
 
         prevGuarding = isGuard;
+    }
+
+    void ApplyAnimatorValues(float speedValue, float xValue, float yValue)
+    {
+        if (hSpd != 0 && ShouldWriteAnimatorValue(_lastSpeedValue, speedValue))
+        {
+            animator.SetFloat(hSpd, speedValue, dampTime, Time.deltaTime);
+            _lastSpeedValue = speedValue;
+        }
+
+        if (!use2DBlend)
+            return;
+
+        if (hX != 0 && ShouldWriteAnimatorValue(_lastXValue, xValue))
+        {
+            animator.SetFloat(hX, xValue, dampTime, Time.deltaTime);
+            _lastXValue = xValue;
+        }
+
+        if (hY != 0 && ShouldWriteAnimatorValue(_lastYValue, yValue))
+        {
+            animator.SetFloat(hY, yValue, dampTime, Time.deltaTime);
+            _lastYValue = yValue;
+        }
+    }
+
+    static bool ShouldWriteAnimatorValue(float cached, float next)
+    {
+        return float.IsNaN(cached) || Mathf.Abs(cached - next) > AnimatorWriteEpsilon;
     }
 
     Vector3 GetWorldVelocity()

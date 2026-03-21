@@ -581,11 +581,11 @@ SkinnedMeshRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2740733817423797607}
   m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
-  m_MotionVectors: 1
+  m_MotionVectors: 0
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 3
@@ -617,7 +617,7 @@ SkinnedMeshRenderer:
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
-  m_SkinnedMotionVectors: 1
+  m_SkinnedMotionVectors: 0
   m_Mesh: {fileID: 6559932801383998556, guid: bfdbf6177b8629c4188c0b56bfc48656, type: 3}
   m_Bones:
   - {fileID: 8580716781461777498}
@@ -1150,13 +1150,14 @@ MonoBehaviour:
   invincibleDuration: 1
   hitEffectPrefab: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
   cameraShake: {fileID: 0}
+  useCombatFeelPolicy: 1
   reactionMode: 0
   combatController: {fileID: 3625136038103508255}
   heavyDamageThreshold: 25
   animator: {fileID: 5777839405900600649}
   hitParamName: Hit
   hurtParamName: Hurt
-  debugLog: 1
+  debugLog: 0
 --- !u!114 &710101040890137229
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1334,9 +1335,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3673e3fb2819c3d45a0678bf87932a9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  inputBufferTime: 0.25
-  comboResetTime: 0.6
-  minClickInterval: 0.05
+  inputBufferTime: 0.35
+  comboResetTime: 0.75
+  minClickInterval: 0.035
+  comboChainBufferTime: 0.45
+  comboLateGraceNormalized: 0.08
+  attackTransitionGraceSeconds: 0.08
   firstLight: {fileID: 11400000, guid: 3a9f06ed13cc7cc47b6a05eaf9e80db1, type: 2}
   firstHeavy: {fileID: 11400000, guid: dca78e9929952bf4bab1a2cd6984b8f6, type: 2}
   animator: {fileID: 5777839405900600649}
@@ -1345,7 +1349,16 @@ MonoBehaviour:
   lockMovementWhileAttacking: 1
   locomotionDuringAttack: 0
   speedParam: speed
+  playerRoot: {fileID: 0}
+  characterController: {fileID: 0}
+  playerLockOn: {fileID: 0}
+  perfectDodgeController: {fileID: 0}
+  usePerfectDodgeAttackAssist: 1
+  perfectDodgeAssistStopDistance: 0.2
+  perfectDodgeAssistMinRange: 0
+  snapFacingToPerfectDodgeTarget: 1
   endAttackIfStuckSeconds: 2
+  logAttackTimeoutFailsafe: 0
   lightHitSeconds: 0.35
   heavyHitSeconds: 0.7
   knockdownInvulnSeconds: 1.2
@@ -1391,8 +1404,43 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
+  preferDedicatedRuntimeSequenceCamera: 1
+  useUltimateStageRuntime: 1
+  runtimeStage: {fileID: 0}
+  useScriptedSequence: 1
+  allowDirectorFallbackWhenScriptedUnavailable: 0
+  scriptedCameraPriority: 100
+  scriptedAnimator: {fileID: 0}
+  slashBurstSpawner: {fileID: 0}
+  finisherImpactPrefab: {fileID: 0}
+  finisherImpactPoint: {fileID: 0}
+  swordFocusOverride: {fileID: 0}
+  scriptedStartTrigger: Ultimate_Start
+  scriptedWalkTrigger: Ultimate_Walk
+  scriptedMultiHitCount: 7
+  scriptedCloseupDuration: 0.32
+  scriptedWideDuration: 0.45
+  scriptedHitInterval: 0.11
+  scriptedFinisherHold: 0.35
+  scriptedWalkOutDuration: 1.05
+  scriptedStrikeDistance: 1.45
+  scriptedFinisherDistance: 1.1
+  scriptedVictimCenterDistance: 2.2
+  scriptedVictimCenterHeight: 0
+  scriptedStageVictimSideOffset: 0.42
+  scriptedStagePlayerSideOffset: -0.95
+  scriptedStagePlayerForwardOffset: 0.55
+  scriptedStageStrikeDistance: 2.2
+  scriptedStageFinisherDistance: 1.65
+  scriptedCloseupDistance: 0.65
+  scriptedWideDistance: 5.4
+  scriptedWalkCameraDistance: 2.8
+  scriptedWalkCameraHeight: 1.45
   screenFX: {fileID: 0}
   glassCrackPrefab: {fileID: 0}
+  enableDebugFillGaugeShortcut: 1
+  debugFillGaugeKey: 49
+  enableUltimateCameraDebugLogs: 0
 --- !u!114 &794500035358795120
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1565,6 +1613,8 @@ MonoBehaviour:
   propAlpha: _Alpha
   baseIntensity: 1.2
   baseScroll: 2
+  presentationPlayerOverride: {fileID: 0}
+  presentationSpawnRootOverride: {fileID: 0}
 --- !u!114 &6781616526493563612
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1605,6 +1655,8 @@ MonoBehaviour:
   interactKey: 102
   hideWhenAiming: 1
   debugDrawRay: 0
+  debugLogs: 0
+  interactionCheckInterval: 0.04
   hoverGrace: 0.12
 --- !u!114 &804239227037923123
 MonoBehaviour:
@@ -1638,7 +1690,7 @@ MonoBehaviour:
   feedback: {fileID: 2570013235222381821}
   hitTriggerParam: Hit
   guardBlockTriggerParam: GuardBlock
-  frontArcDegrees: 100
+  frontArcDegrees: 120
   chipDamageMul: 0.1
   suppressHitAnimWhenGuarding: 1
   lockMoveOnParry: 0.35
@@ -1652,6 +1704,7 @@ MonoBehaviour:
   - AddUltimate
   - Gain
   - OnParryUltimateGain
+  debugLogs: 0
 --- !u!114 &6669824055994905385
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1669,17 +1722,30 @@ MonoBehaviour:
   isAttackingBoolParam: IsAttacking
   guardBlockTrigger: GuardBlock
   parrySuccessTrigger: ParrySuccess
+  guardBreakTrigger: GuardBreak
   forwardMode: 0
   modelForwardSource: {fileID: 9217704258761649807}
   cameraTransform: {fileID: 0}
   invertForward: 0
-  frontArcDegrees: 100
+  frontArcDegrees: 120
   flattenToGround: 1
   denyGuardWhileAttacking: 1
   autoResumeGuardIfHolding: 1
+  splitTapParryAndHoldGuard: 1
+  guardHoldDelay: 0.18
   chipDamageOnBlock: 0.1
   enablePerfectGuard: 1
-  perfectGuardWindow: 0.12
+  perfectGuardWindow: 0.16
+  parryEventAcceptWindow: 0.35
+  useRealtimeParryWindow: 1
+  enableGuardStrain: 1
+  maxGuardStrain: 100
+  guardStrainPerBlockedDamage: 1
+  guardStrainFlatPerBlock: 6
+  guardStrainRecoverDelay: 1.15
+  guardStrainRecoverPerSecond: 26
+  parryStrainRecover: 24
+  guardBreakDuration: 0.9
   lockMoveOnBlock: 1
   blockMoveLock: 0.35
   lockMoveOnParry: 1
@@ -1691,6 +1757,11 @@ MonoBehaviour:
   grantUltimateOnParry: 1
   ultimateGainOnParry: 10
   ultimate: {fileID: 5692553494910946447}
+  enableParryCounterWindow: 1
+  parryCounterWindow: 1.15
+  parryCounterDamageMultiplier: 1.85
+  parryCounterBreakBonus: 20
+  parryCounterHitType: 4
   OnParrySuccess:
     m_PersistentCalls:
       m_Calls:
@@ -1721,6 +1792,9 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+  OnGuardBreak:
+    m_PersistentCalls:
+      m_Calls: []
   animator: {fileID: 5777839405900600649}
   debugDraw: 1
   warnMissingParams: 1
@@ -1847,6 +1921,7 @@ MonoBehaviour:
   blockClip: {fileID: 8300000, guid: 80b325de415090541bed1f7df7441127, type: 3}
   dodgeClip: {fileID: 0}
   sfxVolume: 0.9
+  useCombatFeelPolicy: 1
   debugLog: 0
 --- !u!114 &171033920233620033
 MonoBehaviour:
@@ -1866,10 +1941,10 @@ MonoBehaviour:
   maxWindow: 0.5
   initialFreezeTimeScale: 0.04
   initialFreezeDuration: 0.03
-  slowTimeScale: 0.12
+  slowTimeScale: 0.28
   slowDuration: 2
   playerHealth: {fileID: 192257646706784962}
-  perfectDodgeInvincibleRealtime: 0.5
+  perfectDodgeInvincibleRealtime: 0.65
   adjustFixedDelta: 1
   slowRecoverCurve:
     serializedVersion: 2
@@ -1909,9 +1984,13 @@ MonoBehaviour:
   disableRootMotionOnSlow: 0
   feedback: {fileID: 2570013235222381821}
   autoFeedback: 1
+  afterImageEffect: {fileID: 0}
+  autoAfterImage: 1
   ultimate: {fileID: 5692553494910946447}
   ultimateGainOnPerfect: 12
   autoUltimateGain: 1
+  enableAttackFollowUpAssist: 1
+  attackFollowUpWindowRealtime: 1.5
   OnWindowOpened:
     m_PersistentCalls:
       m_Calls: []
@@ -1934,47 +2013,47 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 180ecf9b41d478f468eb3e9083753217, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ImpulseDefinition:
-    m_ImpulseChannel: 1
-    m_ImpulseShape: 2
-    m_CustomImpulseShape:
+  ImpulseDefinition:
+    ImpulseChannel: 1
+    ImpulseShape: 2
+    CustomImpulseShape:
       serializedVersion: 2
       m_Curve: []
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    m_ImpulseDuration: 0.08
-    m_ImpulseType: 0
-    m_DissipationRate: 0.25
-    m_RawSignal: {fileID: 0}
-    m_AmplitudeGain: 1
-    m_FrequencyGain: 1
-    m_RepeatMode: 0
-    m_Randomize: 1
-    m_TimeEnvelope:
-      m_AttackShape:
+    ImpulseDuration: 0.08
+    ImpulseType: 0
+    DissipationRate: 0.25
+    RawSignal: {fileID: 0}
+    AmplitudeGain: 1
+    FrequencyGain: 1
+    RepeatMode: 0
+    Randomize: 1
+    TimeEnvelope:
+      AttackShape:
         serializedVersion: 2
         m_Curve: []
         m_PreInfinity: 2
         m_PostInfinity: 2
         m_RotationOrder: 4
-      m_DecayShape:
+      DecayShape:
         serializedVersion: 2
         m_Curve: []
         m_PreInfinity: 2
         m_PostInfinity: 2
         m_RotationOrder: 4
-      m_AttackTime: 0
-      m_SustainTime: 0.2
-      m_DecayTime: 0.7
-      m_ScaleWithImpact: 1
-      m_HoldForever: 0
-    m_ImpactRadius: 100
-    m_DirectionMode: 0
-    m_DissipationMode: 2
-    m_DissipationDistance: 100
-    m_PropagationSpeed: 343
-  m_DefaultVelocity: {x: 0, y: -1, z: 0}
+      AttackTime: 0
+      SustainTime: 0.2
+      DecayTime: 0.7
+      ScaleWithImpact: 1
+      HoldForever: 0
+    ImpactRadius: 100
+    DirectionMode: 0
+    DissipationMode: 2
+    DissipationDistance: 100
+    PropagationSpeed: 343
+  DefaultVelocity: {x: 0, y: -1, z: 0}
 --- !u!114 &2996402383616999470
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2128,7 +2207,7 @@ MeshRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3826020367586159521}
   m_Enabled: 1
-  m_CastShadows: 1
+  m_CastShadows: 0
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
@@ -2489,11 +2568,11 @@ SkinnedMeshRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4948852181318958242}
   m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
-  m_MotionVectors: 1
+  m_MotionVectors: 0
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 3
@@ -2525,7 +2604,7 @@ SkinnedMeshRenderer:
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
-  m_SkinnedMotionVectors: 1
+  m_SkinnedMotionVectors: 0
   m_Mesh: {fileID: -3712423147401242153, guid: bfdbf6177b8629c4188c0b56bfc48656, type: 3}
   m_Bones:
   - {fileID: 4167337161974379815}
@@ -2856,10 +2935,10 @@ SkinnedMeshRenderer:
   m_GameObject: {fileID: 5964982364313053461}
   m_Enabled: 1
   m_CastShadows: 1
-  m_ReceiveShadows: 1
+  m_ReceiveShadows: 0
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
-  m_MotionVectors: 1
+  m_MotionVectors: 0
   m_LightProbeUsage: 1
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 3
@@ -2891,7 +2970,7 @@ SkinnedMeshRenderer:
   serializedVersion: 2
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
-  m_SkinnedMotionVectors: 1
+  m_SkinnedMotionVectors: 0
   m_Mesh: {fileID: -3996760141626369306, guid: bfdbf6177b8629c4188c0b56bfc48656, type: 3}
   m_Bones:
   - {fileID: 6924493809194741051}
@@ -2935,7 +3014,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   baseDamage: 10
   hitType: 1
+  canParry: 1
   canPerfectDodge: 0
+  unblockable: 0
   attackerRoot: {fileID: 9217704258761649807}
   hitLayers:
     serializedVersion: 2
@@ -2943,6 +3024,20 @@ MonoBehaviour:
   ignoreTriggerColliders: 1
   useOneShotWindow: 1
   oneShotWindow: 0.2
+  hitEachReceiverOncePerActivation: 1
+  maxUniqueTargetsPerActivation: 1
+  useExpandedHitDetection: 1
+  expandedPadding: 0.42
+  expandedHitBufferSize: 24
+  meshExpandedPaddingScale: 0.6
+  expandedScanInterval: 0.06
+  showRuntimeHitboxPreview: 0
+  previewUseExpandedShape: 1
+  previewColor: {r: 0.15, g: 0.85, b: 1, a: 0.95}
+  previewLineWidth: 0.05
+  previewCircleSegments: 18
+  previewPersistSeconds: 0.2
+  previewShellAlpha: 0.16
   enableLogs: 0
 --- !u!64 &5284417933996730880
 MeshCollider:

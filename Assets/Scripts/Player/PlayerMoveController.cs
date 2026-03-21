@@ -54,6 +54,9 @@ public class PlayerMoveController : MonoBehaviour
     private bool _externLocked; // 외부에서 이동을 막았는지 여부
     private IInputBlocker _inputBlocker;
     private PlayerReferences _playerReferences;
+    private float _lastAnimSpeed = float.NaN;
+
+    const float AnimSpeedWriteEpsilon = 0.0025f;
 
     void Awake()
     {
@@ -133,10 +136,11 @@ public class PlayerMoveController : MonoBehaviour
         // 6. 캐릭터 회전
         if (!locked)
         {
-            bool shouldRotate = !rotateOnlyWhenMoving || _velXZ.sqrMagnitude > 0.0004f;
-            if (shouldRotate && _velXZ.sqrMagnitude > 0.000001f)
+            Vector3 rotationDirection = wishDir.sqrMagnitude > 0.000001f ? wishDir : _velXZ;
+            bool shouldRotate = !rotateOnlyWhenMoving || rotationDirection.sqrMagnitude > 0.0004f;
+            if (shouldRotate && rotationDirection.sqrMagnitude > 0.000001f)
             {
-                Quaternion t = Quaternion.LookRotation(_velXZ.normalized, Vector3.up);
+                Quaternion t = Quaternion.LookRotation(rotationDirection.normalized, Vector3.up);
                 playerRoot.rotation = Quaternion.RotateTowards(playerRoot.rotation, t, rotationSpeed * dt);
             }
         }
@@ -243,7 +247,12 @@ public class PlayerMoveController : MonoBehaviour
     void SetAnimSpeed(float spd01)
     {
         if (!animator || string.IsNullOrEmpty(p_Speed)) return;
+
+        if (!float.IsNaN(_lastAnimSpeed) && Mathf.Abs(_lastAnimSpeed - spd01) <= AnimSpeedWriteEpsilon)
+            return;
+
         animator.SetFloat(p_Speed, spd01);
+        _lastAnimSpeed = spd01;
     }
 
     bool IsInputBlocked()

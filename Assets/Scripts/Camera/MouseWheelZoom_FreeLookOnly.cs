@@ -1,32 +1,33 @@
-using UnityEngine;
-using Cinemachine;
+ï»¿using UnityEngine;
+using Unity.Cinemachine;
+#pragma warning disable CS0618
 
 /// ==============================
-/// ¡å º¯¼ö Çì´õ(ÇÑ±Û ¼³¸í)
-/// freeLook       : Á¶ÀıÇÒ CinemachineFreeLook ÄÄÆ÷³ÍÆ®
-/// step           : ÈÙ 1Æ½´ç ¹İÁö¸§ º¯È­·®
-/// invertScroll   : ÈÙ ¹æÇâ ¹İÀü ¿©ºÎ
-/// minRadius      : Ä«¸Ş¶ó °Å¸® ÃÖ¼Ò ¹İÁö¸§
-/// maxRadius      : Ä«¸Ş¶ó °Å¸® ÃÖ´ë ¹İÁö¸§
+/// â–¼ ë³€ìˆ˜ í—¤ë”(í•œê¸€ ì„¤ëª…)
+/// freeLook       : ì¡°ì ˆí•  CinemachineFreeLook ì»´í¬ë„ŒíŠ¸
+/// step           : íœ  1í‹±ë‹¹ ë°˜ì§€ë¦„ ë³€í™”ëŸ‰
+/// invertScroll   : íœ  ë°©í–¥ ë°˜ì „ ì—¬ë¶€
+/// minRadius      : ì¹´ë©”ë¼ ê±°ë¦¬ ìµœì†Œ ë°˜ì§€ë¦„
+/// maxRadius      : ì¹´ë©”ë¼ ê±°ë¦¬ ìµœëŒ€ ë°˜ì§€ë¦„
 /// ==============================
 [DisallowMultipleComponent]
 public class MouseWheelZoom_FreeLookOnly : MonoBehaviour
 {
-    [Header("´ë»ó ÂüÁ¶")]
-    public CinemachineFreeLook freeLook;
+    [Header("ëŒ€ìƒ ì°¸ì¡°")]
+    public CinemachineVirtualCameraBase freeLook;
 
-    [Header("µ¿ÀÛ ¿É¼Ç")]
+    [Header("ë™ì‘ ì˜µì…˜")]
     public float step = 0.5f;
     public bool invertScroll = false;
 
-    [Header("¹İ°æ ÇÑ°è")]
+    [Header("ë°˜ê²½ í•œê³„")]
     public float minRadius = 2f;
     public float maxRadius = 8f;
 
     void Reset()
     {
         if (!freeLook)
-            freeLook = GetComponent<CinemachineFreeLook>();
+            freeLook = GetComponent<CinemachineVirtualCameraBase>();
     }
 
     void Update()
@@ -37,12 +38,6 @@ public class MouseWheelZoom_FreeLookOnly : MonoBehaviour
         if (Mathf.Abs(wheel) < 0.01f) return;
         if (invertScroll) wheel = -wheel;
 
-        // ¼¼ ¿Àºø ¸ğµÎ °°Àº ¹İ°æ º¯È­ Àû¿ë
-        for (int i = 0; i < 3; i++)
-        {
-            var orbit = freeLook.m_Orbits[i];
-            orbit.m_Radius = Mathf.Clamp(orbit.m_Radius - wheel * step, minRadius, maxRadius);
-            freeLook.m_Orbits[i] = orbit;
-        }
+        CinemachineCompat.TryAdjustLegacyFreeLookOrbitsRadius(freeLook, -wheel * step, minRadius, maxRadius);
     }
 }

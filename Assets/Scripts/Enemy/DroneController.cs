@@ -1,171 +1,305 @@
 using UnityEngine;
-using DG.Tweening; // 피격 시 색깔 깜빡임용
+using UnityEngine.Rendering;
 
-// ★ IDamageReceiver 필수 (플레이어 공격 인식용)
 [DisallowMultipleComponent]
 public class DroneController : MonoBehaviour, IDamageReceiver
 {
-    [Header("▶ 타겟")]
+    [Header("Target")]
     public Transform target;
 
-    [Header("▶ 이동 파라미터")]
+    [Header("Movement")]
     public float moveSpeed = 3.5f;
     public float stopDistance = 8f;
     public float turnSpeedDeg = 360f;
 
-    [Header("▶ 사격 파라미터")]
+    [Header("Attack")]
     public GameObject projectilePrefab;
     public Transform fireOrigin;
     public float fireDistance = 15f;
-    public float fireCooldown = 2.0f;
+    public float fireCooldown = 2f;
     public float projectileSpeed = 15f;
     public int projectileDamage = 10;
 
-    [Header("▶ 체력 & 이펙트 설정")]
-    public int maxHP = 30;          // 최대 체력
-    private int currentHP;
-    
-    [Tooltip("피격 시 생성될 이펙트 (폭발, 스파크 등)")]
-    public GameObject hitVFX;       
-    
-    [Tooltip("파괴 시 생성될 이펙트 (큰 폭발)")]
+    [Header("Health / VFX")]
+    public int maxHP = 30;
+    public GameObject hitVFX;
     public GameObject deathVFX;
+    public Renderer droneRenderer;
+    public Color hitFlashColor = Color.red;
+    public float hitFlashDuration = 0.2f;
 
-    [Tooltip("피격 시 깜빡일 렌더러 (드론 몸통)")]
-    public Renderer droneRenderer; 
+    [Header("Debug")]
+    [SerializeField] bool debugLogs = false;
 
-    private float nextFireTime;
-    private Rigidbody rb;
-    private Color originalColor; // 원래 색 저장용
+    [Header("Performance")]
+    [SerializeField] bool optimizeChildRenderers = true;
+    [SerializeField] bool disableRendererShadows = true;
+    [SerializeField] bool disableMotionVectors = true;
+    [SerializeField] bool lightweightSimulationMode = false;
+    [SerializeField, Min(0.016f)] float lightweightTickInterval = 0.05f;
+
+    int _currentHP;
+    float _nextFireTime;
+    float _hitFlashUntil;
+    Rigidbody _rigidbody;
+    Color _originalColor = Color.white;
+    MaterialPropertyBlock _colorBlock;
+    bool _hasBaseColorProperty;
+    bool _hasColorProperty;
+    bool _flashApplied;
+    float _initialFireDelay;
+    float _nextLightweightTickAt;
+    Renderer[] _cachedRenderers;
 
     void Awake()
     {
-        rb = GetComponent<Rigidbody>();
-        currentHP = maxHP;
+        _rigidbody = GetComponent<Rigidbody>();
+        _currentHP = maxHP;
 
-        // 렌더러 자동 찾기 (없으면 수동 할당 필요)
-        if (droneRenderer == null) droneRenderer = GetComponentInChildren<Renderer>();
-        if (droneRenderer != null) originalColor = droneRenderer.material.color;
+        if (droneRenderer == null)
+            droneRenderer = GetComponentInChildren<Renderer>();
 
-        // 타겟(플레이어) 자동 검색
+        InitializeRendererState();
+        CacheChildRenderers();
+        ApplyRendererPerformanceOverrides();
+
         if (target == null)
         {
-            var p = GameObject.FindWithTag("Player");
-            if (p) target = p.transform;
+            GameObject player = GameObject.FindWithTag("Player");
+            if (player != null)
+                target = player.transform;
         }
     }
 
     void OnEnable()
     {
-        currentHP = maxHP; // 되살아날 때 체력 초기화
+        _currentHP = maxHP;
+        _nextFireTime = _initialFireDelay > 0f ? Time.time + _initialFireDelay : 0f;
+        _hitFlashUntil = 0f;
+        _flashApplied = false;
+        _nextLightweightTickAt = Time.time;
+        CacheChildRenderers();
+        ApplyRendererPerformanceOverrides();
+        ApplySimulationMode();
+        ApplyRendererColor(_originalColor);
+    }
+
+    public void SetInitialFireDelay(float delay)
+    {
+        _initialFireDelay = Mathf.Max(0f, delay);
+        _nextFireTime = _initialFireDelay > 0f ? Time.time + _initialFireDelay : 0f;
+    }
+
+    public void SetLightweightSimulation(bool enabled, float tickInterval = 0.05f)
+    {
+        lightweightSimulationMode = enabled;
+        lightweightTickInterval = Mathf.Max(0.016f, tickInterval);
+        _nextLightweightTickAt = Time.time;
+        ApplySimulationMode();
+    }
+
+    void ApplySimulationMode()
+    {
+        if (_rigidbody == null)
+            return;
+
+        _rigidbody.isKinematic = lightweightSimulationMode;
+        _rigidbody.interpolation = RigidbodyInterpolation.None;
+        _rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
+    }
+
+    void Update()
+    {
+        UpdateHitFlash();
+
+        if (!lightweightSimulationMode)
+            return;
+
+        if (Time.time < _nextLightweightTickAt)
+            return;
+
+        _nextLightweightTickAt = Time.time + Mathf.Max(0.016f, lightweightTickInterval);
+        TickMovementAndFire(Mathf.Max(lightweightTickInterval, Time.deltaTime));
     }
 
     void FixedUpdate()
     {
-        if (target == null) return;
+        if (lightweightSimulationMode)
+            return;
 
-        // 1. 타겟 바라보기
-        Vector3 direction = (target.position - transform.position).normalized;
-        if (direction != Vector3.zero)
+        TickMovementAndFire(Time.fixedDeltaTime);
+    }
+
+    void TickMovementAndFire(float deltaTime)
+    {
+        if (target == null)
+            return;
+
+        Vector3 toTarget = target.position - transform.position;
+        Vector3 flatDirection = new Vector3(toTarget.x, 0f, toTarget.z);
+        float distanceSqr = flatDirection.sqrMagnitude;
+        if (distanceSqr > 0.0001f)
         {
-            Quaternion lookRotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
-            transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.fixedDeltaTime * 5f);
+            Vector3 flatNormalized = flatDirection / Mathf.Sqrt(distanceSqr);
+            Quaternion lookRotation = Quaternion.LookRotation(flatNormalized, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, lookRotation, turnSpeedDeg * deltaTime);
+
+            if (distanceSqr > stopDistance * stopDistance)
+            {
+                Vector3 moveStep = flatNormalized * moveSpeed * deltaTime;
+                if (_rigidbody != null && !lightweightSimulationMode)
+                    _rigidbody.MovePosition(transform.position + moveStep);
+                else
+                    transform.position += moveStep;
+            }
         }
 
-        // 2. 거리 체크 및 이동
-        float distance = Vector3.Distance(transform.position, target.position);
-        
-        if (distance > stopDistance)
-        {
-            Vector3 movePos = transform.position + direction * moveSpeed * Time.fixedDeltaTime;
-            if (rb) rb.MovePosition(movePos);
-            else transform.position = movePos;
-        }
-
-        // 3. 공격
-        if (distance <= fireDistance && Time.time >= nextFireTime)
+        if (distanceSqr <= fireDistance * fireDistance && Time.time >= _nextFireTime)
         {
             Fire();
-            nextFireTime = Time.time + fireCooldown;
+            _nextFireTime = Time.time + fireCooldown;
         }
+    }
+
+    void InitializeRendererState()
+    {
+        if (droneRenderer == null)
+            return;
+
+        _colorBlock ??= new MaterialPropertyBlock();
+        Material sharedMaterial = droneRenderer.sharedMaterial;
+        if (sharedMaterial == null)
+            return;
+
+        _hasBaseColorProperty = sharedMaterial.HasProperty("_BaseColor");
+        _hasColorProperty = sharedMaterial.HasProperty("_Color");
+
+        if (_hasBaseColorProperty)
+            _originalColor = sharedMaterial.GetColor("_BaseColor");
+        else if (_hasColorProperty)
+            _originalColor = sharedMaterial.GetColor("_Color");
+    }
+
+    void CacheChildRenderers()
+    {
+        if (_cachedRenderers == null || _cachedRenderers.Length == 0)
+            _cachedRenderers = GetComponentsInChildren<Renderer>(true);
+    }
+
+    void ApplyRendererPerformanceOverrides()
+    {
+        if (!optimizeChildRenderers || _cachedRenderers == null)
+            return;
+
+        for (int i = 0; i < _cachedRenderers.Length; i++)
+        {
+            Renderer renderer = _cachedRenderers[i];
+            if (renderer == null)
+                continue;
+
+            if (disableRendererShadows)
+            {
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+
+            if (disableMotionVectors)
+                renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        }
+    }
+
+    void UpdateHitFlash()
+    {
+        if (_hitFlashUntil > Time.time)
+        {
+            if (!_flashApplied)
+            {
+                ApplyRendererColor(hitFlashColor);
+                _flashApplied = true;
+            }
+
+            return;
+        }
+
+        if (!_flashApplied)
+            return;
+
+        _flashApplied = false;
+        ApplyRendererColor(_originalColor);
+    }
+
+    void ApplyRendererColor(Color color)
+    {
+        if (droneRenderer == null || (!_hasBaseColorProperty && !_hasColorProperty))
+            return;
+
+        droneRenderer.GetPropertyBlock(_colorBlock);
+        if (_hasBaseColorProperty)
+            _colorBlock.SetColor("_BaseColor", color);
+        if (_hasColorProperty)
+            _colorBlock.SetColor("_Color", color);
+        droneRenderer.SetPropertyBlock(_colorBlock);
     }
 
     void Fire()
     {
-        if (projectilePrefab && fireOrigin)
-        {
-            GameObject bullet = Instantiate(projectilePrefab, fireOrigin.position, fireOrigin.rotation);
-            
-            // 총알 종류에 따라 초기화 (BulletProjectile 또는 TutorialProjectile)
-            var bp = bullet.GetComponent<BulletProjectile>();
-            if (bp) bp.Init(this.gameObject, projectileSpeed, projectileDamage);
-            
-            var tp = bullet.GetComponent<TutorialProjectile>();
-            if (tp) tp.owner = this.transform;
-        }
+        if (projectilePrefab == null || fireOrigin == null)
+            return;
+
+        GameObject bullet = RuntimeObjectPool.Acquire(projectilePrefab, fireOrigin.position, fireOrigin.rotation);
+        if (bullet == null)
+            return;
+
+        BulletProjectile bulletProjectile = bullet.GetComponent<BulletProjectile>();
+        if (bulletProjectile != null)
+            bulletProjectile.Init(gameObject, projectileSpeed, projectileDamage);
+
+        TutorialProjectile tutorialProjectile = bullet.GetComponent<TutorialProjectile>();
+        if (tutorialProjectile != null)
+            tutorialProjectile.owner = transform;
     }
 
-    // ======================================================================
-    // ★ IDamageReceiver 구현 (플레이어 공격을 받는 부분)
-    // ======================================================================
     public void ReceiveHit(HitPayload payload)
     {
-        // 1. 데미지 적용
-        int beforeHp = currentHP;
-        TakeDamage((int)payload.damage, payload.hitPoint, payload.hitDirection);
+        int beforeHp = _currentHP;
+        TakeDamage(Mathf.RoundToInt(payload.damage), payload.hitPoint, payload.hitDirection);
 
-        if (currentHP < beforeHp)
+        if (_currentHP < beforeHp)
             TryGrantBasicAttackGauge(payload.attacker);
     }
 
     public void TakeDamage(int amount, Vector3 hitPoint, Vector3 hitDir)
     {
-        if (currentHP <= 0) return; // 이미 죽었으면 무시
+        if (_currentHP <= 0 || amount <= 0)
+            return;
 
-        currentHP -= amount;
-        Debug.Log($"[드론] 피격! 남은 체력: {currentHP}/{maxHP}");
+        _currentHP -= amount;
+        if (debugLogs)
+            Debug.Log($"[Drone] Hit {amount} => {_currentHP}/{maxHP}", this);
 
-        // 2. 히트 이펙트 생성 (타격 지점에)
         if (hitVFX != null)
         {
-            // 타격 방향 반대로 이펙트가 튀게 회전 설정
-            Quaternion rot = Quaternion.LookRotation(-hitDir); 
-            GameObject vfx = Instantiate(hitVFX, hitPoint, rot);
-            Destroy(vfx, 1.0f); // 1초 뒤 삭제
+            Quaternion rotation = hitDir.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(-hitDir.normalized, Vector3.up)
+                : Quaternion.identity;
+            TransientVfxPool.Spawn(hitVFX, hitPoint, rotation, null, 1f);
         }
 
-        // 3. 피격 반응 (빨간색 깜빡임)
-        if (droneRenderer != null)
-        {
-            // 기존 트윈 멈추고 새로 시작 (연속 피격 시 꼬임 방지)
-            droneRenderer.material.DOKill(); 
-            droneRenderer.material.color = Color.red;
-            droneRenderer.material.DOColor(originalColor, 0.2f);
-        }
+        _hitFlashUntil = Time.time + Mathf.Max(0.05f, hitFlashDuration);
+        _flashApplied = false;
 
-        // 4. 넉백 (밀려남) 효과
-        transform.DOPunchPosition(hitDir.normalized * 0.5f, 0.2f);
-
-        // 5. 사망 체크
-        if (currentHP <= 0)
-        {
+        if (_currentHP <= 0)
             Die();
-        }
     }
 
     void Die()
     {
-        Debug.Log("[드론] 파괴됨!");
+        if (debugLogs)
+            Debug.Log("[Drone] Destroyed", this);
 
-        // 파괴 이펙트 생성
         if (deathVFX != null)
-        {
-            GameObject vfx = Instantiate(deathVFX, transform.position, Quaternion.identity);
-            Destroy(vfx, 2.0f);
-        }
+            TransientVfxPool.Spawn(deathVFX, transform.position, Quaternion.identity, null, 2f);
 
-        // 중요: LobbyEnemy가 사망을 감지할 수 있도록 오브젝트 파괴
-        // (LobbyEnemy의 OnDisable이나 OnDestroy가 호출됨)
         Destroy(gameObject);
     }
 
@@ -174,7 +308,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         if (attacker == null)
             return;
 
-        var ultimate = attacker.GetComponent<PlayerUltimateController>();
+        PlayerUltimateController ultimate = attacker.GetComponent<PlayerUltimateController>();
         if (ultimate == null)
             ultimate = attacker.GetComponentInParent<PlayerUltimateController>();
 

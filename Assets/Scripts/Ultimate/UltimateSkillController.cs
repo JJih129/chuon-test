@@ -53,6 +53,7 @@ public sealed class UltimateSkillController : MonoBehaviour
 
         SyncPrimaryControllerBindings();
         ConfigureStandaloneDirector();
+        RefreshDebugTickState();
     }
 
 #if UNITY_EDITOR
@@ -69,6 +70,7 @@ public sealed class UltimateSkillController : MonoBehaviour
 
     private void OnEnable()
     {
+        RefreshDebugTickState();
         if (!HasPrimaryController && director != null)
             director.stopped += HandleDirectorStopped;
     }
@@ -116,6 +118,7 @@ public sealed class UltimateSkillController : MonoBehaviour
     private void BeginCutscene()
     {
         isCutscenePlaying = true;
+        RefreshDebugTickState();
 
         if (blockAllInputsDuringCutscene && inputBlocker != null)
             inputBlocker.BlockAll(true);
@@ -159,6 +162,7 @@ public sealed class UltimateSkillController : MonoBehaviour
             inputBlocker.BlockAll(false);
 
         isCutscenePlaying = false;
+        RefreshDebugTickState();
 
         if (debugLog)
             Debug.Log("[Ultimate] Standalone fallback cutscene end", this);
@@ -193,5 +197,10 @@ public sealed class UltimateSkillController : MonoBehaviour
         director.timeUpdateMode = useUnscaledDirectorTime
             ? DirectorUpdateMode.UnscaledGameTime
             : DirectorUpdateMode.GameTime;
+    }
+
+    private void RefreshDebugTickState()
+    {
+        enabled = enableDebugHotkey || isCutscenePlaying;
     }
 }

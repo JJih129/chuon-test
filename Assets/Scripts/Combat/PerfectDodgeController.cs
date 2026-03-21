@@ -20,7 +20,7 @@ public class PerfectDodgeController : MonoBehaviour
     [Range(0.01f, 1f)] public float initialFreezeTimeScale = 0.04f;
     [Min(0f)] public float initialFreezeDuration = 0.03f;
     [Range(0.01f, 1f)] public float slowTimeScale = 0.28f;
-    [Min(0.01f)] public float slowDuration = 0.12f;
+    [Min(0.01f)] public float slowDuration = 2f;
     [SerializeField] private PlayerHealth playerHealth;
     [Min(0f)] public float perfectDodgeInvincibleRealtime = 0.50f;
     [Tooltip("Adjust fixedDeltaTime while the slow effect is active.")]
@@ -50,9 +50,15 @@ public class PerfectDodgeController : MonoBehaviour
     [Header("Feedback")]
     public ParryFeedbackController feedback;
     public bool autoFeedback = true;
+    [SerializeField] private PerfectDodgeAfterImageEffect afterImageEffect;
+    public bool autoAfterImage = true;
     public PlayerUltimateController ultimate;
     public float ultimateGainOnPerfect = 7f;
     public bool autoUltimateGain = true;
+
+    [Header("Attack Follow Up")]
+    public bool enableAttackFollowUpAssist = true;
+    [Min(0f)] public float attackFollowUpWindowRealtime = 1.5f;
 
     [Header("Events")]
     public UnityEvent OnWindowOpened;
@@ -60,13 +66,15 @@ public class PerfectDodgeController : MonoBehaviour
     public UnityEvent OnPerfectDodge;
 
     [Header("Debug")]
-    public bool enableLogs = true;
+    public bool enableLogs = false;
 
     private float _remain;
     private bool _windowOpen;
     private float _initialFixedDelta;
     private Coroutine _coSlow;
     private Coroutine _coClose;
+    private Transform _attackFollowUpTarget;
+    private float _attackFollowUpUntilRealtime;
     private readonly Dictionary<Animator, (AnimatorUpdateMode mode, float speed)> _animatorBackup
         = new Dictionary<Animator, (AnimatorUpdateMode, float)>();
 
@@ -76,6 +84,9 @@ public class PerfectDodgeController : MonoBehaviour
         if (!dodgeController) dodgeController = GetComponent<PlayerDodgeController>();
         if (!playerHealth) playerHealth = GetComponent<PlayerHealth>();
         if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
+        if (!afterImageEffect) afterImageEffect = GetComponent<PerfectDodgeAfterImageEffect>();
+        if (autoAfterImage && !afterImageEffect)
+            afterImageEffect = gameObject.AddComponent<PerfectDodgeAfterImageEffect>();
 
         _initialFixedDelta = Time.fixedDeltaTime;
         EnsureAnimatorList();
@@ -157,6 +168,7 @@ public class PerfectDodgeController : MonoBehaviour
         if (!_windowOpen) return false;
 
         PerfectDodgeWindow_Close();
+        CacheAttackFollowUp(attacker);
         if (dodgeController != null)
             dodgeController.ApplyPerfectDodgeSideStep(attacker);
         if (playerHealth != null && perfectDodgeInvincibleRealtime > 0f)
@@ -165,6 +177,8 @@ public class PerfectDodgeController : MonoBehaviour
 
         if (autoFeedback && feedback)
             feedback.PlayPerfectDodgeFeedback(hitPoint, attacker);
+        if (autoAfterImage && afterImageEffect)
+            afterImageEffect.Play();
 
         if (autoUltimateGain && ultimate)
             ultimate.AddGauge(ultimateGainOnPerfect);
@@ -177,6 +191,24 @@ public class PerfectDodgeController : MonoBehaviour
                 this);
 
         return true;
+    }
+
+    public bool TryConsumeAttackFollowUpTarget(out Transform target)
+    {
+        target = null;
+
+        if (!enableAttackFollowUpAssist)
+            return false;
+
+        if (_attackFollowUpTarget == null || Time.realtimeSinceStartup > _attackFollowUpUntilRealtime)
+        {
+            ClearAttackFollowUp();
+            return false;
+        }
+
+        target = _attackFollowUpTarget;
+        ClearAttackFollowUp();
+        return target != null;
     }
 
     void StartSlow(float scale, float duration)
@@ -317,5 +349,23 @@ public class PerfectDodgeController : MonoBehaviour
         }
 
         _animatorBackup.Clear();
+    }
+
+    void CacheAttackFollowUp(Transform attacker)
+    {
+        if (!enableAttackFollowUpAssist || attacker == null)
+        {
+            ClearAttackFollowUp();
+            return;
+        }
+
+        _attackFollowUpTarget = attacker.root != null ? attacker.root : attacker;
+        _attackFollowUpUntilRealtime = Time.realtimeSinceStartup + Mathf.Max(0f, attackFollowUpWindowRealtime);
+    }
+
+    void ClearAttackFollowUp()
+    {
+        _attackFollowUpTarget = null;
+        _attackFollowUpUntilRealtime = 0f;
     }
 }

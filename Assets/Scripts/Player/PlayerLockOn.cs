@@ -41,6 +41,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
     Transform _playerPivot;                                                    // ?뚮젅?댁뼱 履??쎌삩 ?쇰쿁
     PlayerReferences _playerReferences;
     Transform _cam;                                                            // Camera.main 罹먯떆
+    LockOnFacingDriver _facingDriver;
 
     private bool _lockModeActive;
     bool _timelineOwnsCamera;
@@ -53,6 +54,8 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
             : EnsurePivot(transform, pivotName, defaultPivotY);
         if (!cameraMgr) cameraMgr = FindAnyObjectByType<LockOnCameraManager>();
         cameraMgr?.SetPlayerPivot(_playerPivot);
+        _facingDriver = GetComponent<LockOnFacingDriver>();
+        _facingDriver?.RefreshTickState();
 
         // 移대찓??罹먯떆(硫붿씤 移대찓?쇰뒗 ?고??꾩뿉 諛붾????덉뼱 Start?먯꽌 ?ы솗蹂?
         _cam = Camera.main ? Camera.main.transform : null;
@@ -68,10 +71,11 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         // 0) ?쎌삩 以묒씤???寃잛씠 二쎌뿀嫄곕굹 鍮꾪솢?깊솕??寃쎌슦 ?먮룞?쇰줈 移대찓???댁젣
         //    - CurrentTarget == null : Destroy ??寃쎌슦
         //    - activeInHierarchy == false : SetActive(false) ??寃쎌슦
-        if (_lockModeActive && (!CurrentTarget || !CurrentTarget.gameObject.activeInHierarchy))
+        if (_lockModeActive && autoUnlockWhenTargetDisabled && (!CurrentTarget || !CurrentTarget.gameObject.activeInHierarchy))
         {
             _lockModeActive = false;
             CurrentTarget = null;
+            _facingDriver?.RefreshTickState();
 
             if (!_timelineOwnsCamera)
                 cameraMgr?.EndLockOn();   // freeLookDriver.enabled = true, 移대찓???곗꽑?쒖쐞 蹂듦뎄
@@ -100,6 +104,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         CurrentTarget = EnsurePivot(enemyRoot, pivotName, defaultPivotY);
 
         _lockModeActive = CurrentTarget;           // ?쇰쿁???덉쑝硫??쎌삩 紐⑤뱶 ON
+        _facingDriver?.RefreshTickState();
         if (CurrentTarget && !_timelineOwnsCamera)
             cameraMgr?.StartLockOn(CurrentTarget);
     }
@@ -109,6 +114,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         _lockModeActive = false;                   // ?쎌삩 紐⑤뱶 OFF
         _timelineOwnsCamera = false;
         CurrentTarget = null;
+        _facingDriver?.RefreshTickState();
         cameraMgr?.EndLockOn();
     }
 
@@ -124,18 +130,32 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
     public bool IsLockedOn() => IsLocked;
 
+    public void RestoreFreeLookAfterTimeline()
+    {
+        _timelineOwnsCamera = false;
+        _lockModeActive = false;
+        CurrentTarget = null;
+        _facingDriver?.RefreshTickState();
+
+        if (cameraMgr == null)
+            return;
+
+        cameraMgr.EndLockOn(false);
+        cameraMgr.ForceRestoreGameplayFreeLook();
+    }
+
     public void GiveCameraControlToTimeline(bool give)
     {
         _timelineOwnsCamera = give;
+        _facingDriver?.RefreshTickState();
 
         if (cameraMgr == null)
             return;
 
         if (give)
         {
-            cameraMgr.EndLockOn();
-            if (cameraMgr.freeLookDriver != null)
-                cameraMgr.freeLookDriver.enabled = false;
+            cameraMgr.EndLockOn(false);
+            cameraMgr.SetFreeLookDriverEnabled(false);
             return;
         }
 
@@ -145,7 +165,8 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
             return;
         }
 
-        cameraMgr.EndLockOn();
+        cameraMgr.EndLockOn(false);
+        cameraMgr.ForceRestoreGameplayFreeLook();
     }
 
     // === ?대? 援ы쁽 ===

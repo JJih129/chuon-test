@@ -1,4 +1,5 @@
 // EnemyHPBarPool.cs
+using System.Collections;
 using UnityEngine;
 using System.Collections.Generic;
 
@@ -6,6 +7,7 @@ public class EnemyHPBarPool : MonoBehaviour
 {
     public EnemyHPBar prefab;
     public int initialSize = 6;
+    public int prewarmPerFrame = 2;
     public Transform parent; // optional, 자동 할당 지원
 
     Queue<EnemyHPBar> _pool = new();
@@ -31,11 +33,21 @@ public class EnemyHPBarPool : MonoBehaviour
             }
         }
 
-        for (int i = 0; i < initialSize; i++)
+    }
+
+    IEnumerator Start()
+    {
+        int targetCount = Mathf.Max(0, initialSize);
+        int batchSize = Mathf.Max(1, prewarmPerFrame);
+
+        for (int i = 0; i < targetCount; i++)
         {
             var e = CreateInstance();
             e.gameObject.SetActive(false);
             _pool.Enqueue(e);
+
+            if ((i + 1) % batchSize == 0 && i + 1 < targetCount)
+                yield return null;
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -49,6 +50,11 @@ public class InteractionManager : MonoBehaviour
 
     [Header("디버그 레이 시각화")]
     public bool debugDrawRay = false;
+    public bool debugLogs = false;
+
+    [Header("성능")]
+    [Tooltip("상호작용 레이캐스트 체크 간격(초). 0이면 매 프레임.")]
+    public float interactionCheckInterval = 0.06f;
 
     [Header("호버 디바운스(초) - 짧은 깜박임 방지")]
     public float hoverGrace = 0.12f;
@@ -62,6 +68,7 @@ public class InteractionManager : MonoBehaviour
 
     float _lastHitTime = -10f;
     float _startTime;
+    float _nextInteractionCheckAt;
 
     public Transform PlayerRoot
     {
@@ -127,17 +134,26 @@ public class InteractionManager : MonoBehaviour
                     LayoutRebuilder.ForceRebuildLayoutImmediate(_promptUI.background);
             }
 
-            var names = string.Join(", ", Array.ConvertAll(cloneGO.GetComponentsInChildren<Transform>(true),
-                                                           t => t.name));
-            Debug.Log("[InteractionManager] prompt clone children: " + names);
+            if (debugLogs)
+            {
+                var names = string.Join(", ", Array.ConvertAll(cloneGO.GetComponentsInChildren<Transform>(true),
+                                                               t => t.name));
+                Debug.Log("[InteractionManager] prompt clone children: " + names);
+            }
         }
 
         _promptAnchor = new GameObject("InteractionPromptAnchor").transform;
         _promptAnchor.gameObject.hideFlags = HideFlags.HideAndDontSave;
 
         // 씬 시작 시 모든 InteractionOutlineRenderer 강제 리셋(비활성)
-        foreach (var o in FindObjectsOfType<InteractionOutlineRenderer>(true))
-            o.SetActive(false);
+    }
+
+    System.Collections.IEnumerator Start()
+    {
+        yield return null;
+
+        foreach (var outline in FindObjectsOfType<InteractionOutlineRenderer>(true))
+            outline.SetActive(false);
     }
 
     void Update()
@@ -150,6 +166,19 @@ public class InteractionManager : MonoBehaviour
         if (IsInputBlocked()) { ClearHover(); return; }
         if (IsLockOn()) { ClearHover(); return; }
         if (hideWhenAiming && IsAiming()) { ClearHover(); return; }
+
+        if (_current != null && GetInteractPressed())
+        {
+            Component currentComponent = _current as Component;
+            if (_current.TryInteract(this) && _promptUI && currentComponent != null)
+                _promptUI.Show(currentComponent.transform, _current.GetPromptText());
+        }
+
+        float effectiveCheckInterval = Mathf.Max(0.06f, interactionCheckInterval);
+        if (effectiveCheckInterval > 0f && Time.unscaledTime < _nextInteractionCheckAt)
+            return;
+
+        _nextInteractionCheckAt = Time.unscaledTime + effectiveCheckInterval;
 
         Ray centerRay;
         if (_cam != null)
@@ -203,13 +232,6 @@ public class InteractionManager : MonoBehaviour
             if (_promptUI) _promptUI.Show(_promptAnchor, _current.GetPromptText());
         }
 
-        if (GetInteractPressed())
-        {
-            if (_current.TryInteract(this))
-            {
-                if (_promptUI) _promptUI.Show((interactable as Component).transform, _current.GetPromptText());
-            }
-        }
     }
 
     void ClearHover()

@@ -36,6 +36,10 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
     [SerializeField] private float ultimateGainOnParry = 10f;
     [SerializeField] private string[] ultimateAddMethodNames = { "AddGauge", "Gain" };
 
+    [Header("Debug")]
+    [SerializeField] private bool debugLogs = false;
+    float _moveUnlockAt = float.NegativeInfinity;
+
     void Awake()
     {
         _playerReferences = GetComponent<PlayerReferences>();
@@ -49,6 +53,7 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
         if (!feedback) feedback = GetComponent<ParryFeedbackController>();
         if (!ultimateTarget) ultimateTarget = gameObject;
         RefreshAnimatorParameterCache();
+        enabled = false;
     }
 
 #if UNITY_EDITOR
@@ -60,23 +65,31 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
 
     public void ReceiveHit(HitPayload payload)
     {
-        ReceiveHit(payload.damage, payload.attacker, payload.hitPoint, false, payload.canPerfectDodge);
+        ReceiveHit(payload.damage, payload.attacker, payload.hitPoint, payload.unblockable, payload.canPerfectDodge, payload.canParry);
     }
 
     public void ReceiveHit(float baseDamage, Transform attacker, Vector3 hitPoint, bool unblockable)
     {
-        ReceiveHit(baseDamage, attacker, hitPoint, unblockable, true);
+        ReceiveHit(baseDamage, attacker, hitPoint, unblockable, true, true);
     }
 
     public void ReceiveHit(float baseDamage, Transform attacker, Vector3 hitPoint, bool unblockable, bool allowPerfectDodge)
+    {
+        ReceiveHit(baseDamage, attacker, hitPoint, unblockable, allowPerfectDodge, true);
+    }
+
+    public void ReceiveHit(float baseDamage, Transform attacker, Vector3 hitPoint, bool unblockable, bool allowPerfectDodge, bool allowParry)
     {
         if (!health || health.IsDead) return;
 
         if (allowPerfectDodge && perfectDodge != null && perfectDodge.ResolvePerfectDodge(hitPoint, attacker))
         {
-            Debug.Log(
-                $"[PerfectDodge] SUCCESS attacker={(attacker ? attacker.name : "null")} hitPoint={hitPoint}",
-                this);
+            if (debugLogs)
+            {
+                Debug.Log(
+                    $"[PerfectDodge] SUCCESS attacker={(attacker ? attacker.name : "null")} hitPoint={hitPoint}",
+                    this);
+            }
             return;
         }
 
@@ -91,12 +104,13 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
         bool isFront = IsFront(hitPoint, attacker);
         bool canDefense = hasGuard && isFront && !unblockable;
 
-        bool isParryWindow = canDefense && guard.IsParryWindowOpen;
+        bool isParryWindow = canDefense && allowParry && guard.IsParryWindowOpen;
         bool isGuarding = canDefense && guard.IsGuarding && !isParryWindow;
 
         if (isParryWindow)
         {
-            feedback?.PlayParryFeedback(hitPoint, attacker);
+            guard.CloseParryWindow();
+            guard.PlayParrySuccess();
             LockMove(lockMoveOnParry);
             TryNotifyUltimateGain(ultimateGainOnParry);
             TryNotifyParryBreak(attacker);
@@ -104,35 +118,36 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
             if (TutorialManager.Instance != null)
                 TutorialManager.Instance.OnPlayerParrySuccess();
 
-            Debug.Log("[PlayerDamageReceiver] Parry Success", this);
+            if (debugLogs)
+                Debug.Log("[PlayerDamageReceiver] Parry Success", this);
             return;
         }
 
         if (isGuarding)
         {
+            bool guardBroken = guard.ApplyGuardStrainFromBlock(baseDamage);
             float chip = baseDamage * chipDamageMul;
             if (chip > 0f)
-                health.ApplyDamage(chip);
+                health.ApplyChipDamage(chip);
 
-            feedback?.PlayGuardBlockFeedback(hitPoint, attacker);
-            LockMove(lockMoveOnBlock);
-
-            if (TutorialManager.Instance != null)
-                TutorialManager.Instance.OnPlayerGuardSuccess();
-
-            if (!suppressHitAnimWhenGuarding && anim && _hasGuardBlockTrigger)
+            if (!guardBroken)
             {
-                anim.ResetTrigger(guardBlockTriggerParam);
-                anim.SetTrigger(guardBlockTriggerParam);
+                LockMove(lockMoveOnBlock);
+                guard.PlayBlockReaction();
             }
 
-            Debug.Log($"[PlayerDamageReceiver] Guard Block, chip={chip}", this);
+            if (!guardBroken && TutorialManager.Instance != null)
+                TutorialManager.Instance.OnPlayerGuardSuccess();
+
+            if (debugLogs)
+                Debug.Log($"[PlayerDamageReceiver] Guard Block, chip={chip}, break={guardBroken}", this);
             return;
         }
 
         health.ApplyDamage(baseDamage);
 
-        if (anim && _hasHitTrigger)
+        bool shouldSuppressHitAnim = suppressHitAnimWhenGuarding && canDefense && guard != null && guard.IsGuarding;
+        if (anim && _hasHitTrigger && !shouldSuppressHitAnim)
         {
             anim.ResetTrigger(hitTriggerParam);
             anim.SetTrigger(hitTriggerParam);
@@ -161,19 +176,28 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
 
     bool IsFront(Vector3 hitPoint, Transform attacker)
     {
-        Vector3 toHit = hitPoint - transform.position;
-        toHit.y = 0f;
+        Vector3 defenseDirection;
+        if (attacker != null)
+        {
+            defenseDirection = attacker.position - transform.position;
+        }
+        else
+        {
+            defenseDirection = hitPoint - transform.position;
+        }
 
-        if (toHit.sqrMagnitude < 0.0001f)
+        defenseDirection.y = 0f;
+
+        if (defenseDirection.sqrMagnitude < 0.0001f)
             return true;
 
-        toHit.Normalize();
+        defenseDirection.Normalize();
 
         Vector3 forward = transform.forward;
         forward.y = 0f;
         forward.Normalize();
 
-        float dot = Vector3.Dot(forward, toHit);
+        float dot = Vector3.Dot(forward, defenseDirection);
         float angle = Mathf.Acos(Mathf.Clamp(dot, -1f, 1f)) * Mathf.Rad2Deg;
         return angle <= frontArcDegrees * 0.5f;
     }
@@ -181,14 +205,21 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
     void LockMove(float duration)
     {
         if (!moveController || duration <= 0f) return;
-        StartCoroutine(CoLockMove(duration));
+        moveController.enabled = false;
+        _moveUnlockAt = Mathf.Max(_moveUnlockAt, Time.time + duration);
+        enabled = true;
     }
 
-    IEnumerator CoLockMove(float duration)
+    void Update()
     {
-        moveController.enabled = false;
-        yield return new WaitForSeconds(duration);
-        moveController.enabled = true;
+        if (Time.time < _moveUnlockAt)
+            return;
+
+        if (moveController)
+            moveController.enabled = true;
+
+        _moveUnlockAt = float.NegativeInfinity;
+        enabled = false;
     }
 
     void TryNotifyUltimateGain(float amount)

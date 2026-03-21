@@ -1,23 +1,30 @@
-// Assets/Scripts/Boss/BossDamageReceiver.cs
 using UnityEngine;
 
-/// <summary>
-/// 보스가 플레이어 공격(무기 AttackHitbox 등)을 맞을 때
-/// 공통 인터페이스(IDamageReceiver)를 통해 데미지를 받는 컴포넌트
-/// </summary>
 [DisallowMultipleComponent]
 public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
 {
-    [Header("참조")]
+    [Header("References")]
     public BossHealth bossHealth;
     public Transform bossRoot;
+    public BossBreakController bossBreakController;
+    public BossController bossController;
 
-    [Header("히트 타입 설정")]
-    [Tooltip("히트 정보에서 HitType 을 무시하고 이 값으로 강제할지 여부")]
+    [Header("Hit Settings")]
+    [Tooltip("Ignore payload hit type and force the override type instead.")]
     public bool overrideHitType = false;
 
-    [Tooltip("overrideHitType 이 true 일 때 사용할 기본 타입")]
+    [Tooltip("Used when overrideHitType is enabled.")]
     public HitType overrideType = HitType.Normal;
+
+    [Header("Parry Counter")]
+    [Tooltip("Consume the parry counter window on the first valid hit.")]
+    public bool consumeParryCounterBonus = true;
+    [Tooltip("Grant extra break when the counter hit lands.")]
+    public bool grantBreakBonusOnParryCounter = true;
+
+    [Header("Punish Window")]
+    [Tooltip("보스 공격 후 열린 빈틈 시간 동안 추가 피해 배수를 적용.")]
+    public bool applyPunishWindowBonus = true;
 
     void Awake()
     {
@@ -26,6 +33,12 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
 
         if (bossRoot == null && bossHealth != null)
             bossRoot = bossHealth.transform;
+
+        if (bossBreakController == null)
+            bossBreakController = GetComponentInParent<BossBreakController>();
+
+        if (bossController == null)
+            bossController = GetComponentInParent<BossController>();
     }
 
     public void ReceiveHit(HitPayload payload)
@@ -34,17 +47,62 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
             return;
 
         HitType type = overrideHitType ? overrideType : payload.hitType;
-        int beforeHp = bossHealth.CurrentHP;
+        float damage = payload.damage;
+        ApplyParryCounterBonus(payload.attacker, ref damage, ref type);
+        ApplyPunishWindowBonus(ref damage);
 
-        // IHealth 구현 기반 BossHealth.TakeDamage(...)
+        int beforeHp = bossHealth.CurrentHP;
         bossHealth.TakeDamage(
-            Mathf.RoundToInt(payload.damage),
+            Mathf.RoundToInt(damage),
             type,
-            payload.hitPoint
-        );
+            payload.hitPoint);
 
         if (bossHealth.CurrentHP < beforeHp)
             TryGrantBasicAttackGauge(payload.attacker);
+    }
+
+    void ApplyParryCounterBonus(Transform attacker, ref float damage, ref HitType type)
+    {
+        if (!consumeParryCounterBonus || attacker == null)
+            return;
+
+        PlayerGuardController guard = attacker.GetComponent<PlayerGuardController>();
+        if (guard == null)
+            guard = attacker.GetComponentInParent<PlayerGuardController>();
+
+        if (guard == null)
+            return;
+
+        if (!guard.TryConsumeParryCounter(out float damageMultiplier, out HitType counterHitType, out float breakBonus))
+            return;
+
+        damage *= damageMultiplier;
+
+        if (!overrideHitType)
+            type = counterHitType;
+
+        if (!grantBreakBonusOnParryCounter || breakBonus <= 0f)
+            return;
+
+        if (bossBreakController == null)
+            bossBreakController = GetComponentInParent<BossBreakController>();
+
+        if (bossBreakController != null)
+            bossBreakController.AddBreak(breakBonus, BossBreakController.BreakSource.Parry);
+    }
+
+    void ApplyPunishWindowBonus(ref float damage)
+    {
+        if (!applyPunishWindowBonus)
+            return;
+
+        if (bossController == null)
+            bossController = GetComponentInParent<BossController>();
+
+        if (bossController == null || !bossController.IsPunishWindowActive)
+            return;
+
+        damage *= bossController.CurrentPunishDamageMultiplier;
     }
 
     void TryGrantBasicAttackGauge(Transform attacker)
@@ -52,7 +110,7 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
         if (attacker == null)
             return;
 
-        var ultimate = attacker.GetComponent<PlayerUltimateController>();
+        PlayerUltimateController ultimate = attacker.GetComponent<PlayerUltimateController>();
         if (ultimate == null)
             ultimate = attacker.GetComponentInParent<PlayerUltimateController>();
 

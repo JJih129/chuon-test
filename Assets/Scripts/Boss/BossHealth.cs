@@ -8,7 +8,7 @@ using UnityEngine;
 /// - BossBreakController, BossController 등에서 공통으로 참조
 /// </summary>
 [DisallowMultipleComponent]
-public class BossHealth : MonoBehaviour, IHealth
+public class BossHealth : MonoBehaviour, IHealth, IUltimateTarget
 {
     [Header("▶ 체력 설정")]
     [Tooltip("보스 최대 체력")]
@@ -76,6 +76,8 @@ public class BossHealth : MonoBehaviour, IHealth
 
         if (debugLog)
             Debug.Log($"[BossHealth] Init HP={CurrentHP}/{MaxHP} invincible={isInvincible} staggered={IsStaggered}", this);
+
+        enabled = _invincibleRemain > 0f;
     }
 
     void Update()
@@ -90,6 +92,8 @@ public class BossHealth : MonoBehaviour, IHealth
 
                 if (debugLog)
                     Debug.Log("[BossHealth] Invincible OFF (timer end)", this);
+
+                enabled = false;
             }
         }
     }
@@ -170,6 +174,7 @@ public class BossHealth : MonoBehaviour, IHealth
         {
             isInvincible = false;
             _invincibleRemain = 0f;
+            enabled = false;
 
             if (debugLog)
                 Debug.Log("[BossHealth] Invincible OFF (manual)", this);
@@ -179,6 +184,7 @@ public class BossHealth : MonoBehaviour, IHealth
 
         isInvincible = true;
         _invincibleRemain = duration;
+        enabled = true;
 
         if (debugLog)
             Debug.Log($"[BossHealth] Invincible ON ({duration:0.00}s)", this);
@@ -209,6 +215,14 @@ public class BossHealth : MonoBehaviour, IHealth
 
         CurrentHP = 0;
         Die();
+    }
+
+    public void ApplyUltimateDamage(int fixedDamage)
+    {
+        if (fixedDamage <= 0 || IsDead)
+            return;
+
+        TakeDamage(fixedDamage, HitType.Force, transform.position);
     }
 
     void Die()

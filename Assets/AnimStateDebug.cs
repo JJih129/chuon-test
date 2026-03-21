@@ -2,12 +2,16 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+public class AnimStateDebug : StateMachineBehaviour
+{
+    [SerializeField] private bool logOnStateEnter = false;
 
-    public class AnimStateDebug : StateMachineBehaviour {
-        public override void OnStateEnter(Animator a, AnimatorStateInfo s, int l){
+    public override void OnStateEnter(Animator a, AnimatorStateInfo s, int l)
+    {
+        if (logOnStateEnter)
             Debug.Log("[Anim] Enter Guard2D");
-        }
     }
+}
     // OnStateEnter is called when a transition starts and the state machine starts to evaluate this state
     //override public void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex)
     //{

@@ -1,29 +1,36 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-// BossHUDImage.cs
-// 설명: 상단 고정 보스 HP를 Image(Filled)로 표시. Slider 대신 Image 사용.
-// 사용: HUD 루트(비활성) 위에 붙이고 hpFillImage에 Filled 타입 Image 할당.
-
+[DisallowMultipleComponent]
 public class BossHUD : MonoBehaviour
 {
-    [Header("▶ HP 이미지 (필수)")]
-    [Tooltip("Image Type = Filled. 채워지는 부분에 사용할 이미지.")]
+    [Header("Top Boss HP")]
+    [Tooltip("Filled image used for the HP bar.")]
     public Image hpFillImage;
 
-    // 내부 바인딩 대상
     IHealth bound;
 
-    // 바인딩: IHealth를 받아 이벤트 구독
     public void Bind(IHealth boss)
     {
+        if (boss == null)
+            return;
+
+        if (ReferenceEquals(bound, boss))
+        {
+            UpdateHPImage(boss.CurrentHP, boss.MaxHP);
+            if (!gameObject.activeSelf)
+                gameObject.SetActive(true);
+            return;
+        }
+
         Unbind();
-        if (boss == null) return;
         bound = boss;
         UpdateHPImage(boss.CurrentHP, boss.MaxHP);
         boss.OnHPChanged += UpdateHPImage;
         boss.OnDied += OnDied;
-        gameObject.SetActive(true);
+
+        if (!gameObject.activeSelf)
+            gameObject.SetActive(true);
     }
 
     public void Unbind()
@@ -34,14 +41,21 @@ public class BossHUD : MonoBehaviour
             bound.OnDied -= OnDied;
             bound = null;
         }
-        gameObject.SetActive(false);
+
+        if (gameObject.activeSelf)
+            gameObject.SetActive(false);
     }
 
-    void UpdateHPImage(int cur, int max)
+    void UpdateHPImage(int current, int max)
     {
-        if (hpFillImage == null) return;
-        hpFillImage.fillAmount = (max > 0) ? (float)cur / max : 0f;
+        if (hpFillImage == null)
+            return;
+
+        hpFillImage.fillAmount = max > 0 ? (float)current / max : 0f;
     }
 
-    void OnDied() => Unbind();
+    void OnDied()
+    {
+        Unbind();
+    }
 }

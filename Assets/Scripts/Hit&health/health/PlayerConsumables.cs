@@ -26,6 +26,7 @@ public class PlayerConsumables : MonoBehaviour
     void Start()
     {
         OnAmpouleChanged?.Invoke(currentAmpoule, maxAmpoule);
+        RefreshInputPollingState();
     }
 
     void Update()
@@ -45,11 +46,18 @@ public class PlayerConsumables : MonoBehaviour
         health.Heal(amount);
 
         OnAmpouleChanged?.Invoke(currentAmpoule, maxAmpoule);
+        RefreshInputPollingState();
     }
 
     public void Refill()
     {
         currentAmpoule = maxAmpoule;
         OnAmpouleChanged?.Invoke(currentAmpoule, maxAmpoule);
+        RefreshInputPollingState();
+    }
+
+    void RefreshInputPollingState()
+    {
+        enabled = currentAmpoule > 0;
     }
 }

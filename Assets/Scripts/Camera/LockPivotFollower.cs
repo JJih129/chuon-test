@@ -8,10 +8,18 @@ public class LockPivotFollower : MonoBehaviour
 {
     public Renderer sourceRenderer; // [조절값]
     public float yOffset = 0f;      // [조절값]
+    [Min(0f)] public float refreshInterval = 1f / 30f;
+
+    float _nextRefreshAt;
 
     void LateUpdate()
     {
         if (!sourceRenderer) return;
+        float effectiveRefreshInterval = Mathf.Max(refreshInterval, 1f / 15f);
+        if (effectiveRefreshInterval > 0f && Time.unscaledTime < _nextRefreshAt)
+            return;
+
+        _nextRefreshAt = Time.unscaledTime + effectiveRefreshInterval;
         var c = sourceRenderer.bounds.center;
         transform.position = new Vector3(c.x, c.y + yOffset, c.z);
     }

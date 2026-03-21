@@ -1,62 +1,63 @@
-// FinisherStaticCam.cs
+﻿// FinisherStaticCam.cs
 using UnityEngine;
 using UnityEngine.Playables;
-using Cinemachine;
+using Unity.Cinemachine;
+#pragma warning disable CS0618
 
 [DisallowMultipleComponent]
 public class FinisherStaticCam : MonoBehaviour
 {
-    // ===== 변수 헤더(한글 설명) =====
-    [Header("플레이어 참조")]
-    [Tooltip("궁극기 주체 플레이어 루트 Transform")]
+    // ===== Player refs =====
+    [Header("Player References")]
+    [Tooltip("Root transform of the player using the finisher camera.")]
     public Transform player;
-    [Tooltip("플레이어 얼굴(머리) Transform. 없으면 player.position + headHeight 사용")]
+    [Tooltip("Optional head transform. Uses player position plus headHeight when null.")]
     public Transform headTransform;
-    [Tooltip("headTransform이 없을 때 사용할 머리 높이")]
+    [Tooltip("Fallback head height when headTransform is not assigned.")]
     public float headHeight = 1.6f;
 
-    [Header("카메라 배치(발동 시 고정)")]
-    [Tooltip("플레이어 정면으로부터 떨어질 거리 (양수)")]
+    [Header("Camera Placement")]
+    [Tooltip("Distance from the player forward direction.")]
     public float forwardDistance = 3f;
-    [Tooltip("카메라 높이 (바닥 기준; 낮게 설정하면 올려다보는 각도가 됨)")]
+    [Tooltip("World height offset for the camera.")]
     public float cameraHeight = 0.25f;
-    [Tooltip("카메라의 좌우 오프셋")]
+    [Tooltip("Left/right offset for the camera.")]
     public float lateralOffset = 0f;
 
-    [Header("Cinemachine / 우선도")]
-    [Tooltip("제어할 Cinemachine Virtual Camera")]
-    public CinemachineVirtualCamera vCam;
-    [Tooltip("타임라인(선택) - 재생 제어는 플레이어 컨트롤러에서 함")]
+    [Header("Cinemachine")]
+    [Tooltip("Cinemachine virtual camera controlled by this component.")]
+    public CinemachineVirtualCameraBase vCam;
+    [Tooltip("Optional playable director reference.")]
     public PlayableDirector director;
-    [Tooltip("타임라인 시작 시 vCam 우선도로 전환할 값")]
+    [Tooltip("Priority to use while the finisher camera is active.")]
     public int overridePriority = 100;
-    [Tooltip("발동 전 원래 Priority를 복구할 때 사용할 값")]
+    [Tooltip("Priority restored when the finisher camera is released.")]
     public int restorePriority = 10;
 
-    [Header("연동: 플레이어 이동 실행자")]
-    [Tooltip("플레이어를 카메라 앞 Anchor로 이동시키는 스크립트")]
+    [Header("Player Mover")]
+    [Tooltip("Moves the player toward the finisher anchor.")]
     public PlayerFinisherMover playerMover;
 
-    // 내부
+    // Runtime state
     Transform _anchor;
     int _oldPriority;
 
     void Awake()
     {
-        if (vCam == null) vCam = GetComponent<CinemachineVirtualCamera>();
+        if (vCam == null) vCam = GetComponent<CinemachineVirtualCameraBase>();
         _oldPriority = vCam != null ? vCam.Priority : 0;
     }
 
-    // 발동 시 호출: activationPosition은 '플레이어가 궁극기를 사용한 위치' (world)
+    // activationPosition is the world position where the finisher started
     public void LockAtActivation(Vector3 activationPosition)
     {
         if (player == null || vCam == null)
         {
-            Debug.LogWarning("[FinisherStaticCam] player 또는 vCam이 할당되지 않았습니다.");
+            Debug.LogWarning("[FinisherStaticCam] player or vCam is not assigned.");
             return;
         }
 
-        // 플레이어 발동 시점의 정면 기준으로 카메라 위치 계산
+        // Build the camera position from the player's forward at activation time
         Vector3 forward = player.forward;
         forward.y = 0f;
         if (forward.sqrMagnitude < 0.001f) forward = Vector3.forward;
@@ -64,46 +65,46 @@ public class FinisherStaticCam : MonoBehaviour
 
         Vector3 camPos = activationPosition + forward * forwardDistance + Vector3.up * cameraHeight + player.right * lateralOffset;
 
-        // vCam 고정(Follow 사용하지 않음), LookAt은 headTransform 또는 대체 포인트로 설정
+        // Keep the vcam fixed in place and set a look target
         vCam.Follow = null;
         _anchor = new GameObject("FinisherAnchor").transform;
-        _anchor.position = camPos + vCam.transform.forward * -1.5f; // 카메라 앞, 플레이어가 이동할 위치
+        _anchor.position = camPos + vCam.transform.forward * -1.5f;
         _anchor.rotation = Quaternion.LookRotation((player.position + Vector3.up * headHeight) - _anchor.position, Vector3.up);
 
-        // 카메라 위치 및 회전 설정
+        // Set camera position and rotation
         vCam.transform.position = camPos;
         if (headTransform != null) vCam.LookAt = headTransform;
         else
         {
-            // LookAt이 없을 경우 카메라가 플레이어 머리 방향을 바라보게 회전
+            // Fall back to a simple look-at point above the player
             Vector3 lookTarget = player.position + Vector3.up * headHeight;
             vCam.transform.rotation = Quaternion.LookRotation((lookTarget - camPos).normalized, Vector3.up);
         }
 
-        // 우선도 올리기(다른 vCam과 블렌드되게 하려면 Priority 변경)
+        // Raise priority so this vcam becomes active
         _oldPriority = vCam.Priority;
         vCam.Priority = overridePriority;
     }
 
-    // 타임라인에서 시그널로 호출: 실제 이동 시작(플레이어 이동 담당자에게 위임)
-    // duration은 이동 지속 시간(초)
+    // Called by timeline signal to begin player movement
+    // duration is movement time in seconds
     public void TriggerMoveToAnchor(float duration)
     {
         if (_anchor == null || playerMover == null)
         {
-            Debug.LogWarning("[FinisherStaticCam] Anchor 또는 playerMover가 없습니다.");
+            Debug.LogWarning("[FinisherStaticCam] Anchor or playerMover is missing.");
             return;
         }
         playerMover.StartMoveToAnchor(_anchor, duration);
     }
 
-    // 타임라인/연출이 끝났을 때 호출
+    // Called when the finisher sequence ends
     public void Release()
     {
         if (vCam != null) vCam.Priority = _oldPriority;
         if (_anchor != null) { Destroy(_anchor.gameObject); _anchor = null; }
     }
 
-    // 외부에서 Anchor 참조 필요하면 호출
+    // Expose anchor when external scripts need it
     public Transform GetAnchor() => _anchor;
 }

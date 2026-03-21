@@ -254,12 +254,15 @@ public class PauseSettingsOverlayStyler : MonoBehaviour
 
     void Update()
     {
+        if (!ShouldRefreshRuntimeState())
+            return;
+
         RefreshRuntimeState();
     }
 
     public void RefreshRuntimeState()
     {
-        if (_hostPanel == null || _root == null)
+        if (!ShouldRefreshRuntimeState())
             return;
 
         HandleTabHotkeys();
@@ -267,6 +270,23 @@ public class PauseSettingsOverlayStyler : MonoBehaviour
         RefreshRebindState();
         RefreshOptionValueState();
         RefreshRowFocusState();
+    }
+
+    bool ShouldRefreshRuntimeState()
+    {
+        if (!isActiveAndEnabled)
+            return false;
+
+        if (_hostPanel == null || _root == null)
+            return false;
+
+        if (!_hostPanel.gameObject.activeInHierarchy)
+            return false;
+
+        if (!_root.gameObject.activeInHierarchy)
+            return false;
+
+        return true;
     }
 
     void ApplyNow()

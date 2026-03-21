@@ -42,6 +42,7 @@ public sealed class TimeScaleController : MonoBehaviour
         DontDestroyOnLoad(gameObject);
         baseFixedDeltaTime = Mathf.Max(0.001f, baseFixedDeltaTime);
         ApplyScale(1f);
+        RefreshTickState();
     }
 
     void Update()
@@ -68,6 +69,7 @@ public sealed class TimeScaleController : MonoBehaviour
         // 예약 복원
         _pendingAutoRestore = true;
         _restoreAtUnscaled = Time.unscaledTime + Mathf.Max(0f, duration);
+        RefreshTickState();
     }
 
     /// <summary>
@@ -87,6 +89,7 @@ public sealed class TimeScaleController : MonoBehaviour
         ApplyScale(0f);
         _pendingAutoRestore = true;
         _restoreAtUnscaled = Time.unscaledTime + duration;
+        RefreshTickState();
     }
 
     /// <summary>
@@ -98,6 +101,7 @@ public sealed class TimeScaleController : MonoBehaviour
         _pendingAutoRestore = false;
         _restoreAtUnscaled = 0f;
         Restore(blendOut);
+        RefreshTickState();
     }
 
     // ===================== [기존 호환 API] =====================
@@ -109,6 +113,7 @@ public sealed class TimeScaleController : MonoBehaviour
     {
         if (_lerpCo != null) StopCoroutine(_lerpCo);
         _lerpCo = StartCoroutine(LerpTimeScale(toScale, blendDuration));
+        RefreshTickState();
     }
 
     /// <summary>
@@ -118,6 +123,7 @@ public sealed class TimeScaleController : MonoBehaviour
     {
         if (_lerpCo != null) StopCoroutine(_lerpCo);
         _lerpCo = StartCoroutine(LerpTimeScale(1f, blendDuration));
+        RefreshTickState();
     }
 
     // ===================== [내부 구현] =====================
@@ -131,6 +137,7 @@ public sealed class TimeScaleController : MonoBehaviour
         {
             ApplyScale(target);
             _lerpCo = null;
+            RefreshTickState();
             yield break;
         }
 
@@ -143,6 +150,7 @@ public sealed class TimeScaleController : MonoBehaviour
         }
         ApplyScale(target);
         _lerpCo = null;
+        RefreshTickState();
     }
 
     void ApplyScale(float scale)
@@ -150,5 +158,10 @@ public sealed class TimeScaleController : MonoBehaviour
         CurrentScale = scale;
         Time.timeScale = scale;
         Time.fixedDeltaTime = baseFixedDeltaTime * Mathf.Max(scale, 0.0001f);
+    }
+
+    void RefreshTickState()
+    {
+        enabled = _pendingAutoRestore || _lerpCo != null;
     }
 }

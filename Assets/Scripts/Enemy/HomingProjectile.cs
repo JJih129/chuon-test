@@ -1,30 +1,46 @@
-// HomingProjectile.cs
-using System;
 using UnityEngine;
 
 [RequireComponent(typeof(Collider))]
 public class HomingProjectile : MonoBehaviour
 {
-    [Header("유도/운동")]
+    [Header("Debug")]
+    [SerializeField] bool debugLogs = false;
+
+    [Header("Movement")]
     public Transform target;
     public float speed = 12f;
     public float turnSpeedDeg = 720f;
     public float lifeTime = 8f;
     public int damage = 15;
 
-    [Header("발사자/그레이스")]
+    [Header("Owner Grace")]
     public GameObject owner;
     public float graceDuration = 0.12f;
+
+    [Header("Performance")]
+    [SerializeField] bool useKinematicTransformMovement = true;
 
     Collider _col;
     Rigidbody _rb;
     float _spawnTime;
+    float _lifeRemaining;
 
     void Awake()
     {
         _col = GetComponent<Collider>();
         _rb = GetComponent<Rigidbody>();
-        if (_rb != null) _rb.useGravity = false;
+
+        if (_rb != null)
+        {
+            _rb.useGravity = false;
+            if (useKinematicTransformMovement)
+                _rb.isKinematic = true;
+        }
+    }
+
+    void OnEnable()
+    {
+        _lifeRemaining = lifeTime;
     }
 
     public void Init(Transform t, float initialSpeed, GameObject from, int dmg = -1)
@@ -32,22 +48,25 @@ public class HomingProjectile : MonoBehaviour
         target = t;
         speed = initialSpeed;
         owner = from;
-        if (dmg > 0) damage = dmg;
+        if (dmg > 0)
+            damage = dmg;
+
         _spawnTime = Time.time;
+        _lifeRemaining = lifeTime;
 
-        if (owner != null && _col != null)
-        {
-            var attackerCols = owner.GetComponentsInChildren<Collider>(true);
-            foreach (var ac in attackerCols) if (ac != null)
-                try { Physics.IgnoreCollision(_col, ac, true); } catch { }
-        }
-
-        Debug.Log($"[HomingProjectile] Init target={(t? t.name : "null")} speed={initialSpeed} owner={(from? from.name : "null")} dmg={damage}", this);
-        Destroy(gameObject, lifeTime);
+        if (debugLogs)
+            Debug.Log($"[HomingProjectile] Init target={(t ? t.name : "null")} speed={initialSpeed} owner={(from ? from.name : "null")} dmg={damage}", this);
     }
 
-    void FixedUpdate()
+    void Update()
     {
+        _lifeRemaining -= Time.deltaTime;
+        if (_lifeRemaining <= 0f)
+        {
+            ReleaseSelf();
+            return;
+        }
+
         if (target != null)
         {
             Vector3 toTarget = target.position - transform.position;
@@ -55,38 +74,67 @@ public class HomingProjectile : MonoBehaviour
             if (toFlat.sqrMagnitude > 0.0001f)
             {
                 Quaternion want = Quaternion.LookRotation(toFlat.normalized, Vector3.up);
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeedDeg * Time.fixedDeltaTime);
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeedDeg * Time.deltaTime);
             }
         }
 
-        if (_rb != null) _rb.velocity = transform.forward * speed;
-        else transform.position += transform.forward * speed * Time.deltaTime;
+        if (_rb != null && !useKinematicTransformMovement)
+            _rb.velocity = transform.forward * speed;
+        else
+            transform.position += transform.forward * speed * Time.deltaTime;
     }
 
     void OnTriggerEnter(Collider other)
     {
-        if (other == null) return;
+        if (other == null)
+            return;
+
         if (owner != null && (other.gameObject == owner || other.transform.IsChildOf(owner.transform)))
         {
-            if (Time.time - _spawnTime <= graceDuration) return;
+            if (Time.time - _spawnTime <= graceDuration)
+                return;
+
             return;
         }
 
-        var hitRec = other.GetComponentInParent<IHitReceiver>();
-        if (hitRec != null)
+        IHitReceiver hitReceiver = other.GetComponentInParent<IHitReceiver>();
+        if (hitReceiver != null)
         {
-            var hd = new HitData { attacker = owner ?? gameObject, damage = damage, hitPoint = transform.position, hitDirection = transform.forward };
-            hitRec.ReceiveHit(hd);
+            HitData hitData = new HitData
+            {
+                attacker = owner ?? gameObject,
+                damage = damage,
+                hitPoint = transform.position,
+                hitDirection = transform.forward
+            };
+            hitReceiver.ReceiveHit(hitData);
         }
         else
         {
-            var ih = other.GetComponentInParent<IHealth>();
-            if (ih != null)
+            IHealth health = other.GetComponentInParent<IHealth>();
+            if (health != null)
             {
-                try { ih.ApplyDamage(damage); } catch { }
+                try
+                {
+                    health.ApplyDamage(damage);
+                }
+                catch
+                {
+                }
             }
         }
 
-        Destroy(gameObject);
+        ReleaseSelf();
+    }
+
+    void OnDisable()
+    {
+        target = null;
+        owner = null;
+    }
+
+    void ReleaseSelf()
+    {
+        RuntimeObjectPool.Release(gameObject);
     }
 }

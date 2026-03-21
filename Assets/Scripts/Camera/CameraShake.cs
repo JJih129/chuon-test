@@ -1,9 +1,13 @@
 using UnityEngine;
-using System.Collections;
 
 public class CameraShake : MonoBehaviour
 {
     public static float GlobalStrength { get; private set; } = 1f;
+
+    Vector3 _restLocalPosition;
+    float _remainingDuration;
+    float _currentAmplitude;
+    bool _initialized;
 
     public static void SetGlobalStrength(float value)
     {
@@ -16,22 +20,58 @@ public class CameraShake : MonoBehaviour
         if (scaledAmplitude <= 0f || duration <= 0f)
             return;
 
-        StopAllCoroutines();
-        StartCoroutine(ShakeCoroutine(scaledAmplitude, duration));
+        EnsureInitialized();
+        enabled = true;
+
+        if (_remainingDuration <= 0f || scaledAmplitude >= _currentAmplitude)
+        {
+            _currentAmplitude = scaledAmplitude;
+            _remainingDuration = duration;
+        }
+        else
+        {
+            _remainingDuration = Mathf.Max(_remainingDuration, duration);
+        }
     }
 
-    IEnumerator ShakeCoroutine(float amplitude, float duration)
+    void Awake()
     {
-        Vector3 originalPos = transform.localPosition;
-        float timer = 0f;
-        while (timer < duration)
+        EnsureInitialized();
+        enabled = false;
+    }
+
+    void LateUpdate()
+    {
+        EnsureInitialized();
+
+        if (_remainingDuration <= 0f)
         {
-            float x = Random.Range(-1f, 1f) * amplitude;
-            float y = Random.Range(-1f, 1f) * amplitude;
-            transform.localPosition = originalPos + new Vector3(x, y, 0);
-            timer += Time.deltaTime;
-            yield return null;
+            if (transform.localPosition != _restLocalPosition)
+                transform.localPosition = _restLocalPosition;
+            enabled = false;
+            return;
         }
-        transform.localPosition = originalPos;
+
+        _remainingDuration -= Time.unscaledDeltaTime;
+
+        float x = Random.Range(-1f, 1f) * _currentAmplitude;
+        float y = Random.Range(-1f, 1f) * _currentAmplitude;
+        transform.localPosition = _restLocalPosition + new Vector3(x, y, 0f);
+
+        if (_remainingDuration <= 0f)
+        {
+            _remainingDuration = 0f;
+            _currentAmplitude = 0f;
+            transform.localPosition = _restLocalPosition;
+        }
+    }
+
+    void EnsureInitialized()
+    {
+        if (_initialized)
+            return;
+
+        _restLocalPosition = transform.localPosition;
+        _initialized = true;
     }
 }

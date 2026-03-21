@@ -41,7 +41,18 @@ public class BossBreakHUD : MonoBehaviour
 
     // 내부
     float currentFill = 0f;
-    Coroutine flashRoutine;
+    float nextRefreshAt;
+    const float RefreshInterval = 1f / 12f;
+    Color _baseFillColor;
+    bool _flashActive;
+    float _flashTimeRemaining;
+    float _flashHalfPeriod;
+    int _flashToggleCount;
+    bool _fadeActive;
+    float _fadeElapsed;
+    float _fadeDuration;
+    float _fadeFromAlpha;
+    float _fadeToAlpha;
 
     void Awake()
     {
@@ -52,7 +63,11 @@ public class BossBreakHUD : MonoBehaviour
         if (breakFillImage == null)
             Debug.LogWarning("[BossBreakHUD] breakFillImage 미할당.");
 
+        if (breakFillImage != null)
+            _baseFillColor = breakFillImage.color;
+
         BindBreakController(breakController);
+        RefreshExecutionState();
     }
 
     void OnDestroy()
@@ -62,11 +77,26 @@ public class BossBreakHUD : MonoBehaviour
 
     void Update()
     {
+        UpdateFade();
+        UpdateFlash();
+
+        if (hudRoot != null && !hudRoot.activeInHierarchy)
+        {
+            RefreshExecutionState();
+            return;
+        }
+
+        if (Time.unscaledTime < nextRefreshAt)
+            return;
+
+        nextRefreshAt = Time.unscaledTime + RefreshInterval;
+
         if (breakController == null || breakFillImage == null) return;
 
         float target = breakController.Get01();
-        currentFill = Mathf.Lerp(currentFill, target, Mathf.Clamp01(Time.deltaTime * followSpeed));
-        breakFillImage.fillAmount = currentFill;
+        currentFill = Mathf.Lerp(currentFill, target, Mathf.Clamp01(Time.unscaledDeltaTime * followSpeed));
+        if (!Mathf.Approximately(breakFillImage.fillAmount, currentFill))
+            breakFillImage.fillAmount = currentFill;
     }
 
     public void BindBreakController(BossBreakController controller)
@@ -102,59 +132,113 @@ public class BossBreakHUD : MonoBehaviour
 
     void OnBreakEnter()
     {
+        enabled = true;
         if (showOnBreakEnter && hudRoot != null) SetHUDVisible(true);
         if (!isActiveAndEnabled || breakFillImage == null)
             return;
-        if (flashRoutine != null) StopCoroutine(flashRoutine);
-        flashRoutine = StartCoroutine(FlashFill());
+        StartFlash();
     }
 
     void OnBreakExit()
     {
         if (hideOnBreakExit && hudRoot != null) SetHUDVisible(false);
+        else
+            RefreshExecutionState();
     }
 
     void SetHUDVisible(bool on)
     {
         if (useFade && canvasGroup != null)
         {
-            StopAllCoroutines();
-            StartCoroutine(FadeCanvas(canvasGroup, on ? 1f : 0f, 0.18f, on));
+            BeginFade(on ? 1f : 0f, 0.18f, on);
         }
         else
         {
             hudRoot.SetActive(on);
+            RefreshExecutionState();
         }
     }
 
-    IEnumerator FadeCanvas(CanvasGroup cg, float targetAlpha, float dur, bool ensureActive)
+    void BeginFade(float targetAlpha, float duration, bool ensureActive)
     {
-        if (ensureActive && !cg.gameObject.activeSelf) cg.gameObject.SetActive(true);
-        float start = cg.alpha;
-        float t = 0f;
-        while (t < dur)
-        {
-            t += Time.deltaTime;
-            cg.alpha = Mathf.Lerp(start, targetAlpha, t / dur);
-            yield return null;
-        }
-        cg.alpha = targetAlpha;
-        if (targetAlpha <= 0f) cg.gameObject.SetActive(false);
+        if (canvasGroup == null)
+            return;
+
+        if (ensureActive && !canvasGroup.gameObject.activeSelf)
+            canvasGroup.gameObject.SetActive(true);
+
+        _fadeActive = true;
+        _fadeElapsed = 0f;
+        _fadeDuration = Mathf.Max(0.0001f, duration);
+        _fadeFromAlpha = canvasGroup.alpha;
+        _fadeToAlpha = targetAlpha;
+        enabled = true;
     }
 
-    IEnumerator FlashFill()
+    void UpdateFade()
     {
-        if (breakFillImage == null) yield break;
-        var orig = breakFillImage.color;
-        for (int i = 0; i < hitFlashCount; i++)
+        if (!_fadeActive || canvasGroup == null)
+            return;
+
+        _fadeElapsed += Time.unscaledDeltaTime;
+        float t = Mathf.Clamp01(_fadeElapsed / _fadeDuration);
+        canvasGroup.alpha = Mathf.Lerp(_fadeFromAlpha, _fadeToAlpha, t);
+
+        if (t < 1f)
+            return;
+
+        _fadeActive = false;
+        canvasGroup.alpha = _fadeToAlpha;
+        if (_fadeToAlpha <= 0f && canvasGroup.gameObject.activeSelf)
+            canvasGroup.gameObject.SetActive(false);
+
+        RefreshExecutionState();
+    }
+
+    void StartFlash()
+    {
+        if (breakFillImage == null)
+            return;
+
+        _baseFillColor = breakFillImage.color;
+        _flashActive = true;
+        _flashTimeRemaining = Mathf.Max(0.01f, hitFlashDuration);
+        _flashHalfPeriod = Mathf.Max(0.01f, hitFlashDuration / Mathf.Max(1, hitFlashCount * 2));
+        _flashToggleCount = 0;
+        breakFillImage.color = Color.white;
+    }
+
+    void UpdateFlash()
+    {
+        if (!_flashActive || breakFillImage == null)
+            return;
+
+        _flashTimeRemaining -= Time.unscaledDeltaTime;
+        if (_flashTimeRemaining <= 0f)
         {
-            // 밝은 색 순간 적용
-            breakFillImage.color = Color.white;
-            yield return new WaitForSeconds(hitFlashDuration * 0.5f);
-            breakFillImage.color = orig;
-            yield return new WaitForSeconds(hitFlashDuration * 0.5f);
+            _flashActive = false;
+            breakFillImage.color = _baseFillColor;
+            RefreshExecutionState();
+            return;
         }
-        flashRoutine = null;
+
+        int togglesElapsed = Mathf.FloorToInt((hitFlashDuration - _flashTimeRemaining) / _flashHalfPeriod);
+        if (togglesElapsed == _flashToggleCount)
+            return;
+
+        _flashToggleCount = togglesElapsed;
+        breakFillImage.color = (_flashToggleCount & 1) == 0 ? Color.white : _baseFillColor;
+    }
+
+    void RefreshExecutionState()
+    {
+        bool shouldRun = _fadeActive
+            || _flashActive
+            || hudRoot == null
+            || hudRoot.activeInHierarchy;
+
+        if (enabled != shouldRun)
+            enabled = shouldRun;
     }
 }
 

@@ -48,6 +48,9 @@ public class SimpleCombatStateReader : MonoBehaviour, ICombatStateReader
         if (combatController != null && combatController.IsInHit)
             return true;
 
+        if (guardController != null && guardController.IsGuardBroken)
+            return true;
+
         if (playerHealth != null && (playerHealth.IsDead || playerHealth.IsStaggered))
             return true;
 

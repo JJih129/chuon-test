@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System;
+using System.Collections;
 
 public class UltimateSlashBurstSpawner : MonoBehaviour
 {
@@ -22,9 +23,23 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
     [SerializeField] string propAlpha = "_Alpha";
     [SerializeField] float baseIntensity = 1.2f;
     [SerializeField] float baseScroll = 2.0f;
+    [SerializeField] Transform presentationPlayerOverride;
+    [SerializeField] Transform presentationSpawnRootOverride;
 
     const float Golden = 137.507764f; // 분포용
     bool _warnedMissingSlashPrefab;
+
+    public void PushPresentationOverride(Transform playerOverride, Transform spawnRootOverride)
+    {
+        presentationPlayerOverride = playerOverride;
+        presentationSpawnRootOverride = spawnRootOverride;
+    }
+
+    public void ClearPresentationOverride()
+    {
+        presentationPlayerOverride = null;
+        presentationSpawnRootOverride = null;
+    }
 
     void EnsureSpawnRoot()
     {
@@ -47,6 +62,13 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
         if (!player) player = playerReferences != null ? playerReferences.PlayerRoot : transform;
         EnsureSpawnRoot();
 
+        Transform activePlayer = presentationPlayerOverride != null ? presentationPlayerOverride : player;
+        Transform activeSpawnRoot = presentationSpawnRootOverride != null ? presentationSpawnRootOverride : spawnRoot;
+        if (activePlayer == null)
+            activePlayer = transform;
+        if (activeSpawnRoot == null)
+            activeSpawnRoot = activePlayer;
+
         if (!slashPrefab)
         {
             if (!_warnedMissingSlashPrefab)
@@ -61,7 +83,7 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
         var rng = new System.Random(patternSeed + index * 9973);
 
         // 플레이어 정면 기준 회전
-        Quaternion faceFwd = Quaternion.LookRotation(player.forward, Vector3.up);
+        Quaternion faceFwd = Quaternion.LookRotation(activePlayer.forward, Vector3.up);
 
         // 분포: 골든앵글 기반 + 약간의 지터
         float yaw = index * Golden + (float)(rng.NextDouble() * 10f - 5f);
@@ -71,10 +93,13 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
                        * Quaternion.AngleAxis(yaw, Vector3.up)
                        * Quaternion.AngleAxis(pitch, Vector3.right);
 
-        Vector3 pos = spawnRoot.position;
+        Vector3 pos = activeSpawnRoot.position;
 
-        var go = Instantiate(slashPrefab, pos, rot);
+        var go = TransientVfxPool.Spawn(slashPrefab, pos, rot, null, life);
+        if (go == null)
+            return;
         go.transform.localScale = new Vector3(thickness, thickness, length);
+        ConfigureSpawnedFxForUnscaledPlayback(go);
 
         var r = go.GetComponentInChildren<Renderer>();
         if (r)
@@ -86,7 +111,22 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
             if (!string.IsNullOrEmpty(propAlpha)) mpb.SetFloat(propAlpha, 1f);
             r.SetPropertyBlock(mpb);
         }
+    }
 
-        Destroy(go, life);
+    void ConfigureSpawnedFxForUnscaledPlayback(GameObject go)
+    {
+        if (go == null)
+            return;
+
+        var animators = go.GetComponentsInChildren<Animator>(true);
+        for (int i = 0; i < animators.Length; i++)
+            animators[i].updateMode = AnimatorUpdateMode.UnscaledTime;
+
+        var particleSystems = go.GetComponentsInChildren<ParticleSystem>(true);
+        for (int i = 0; i < particleSystems.Length; i++)
+        {
+            var main = particleSystems[i].main;
+            main.useUnscaledTime = true;
+        }
     }
 }

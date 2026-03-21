@@ -17,6 +17,7 @@ public abstract class BaseInteractable : MonoBehaviour, IInteractable
 
     [Header("접근만으로 자동 실행할지. 문/상자 등은 false 권장")]
     public bool autoPickup = false;
+    [SerializeField] bool debugHoverLogs = false;
 
     protected virtual void Reset()
     {
@@ -29,14 +30,16 @@ public abstract class BaseInteractable : MonoBehaviour, IInteractable
     // 로그 추가: OnHoverStart
     public virtual void OnHoverStart()
     {
-        Debug.Log($"[Hover] OnHoverStart: {name}");
+        if (debugHoverLogs)
+            Debug.Log($"[Hover] OnHoverStart: {name}");
         if (highlight) highlight.SetActive(true);
     }
 
     // 로그 추가: OnHoverEnd
     public virtual void OnHoverEnd()
     {
-        Debug.Log($"[Hover] OnHoverEnd: {name}");
+        if (debugHoverLogs)
+            Debug.Log($"[Hover] OnHoverEnd: {name}");
         if (highlight) highlight.SetActive(false);
     }
 

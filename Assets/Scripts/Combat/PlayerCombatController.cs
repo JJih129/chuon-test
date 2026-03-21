@@ -10,6 +10,9 @@ public class PlayerCombatController : MonoBehaviour
     [SerializeField] private float inputBufferTime = 0.25f;
     [SerializeField] private float comboResetTime = 0.6f;
     [SerializeField] private float minClickInterval = 0.05f;
+    [SerializeField] private float comboChainBufferTime = 0.45f;
+    [SerializeField, Range(0f, 0.25f)] private float comboLateGraceNormalized = 0.08f;
+    [SerializeField] private float attackTransitionGraceSeconds = 0.08f;
 
     [Header("▶ 콤보 데이터")]
     [SerializeField] private AttackData firstLight;
@@ -24,9 +27,20 @@ public class PlayerCombatController : MonoBehaviour
     [SerializeField] private bool lockMovementWhileAttacking = true;
     [SerializeField] private bool locomotionDuringAttack = false;
     [SerializeField] private string speedParam = "speed";
+    [SerializeField] private Transform playerRoot;
+    [SerializeField] private CharacterController characterController;
+    [SerializeField] private PlayerLockOn playerLockOn;
+    [SerializeField] private PerfectDodgeController perfectDodgeController;
+
+    [Header("Perfect Dodge Attack Assist")]
+    [SerializeField] private bool usePerfectDodgeAttackAssist = true;
+    [SerializeField, Range(0f, 2f)] private float perfectDodgeAssistStopDistance = 0.2f;
+    [SerializeField, Range(0f, 1f)] private float perfectDodgeAssistMinRange = 0f;
+    [SerializeField] private bool snapFacingToPerfectDodgeTarget = true;
 
     [Header("▶ 안전장치")]
     [SerializeField] private float endAttackIfStuckSeconds = 2.0f;
+    [SerializeField] private bool logAttackTimeoutFailsafe = false;
 
     // ── 피격 관련 ───────────────────────────────────
     [Header("▶ 피격 설정")]
@@ -48,6 +62,8 @@ public class PlayerCombatController : MonoBehaviour
     // ── 내부 변수 ───────────────────────────────────
     private struct BufferedInput { public float time; public AttackInput type; }
     private readonly Queue<BufferedInput> inputQueue = new Queue<BufferedInput>();
+    private bool hasQueuedComboInput;
+    private BufferedInput queuedComboInput;
     
     private float lastClickTime = -999f;
     private float lastAttackEndRT = -999f;
@@ -58,6 +74,7 @@ public class PlayerCombatController : MonoBehaviour
 
     // 타임아웃 체크용 (Time.time 기준)
     private float attackStartTime = 0f;
+    private float lastAttackPlayTime = -999f;
 
     // 피격 상태 변수
     private bool inHit = false;
@@ -77,6 +94,12 @@ public class PlayerCombatController : MonoBehaviour
         if (!animator) animator = playerReferences != null && playerReferences.MainAnimator != null
             ? playerReferences.MainAnimator
             : GetComponent<Animator>();
+        if (!playerRoot) playerRoot = playerReferences != null && playerReferences.PlayerRoot != null
+            ? playerReferences.PlayerRoot
+            : transform;
+        if (!characterController) characterController = GetComponent<CharacterController>();
+        if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
+        if (!perfectDodgeController) perfectDodgeController = GetComponent<PerfectDodgeController>();
         RefreshWeaponHitbox();
         moveController = GetComponent<PlayerMoveController>();
         inputBlocker = GetComponent<IInputBlocker>();
@@ -94,6 +117,8 @@ public class PlayerCombatController : MonoBehaviour
     void OnDisable()
     {
         if (!animator) return;
+
+        ClearBufferedInputs();
 
         if (movementLocked) SetMoveLock(false);
         SafeSetLayerWeight(actionLayerIndex, 0f);
@@ -137,14 +162,14 @@ public class PlayerCombatController : MonoBehaviour
 
         // 1) 입력 버퍼링
         if (Input.GetMouseButtonDown(0) && Time.time - lastClickTime > minClickInterval)
-        { 
-            lastClickTime = Time.time; 
-            inputQueue.Enqueue(new BufferedInput { time = Time.time, type = AttackInput.Light }); 
+        {
+            lastClickTime = Time.time;
+            BufferAttackInput(AttackInput.Light);
         }
         if (Input.GetMouseButtonDown(1) && Time.time - lastClickTime > minClickInterval)
-        { 
-            lastClickTime = Time.time; 
-            inputQueue.Enqueue(new BufferedInput { time = Time.time, type = AttackInput.Heavy }); 
+        {
+            lastClickTime = Time.time;
+            BufferAttackInput(AttackInput.Heavy);
         }
 
         // 2) 로코모션 (공격 중 아닐 때만)
@@ -157,7 +182,8 @@ public class PlayerCombatController : MonoBehaviour
         // 4) 공격 비상 타임아웃 (Time.time 기준)
         if (inAttack && endAttackIfStuckSeconds > 0f && (Time.time - attackStartTime) > endAttackIfStuckSeconds)
         {
-            Debug.LogWarning("[Combat] Attack forced to end by timeout failsafe.");
+            if (logAttackTimeoutFailsafe)
+                Debug.LogWarning("[Combat] Attack forced to end by timeout failsafe.");
             EndAttack();
         }
     }
@@ -173,15 +199,12 @@ public class PlayerCombatController : MonoBehaviour
     private void StepCombo()
     {
         int layer = current ? current.animatorLayer : actionLayerIndex;
-        var st = animator.GetCurrentAnimatorStateInfo(layer);
-        float t = st.normalizedTime % 1f;
 
-        // A) 대기 상태 -> 첫 타
         if (!inAttack)
         {
             if (Time.time - lastAttackEndRT > comboResetTime) current = null;
 
-            if (TryConsume(out var inp))
+            if (TryConsumeAnyBufferedInput(out var inp))
             {
                 var start = (inp.type == AttackInput.Light) ? firstLight : firstHeavy;
                 if (start) Play(start, 0f);
@@ -189,45 +212,60 @@ public class PlayerCombatController : MonoBehaviour
             return;
         }
 
-        // B) 공격 중 (콤보 연결)
-        if (current)
+        if (!current)
+            return;
+
+        bool matchedAttackState = TryGetAttackProgress(layer, current, out float t);
+        if (!matchedAttackState)
         {
-            // 캔슬 구간 확인
-            if (t >= current.cancelStart && t <= current.cancelEnd)
+            if (Time.time - lastAttackPlayTime < attackTransitionGraceSeconds || animator.IsInTransition(layer))
+                return;
+
+            EndAttack();
+            return;
+        }
+
+        float comboWindowEnd = Mathf.Min(1.05f, Mathf.Max(current.cancelEnd, 0.95f) + comboLateGraceNormalized);
+        if (t >= current.cancelStart && t <= comboWindowEnd)
+        {
+            if (TryPeekAnyBufferedInput(out var inp))
             {
-                if (TryConsume(out var inp))
+                var nx = FindNext(current, inp.type);
+                if (nx)
                 {
-                    var nx = FindNext(current, inp.type);
-                    if (nx) { Play(nx, 0.05f); return; }
+                    ConsumePeekedBufferedInput();
+                    Play(nx, 0.03f);
+                    return;
                 }
             }
-            // C) 모션 종료 확인
-            if (t >= 0.99f)
-                EndAttack();
+        }
+
+        if (t >= 0.99f && !animator.IsInTransition(layer) &&
+            (Time.time - lastAttackPlayTime) >= attackTransitionGraceSeconds)
+        {
+            EndAttack();
         }
     }
 
     private void Play(AttackData data, float fade)
     {
+        TryApplyPerfectDodgeAttackAssist();
+
         current = data;
         inAttack = true;
-        
-        // ★ 게임 시간 기준으로 기록 (일시정지 문제 해결)
-        attackStartTime = Time.time;
 
-        // 레이어 활성화
+        attackStartTime = Time.time;
+        lastAttackPlayTime = Time.time;
+
         SafeSetLayerWeight(actionLayerIndex, 1f);
 
-        // 이동 잠금
         if (lockMovementWhileAttacking && !movementLocked)
             SetMoveLock(true);
 
-        // 애니메이션 재생
         animator.speed = Mathf.Max(0.01f, data.playSpeed);
         if (fade <= 0f) animator.Play(data.stateName, data.animatorLayer, 0f);
         else            animator.CrossFadeInFixedTime(data.stateName, fade, data.animatorLayer, 0f);
-        
-        // ★ 공격 시 루트 모션 켜기 (전진 공격 등을 위해)
+
         animator.applyRootMotion = true;
     }
 
@@ -240,19 +278,256 @@ public class PlayerCombatController : MonoBehaviour
         SafeSetLayerWeight(actionLayerIndex, 0f);
 
         if (movementLocked) SetMoveLock(false);
-        
-        // ★ 공격 끝나면 루트 모션 끄기 (이동 스크립트 복귀)
         animator.applyRootMotion = false;
     }
 
-    // ───────────────── 입력 처리 ─────────────────
-    private bool TryConsume(out BufferedInput input)
+    private void TryApplyPerfectDodgeAttackAssist()
+    {
+        if (!usePerfectDodgeAttackAssist || perfectDodgeController == null)
+            return;
+
+        if (!perfectDodgeController.TryConsumeAttackFollowUpTarget(out Transform target))
+            return;
+
+        target = ResolvePerfectDodgeAttackAssistTarget(target);
+        if (target == null)
+            return;
+
+        Transform facingRoot = playerRoot != null ? playerRoot : transform;
+        Vector3 targetPoint = GetPerfectDodgeAttackAssistTargetPoint(target);
+        Vector3 direction = GetPerfectDodgeAttackAssistApproachDirection(target, targetPoint, facingRoot);
+        if (direction.sqrMagnitude <= 0.0001f)
+            return;
+
+        Vector3 destinationAnchor = GetPerfectDodgeAttackAssistFrontSurfacePoint(target, targetPoint, direction);
+        Vector3 destination = destinationAnchor - direction * perfectDodgeAssistStopDistance;
+        destination.y = transform.position.y;
+
+        Vector3 moveDelta = destination - transform.position;
+        moveDelta.y = 0f;
+        if (moveDelta.sqrMagnitude > perfectDodgeAssistMinRange * perfectDodgeAssistMinRange)
+            SnapPlayerToPerfectDodgeAssistDestination(destination);
+
+        if (snapFacingToPerfectDodgeTarget)
+        {
+            Vector3 facingDirection = targetPoint - facingRoot.position;
+            facingDirection.y = 0f;
+            if (facingDirection.sqrMagnitude <= 0.0001f)
+                facingDirection = direction;
+
+            if (facingDirection.sqrMagnitude > 0.0001f)
+                facingRoot.rotation = Quaternion.LookRotation(facingDirection.normalized, Vector3.up);
+        }
+    }
+
+    private Transform ResolvePerfectDodgeAttackAssistTarget(Transform fallbackTarget)
+    {
+        if (fallbackTarget != null)
+            return fallbackTarget;
+
+        if (playerLockOn != null && playerLockOn.HasTarget)
+            return playerLockOn.GetCurrentTarget();
+
+        return null;
+    }
+
+    private Vector3 GetPerfectDodgeAttackAssistTargetPoint(Transform target)
+    {
+        Bounds combinedBounds = default;
+        bool hasBounds = false;
+        Collider[] colliders = target.GetComponentsInChildren<Collider>(true);
+
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            Collider col = colliders[i];
+            if (col == null || !col.enabled || col.isTrigger)
+                continue;
+
+            if (!hasBounds)
+            {
+                combinedBounds = col.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            combinedBounds.Encapsulate(col.bounds);
+        }
+
+        return hasBounds ? combinedBounds.center : target.position;
+    }
+
+    private Vector3 GetPerfectDodgeAttackAssistApproachDirection(Transform target, Vector3 targetPoint, Transform facingRoot)
+    {
+        Vector3 direction = -target.forward;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.0001f)
+            return direction.normalized;
+
+        direction = targetPoint - facingRoot.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.0001f)
+            return direction.normalized;
+
+        return GetPerfectDodgeAttackAssistFallbackDirection(target, facingRoot);
+    }
+
+    private Vector3 GetPerfectDodgeAttackAssistFrontSurfacePoint(Transform target, Vector3 targetPoint, Vector3 approachDirection)
+    {
+        Collider bestCollider = null;
+        float bestSqrDistance = float.MaxValue;
+        Vector3 sampleOrigin = targetPoint - approachDirection.normalized * 4f;
+        Collider[] colliders = target.GetComponentsInChildren<Collider>(true);
+
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            Collider col = colliders[i];
+            if (col == null || !col.enabled || col.isTrigger)
+                continue;
+
+            Vector3 surfacePoint = col.ClosestPoint(sampleOrigin);
+            float sqrDistance = (surfacePoint - sampleOrigin).sqrMagnitude;
+            if (sqrDistance < bestSqrDistance)
+            {
+                bestSqrDistance = sqrDistance;
+                bestCollider = col;
+            }
+        }
+
+        if (bestCollider != null)
+        {
+            Vector3 surfacePoint = bestCollider.ClosestPoint(sampleOrigin);
+            if ((surfacePoint - sampleOrigin).sqrMagnitude > 0.0001f)
+                return surfacePoint;
+
+            return bestCollider.bounds.center;
+        }
+
+        return targetPoint;
+    }
+
+    private Vector3 GetPerfectDodgeAttackAssistFallbackDirection(Transform target, Transform facingRoot)
+    {
+        Vector3 direction = target.position - facingRoot.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.0001f)
+            return direction.normalized;
+
+        direction = target.forward;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.0001f)
+            return direction.normalized;
+
+        direction = facingRoot.forward;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.0001f)
+            return direction.normalized;
+
+        return Vector3.forward;
+    }
+
+    private void SnapPlayerToPerfectDodgeAssistDestination(Vector3 destination)
+    {
+        if (characterController != null && characterController.enabled)
+        {
+            characterController.enabled = false;
+            transform.position = destination;
+            characterController.enabled = true;
+            return;
+        }
+
+        transform.position = destination;
+    }
+
+    private void BufferAttackInput(AttackInput inputType)
+    {
+        var buffered = new BufferedInput { time = Time.time, type = inputType };
+
+        if (inAttack)
+        {
+            queuedComboInput = buffered;
+            hasQueuedComboInput = true;
+            return;
+        }
+
+        inputQueue.Enqueue(buffered);
+    }
+
+    private bool TryPeekAnyBufferedInput(out BufferedInput input)
+    {
+        PruneExpiredBufferedInputs();
+
+        if (hasQueuedComboInput)
+        {
+            input = queuedComboInput;
+            return true;
+        }
+
+        if (inputQueue.Count > 0)
+        {
+            input = inputQueue.Peek();
+            return true;
+        }
+
+        input = default;
+        return false;
+    }
+
+    private bool TryConsumeAnyBufferedInput(out BufferedInput input)
+    {
+        if (!TryPeekAnyBufferedInput(out input))
+            return false;
+
+        ConsumePeekedBufferedInput();
+        return true;
+    }
+
+    private void ConsumePeekedBufferedInput()
+    {
+        if (hasQueuedComboInput)
+        {
+            hasQueuedComboInput = false;
+            return;
+        }
+
+        if (inputQueue.Count > 0)
+            inputQueue.Dequeue();
+    }
+
+    private void PruneExpiredBufferedInputs()
     {
         while (inputQueue.Count > 0 && Time.time - inputQueue.Peek().time > inputBufferTime)
             inputQueue.Dequeue();
 
-        if (inputQueue.Count > 0) { input = inputQueue.Dequeue(); return true; }
-        input = default; return false;
+        float comboBufferLifetime = Mathf.Max(inputBufferTime, comboChainBufferTime);
+        if (hasQueuedComboInput && Time.time - queuedComboInput.time > comboBufferLifetime)
+            hasQueuedComboInput = false;
+    }
+
+    private bool TryGetAttackProgress(int layer, AttackData attack, out float normalizedTime)
+    {
+        normalizedTime = 0f;
+        if (!animator || attack == null)
+            return false;
+
+        var currentState = animator.GetCurrentAnimatorStateInfo(layer);
+        if (currentState.IsName(attack.stateName))
+        {
+            normalizedTime = currentState.normalizedTime % 1f;
+            return true;
+        }
+
+        if (animator.IsInTransition(layer))
+        {
+            var nextState = animator.GetNextAnimatorStateInfo(layer);
+            if (nextState.IsName(attack.stateName))
+            {
+                normalizedTime = nextState.normalizedTime % 1f;
+                return true;
+            }
+        }
+
+        normalizedTime = currentState.normalizedTime % 1f;
+        return false;
     }
 
     private AttackData FindNext(AttackData from, AttackInput input)
@@ -290,6 +565,7 @@ public class PlayerCombatController : MonoBehaviour
     {
         if (invulnerable) return;
         if (inAttack) EndAttack();
+        ClearBufferedInputs();
 
         inHit = true;
         hitStartTime = Time.time;
@@ -309,6 +585,7 @@ public class PlayerCombatController : MonoBehaviour
     {
         if (invulnerable) return;
         if (inAttack) EndAttack();
+        ClearBufferedInputs();
 
         inHit = true;
         invulnerable = true;
@@ -329,6 +606,7 @@ public class PlayerCombatController : MonoBehaviour
         inHit = true;
         inAttack = false;
         invulnerable = true;
+        ClearBufferedInputs();
 
         SafeSetLayerWeight(actionLayerIndex, 0f);
         SafeSetLayerWeight(hitLayerIndex, 1f);
@@ -410,6 +688,7 @@ public class PlayerCombatController : MonoBehaviour
     private void ClearBufferedInputs()
     {
         inputQueue.Clear();
+        hasQueuedComboInput = false;
     }
 
     private bool IsInputBlocked()

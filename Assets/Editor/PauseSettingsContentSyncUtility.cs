@@ -20,15 +20,15 @@ public static class PauseSettingsContentSyncUtility
     [MenuItem("Tools/Validation/Sync Pause Settings Content")]
     static void SyncPauseSettingsContent()
     {
-        RunInternal(showDialog: true);
+        RunInternal(showDialog: true, syncPauseCanvasPrefab: true);
     }
 
     public static SyncSummary RunFromFastMcp()
     {
-        return RunInternal(showDialog: false);
+        return RunInternal(showDialog: false, syncPauseCanvasPrefab: false);
     }
 
-    static SyncSummary RunInternal(bool showDialog)
+    static SyncSummary RunInternal(bool showDialog, bool syncPauseCanvasPrefab)
     {
         var activeScene = SceneManager.GetActiveScene();
         var activeScenePath = activeScene.IsValid() ? activeScene.path : string.Empty;
@@ -48,7 +48,8 @@ public static class PauseSettingsContentSyncUtility
 
         try
         {
-            SyncPauseCanvasPrefab(optionsPrefab, report);
+            if (syncPauseCanvasPrefab)
+                SyncPauseCanvasPrefab(optionsPrefab, report);
 
             foreach (var scenePath in TargetScenePaths)
                 SyncScene(scenePath, optionsPrefab, report);
@@ -162,7 +163,7 @@ public static class PauseSettingsContentSyncUtility
             var details = BuildDetails();
             if (warnings.Count > 0)
                 Debug.LogWarning(details);
-            else
+            else if (showDialog)
                 Debug.Log(details);
 
             if (showDialog)

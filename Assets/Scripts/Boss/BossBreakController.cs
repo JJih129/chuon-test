@@ -70,6 +70,7 @@ public class BossBreakController : MonoBehaviour
             bossHealth.OnDied += HandleBossDied;
 
         _breakBoolHash = Animator.StringToHash(breakBoolName);
+        enabled = false;
     }
 
     private void OnDestroy()
@@ -127,6 +128,7 @@ public class BossBreakController : MonoBehaviour
 
         _isInBreak = true;
         _breakTimer = breakDuration;
+        enabled = true;
 
         if (bossHealth != null)
             bossHealth.SetStaggered(true);
@@ -155,6 +157,7 @@ public class BossBreakController : MonoBehaviour
 
         _currentBreak = 0f;
         OnBreakExit?.Invoke();
+        enabled = false;
 
         if (logDebug)
             Debug.Log("[Break] EXIT", this);

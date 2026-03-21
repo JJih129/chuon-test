@@ -30,7 +30,7 @@ public class EnemyHealth : MonoBehaviour, IHealth
         currentHP -= amount;
         if (currentHP < 0) currentHP = 0;
 
-        if (hitEffectPrefab != null) Instantiate(hitEffectPrefab, hitPoint, Quaternion.identity);
+        if (hitEffectPrefab != null) TransientVfxPool.Spawn(hitEffectPrefab, hitPoint, Quaternion.identity);
 
         OnHPChanged?.Invoke(currentHP, maxHP);
         OnHealthChanged?.Invoke(currentHP, maxHP);

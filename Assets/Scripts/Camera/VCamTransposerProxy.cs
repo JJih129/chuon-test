@@ -1,54 +1,58 @@
-using UnityEngine;
-using Cinemachine;
+ï»¿using UnityEngine;
+using Unity.Cinemachine;
+#pragma warning disable CS0618
 
-// ===== º¯¼ö Çì´õ(ÇÑ±Û ¼³¸í) =====
-// ¸ñÀû: Å¸ÀÓ¶óÀÎ(¾Ö´Ï¸ŞÀÌ¼Ç Æ®·¢)¿¡¼­ offsetX / offsetY / offsetZ¿¡ Å°ÇÁ·¹ÀÓÀ» ÁÖ¸é
-//       Cinemachine TransposerÀÇ m_FollowOffset(X/Y/Z)À» ¸Å ÇÁ·¹ÀÓ °»½ÅÇÑ´Ù.
-// »ç¿ëÃ³: VCam_Action(¶Ç´Â ¿øÇÏ´Â VCam)¿¡ ºÙ¿©¼­, Ä«¸Ş¶ó ±¸µµ¸¦ XYZ·Î ¿¬Ãâ Á¦¾î.
+// ===== ë³€ìˆ˜ í—¤ë”(í•œê¸€ ì„¤ëª…) =====
+// ëª©ì : íƒ€ì„ë¼ì¸(ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë™)ì—ì„œ offsetX / offsetY / offsetZì— í‚¤í”„ë ˆì„ì„ ì£¼ë©´
+//       Cinemachine Transposerì˜ m_FollowOffset(X/Y/Z)ì„ ë§¤ í”„ë ˆì„ ê°±ì‹ í•œë‹¤.
+// ì‚¬ìš©ì²˜: VCam_Action(ë˜ëŠ” ì›í•˜ëŠ” VCam)ì— ë¶™ì—¬ì„œ, ì¹´ë©”ë¼ êµ¬ë„ë¥¼ XYZë¡œ ì—°ì¶œ ì œì–´.
 //
-// [ÇÙ½É Á¶Àı°ª]
-//  - offsetX : ÁÂ/¿ì ¿ÀÇÁ¼Â(+´Â Ä«¸Ş¶ó°¡ Å¸°Ù ¿À¸¥ÂÊÀ¸·Î ÀÌµ¿)
-//  - offsetY : ³ôÀÌ ¿ÀÇÁ¼Â(+´Â ´õ ³ôÀº ½ÃÁ¡)
-//  - offsetZ : Àü/ÈÄ ¿ÀÇÁ¼Â(ÀÏ¹İÀûÀ¸·Î µÚ´Â À½¼ö °ª, ¾ÕÀ¸·Î ´ç±æ ¶© +)
-//  - animateY : ONÀÌ¸é offsetY¸¦ »ç¿ëÇØ YÃàµµ ¾Ö´Ï¸ŞÀÌ¼Ç, OFF¸é ÇöÀç Transposer Y¸¦ À¯Áö(°íÁ¤)
+// [í•µì‹¬ ì¡°ì ˆê°’]
+//  - offsetX : ì¢Œ/ìš° ì˜¤í”„ì…‹(+ëŠ” ì¹´ë©”ë¼ê°€ íƒ€ê²Ÿ ì˜¤ë¥¸ìª½ìœ¼ë¡œ ì´ë™)
+//  - offsetY : ë†’ì´ ì˜¤í”„ì…‹(+ëŠ” ë” ë†’ì€ ì‹œì )
+//  - offsetZ : ì „/í›„ ì˜¤í”„ì…‹(ì¼ë°˜ì ìœ¼ë¡œ ë’¤ëŠ” ìŒìˆ˜ ê°’, ì•ìœ¼ë¡œ ë‹¹ê¸¸ ë• +)
+//  - animateY : ONì´ë©´ offsetYë¥¼ ì‚¬ìš©í•´ Yì¶•ë„ ì• ë‹ˆë©”ì´ì…˜, OFFë©´ í˜„ì¬ Transposer Yë¥¼ ìœ ì§€(ê³ ì •)
 //
-// [º¸°£ ¿É¼Ç(¿¬Ãâ ºÎµå·¯¿ò)]
-//  - smoothFollow : ONÀÌ¸é ¸ñÇ¥ ¿ÀÇÁ¼ÂÀ¸·Î ¼­¼­È÷ ¼ö·Å(Lerp ¶Ç´Â SmoothDamp)
-//  - lerpSpeed    : Lerp ¼Óµµ(ÃÊ´ç ºñÀ²). °ªÀÌ Å¬¼ö·Ï ºü¸£°Ô ¸ñÇ¥·Î ºÙÀ½(±ÇÀå 4~8)
-//  - smoothTime   : SmoothDamp ¸ñÇ¥ µµ´Ş ½Ã°£(ÃÊ). 0º¸´Ù Å©¸é SmoothDamp ¿ì¼±(¸»¶ûÇÑ °¨¼Ó)
+// [ë³´ê°„ ì˜µì…˜(ì—°ì¶œ ë¶€ë“œëŸ¬ì›€)]
+//  - smoothFollow : ONì´ë©´ ëª©í‘œ ì˜¤í”„ì…‹ìœ¼ë¡œ ì„œì„œíˆ ìˆ˜ë ´(Lerp ë˜ëŠ” SmoothDamp)
+//  - lerpSpeed    : Lerp ì†ë„(ì´ˆë‹¹ ë¹„ìœ¨). ê°’ì´ í´ìˆ˜ë¡ ë¹ ë¥´ê²Œ ëª©í‘œë¡œ ë¶™ìŒ(ê¶Œì¥ 4~8)
+//  - smoothTime   : SmoothDamp ëª©í‘œ ë„ë‹¬ ì‹œê°„(ì´ˆ). 0ë³´ë‹¤ í¬ë©´ SmoothDamp ìš°ì„ (ë§ë‘í•œ ê°ì†)
 //
-// [À¯Æ¿]
-//  - SnapNow()    : ÇöÀç offsetX/Y/Z ¸ñÇ¥°ªÀ¸·Î 'Áï½Ã' ½º³À(ÄÆ ÀüÈ¯ ½Ã È£Ãâ¿ë)
-//  - applyEveryFrame : ¸Å ÇÁ·¹ÀÓ ¹İ¿µÇÒÁö ¿©ºÎ
+// [ìœ í‹¸]
+//  - SnapNow()    : í˜„ì¬ offsetX/Y/Z ëª©í‘œê°’ìœ¼ë¡œ 'ì¦‰ì‹œ' ìŠ¤ëƒ…(ì»· ì „í™˜ ì‹œ í˜¸ì¶œìš©)
+//  - applyEveryFrame : ë§¤ í”„ë ˆì„ ë°˜ì˜í• ì§€ ì—¬ë¶€
 //
-// ÁÖÀÇ: ´ë»ó VCamÀÇ Body´Â ¹İµå½Ã "Transposer"¿©¾ß ÇÔ.
-//      Main Camera¿¡´Â Cinemachine BrainÀÌ ºÙ¾î ÀÖ¾î¾ß ÀüÈ¯/ºí·»µå°¡ µ¿ÀÛÇÔ.
+// ì£¼ì˜: ëŒ€ìƒ VCamì˜ BodyëŠ” ë°˜ë“œì‹œ "Transposer"ì—¬ì•¼ í•¨.
+//      Main Cameraì—ëŠ” Cinemachine Brainì´ ë¶™ì–´ ìˆì–´ì•¼ ì „í™˜/ë¸”ë Œë“œê°€ ë™ì‘í•¨.
 [ExecuteAlways]
 public class VCamTransposerProxy : MonoBehaviour
 {
-    [Header("¨ç ´ë»ó VCam (ºñ¿ì¸é ÀÚ±â ÀÚ½Å¿¡¼­ Ã£À½)")]
-    public CinemachineVirtualCamera vcam;
+    [Header("â‘  ëŒ€ìƒ VCam (ë¹„ìš°ë©´ ìê¸° ìì‹ ì—ì„œ ì°¾ìŒ)")]
+    public CinemachineVirtualCameraBase vcam;
 
-    [Header("¨è ¾Ö´Ï¸ŞÀÌ¼Ç¿ë ÇÁ·Ï½Ã ¿ÀÇÁ¼Â(X/Y/Z) - Å¸ÀÓ¶óÀÎ¿¡¼­ ¿©±â¿¡ Å° ÁÖ±â")]
-    public float offsetX = 0.0f;   // ¿¹: 0.8 ¡æ -0.6 (ÁÂ¿ì ½ºÀ¬)
-    public float offsetY = 1.8f;   // ¿¹: 1.8 ¡æ 2.2  (»óÇÏ º¯È¯)
-    public float offsetZ = -3.8f;  // ¿¹: -3.8 ¡æ -3.2 (´ç°Ü ÀÓÆÑÆ®)
+    [Header("â‘¡ ì• ë‹ˆë©”ì´ì…˜ìš© í”„ë¡ì‹œ ì˜¤í”„ì…‹(X/Y/Z) - íƒ€ì„ë¼ì¸ì—ì„œ ì—¬ê¸°ì— í‚¤ ì£¼ê¸°")]
+    public float offsetX = 0.0f;   // ì˜ˆ: 0.8 â†’ -0.6 (ì¢Œìš° ìŠ¤ìœ•)
+    public float offsetY = 1.8f;   // ì˜ˆ: 1.8 â†’ 2.2  (ìƒí•˜ ë³€í™˜)
+    public float offsetZ = -3.8f;  // ì˜ˆ: -3.8 â†’ -3.2 (ë‹¹ê²¨ ì„íŒ©íŠ¸)
 
-    [Header("¨é YÃà ¾Ö´Ï¸ŞÀÌ¼Ç »ç¿ë ¿©ºÎ (OFF=Çö Transposer Y À¯Áö)")]
+    [Header("â‘¢ Yì¶• ì• ë‹ˆë©”ì´ì…˜ ì‚¬ìš© ì—¬ë¶€ (OFF=í˜„ Transposer Y ìœ ì§€)")]
     public bool animateY = false;
 
-    [Header("¨ê ¸Å ÇÁ·¹ÀÓ °­Á¦ ¹İ¿µ")]
+    [Header("â‘£ ë§¤ í”„ë ˆì„ ê°•ì œ ë°˜ì˜")]
     public bool applyEveryFrame = true;
+    [Tooltip("í”Œë ˆì´ ì¤‘ì—ëŠ” ì‹¤ì œë¡œ ë¼ì´ë¸Œì¸ ì‹œë„¤ë¨¸ì‹  ì¹´ë©”ë¼ê±°ë‚˜ ëª©í‘œê°’ì´ ë°”ë€ ê²½ìš°ì—ë§Œ ë°˜ì˜.")]
+    public bool skipWhenNotLiveAndUnchanged = true;
 
-    [Header("¨ë ºÎµå·¯¿î º¸°£ ¿É¼Ç (¿¬Ãâ Ç°Áú)")]
+    [Header("â‘¤ ë¶€ë“œëŸ¬ìš´ ë³´ê°„ ì˜µì…˜ (ì—°ì¶œ í’ˆì§ˆ)")]
     public bool smoothFollow = true;
-    [Tooltip("Lerp ¼Óµµ(ÃÊ´ç ºñÀ²). °ªÀÌ Å¬¼ö·Ï ´õ »¡¸® ¸ñÇ¥ ¿ÀÇÁ¼Â¿¡ ºÙÀ½(±ÇÀå 4~8).")]
+    [Tooltip("Lerp ì†ë„(ì´ˆë‹¹ ë¹„ìœ¨). ê°’ì´ í´ìˆ˜ë¡ ë” ë¹¨ë¦¬ ëª©í‘œ ì˜¤í”„ì…‹ì— ë¶™ìŒ(ê¶Œì¥ 4~8).")]
     public float lerpSpeed = 6f;
-    [Tooltip("SmoothDamp ½Ã°£(ÃÊ). 0º¸´Ù Å©¸é SmoothDamp ¿ì¼± Àû¿ë(ÀÚ¿¬ °¨¼Ó).")]
+    [Tooltip("SmoothDamp ì‹œê°„(ì´ˆ). 0ë³´ë‹¤ í¬ë©´ SmoothDamp ìš°ì„  ì ìš©(ìì—° ê°ì†).")]
     public float smoothTime = 0f;
 
-    CinemachineTransposer _transposer;
-    Vector3 _vel; // SmoothDamp ³»ºÎ ¼Óµµ »óÅÂ(À¯Áö¿ë)
+    Vector3 _vel; // SmoothDamp ë‚´ë¶€ ì†ë„ ìƒíƒœ(ìœ ì§€ìš©)
+    Vector3 _lastRequestedTarget;
+    bool _hasLastRequestedTarget;
 
     void Reset() { TryResolve(); }
     void OnEnable() { TryResolve(); Apply(forceSnap: true); }
@@ -57,49 +61,76 @@ public class VCamTransposerProxy : MonoBehaviour
 #endif
     void LateUpdate()
     {
-        if (applyEveryFrame) Apply(forceSnap: false);
+        if (!applyEveryFrame)
+            return;
+
+        TryResolve();
+        if (!TryBuildTarget(out var target, out var cur))
+            return;
+
+        bool targetChanged = !_hasLastRequestedTarget || (target - _lastRequestedTarget).sqrMagnitude > 0.000001f;
+        _lastRequestedTarget = target;
+        _hasLastRequestedTarget = true;
+
+        if (Application.isPlaying && skipWhenNotLiveAndUnchanged && vcam != null && !CinemachineCore.IsLive(vcam) && !targetChanged)
+            return;
+
+        ApplyResolved(cur, target, forceSnap: false);
     }
 
     void TryResolve()
     {
-        if (!vcam) vcam = GetComponent<CinemachineVirtualCamera>();
-        if (vcam) _transposer = vcam.GetCinemachineComponent<CinemachineTransposer>();
+        if (!vcam) vcam = GetComponent<CinemachineVirtualCameraBase>();
     }
 
-    // === ¿ÜºÎ¿¡¼­ Áï½Ã ½º³À½ÃÅ°°í ½ÍÀ» ¶§(ÄÆ ÀüÈ¯ Å¸ÀÌ¹Ö µî) È£Ãâ ===
+    // === ì™¸ë¶€ì—ì„œ ì¦‰ì‹œ ìŠ¤ëƒ…ì‹œí‚¤ê³  ì‹¶ì„ ë•Œ(ì»· ì „í™˜ íƒ€ì´ë° ë“±) í˜¸ì¶œ ===
     public void SnapNow() => Apply(forceSnap: true);
 
     void Apply(bool forceSnap)
     {
-        if (_transposer == null) return;
+        if (!TryBuildTarget(out var target, out var cur))
+            return;
 
-        var cur = _transposer.m_FollowOffset;
+        _lastRequestedTarget = target;
+        _hasLastRequestedTarget = true;
+        ApplyResolved(cur, target, forceSnap);
+    }
 
-        // Y¸¦ ¾Ö´Ï¸ŞÀÌ¼ÇÇÒÁö °áÁ¤ (OFF¸é ÇöÀç Y À¯Áö)
-        float targetY = animateY ? offsetY : cur.y;
-        var target = new Vector3(offsetX, targetY, offsetZ);
+    bool TryBuildTarget(out Vector3 target, out Vector3 current)
+    {
+        target = default;
+        current = default;
+        if (!CinemachineCompat.TryGetBodyFollowOffset(vcam, out current))
+            return false;
 
-        // ¿¡µğÅÍ/½º³À/º¸°£ ¹Ì»ç¿ë ¡æ Áï½Ã Àû¿ë
+        float targetY = animateY ? offsetY : current.y;
+        target = new Vector3(offsetX, targetY, offsetZ);
+        return true;
+    }
+
+    void ApplyResolved(Vector3 cur, Vector3 target, bool forceSnap)
+    {
+        // ì—ë””í„°/ìŠ¤ëƒ…/ë³´ê°„ ë¯¸ì‚¬ìš© â†’ ì¦‰ì‹œ ì ìš©
         if (!Application.isPlaying || forceSnap || !smoothFollow || (lerpSpeed <= 0f && smoothTime <= 0f))
         {
-            _transposer.m_FollowOffset = target;
+            CinemachineCompat.TrySetBodyFollowOffset(vcam, target);
             return;
         }
 
-        // ·±Å¸ÀÓ º¸°£
+        // ëŸ°íƒ€ì„ ë³´ê°„
         Vector3 next;
         if (smoothTime > 0f)
         {
-            // SmoothDamp: ÁöÁ¤ ½Ã°£¿¡ ±Ù»ç µµ´Ş(³¡¿¡¼­ ÀÚ¿¬ °¨¼Ó)
+            // SmoothDamp: ì§€ì • ì‹œê°„ì— ê·¼ì‚¬ ë„ë‹¬(ëì—ì„œ ìì—° ê°ì†)
             next = Vector3.SmoothDamp(cur, target, ref _vel, smoothTime);
         }
         else
         {
-            // Lerp: ÇÁ·¹ÀÓ´ç ºñÀ² ¼ö·Å
+            // Lerp: í”„ë ˆì„ë‹¹ ë¹„ìœ¨ ìˆ˜ë ´
             float t = 1f - Mathf.Pow(1f - Mathf.Clamp01(lerpSpeed * Time.deltaTime), 60f);
             next = Vector3.Lerp(cur, target, t);
         }
 
-        _transposer.m_FollowOffset = next;
+        CinemachineCompat.TrySetBodyFollowOffset(vcam, next);
     }
 }

@@ -11,6 +11,13 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class BossHitReaction : MonoBehaviour
 {
+    bool _hasHitTrigger;
+    bool _hasStaggerTrigger;
+    float _lastVfxRealtime = float.NegativeInfinity;
+    float _lastAudioRealtime = float.NegativeInfinity;
+    float _lastHitFeelRealtime = float.NegativeInfinity;
+    float _lastAnimationRealtime = float.NegativeInfinity;
+
     [Header("참조 (한글 설명)")]
     [Tooltip("같은 오브젝트 또는 부모에 있는 BossHealth를 지정. 비워두면 자동 검색.")]
     public BossHealth bossHealth;
@@ -56,6 +63,16 @@ public class BossHitReaction : MonoBehaviour
     [Tooltip("같은 사운드가 반복될 때의 단조로움을 줄이기 위한 랜덤 피치 범위 (x = 최소, y = 최대). 둘 다 1이면 피치 고정.")]
     public Vector2 randomPitchRange = new Vector2(0.95f, 1.05f); // [조절값]
 
+    [Header("Hit Feel Policy")]
+    [SerializeField] bool useCombatFeelPolicy = true;
+    [SerializeField] CameraShake hitCameraShake;
+
+    [Header("Performance")]
+    [SerializeField, Min(0f)] float minVfxIntervalRealtime = 0.05f;
+    [SerializeField, Min(0f)] float minAudioIntervalRealtime = 0.06f;
+    [SerializeField, Min(0f)] float minHitFeelIntervalRealtime = 0.07f;
+    [SerializeField, Min(0f)] float minAnimationIntervalRealtime = 0.03f;
+
     void Awake()
     {
         if (!bossHealth)
@@ -73,10 +90,14 @@ public class BossHitReaction : MonoBehaviour
 
         // 히트 이벤트 구독
         // IHealth.OnDamagedWithType: Action<int, HitType> 형태라고 가정
+        CacheAnimatorTriggers();
         bossHealth.OnDamagedWithType += HandleDamagedWithType;
 
         // 히트 사운드용 AudioSource 준비 (없으면 자동 생성)
         EnsureAudioSource();
+
+        if (hitCameraShake == null && Camera.main != null)
+            hitCameraShake = Camera.main.GetComponent<CameraShake>();
     }
 
     void OnDestroy()
@@ -99,12 +120,18 @@ public class BossHitReaction : MonoBehaviour
 
         // 3) 사운드 재생
         PlayHitSound(hitType);
+
+        ApplyHitFeel(hitType);
     }
 
     // ==================== VFX ====================
 
     void SpawnHitVfx(HitType hitType)
     {
+        float now = Time.unscaledTime;
+        if (now - _lastVfxRealtime < minVfxIntervalRealtime)
+            return;
+
         GameObject prefab = null;
 
         // 경직(Heavy) 공격인지에 따라 다른 이펙트 선택
@@ -116,7 +143,8 @@ public class BossHitReaction : MonoBehaviour
         if (!prefab) return;
 
         Vector3 spawnPos = vfxPivot ? vfxPivot.position : transform.position;
-        Instantiate(prefab, spawnPos, Quaternion.identity);
+        _lastVfxRealtime = now;
+        TransientVfxPool.Spawn(prefab, spawnPos, Quaternion.identity);
     }
 
     // ==================== 애니메이션 ====================
@@ -124,24 +152,58 @@ public class BossHitReaction : MonoBehaviour
     void PlayHitAnimation(HitType hitType)
     {
         if (!bossAnimator) return;
+        float now = Time.unscaledTime;
+        if (now - _lastAnimationRealtime < minAnimationIntervalRealtime)
+            return;
 
         // 경직 공격이면 Stagger 우선
-        if (hitType == staggerHitType && !string.IsNullOrEmpty(staggerTriggerName))
+        if (hitType == staggerHitType && _hasStaggerTrigger)
         {
+            _lastAnimationRealtime = now;
             bossAnimator.ResetTrigger(staggerTriggerName);
             bossAnimator.SetTrigger(staggerTriggerName);
             return;
         }
 
         // 그 외에는 일반 Hit
-        if (!string.IsNullOrEmpty(hitTriggerName))
+        if (_hasHitTrigger)
         {
+            _lastAnimationRealtime = now;
             bossAnimator.ResetTrigger(hitTriggerName);
             bossAnimator.SetTrigger(hitTriggerName);
         }
     }
 
     // ==================== 사운드 ====================
+
+    void CacheAnimatorTriggers()
+    {
+        _hasHitTrigger = false;
+        _hasStaggerTrigger = false;
+
+        if (bossAnimator == null || bossAnimator.runtimeAnimatorController == null)
+            return;
+
+        foreach (AnimatorControllerParameter parameter in bossAnimator.parameters)
+        {
+            if (!_hasHitTrigger &&
+                parameter.type == AnimatorControllerParameterType.Trigger &&
+                parameter.name == hitTriggerName)
+            {
+                _hasHitTrigger = true;
+            }
+
+            if (!_hasStaggerTrigger &&
+                parameter.type == AnimatorControllerParameterType.Trigger &&
+                parameter.name == staggerTriggerName)
+            {
+                _hasStaggerTrigger = true;
+            }
+
+            if (_hasHitTrigger && _hasStaggerTrigger)
+                break;
+        }
+    }
 
     void EnsureAudioSource()
     {
@@ -159,16 +221,47 @@ public class BossHitReaction : MonoBehaviour
         audioSource.maxDistance = 30f;         // 필요 시 조절
     }
 
+    void ApplyHitFeel(HitType hitType)
+    {
+        if (!useCombatFeelPolicy || hitCameraShake == null)
+            return;
+        float now = Time.unscaledTime;
+        if (now - _lastHitFeelRealtime < minHitFeelIntervalRealtime)
+            return;
+
+        CombatFeelPreset preset = CombatFeelPolicy.GetBossHitPreset(hitType);
+        if (preset.CameraShakeAmplitude > 0f && preset.CameraShakeDuration > 0f)
+        {
+            _lastHitFeelRealtime = now;
+            hitCameraShake.Shake(preset.CameraShakeAmplitude, preset.CameraShakeDuration);
+        }
+    }
+
     void PlayHitSound(HitType hitType)
     {
         if (audioSource == null) return;
+        float now = Time.unscaledTime;
+        if (now - _lastAudioRealtime < minAudioIntervalRealtime)
+            return;
 
         AudioClip clip = GetClipForHitType(hitType);
         if (clip == null) return;
 
+        CombatFeelPreset preset = useCombatFeelPolicy
+            ? CombatFeelPolicy.GetBossHitPreset(hitType)
+            : default;
+
         // 랜덤 피치 적용
         float pitch = 1f;
-        if (randomPitchRange.y > 0f && randomPitchRange.y >= randomPitchRange.x)
+        if (useCombatFeelPolicy)
+        {
+            float minPitch = Mathf.Min(preset.AudioPitchMin, preset.AudioPitchMax);
+            float maxPitch = Mathf.Max(preset.AudioPitchMin, preset.AudioPitchMax);
+            pitch = Mathf.Approximately(minPitch, maxPitch)
+                ? minPitch
+                : Random.Range(minPitch, maxPitch);
+        }
+        else if (randomPitchRange.y > 0f && randomPitchRange.y >= randomPitchRange.x)
         {
             pitch = Random.Range(randomPitchRange.x, randomPitchRange.y);
         }
@@ -176,7 +269,11 @@ public class BossHitReaction : MonoBehaviour
         audioSource.pitch = pitch;
 
         // PlayOneShot 사용: 같은 프레임에 여러 히트가 들어와도 겹쳐서 재생 가능
-        audioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(hitVolume));
+        float volume = useCombatFeelPolicy
+            ? Mathf.Clamp01(hitVolume * preset.AudioVolumeMultiplier)
+            : hitVolume;
+        _lastAudioRealtime = now;
+        audioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(volume));
     }
 
     AudioClip GetClipForHitType(HitType hitType)

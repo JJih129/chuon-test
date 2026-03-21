@@ -8,6 +8,8 @@ public class VideoOptionsRuntime : MonoBehaviour
 {
     const string BrightnessKey = "opt_brightness";
     const string MotionBlurKey = "opt_motionblur";
+    const float DefaultBrightness = 1f;
+    const int DefaultMotionBlur = 0;
 
     static VideoOptionsRuntime _instance;
 
@@ -124,8 +126,8 @@ public class VideoOptionsRuntime : MonoBehaviour
 
     void ApplyPrefs()
     {
-        ApplyBrightness(PlayerPrefs.GetFloat(BrightnessKey, 1f));
-        ApplyMotionBlur(PlayerPrefs.GetInt(MotionBlurKey, 1) == 1);
+        ApplyBrightness(PlayerPrefs.GetFloat(BrightnessKey, DefaultBrightness));
+        ApplyMotionBlur(PlayerPrefs.GetInt(MotionBlurKey, DefaultMotionBlur) == 1);
     }
 
     void ApplyBrightness(float value)
@@ -135,6 +137,8 @@ public class VideoOptionsRuntime : MonoBehaviour
 
         value = Mathf.Clamp01(value);
         _colorAdjustments.postExposure.value = Mathf.Lerp(-1.6f, 0f, value);
+        ApplyVolumeState();
+        ApplyToAllCameras();
     }
 
     void ApplyMotionBlur(bool enabled)
@@ -142,12 +146,14 @@ public class VideoOptionsRuntime : MonoBehaviour
         if (_motionBlur == null)
             return;
 
-        _motionBlur.intensity.value = enabled ? 0.55f : 0f;
+        _motionBlur.intensity.value = enabled ? 0.32f : 0f;
+        ApplyVolumeState();
         ApplyToAllCameras();
     }
 
     void ApplyToAllCameras()
     {
+        bool enablePostProcessing = ShouldEnablePostProcessing();
         var cameras = FindObjectsOfType<Camera>(true);
         foreach (var cam in cameras)
         {
@@ -156,7 +162,25 @@ public class VideoOptionsRuntime : MonoBehaviour
 
             var cameraData = cam.GetUniversalAdditionalCameraData();
             if (cameraData != null)
-                cameraData.renderPostProcessing = true;
+                cameraData.renderPostProcessing = enablePostProcessing;
         }
+    }
+
+    void ApplyVolumeState()
+    {
+        if (_volume == null)
+            return;
+
+        _volume.weight = ShouldEnablePostProcessing() ? 1f : 0f;
+    }
+
+    bool ShouldEnablePostProcessing()
+    {
+        bool brightnessActive = _colorAdjustments != null
+            && Mathf.Abs(_colorAdjustments.postExposure.value) > 0.001f;
+        bool motionBlurActive = _motionBlur != null
+            && _motionBlur.intensity.value > 0.001f;
+
+        return brightnessActive || motionBlurActive;
     }
 }

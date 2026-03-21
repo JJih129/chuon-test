@@ -229,7 +229,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   lockOnCam: {fileID: 99273688}
   freeLookCam: {fileID: 1897136317}
-  freeLookDriver: {fileID: 963194229}
+  freeLookDriver: {fileID: 1897136319}
   targetGroup: {fileID: 1283139512}
   playerPivot: {fileID: 1529425203}
   lockOnFollowHeightOffset: -1
@@ -257,7 +257,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 95505296}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 430774c264ecd0743a8f3cf12eafd596, type: 3}
   m_Name: 
@@ -269,14 +269,18 @@ MonoBehaviour:
   mouseSensitivity: 2000
   minY: -30
   maxY: 60
+  autoAlignEnabled: 0
   autoAlignSpeed: 2.5
   alignDelay: 1
+  suppressAutoAlignWhileMoving: 1
+  movingSpeedThreshold: 0.15
+  mouseInputDeadzone: 0.01
   zoomStep: 0
   minFov: 30
   maxFov: 70
 --- !u!1 &95828440
 GameObject:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -293,7 +297,7 @@ GameObject:
   m_IsActive: 1
 --- !u!114 &95828441
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -303,6 +307,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45e653bab7fb20e499bda25e1b646fea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
+  m_StreamingVersion: 20170927
+  m_LegacyPriority: 10
+  m_LookAt: {fileID: 0}
+  m_Follow: {fileID: 0}
+  m_Lens:
+    FieldOfView: 40
+    OrthographicSize: 10
+    NearClipPlane: 0.1
+    FarClipPlane: 5000
+    Dutch: 0
+    ModeOverride: 0
+    GateFit: 2
+    m_SensorSize: {x: 1, y: 1}
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
   m_ExcludedPropertiesInInspector:
   - m_Script
   - Header
@@ -313,33 +348,16 @@ MonoBehaviour:
   - m_StandbyUpdate
   - m_Lens
   m_LockStageInInspector: 00000000
-  m_StreamingVersion: 20170927
-  m_Priority: 10
-  m_StandbyUpdate: 2
-  m_LookAt: {fileID: 0}
-  m_Follow: {fileID: 0}
-  m_Lens:
-    FieldOfView: 40
-    OrthographicSize: 10
-    NearClipPlane: 0.1
-    FarClipPlane: 5000
-    Dutch: 0
-    ModeOverride: 0
-    LensShift: {x: 0, y: 0}
-    GateFit: 2
-    FocusDistance: 10
-    m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
+  m_LegacyTransitions:
     m_BlendHint: 0
     m_InheritPosition: 0
     m_OnCameraLive:
       m_PersistentCalls:
         m_Calls: []
-  m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 1600952909}
 --- !u!4 &95828442
 Transform:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -385,12 +403,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45e653bab7fb20e499bda25e1b646fea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ExcludedPropertiesInInspector:
-  - m_Script
-  m_LockStageInInspector: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
   m_StreamingVersion: 20170927
-  m_Priority: 20
-  m_StandbyUpdate: 2
+  m_LegacyPriority: 20
   m_LookAt: {fileID: 1283139513}
   m_Follow: {fileID: 1529425203}
   m_Lens:
@@ -400,17 +419,30 @@ MonoBehaviour:
     FarClipPlane: 5000
     Dutch: 0
     ModeOverride: 0
-    LensShift: {x: 0, y: 0}
     GateFit: 2
-    FocusDistance: 10
     m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ExcludedPropertiesInInspector:
+  - m_Script
+  m_LockStageInInspector: 
+  m_LegacyTransitions:
     m_BlendHint: 0
     m_InheritPosition: 0
     m_OnCameraLive:
       m_PersistentCalls:
         m_Calls: []
-  m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 1570147819}
 --- !u!4 &99273689
 Transform:
@@ -476,6 +508,7 @@ MonoBehaviour:
   offsetZ: -3.8
   animateY: 0
   applyEveryFrame: 1
+  skipWhenNotLiveAndUnchanged: 1
   smoothFollow: 1
   lerpSpeed: 6
   smoothTime: 0
@@ -491,16 +524,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 00b2d199b96b516448144ab30fb26aed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ApplyAfter: 2
-  m_ChannelMask: 1
-  m_Gain: 1
-  m_Use2DDistance: 0
-  m_UseCameraSpace: 1
-  m_ReactionSettings:
+  ApplyAfter: 2
+  ChannelMask: 1
+  Gain: 1
+  Use2DDistance: 0
+  UseCameraSpace: 1
+  SignalCombinationMode: 0
+  ReactionSettings:
     m_SecondaryNoise: {fileID: 0}
-    m_AmplitudeGain: 1.2
-    m_FrequencyGain: 1
-    m_Duration: 1
+    AmplitudeGain: 1.2
+    FrequencyGain: 1
+    Duration: 1
     m_NoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &132624434
 GameObject:
@@ -533,6 +567,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   type: 1
+  debugLogs: 0
 --- !u!65 &132624436
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -894,7 +929,7 @@ MonoBehaviour:
   m_LegacyRadius: 3.4028235e+38
   m_LegacyHeightOffset: 3.4028235e+38
   m_LegacyHeadingBias: 3.4028235e+38
-  m_HeadingIsSlave: 1
+  m_HeadingIsDriven: 1
 --- !u!114 &225598900
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -1308,13 +1343,14 @@ MonoBehaviour:
   invincibleDuration: 1
   hitEffectPrefab: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
   cameraShake: {fileID: 963194236}
+  useCombatFeelPolicy: 1
   reactionMode: 0
   combatController: {fileID: 281972696}
   heavyDamageThreshold: 25
   animator: {fileID: 281972687}
   hitParamName: Hit
   hurtParamName: Hurt
-  debugLog: 1
+  debugLog: 0
 --- !u!114 &281972696
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1327,9 +1363,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3673e3fb2819c3d45a0678bf87932a9d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  inputBufferTime: 0.1
-  comboResetTime: 0.6
-  minClickInterval: 0.05
+  inputBufferTime: 0.35
+  comboResetTime: 0.75
+  minClickInterval: 0.035
+  comboChainBufferTime: 0.45
+  comboLateGraceNormalized: 0.08
+  attackTransitionGraceSeconds: 0.08
   firstLight: {fileID: 11400000, guid: 3a9f06ed13cc7cc47b6a05eaf9e80db1, type: 2}
   firstHeavy: {fileID: 11400000, guid: dca78e9929952bf4bab1a2cd6984b8f6, type: 2}
   animator: {fileID: 281972687}
@@ -1338,7 +1377,16 @@ MonoBehaviour:
   lockMovementWhileAttacking: 1
   locomotionDuringAttack: 0
   speedParam: speed
+  playerRoot: {fileID: 0}
+  characterController: {fileID: 0}
+  playerLockOn: {fileID: 0}
+  perfectDodgeController: {fileID: 0}
+  usePerfectDodgeAttackAssist: 1
+  perfectDodgeAssistStopDistance: 0.2
+  perfectDodgeAssistMinRange: 0
+  snapFacingToPerfectDodgeTarget: 1
   endAttackIfStuckSeconds: 2
+  logAttackTimeoutFailsafe: 0
   lightHitSeconds: 0.35
   heavyHitSeconds: 0.7
   knockdownInvulnSeconds: 1.2
@@ -1429,8 +1477,43 @@ MonoBehaviour:
   - {fileID: 1406020506}
   - {fileID: 1833898924}
   - {fileID: 0}
+  preferDedicatedRuntimeSequenceCamera: 1
+  useUltimateStageRuntime: 1
+  runtimeStage: {fileID: 0}
+  useScriptedSequence: 1
+  allowDirectorFallbackWhenScriptedUnavailable: 0
+  scriptedCameraPriority: 100
+  scriptedAnimator: {fileID: 0}
+  slashBurstSpawner: {fileID: 0}
+  finisherImpactPrefab: {fileID: 0}
+  finisherImpactPoint: {fileID: 0}
+  swordFocusOverride: {fileID: 0}
+  scriptedStartTrigger: Ultimate_Start
+  scriptedWalkTrigger: Ultimate_Walk
+  scriptedMultiHitCount: 7
+  scriptedCloseupDuration: 0.32
+  scriptedWideDuration: 0.45
+  scriptedHitInterval: 0.11
+  scriptedFinisherHold: 0.35
+  scriptedWalkOutDuration: 1.05
+  scriptedStrikeDistance: 1.45
+  scriptedFinisherDistance: 1.1
+  scriptedVictimCenterDistance: 2.2
+  scriptedVictimCenterHeight: 0
+  scriptedStageVictimSideOffset: 0.42
+  scriptedStagePlayerSideOffset: -0.95
+  scriptedStagePlayerForwardOffset: 0.55
+  scriptedStageStrikeDistance: 2.2
+  scriptedStageFinisherDistance: 1.65
+  scriptedCloseupDistance: 0.65
+  scriptedWideDistance: 5.4
+  scriptedWalkCameraDistance: 2.8
+  scriptedWalkCameraHeight: 1.45
   screenFX: {fileID: 0}
   glassCrackPrefab: {fileID: 0}
+  enableDebugFillGaugeShortcut: 1
+  debugFillGaugeKey: 49
+  enableUltimateCameraDebugLogs: 0
 --- !u!114 &281972701
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1558,6 +1641,8 @@ MonoBehaviour:
   propAlpha: _Alpha
   baseIntensity: 1.2
   baseScroll: 2
+  presentationPlayerOverride: {fileID: 0}
+  presentationSpawnRootOverride: {fileID: 0}
 --- !u!114 &281972708
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1598,6 +1683,8 @@ MonoBehaviour:
   interactKey: 102
   hideWhenAiming: 1
   debugDrawRay: 0
+  debugLogs: 0
+  interactionCheckInterval: 0.04
   hoverGrace: 0.12
 --- !u!114 &281972711
 MonoBehaviour:
@@ -1631,7 +1718,7 @@ MonoBehaviour:
   feedback: {fileID: 281972719}
   hitTriggerParam: Hit
   guardBlockTriggerParam: GuardBlock
-  frontArcDegrees: 100
+  frontArcDegrees: 120
   chipDamageMul: 0.1
   suppressHitAnimWhenGuarding: 1
   lockMoveOnParry: 0.35
@@ -1645,6 +1732,7 @@ MonoBehaviour:
   - AddUltimate
   - Gain
   - OnParryUltimateGain
+  debugLogs: 0
 --- !u!114 &281972713
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1662,17 +1750,30 @@ MonoBehaviour:
   isAttackingBoolParam: IsAttacking
   guardBlockTrigger: GuardBlock
   parrySuccessTrigger: ParrySuccess
+  guardBreakTrigger: GuardBreak
   forwardMode: 0
   modelForwardSource: {fileID: 281972684}
   cameraTransform: {fileID: 963194228}
   invertForward: 0
-  frontArcDegrees: 100
+  frontArcDegrees: 120
   flattenToGround: 1
   denyGuardWhileAttacking: 1
   autoResumeGuardIfHolding: 1
+  splitTapParryAndHoldGuard: 1
+  guardHoldDelay: 0.18
   chipDamageOnBlock: 0.1
   enablePerfectGuard: 1
-  perfectGuardWindow: 0.12
+  perfectGuardWindow: 0.16
+  parryEventAcceptWindow: 0.35
+  useRealtimeParryWindow: 1
+  enableGuardStrain: 1
+  maxGuardStrain: 100
+  guardStrainPerBlockedDamage: 1
+  guardStrainFlatPerBlock: 6
+  guardStrainRecoverDelay: 1.15
+  guardStrainRecoverPerSecond: 26
+  parryStrainRecover: 24
+  guardBreakDuration: 0.9
   lockMoveOnBlock: 1
   blockMoveLock: 0.35
   lockMoveOnParry: 1
@@ -1684,6 +1785,11 @@ MonoBehaviour:
   grantUltimateOnParry: 1
   ultimateGainOnParry: 10
   ultimate: {fileID: 281972699}
+  enableParryCounterWindow: 1
+  parryCounterWindow: 1.15
+  parryCounterDamageMultiplier: 1.85
+  parryCounterBreakBonus: 20
+  parryCounterHitType: 4
   OnParrySuccess:
     m_PersistentCalls:
       m_Calls:
@@ -1714,6 +1820,9 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
+  OnGuardBreak:
+    m_PersistentCalls:
+      m_Calls: []
   animator: {fileID: 281972687}
   debugDraw: 1
   warnMissingParams: 1
@@ -1811,47 +1920,47 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 180ecf9b41d478f468eb3e9083753217, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ImpulseDefinition:
-    m_ImpulseChannel: 1
-    m_ImpulseShape: 2
-    m_CustomImpulseShape:
+  ImpulseDefinition:
+    ImpulseChannel: 1
+    ImpulseShape: 2
+    CustomImpulseShape:
       serializedVersion: 2
       m_Curve: []
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    m_ImpulseDuration: 0.08
-    m_ImpulseType: 0
-    m_DissipationRate: 0.25
-    m_RawSignal: {fileID: 0}
-    m_AmplitudeGain: 1
-    m_FrequencyGain: 1
-    m_RepeatMode: 0
-    m_Randomize: 1
-    m_TimeEnvelope:
-      m_AttackShape:
+    ImpulseDuration: 0.08
+    ImpulseType: 0
+    DissipationRate: 0.25
+    RawSignal: {fileID: 0}
+    AmplitudeGain: 1
+    FrequencyGain: 1
+    RepeatMode: 0
+    Randomize: 1
+    TimeEnvelope:
+      AttackShape:
         serializedVersion: 2
         m_Curve: []
         m_PreInfinity: 2
         m_PostInfinity: 2
         m_RotationOrder: 4
-      m_DecayShape:
+      DecayShape:
         serializedVersion: 2
         m_Curve: []
         m_PreInfinity: 2
         m_PostInfinity: 2
         m_RotationOrder: 4
-      m_AttackTime: 0
-      m_SustainTime: 0.2
-      m_DecayTime: 0.7
-      m_ScaleWithImpact: 1
-      m_HoldForever: 0
-    m_ImpactRadius: 100
-    m_DirectionMode: 0
-    m_DissipationMode: 2
-    m_DissipationDistance: 100
-    m_PropagationSpeed: 343
-  m_DefaultVelocity: {x: 0, y: -1, z: 0}
+      AttackTime: 0
+      SustainTime: 0.2
+      DecayTime: 0.7
+      ScaleWithImpact: 1
+      HoldForever: 0
+    ImpactRadius: 100
+    DirectionMode: 0
+    DissipationMode: 2
+    DissipationDistance: 100
+    PropagationSpeed: 343
+  DefaultVelocity: {x: 0, y: -1, z: 0}
 --- !u!114 &281972719
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1893,6 +2002,7 @@ MonoBehaviour:
   blockClip: {fileID: 8300000, guid: 80b325de415090541bed1f7df7441127, type: 3}
   dodgeClip: {fileID: 0}
   sfxVolume: 0.79
+  useCombatFeelPolicy: 1
   debugLog: 0
 --- !u!82 &281972720
 AudioSource:
@@ -2051,9 +2161,13 @@ MonoBehaviour:
   disableRootMotionOnSlow: 0
   feedback: {fileID: 281972719}
   autoFeedback: 1
+  afterImageEffect: {fileID: 0}
+  autoAfterImage: 1
   ultimate: {fileID: 281972699}
   ultimateGainOnPerfect: 12
   autoUltimateGain: 1
+  enableAttackFollowUpAssist: 1
+  attackFollowUpWindowRealtime: 1.5
   OnWindowOpened:
     m_PersistentCalls:
       m_Calls: []
@@ -2376,12 +2490,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45e653bab7fb20e499bda25e1b646fea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ExcludedPropertiesInInspector:
-  - m_Script
-  m_LockStageInInspector: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
   m_StreamingVersion: 20170927
-  m_Priority: 10
-  m_StandbyUpdate: 2
+  m_LegacyPriority: 10
   m_LookAt: {fileID: 0}
   m_Follow: {fileID: 281972684}
   m_Lens:
@@ -2391,17 +2506,30 @@ MonoBehaviour:
     FarClipPlane: 5000
     Dutch: 0
     ModeOverride: 0
-    LensShift: {x: 0, y: 0}
     GateFit: 2
-    FocusDistance: 10
     m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ExcludedPropertiesInInspector:
+  - m_Script
+  m_LockStageInInspector: 
+  m_LegacyTransitions:
     m_BlendHint: 0
     m_InheritPosition: 0
     m_OnCameraLive:
       m_PersistentCalls:
         m_Calls: []
-  m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 787451471}
 --- !u!4 &320460348
 Transform:
@@ -2511,7 +2639,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &475038470
 GameObject:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -2531,7 +2659,7 @@ GameObject:
   m_IsActive: 1
 --- !u!4 &475038471
 Transform:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -2546,7 +2674,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &475038472
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -2568,7 +2696,7 @@ MonoBehaviour:
   m_AngularDamping: 0
 --- !u!114 &475038473
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -2595,7 +2723,7 @@ MonoBehaviour:
   m_CenterOnActivate: 1
 --- !u!114 &475038474
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -2607,7 +2735,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
 --- !u!114 &475038475
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -2617,11 +2745,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_NoiseProfile: {fileID: 0}
-  m_PivotOffset: {x: 0, y: 0, z: 0}
-  m_AmplitudeGain: 0.2
-  m_FrequencyGain: 1
-  mNoiseOffsets: {x: 0, y: 0, z: 0}
+  NoiseProfile: {fileID: 0}
+  PivotOffset: {x: 0, y: 0, z: 0}
+  AmplitudeGain: 0.2
+  FrequencyGain: 1
+  m_NoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &550969442
 GameObject:
   m_ObjectHideFlags: 0
@@ -2988,6 +3116,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   prefab: {fileID: 9062405296587470551, guid: 958e232c36760d64f812b131b5f68e9b, type: 3}
   initialSize: 6
+  prewarmPerFrame: 2
   parent: {fileID: 0}
 --- !u!4 &712660175
 Transform:
@@ -3610,6 +3739,14 @@ MonoBehaviour:
   - {fileID: 552373170}
   - {fileID: 447799030}
   - {fileID: 1801722394}
+  droneSpawnInterval: 0.08
+  droneInitialFireStagger: 0.12
+  droneInitialFireBaseDelay: 0.75
+  disableLobbyDroneWorldUi: 1
+  disableLobbyDroneShadows: 1
+  simplifyLobbyDroneVisual: 1
+  useLightweightLobbyDroneSimulation: 1
+  lightweightLobbyDroneTickInterval: 0.05
   elevatorPanel: {fileID: 1245720330}
   nextSceneName: MainScene
   doorLeft: {fileID: 2115223467}
@@ -3623,6 +3760,7 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   textTypingSpeed: 0.0362
+  debugLogs: 0
 --- !u!4 &900875287
 Transform:
   m_ObjectHideFlags: 0
@@ -3701,7 +3839,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.1
-  far clip plane: 5000
+  far clip plane: 800
   field of view: 40
   orthographic: 0
   orthographic size: 10
@@ -3713,7 +3851,7 @@ Camera:
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
   m_TargetEye: 3
-  m_HDR: 1
+  m_HDR: 0
   m_AllowMSAA: 1
   m_AllowDynamicResolution: 0
   m_ForceIntoRT: 0
@@ -3792,28 +3930,26 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 72ece51f2901e7445ab60da3685d6b5f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ShowDebugText: 0
-  m_ShowCameraFrustum: 1
-  m_IgnoreTimeScale: 0
-  m_WorldUpOverride: {fileID: 0}
-  m_UpdateMethod: 2
-  m_BlendUpdateMethod: 1
-  m_DefaultBlend:
-    m_Style: 1
-    m_Time: 2
-    m_CustomCurve:
+  ShowDebugText: 0
+  ShowCameraFrustum: 1
+  IgnoreTimeScale: 0
+  WorldUpOverride: {fileID: 0}
+  ChannelMask: -1
+  UpdateMethod: 2
+  BlendUpdateMethod: 1
+  LensModeOverride:
+    Enabled: 0
+    DefaultMode: 2
+  DefaultBlend:
+    Style: 1
+    Time: 2
+    CustomCurve:
       serializedVersion: 2
       m_Curve: []
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-  m_CustomBlends: {fileID: 0}
-  m_CameraCutEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  m_CameraActivatedEvent:
-    m_PersistentCalls:
-      m_Calls: []
+  CustomBlends: {fileID: 0}
 --- !u!114 &963194236
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4439,6 +4575,7 @@ MonoBehaviour:
   highlight: {fileID: 1545242714}
   anchor: {fileID: 1245720335}
   autoPickup: 0
+  debugHoverLogs: 0
 --- !u!1 &1266794278
 GameObject:
   m_ObjectHideFlags: 0
@@ -4472,6 +4609,8 @@ MonoBehaviour:
   linePrefab: {fileID: 4487549991949926583, guid: f8c04b6beb4e2c24fbba498bd8bf6fe0, type: 3}
   pathHeight: 0
   textureScrollSpeed: 2
+  pathRefreshInterval: 0.12
+  repathDistanceThreshold: 0.35
 --- !u!4 &1266794281
 Transform:
   m_ObjectHideFlags: 0
@@ -4516,28 +4655,29 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e5eb80d8e62d9d145bb50fb783c0f731, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_PositionMode: 0
-  m_RotationMode: 0
-  m_UpdateMethod: 2
-  m_Targets:
-  - target: {fileID: 1529425203}
-    weight: 1.2
-    radius: 2
-  - target: {fileID: 0}
-    weight: 1
-    radius: 2
-  - target: {fileID: 0}
-    weight: 1
-    radius: 2
-  - target: {fileID: 0}
-    weight: 1
-    radius: 2
-  - target: {fileID: 0}
-    weight: 1
-    radius: 2
-  - target: {fileID: 0}
-    weight: 1
-    radius: 2
+  PositionMode: 0
+  RotationMode: 0
+  UpdateMethod: 2
+  Targets:
+  - Object: {fileID: 1529425203}
+    Weight: 1.2
+    Radius: 2
+  - Object: {fileID: 0}
+    Weight: 1
+    Radius: 2
+  - Object: {fileID: 0}
+    Weight: 1
+    Radius: 2
+  - Object: {fileID: 0}
+    Weight: 1
+    Radius: 2
+  - Object: {fileID: 0}
+    Weight: 1
+    Radius: 2
+  - Object: {fileID: 0}
+    Weight: 1
+    Radius: 2
+  m_LegacyTargets: []
 --- !u!4 &1283139513
 Transform:
   m_ObjectHideFlags: 0
@@ -4762,6 +4902,55 @@ MonoBehaviour:
   - {fileID: 2074182986}
   - {fileID: 14622528}
   - {fileID: 2020581894}
+  guardStrainFillImage: {fileID: 0}
+  guardStrainTrackImage: {fileID: 0}
+  guardStrainBarHeight: 8
+  guardStrainYOffset: -14
+  guardStrainLerpSpeed: 3.5
+  guardStrainIdleAlpha: 0
+  guardStrainActiveAlpha: 0.95
+  guardBreakFlashDuration: 0.28
+  guardStrainTrackColor: {r: 0.06, g: 0.1, b: 0.12, a: 0.92}
+  guardStrainLowColor: {r: 0.2, g: 0.82, b: 0.92, a: 0.96}
+  guardStrainHighColor: {r: 1, g: 0.34, b: 0.18, a: 1}
+  combatTelegraphText: {fileID: 0}
+  combatTelegraphPanelImage: {fileID: 0}
+  combatTelegraphYOffset: -110
+  combatTelegraphHoldTime: 0.42
+  combatTelegraphPanelColor: {r: 0.03, g: 0.07, b: 0.1, a: 0.88}
+  combatTelegraphChainPanelColor: {r: 0.12, g: 0.1, b: 0.04, a: 0.92}
+  combatTelegraphParryColor: {r: 1, g: 0.8, b: 0.32, a: 1}
+  combatTelegraphGuardColor: {r: 0.35, g: 0.92, b: 1, a: 1}
+  combatTelegraphDodgeColor: {r: 1, g: 0.4, b: 0.4, a: 1}
+  combatTelegraphDangerColor: {r: 1, g: 0.28, b: 0.88, a: 1}
+  combatTelegraphChainPunch: 0.1
+  dangerTelegraphCameraShake: {fileID: 0}
+  dangerTelegraphShakeAmplitude: 0.18
+  dangerTelegraphShakeDuration: 0.22
+  dangerTelegraphHudPunch: 0.18
+  dangerTelegraphAudioSource: {fileID: 0}
+  dangerTelegraphClip: {fileID: 0}
+  generateDangerTelegraphTone: 1
+  dangerTelegraphVolume: 0.85
+  dangerTelegraphToneFrequency: 920
+  dangerTelegraphToneDuration: 0.12
+  parryCounterText: {fileID: 0}
+  parryCounterPanelImage: {fileID: 0}
+  parryCounterFillImage: {fileID: 0}
+  parryCounterYOffset: -154
+  parryCounterActiveAlpha: 0.96
+  parryCounterIdleAlpha: 0
+  parryCounterPanelColor: {r: 0.03, g: 0.08, b: 0.11, a: 0.92}
+  parryCounterFillColor: {r: 0.28, g: 0.96, b: 1, a: 0.95}
+  parryCounterTextColor: {r: 0.82, g: 1, b: 1, a: 1}
+  showPerformanceHud: 1
+  performanceHudAnchoredPosition: {x: 18, y: -18}
+  performanceHudRefreshInterval: 0.2
+  performanceHudSmoothing: 0.12
+  performanceHudTextColor: {r: 0.8, g: 0.98, b: 1, a: 0.96}
+  performanceHudWarningColor: {r: 1, g: 0.76, b: 0.28, a: 0.98}
+  performanceHudCriticalColor: {r: 1, g: 0.38, b: 0.3, a: 1}
+  statusHudRefreshInterval: 0.041666668
 --- !u!1 &1340670544
 GameObject:
   m_ObjectHideFlags: 0
@@ -4840,12 +5029,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45e653bab7fb20e499bda25e1b646fea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ExcludedPropertiesInInspector:
-  - m_Script
-  m_LockStageInInspector: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
   m_StreamingVersion: 20170927
-  m_Priority: 10
-  m_StandbyUpdate: 2
+  m_LegacyPriority: 10
   m_LookAt: {fileID: 281972684}
   m_Follow: {fileID: 281972684}
   m_Lens:
@@ -4855,17 +5045,30 @@ MonoBehaviour:
     FarClipPlane: 5000
     Dutch: 0
     ModeOverride: 0
-    LensShift: {x: 0, y: 0}
     GateFit: 2
-    FocusDistance: 10
     m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ExcludedPropertiesInInspector:
+  - m_Script
+  m_LockStageInInspector: 
+  m_LegacyTransitions:
     m_BlendHint: 0
     m_InheritPosition: 0
     m_OnCameraLive:
       m_PersistentCalls:
         m_Calls: []
-  m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 1993127588}
 --- !u!4 &1406020507
 Transform:
@@ -4885,7 +5088,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1408991141
 GameObject:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -4902,7 +5105,7 @@ GameObject:
   m_IsActive: 1
 --- !u!114 &1408991142
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -4912,6 +5115,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45e653bab7fb20e499bda25e1b646fea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
+  m_StreamingVersion: 20170927
+  m_LegacyPriority: 10
+  m_LookAt: {fileID: 0}
+  m_Follow: {fileID: 0}
+  m_Lens:
+    FieldOfView: 40
+    OrthographicSize: 10
+    NearClipPlane: 0.1
+    FarClipPlane: 5000
+    Dutch: 0
+    ModeOverride: 0
+    GateFit: 2
+    m_SensorSize: {x: 1, y: 1}
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
   m_ExcludedPropertiesInInspector:
   - m_Script
   - Header
@@ -4922,33 +5156,16 @@ MonoBehaviour:
   - m_StandbyUpdate
   - m_Lens
   m_LockStageInInspector: 00000000
-  m_StreamingVersion: 20170927
-  m_Priority: 10
-  m_StandbyUpdate: 2
-  m_LookAt: {fileID: 0}
-  m_Follow: {fileID: 0}
-  m_Lens:
-    FieldOfView: 40
-    OrthographicSize: 10
-    NearClipPlane: 0.1
-    FarClipPlane: 5000
-    Dutch: 0
-    ModeOverride: 0
-    LensShift: {x: 0, y: 0}
-    GateFit: 2
-    FocusDistance: 10
-    m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
+  m_LegacyTransitions:
     m_BlendHint: 0
     m_InheritPosition: 0
     m_OnCameraLive:
       m_PersistentCalls:
         m_Calls: []
-  m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 1731719779}
 --- !u!4 &1408991143
 Transform:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5082,6 +5299,8 @@ MonoBehaviour:
   interactKey: 102
   hideWhenAiming: 1
   debugDrawRay: 0
+  debugLogs: 0
+  interactionCheckInterval: 0.04
   hoverGrace: 0.12
 --- !u!4 &1462887323
 Transform:
@@ -5381,7 +5600,7 @@ CanvasRenderer:
   m_CullTransparentMesh: 1
 --- !u!1 &1555217730
 GameObject:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5398,7 +5617,7 @@ GameObject:
   m_IsActive: 1
 --- !u!114 &1555217731
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5408,6 +5627,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45e653bab7fb20e499bda25e1b646fea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
+  m_StreamingVersion: 20170927
+  m_LegacyPriority: 10
+  m_LookAt: {fileID: 0}
+  m_Follow: {fileID: 0}
+  m_Lens:
+    FieldOfView: 40
+    OrthographicSize: 10
+    NearClipPlane: 0.1
+    FarClipPlane: 5000
+    Dutch: 0
+    ModeOverride: 0
+    GateFit: 2
+    m_SensorSize: {x: 1, y: 1}
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
   m_ExcludedPropertiesInInspector:
   - m_Script
   - Header
@@ -5418,33 +5668,16 @@ MonoBehaviour:
   - m_StandbyUpdate
   - m_Lens
   m_LockStageInInspector: 00000000
-  m_StreamingVersion: 20170927
-  m_Priority: 10
-  m_StandbyUpdate: 2
-  m_LookAt: {fileID: 0}
-  m_Follow: {fileID: 0}
-  m_Lens:
-    FieldOfView: 40
-    OrthographicSize: 10
-    NearClipPlane: 0.1
-    FarClipPlane: 5000
-    Dutch: 0
-    ModeOverride: 0
-    LensShift: {x: 0, y: 0}
-    GateFit: 2
-    FocusDistance: 10
-    m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
+  m_LegacyTransitions:
     m_BlendHint: 0
     m_InheritPosition: 0
     m_OnCameraLive:
       m_PersistentCalls:
         m_Calls: []
-  m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 225598897}
 --- !u!4 &1555217732
 Transform:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5460,7 +5693,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1570147818
 GameObject:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5479,7 +5712,7 @@ GameObject:
   m_IsActive: 1
 --- !u!4 &1570147819
 Transform:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5494,7 +5727,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &1570147821
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5533,7 +5766,7 @@ MonoBehaviour:
   m_MaximumOrthoSize: 5000
 --- !u!114 &1570147822
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5545,7 +5778,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
 --- !u!114 &1570147823
 MonoBehaviour:
-  m_ObjectHideFlags: 3
+  m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -5700,7 +5933,7 @@ MonoBehaviour:
   m_LegacyRadius: 3.4028235e+38
   m_LegacyHeightOffset: 3.4028235e+38
   m_LegacyHeadingBias: 3.4028235e+38
-  m_HeadingIsSlave: 1
+  m_HeadingIsDriven: 1
 --- !u!114 &1600952912
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -5755,6 +5988,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   type: 0
+  debugLogs: 0
 --- !u!65 &1631026503
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -6008,7 +6242,7 @@ MonoBehaviour:
   m_LegacyRadius: 3.4028235e+38
   m_LegacyHeightOffset: 3.4028235e+38
   m_LegacyHeadingBias: 3.4028235e+38
-  m_HeadingIsSlave: 1
+  m_HeadingIsDriven: 1
 --- !u!114 &1731719782
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -6208,12 +6442,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45e653bab7fb20e499bda25e1b646fea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ExcludedPropertiesInInspector:
-  - m_Script
-  m_LockStageInInspector: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
   m_StreamingVersion: 20170927
-  m_Priority: 10
-  m_StandbyUpdate: 2
+  m_LegacyPriority: 10
   m_LookAt: {fileID: 894471296}
   m_Follow: {fileID: 281972684}
   m_Lens:
@@ -6223,17 +6458,30 @@ MonoBehaviour:
     FarClipPlane: 5000
     Dutch: 0
     ModeOverride: 0
-    LensShift: {x: 0, y: 0}
     GateFit: 2
-    FocusDistance: 10
     m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ExcludedPropertiesInInspector:
+  - m_Script
+  m_LockStageInInspector: 
+  m_LegacyTransitions:
     m_BlendHint: 0
     m_InheritPosition: 1
     m_OnCameraLive:
       m_PersistentCalls:
         m_Calls: []
-  m_LegacyBlendHint: 0
   m_ComponentOwner: {fileID: 475038471}
 --- !u!4 &1833898925
 Transform:
@@ -6307,6 +6555,7 @@ MonoBehaviour:
   offsetZ: -3.8
   animateY: 0
   applyEveryFrame: 1
+  skipWhenNotLiveAndUnchanged: 1
   smoothFollow: 0
   lerpSpeed: 6
   smoothTime: 0
@@ -6322,9 +6571,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 44d70cc20219cd84593f67d248eafe36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Offset: {x: 0, y: 0, z: 0}
-  m_ApplyAfter: 1
-  m_PreserveComposition: 0
+  Offset: {x: 0, y: 0, z: 0}
+  ApplyAfter: 1
+  PreserveComposition: 0
 --- !u!114 &1833898930
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6493,12 +6742,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 319d2fe34a804e245819465c9505ea59, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ExcludedPropertiesInInspector:
-  - m_Script
-  m_LockStageInInspector: 
+  Priority:
+    Enabled: 0
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
   m_StreamingVersion: 20170927
-  m_Priority: 20
-  m_StandbyUpdate: 2
+  m_LegacyPriority: 20
   m_LookAt: {fileID: 1529425203}
   m_Follow: {fileID: 281972684}
   m_CommonLens: 1
@@ -6509,21 +6759,25 @@ MonoBehaviour:
     FarClipPlane: 5000
     Dutch: 0
     ModeOverride: 0
-    LensShift: {x: 0, y: 0}
     GateFit: 2
-    FocusDistance: 10
     m_SensorSize: {x: 1, y: 1}
-  m_Transitions:
-    m_BlendHint: 0
-    m_InheritPosition: 0
-    m_OnCameraLive:
-      m_PersistentCalls:
-        m_Calls: []
-  m_LegacyBlendHint: 0
+    LensShift: {x: 0, y: 0}
+    FocusDistance: 10
+    Iso: 200
+    ShutterSpeed: 0.005
+    Aperture: 16
+    BladeCount: 5
+    Curvature: {x: 2, y: 11}
+    BarrelClipping: 0.25
+    Anamorphism: 0
+  BlendHint: 0
+  m_OnCameraLiveEvent:
+    m_PersistentCalls:
+      m_Calls: []
   m_YAxis:
     Value: 0.5
     m_SpeedMode: 0
-    m_MaxSpeed: 8
+    m_MaxSpeed: 3.2
     m_AccelTime: 0.2
     m_DecelTime: 0.1
     m_InputAxisName: Mouse Y
@@ -6547,7 +6801,7 @@ MonoBehaviour:
   m_XAxis:
     Value: 0
     m_SpeedMode: 0
-    m_MaxSpeed: 600
+    m_MaxSpeed: 360
     m_AccelTime: 0.1
     m_DecelTime: 0.1
     m_InputAxisName: Mouse X
@@ -6582,6 +6836,12 @@ MonoBehaviour:
   - m_Height: 0.4
     m_Radius: 6
   m_LegacyHeadingBias: 3.4028235e+38
+  m_LegacyTransitions:
+    m_BlendHint: 0
+    m_InheritPosition: 0
+    m_OnCameraLive:
+      m_PersistentCalls:
+        m_Calls: []
   m_Rigs:
   - {fileID: 1408991142}
   - {fileID: 1555217731}
@@ -6616,15 +6876,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 430774c264ecd0743a8f3cf12eafd596, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  player: {fileID: 0}
-  playerLockOn: {fileID: 0}
+  player: {fileID: 281972684}
+  playerLockOn: {fileID: 281972688}
   distance: 4
   height: 1.5
   mouseSensitivity: 3
   minY: -30
   maxY: 60
+  autoAlignEnabled: 0
   autoAlignSpeed: 2.5
   alignDelay: 1
+  suppressAutoAlignWhileMoving: 1
+  movingSpeedThreshold: 0.15
+  mouseInputDeadzone: 0.01
   zoomStep: 0
   minFov: 30
   maxFov: 70
@@ -6657,16 +6921,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 00b2d199b96b516448144ab30fb26aed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ApplyAfter: 2
-  m_ChannelMask: 1
-  m_Gain: 1
-  m_Use2DDistance: 0
-  m_UseCameraSpace: 1
-  m_ReactionSettings:
+  ApplyAfter: 2
+  ChannelMask: 1
+  Gain: 1
+  Use2DDistance: 0
+  UseCameraSpace: 1
+  SignalCombinationMode: 0
+  ReactionSettings:
     m_SecondaryNoise: {fileID: 0}
-    m_AmplitudeGain: 1.2
-    m_FrequencyGain: 1
-    m_Duration: 1
+    AmplitudeGain: 1.2
+    FrequencyGain: 1
+    Duration: 1
     m_NoiseOffsets: {x: 0, y: 0, z: 0}
 --- !u!1 &1914036229
 GameObject:

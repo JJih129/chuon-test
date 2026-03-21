@@ -31,9 +31,15 @@ public class EnemyHPBar : MonoBehaviour
 
     // 내부 캐시
     Camera _cam;
+    Transform _camTransform;
     RectTransform _rt;
     bool _isUI;
     RectTransform _parentRT;
+    float _nextRefreshAt;
+    bool _isCurrentlyVisible = true;
+    const float NearRefreshInterval = 1f / 6f;
+    const float FarRefreshInterval = 1f / 2f;
+    const float FarDistanceThreshold = 12f;
 
     // 바인딩된 IHealth (이벤트 해제용)
     IHealth _boundHealth;
@@ -41,6 +47,7 @@ public class EnemyHPBar : MonoBehaviour
     void Awake()
     {
         _cam = Camera.main;
+        _camTransform = _cam != null ? _cam.transform : null;
         _rt = transform as RectTransform;
         _isUI = (_rt != null);
         _parentRT = _rt != null ? _rt.parent as RectTransform : null;
@@ -73,20 +80,40 @@ public class EnemyHPBar : MonoBehaviour
 
     void OnEnable()
     {
-        if (_cam == null) _cam = Camera.main;
+        _isCurrentlyVisible = gameObject.activeSelf;
+        if (_cam == null)
+        {
+            _cam = Camera.main;
+            _camTransform = _cam != null ? _cam.transform : null;
+        }
     }
 
     void Update()
     {
+        if (Time.unscaledTime < _nextRefreshAt)
+            return;
+
         if (target == null)
         {
-            gameObject.SetActive(false);
+            SetVisible(false);
             return;
         }
 
+        float sqrDistance = _camTransform != null
+            ? (target.position - _camTransform.position).sqrMagnitude
+            : 0f;
+        float refreshInterval = sqrDistance > FarDistanceThreshold * FarDistanceThreshold
+            ? FarRefreshInterval
+            : NearRefreshInterval;
+        _nextRefreshAt = Time.unscaledTime + refreshInterval;
+
         if (_isUI)
         {
-            if (_cam == null) _cam = Camera.main;
+            if (_cam == null)
+            {
+                _cam = Camera.main;
+                _camTransform = _cam != null ? _cam.transform : null;
+            }
             if (_cam == null) return;
 
             Vector3 screenPos = _cam.WorldToScreenPoint(target.position + offset);
@@ -94,12 +121,12 @@ public class EnemyHPBar : MonoBehaviour
             // 뒤편이면 숨김
             if (screenPos.z <= 0f)
             {
-                if (gameObject.activeSelf) gameObject.SetActive(false);
+                SetVisible(false);
                 return;
             }
             else
             {
-                if (!gameObject.activeSelf) gameObject.SetActive(true);
+                SetVisible(true);
             }
 
             if (_parentRT != null)
@@ -119,13 +146,26 @@ public class EnemyHPBar : MonoBehaviour
 
         // World-space 모드: 따라다니고 카메라를 바라봄
         transform.position = target.position + offset;
-        if (_cam == null) _cam = Camera.main;
+        if (_cam == null)
+        {
+            _cam = Camera.main;
+            _camTransform = _cam != null ? _cam.transform : null;
+        }
         if (_cam != null)
         {
             Vector3 lookDir = transform.position - _cam.transform.position;
             if (lookDir.sqrMagnitude > 0.000001f)
                 transform.rotation = Quaternion.LookRotation(lookDir.normalized, billboardUp);
         }
+    }
+
+    void SetVisible(bool visible)
+    {
+        if (_isCurrentlyVisible == visible)
+            return;
+
+        _isCurrentlyVisible = visible;
+        gameObject.SetActive(visible);
     }
 
     // ---------------- 외부 API ----------------
@@ -141,8 +181,8 @@ public class EnemyHPBar : MonoBehaviour
             fillImage.fillAmount = value;
     }
 
-    public void Show() => gameObject.SetActive(true);
-    public void Hide() => gameObject.SetActive(false);
+    public void Show() => SetVisible(true);
+    public void Hide() => SetVisible(false);
 
     // 풀 반환/초기화
     public void ResetForPool()
@@ -151,7 +191,7 @@ public class EnemyHPBar : MonoBehaviour
         target = null;
         if (slider != null) slider.value = 0f;
         if (fillImage != null) fillImage.fillAmount = 0f;
-        gameObject.SetActive(false);
+        SetVisible(false);
     }
 
     // ---------------- IHealth 바인딩 ----------------

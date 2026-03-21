@@ -49,6 +49,9 @@ public class BossAnimationEvents : MonoBehaviour
     {
         if (debugLog) Debug.Log("[BossAnimEvents] Anim_ActivateHitbox", this);
 
+        if (bossController != null && bossController.IsInUltimateVictimState)
+            return;
+
         if (hitboxes != null && hitboxes.Length > 0)
         {
             for (int i = 0; i < hitboxes.Length; i++)

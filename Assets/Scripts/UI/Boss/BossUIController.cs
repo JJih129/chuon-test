@@ -1,68 +1,72 @@
-﻿using System.Collections;
+using System.Collections;
 using UnityEngine;
 
-// BossUIController.cs
-// 설명: 플레이어와 보스 거리 기반으로 상단 HP(이미지)와 브레이크 HUD를 함께 바인딩/해제.
-// - BossHUDImage (Image형 HP) 와 BossBreakHUD(Image형 브레이크)를 함께 사용하도록 설계.
-
+[DisallowMultipleComponent]
 public class BossUIController : MonoBehaviour
 {
-    [Header("▶ 참조 (필수)")]
-    [Tooltip("플레이어 Transform. 거리 계산 기준.")]
+    [Header("References")]
+    [Tooltip("Player transform used for distance checks.")]
     public Transform player;
 
-    [Tooltip("상단 HUD 루트(GameObject). 기본적으로 비활성화 해놓음.")]
+    [Tooltip("Root object for the top boss HUD.")]
     public GameObject topHudRoot;
 
-    [Tooltip("Image형 HP HUD 컴포넌트 (TopHudRoot에 붙여놓음).")]
+    [Tooltip("Top HP HUD component.")]
     public BossHUD hpHud;
 
-    [Tooltip("브레이크 HUD 컴포넌트 (Image 기반).")]
+    [Tooltip("Break HUD component.")]
     public BossBreakHUD breakHud;
 
-    [Tooltip("보스의 체력 컴포넌트 (IHealth 구현체).")]
+    [Tooltip("Boss health component implementing IHealth.")]
     public MonoBehaviour healthBehaviour;
 
-    [Tooltip("보스의 브레이크 컨트롤러 (없으면 자동 탐색).")]
+    [Tooltip("Boss break controller.")]
     public BossBreakController breakController;
 
-    [Header("▶ 거리/타이밍 (튜닝)")]
-    [Tooltip("보스 HUD가 표시될 최대 거리(미터).")]
+    [Header("Distance / Timing")]
+    [Tooltip("Maximum distance to show the boss HUD.")]
     public float showDistance = 18f;
 
-    [Tooltip("숨김 히스테리시스(미터). showDistance + 값이 hide 기준.")]
+    [Tooltip("Extra distance before hiding once shown.")]
     public float hideHysteresis = 2f;
 
-    [Tooltip("거리 체크 주기(초). 0이면 매 프레임 체크.")]
+    [Tooltip("Distance check interval in seconds. Set 0 to check every frame.")]
     public float pollInterval = 0.12f;
 
-    [Tooltip("근접 후 HUD가 켜지기 전 딜레이(초).")]
+    [Tooltip("Delay before showing after entering range.")]
     public float showDelay = 0.05f;
 
-    [Tooltip("범위 이탈 후 HUD가 꺼지기 전 딜레이(초).")]
+    [Tooltip("Delay before hiding after leaving range.")]
     public float hideDelay = 0.12f;
 
-    // 내부
     IHealth boundHealth;
     float showSqr;
     float hideSqr;
     bool isVisible;
     Coroutine pollRoutine;
+    Coroutine pendingShowRoutine;
+    Coroutine pendingHideRoutine;
 
     void Awake()
     {
+        AutoResolveReferences();
+        NormalizeTopHudRootScale();
+
         showSqr = showDistance * showDistance;
-        hideSqr = (showDistance + Mathf.Max(0f, hideHysteresis));
-        hideSqr *= hideSqr;
+        float hideDistance = showDistance + Mathf.Max(0f, hideHysteresis);
+        hideSqr = hideDistance * hideDistance;
 
-        if (topHudRoot != null) topHudRoot.SetActive(false);
+        if (topHudRoot != null)
+            topHudRoot.SetActive(false);
 
-        // 캐스팅/자동탐색
         boundHealth = healthBehaviour as IHealth;
         if (breakController == null)
             breakController = GetComponent<BossBreakController>();
+        if (hpHud == null && topHudRoot != null)
+            hpHud = topHudRoot.GetComponentInChildren<BossHUD>(true);
         if (breakHud == null && topHudRoot != null)
-            breakHud = topHudRoot.GetComponentInChildren<BossBreakHUD>();
+            breakHud = topHudRoot.GetComponentInChildren<BossBreakHUD>(true);
+
         if (breakHud != null && breakController != null)
         {
             if (breakHud.hudRoot == topHudRoot)
@@ -74,53 +78,99 @@ public class BossUIController : MonoBehaviour
             breakHud.BindBreakController(breakController);
         }
 
-        if (boundHealth == null)
-            Debug.LogWarning($"[BossUIController] healthBehaviour이 IHealth를 구현하지 않습니다: {healthBehaviour?.GetType().Name}");
+        if (boundHealth == null && healthBehaviour != null)
+            Debug.LogWarning($"[BossUIController] healthBehaviour does not implement IHealth: {healthBehaviour.GetType().Name}", this);
     }
 
     void OnEnable()
     {
-        if (pollRoutine != null) StopCoroutine(pollRoutine);
+        if (pollRoutine != null)
+            StopCoroutine(pollRoutine);
         pollRoutine = StartCoroutine(Poll());
     }
 
     void OnDisable()
     {
-        if (pollRoutine != null) StopCoroutine(pollRoutine);
+        if (pollRoutine != null)
+            StopCoroutine(pollRoutine);
+        pollRoutine = null;
+
+        CancelPendingShow();
+        CancelPendingHide();
         ForceHideImmediate();
     }
 
     IEnumerator Poll()
     {
-        var wait = (pollInterval > 0f) ? new WaitForSeconds(pollInterval) : null;
         while (true)
         {
             Evaluate();
-            if (wait != null) yield return wait;
-            else yield return null;
+            float effectivePollInterval = ResolvePollInterval();
+            if (effectivePollInterval > 0f)
+                yield return new WaitForSeconds(effectivePollInterval);
+            else
+                yield return null;
         }
+    }
+
+    float ResolvePollInterval()
+    {
+        float baseInterval = Mathf.Max(0.5f, pollInterval);
+        if (player == null)
+            return Mathf.Max(baseInterval, 1f);
+
+        float sqr = (player.position - transform.position).sqrMagnitude;
+        if (!isVisible && sqr > hideSqr)
+            return Mathf.Max(baseInterval, 0.9f);
+
+        return baseInterval;
     }
 
     void Evaluate()
     {
-        if (player == null) return;
+        if (player == null)
+        {
+            AutoResolveReferences();
+            if (player == null)
+                return;
+        }
+
         float sqr = (player.position - transform.position).sqrMagnitude;
 
         if (!isVisible && sqr <= showSqr)
         {
-            if (showDelay <= 0f) ShowHUD();
-            else StartCoroutine(DelayedShow(showDelay));
+            CancelPendingHide();
+            if (showDelay <= 0f)
+                ShowHUD();
+            else if (pendingShowRoutine == null)
+                pendingShowRoutine = StartCoroutine(DelayedShow(showDelay));
+            return;
         }
-        else if (isVisible && sqr > hideSqr)
+
+        if (isVisible && sqr > hideSqr)
         {
-            if (hideDelay <= 0f) HideHUD();
-            else StartCoroutine(DelayedHide(hideDelay));
+            CancelPendingShow();
+            if (hideDelay <= 0f)
+                HideHUD();
+            else if (pendingHideRoutine == null)
+                pendingHideRoutine = StartCoroutine(DelayedHide(hideDelay));
+            return;
         }
+
+        if (sqr > showSqr)
+            CancelPendingShow();
+        if (sqr <= hideSqr)
+            CancelPendingHide();
     }
 
     IEnumerator DelayedShow(float delay)
     {
         yield return new WaitForSeconds(delay);
+        pendingShowRoutine = null;
+
+        if (player == null)
+            yield break;
+
         if ((player.position - transform.position).sqrMagnitude <= showSqr)
             ShowHUD();
     }
@@ -128,49 +178,112 @@ public class BossUIController : MonoBehaviour
     IEnumerator DelayedHide(float delay)
     {
         yield return new WaitForSeconds(delay);
+        pendingHideRoutine = null;
+
+        if (player == null)
+        {
+            HideHUD();
+            yield break;
+        }
+
         if ((player.position - transform.position).sqrMagnitude > hideSqr)
             HideHUD();
     }
 
     void ShowHUD()
     {
-        if (isVisible) return;
-        if (hpHud == null || topHudRoot == null)
-        {
-            Debug.LogWarning("[BossUIController] hpHud 또는 topHudRoot 미할당.");
+        if (isVisible)
             return;
-        }
 
-        if (boundHealth == null && healthBehaviour is IHealth ih2)
-            boundHealth = ih2;
+        NormalizeTopHudRootScale();
+        if (hpHud == null || topHudRoot == null)
+            return;
+
+        if (boundHealth == null)
+            boundHealth = healthBehaviour as IHealth;
 
         if (boundHealth != null)
             hpHud.Bind(boundHealth);
 
-        // 브레이크 HUD 루트 활성화(브레이크 이미지는 breakHud가 자체적으로 갱신)
-        if (breakHud != null && breakHud.hudRoot != null)
+        if (breakHud != null && breakHud.hudRoot != null && !breakHud.hudRoot.activeSelf)
             breakHud.hudRoot.SetActive(true);
 
-        topHudRoot.SetActive(true);
+        if (!topHudRoot.activeSelf)
+            topHudRoot.SetActive(true);
+
         isVisible = true;
     }
 
     void HideHUD()
     {
-        if (!isVisible) return;
-        if (hpHud != null) hpHud.Unbind();
-        if (breakHud != null && breakHud.hudRoot != null) breakHud.hudRoot.SetActive(false);
-        if (topHudRoot != null) topHudRoot.SetActive(false);
+        if (!isVisible)
+            return;
+
+        if (hpHud != null)
+            hpHud.Unbind();
+        if (breakHud != null && breakHud.hudRoot != null && breakHud.hudRoot.activeSelf)
+            breakHud.hudRoot.SetActive(false);
+        if (topHudRoot != null && topHudRoot.activeSelf)
+            topHudRoot.SetActive(false);
+
         isVisible = false;
     }
 
-    // 강제 숨김 즉시
     public void ForceHideImmediate()
     {
-        if (hpHud != null) hpHud.Unbind();
-        if (breakHud != null && breakHud.hudRoot != null) breakHud.hudRoot.SetActive(false);
-        if (topHudRoot != null) topHudRoot.SetActive(false);
+        if (hpHud != null)
+            hpHud.Unbind();
+        if (breakHud != null && breakHud.hudRoot != null && breakHud.hudRoot.activeSelf)
+            breakHud.hudRoot.SetActive(false);
+        if (topHudRoot != null && topHudRoot.activeSelf)
+            topHudRoot.SetActive(false);
         isVisible = false;
     }
-}
 
+    void AutoResolveReferences()
+    {
+        if (player == null)
+        {
+            PlayerLockOn playerLockOn = FindFirstObjectByType<PlayerLockOn>();
+            if (playerLockOn != null)
+                player = playerLockOn.transform;
+            else
+            {
+                PlayerReferences playerReferences = FindFirstObjectByType<PlayerReferences>();
+                if (playerReferences != null)
+                    player = playerReferences.transform;
+            }
+        }
+
+        if (topHudRoot == null && hpHud != null)
+            topHudRoot = hpHud.transform.root.gameObject;
+    }
+
+    void NormalizeTopHudRootScale()
+    {
+        if (topHudRoot == null)
+            return;
+
+        Transform hudTransform = topHudRoot.transform;
+        if (hudTransform.localScale.sqrMagnitude < 0.0001f)
+            hudTransform.localScale = Vector3.one;
+    }
+
+    void CancelPendingShow()
+    {
+        if (pendingShowRoutine == null)
+            return;
+
+        StopCoroutine(pendingShowRoutine);
+        pendingShowRoutine = null;
+    }
+
+    void CancelPendingHide()
+    {
+        if (pendingHideRoutine == null)
+            return;
+
+        StopCoroutine(pendingHideRoutine);
+        pendingHideRoutine = null;
+    }
+}

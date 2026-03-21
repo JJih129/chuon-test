@@ -1,163 +1,243 @@
-// 파일명: PatternVisuals.cs
 using UnityEngine;
-using System.Collections;
 
 [DisallowMultipleComponent]
 public class PatternVisuals : MonoBehaviour
 {
-    [Header("비주얼 타깃 렌더러")]
-    [Tooltip("보스 모델 중 색을 깜빡이게 할 Renderer. 비워두면 자식에서 자동으로 찾습니다.")]
+    [Header("Renderer")]
+    [Tooltip("텔레그래프를 보여줄 렌더러. 비우면 자식에서 자동 탐색합니다.")]
     public Renderer visualPartRenderer;
 
-    [Header("쉐이더 컬러 프로퍼티 이름")]
-    [Tooltip("HDR Emission 컬러 프로퍼티 이름 (예: _EmissionColor, _BaseColor 등)")]
+    [Header("Material Property")]
+    [Tooltip("Emission이나 BaseColor 같은 색상 프로퍼티 이름")]
     public string emissionColorName = "_EmissionColor";
 
-    [Header("색상 설정 (HDR 권장)")]
-    [Tooltip("패링/가드 가능한 공격 색상")]
-    [ColorUsage(true, true)]
-    public Color parryColor = new Color(1f, 0.5f, 0f) * 5f;
+    [Header("Telegraph Colors")]
+    [ColorUsage(true, true)] public Color parryColor = new Color(1.00f, 0.66f, 0.08f) * 5f;
+    [ColorUsage(true, true)] public Color guardColor = new Color(0.22f, 0.78f, 1.00f) * 4.5f;
+    [ColorUsage(true, true)] public Color dodgeColor = new Color(1.00f, 0.18f, 0.18f) * 5f;
+    [ColorUsage(true, true)] public Color dangerColor = new Color(1.00f, 0.12f, 0.78f) * 6f;
+    [ColorUsage(true, true)] public Color punishColor = new Color(0.36f, 1.00f, 0.78f) * 4.5f;
+    [ColorUsage(true, true)] public Color idleColor = Color.black;
 
-    [Tooltip("패링/가드 불가(언가더블) 공격 색상")]
-    [ColorUsage(true, true)]
-    public Color nonParryColor = Color.red * 5f;
+    [Header("Timing")]
+    [Min(0.06f)] public float flashDuration = 0.45f;
+    [Range(1, 4)] public int pulseCount = 2;
+    [Range(0.1f, 1f)] public float punishHoldIntensity = 0.42f;
 
-    [Tooltip("기본/아이들 상태 색상")]
-    [ColorUsage(true, true)]
-    public Color idleColor = Color.black;
-
-    [Header("플래시 타이밍")]
-    [Tooltip("한 번 깜빡이는 전체 시간(초)")]
-    [Min(0.01f)]
-    public float flashDuration = 0.5f;
-
-    // 내부용
-    Material _runtimeMaterial;
-    Coroutine _flashRoutine;
+    MaterialPropertyBlock _propertyBlock;
+    int _emissionColorId;
+    Color _lastEmissionColor = new Color(float.NaN, float.NaN, float.NaN, float.NaN);
+    bool _telegraphCueActive;
+    AttackTelegraphType _telegraphCueType;
+    float _telegraphCueStartTime;
+    float _telegraphCueDuration;
+    bool _punishCueActive;
+    float _punishCueStartTime;
+    float _punishCueDuration;
 
     void Awake()
     {
-        // 렌더러 자동 탐색 (지정 안 했을 때)
-        if (!visualPartRenderer)
-        {
+        if (visualPartRenderer == null)
             visualPartRenderer = GetComponentInChildren<Renderer>(true);
-        }
 
-        if (!visualPartRenderer)
+        if (visualPartRenderer == null)
         {
-            Debug.LogError("[PatternVisuals] 타깃 Renderer가 설정되지 않았습니다.", this);
+            Debug.LogError("[PatternVisuals] Target renderer is missing.", this);
             enabled = false;
             return;
         }
 
-        // 이 보스 전용 머터리얼 인스턴스 생성
-        // (주의: material 사용은 인스턴스를 만들기 때문에, 런타임 생성 개수가 많으면 비용이 커질 수 있음)
-        _runtimeMaterial = visualPartRenderer.material;
-
-        // 시작 시 기본 색으로 초기화
+        _propertyBlock = new MaterialPropertyBlock();
+        _emissionColorId = Shader.PropertyToID(emissionColorName);
         SetEmissionColor(idleColor);
+        enabled = false;
+    }
+
+    void Update()
+    {
+        UpdatePunishCue();
     }
 
     void OnDisable()
     {
-        // 컴포넌트가 꺼질 때 깜빡임 중이면 정리 + 기본색으로 복귀
         StopFlash();
         SetEmissionColor(idleColor);
     }
 
-    // ======================================================================
-    //  외부에서 호출하는 API
-    //  BossController 에서 patternVisuals.SetParryable(pattern.isParryable)
-    //  또는 StartVisualCue(true/false) 로 호출하면 됨.
-    // ======================================================================
-
-    /// <summary>
-    /// BossController에서 패턴 진입 시 호출하는 진입점.
-    /// 내부적으로 StartVisualCue를 호출한다.
-    /// </summary>
     public void SetParryable(bool isParryable)
     {
-        StartVisualCue(isParryable);
+        StartVisualCue(isParryable ? AttackTelegraphType.Parry : AttackTelegraphType.Dodge, flashDuration);
     }
 
-    /// <summary>
-    /// isParryable에 따라 색을 한 번 깜빡인다.
-    /// </summary>
     public void StartVisualCue(bool isParryable)
     {
-        if (!isActiveAndEnabled) return;
-
-        if (_flashRoutine != null)
-            StopCoroutine(_flashRoutine);
-
-        _flashRoutine = StartCoroutine(Co_FlashVisuals(isParryable));
+        StartVisualCue(isParryable ? AttackTelegraphType.Parry : AttackTelegraphType.Dodge, flashDuration);
     }
 
-    /// <summary>
-    /// 외부에서 강제로 기본 색으로 되돌리고 싶을 때 사용.
-    /// (예: 공격 애니 끝 AnimationEvent에서 호출)
-    /// </summary>
+    public void StartVisualCue(AttackTelegraphType telegraphType, float duration)
+    {
+        if (!gameObject.activeInHierarchy)
+            return;
+
+        enabled = true;
+        StopFlash();
+        _telegraphCueActive = true;
+        _telegraphCueType = telegraphType;
+        _telegraphCueStartTime = Time.time;
+        _telegraphCueDuration = Mathf.Max(0.06f, duration);
+        SetEmissionColor(idleColor);
+    }
+
     public void ResetToIdle()
     {
         StopFlash();
         SetEmissionColor(idleColor);
+        enabled = false;
     }
 
-    // ======================================================================
-    //  내부 구현
-    // ======================================================================
-
-    IEnumerator Co_FlashVisuals(bool isParryable)
+    public void StartPunishCue(float duration)
     {
-        Color targetColor = isParryable ? parryColor : nonParryColor;
+        if (!gameObject.activeInHierarchy)
+            return;
 
-        // 슬로우모션 영향을 받지 않게 unscaledDeltaTime 사용
-        SetEmissionColor(targetColor);
-
-        float t = 0f;
-        while (t < flashDuration)
-        {
-            t += Time.unscaledDeltaTime;
-            yield return null;
-        }
-
+        enabled = true;
+        StopFlash();
+        _punishCueActive = true;
+        _punishCueStartTime = Time.unscaledTime;
+        _punishCueDuration = Mathf.Max(0.08f, duration);
         SetEmissionColor(idleColor);
-        _flashRoutine = null;
     }
 
     void StopFlash()
     {
-        if (_flashRoutine != null)
+        _telegraphCueActive = false;
+        _punishCueActive = false;
+    }
+
+    Color ResolveColor(AttackTelegraphType telegraphType)
+    {
+        switch (telegraphType)
         {
-            StopCoroutine(_flashRoutine);
-            _flashRoutine = null;
+            case AttackTelegraphType.Parry:
+                return parryColor;
+            case AttackTelegraphType.Guard:
+                return guardColor;
+            case AttackTelegraphType.Danger:
+                return dangerColor;
+            case AttackTelegraphType.Dodge:
+            case AttackTelegraphType.Auto:
+            default:
+                return dodgeColor;
         }
     }
 
     void SetEmissionColor(Color color)
     {
-        if (_runtimeMaterial == null) return;
-        _runtimeMaterial.SetColor(emissionColorName, color);
+        if (visualPartRenderer == null)
+            return;
+        if (_lastEmissionColor.Equals(color))
+            return;
+
+        _propertyBlock.SetColor(_emissionColorId, color);
+        visualPartRenderer.SetPropertyBlock(_propertyBlock);
+        _lastEmissionColor = color;
+    }
+
+    void UpdatePunishCue()
+    {
+        if (_telegraphCueActive)
+        {
+            UpdateTelegraphCue();
+            return;
+        }
+
+        if (!_punishCueActive)
+            return;
+
+        float duration = Mathf.Max(0.08f, _punishCueDuration);
+        float pulseIn = Mathf.Min(0.10f, duration * 0.22f);
+        float pulseOut = Mathf.Min(0.12f, duration * 0.24f);
+        float settle = 0.08f;
+        float hold = Mathf.Max(0f, duration - pulseIn - pulseOut - settle);
+        Color holdColor = Color.Lerp(idleColor, punishColor, Mathf.Clamp01(punishHoldIntensity));
+        float elapsed = Time.unscaledTime - _punishCueStartTime;
+
+        if (elapsed >= duration)
+        {
+            _punishCueActive = false;
+            SetEmissionColor(idleColor);
+            enabled = false;
+            return;
+        }
+
+        if (elapsed <= pulseIn)
+        {
+            SetEmissionColor(Color.Lerp(idleColor, punishColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, pulseIn))));
+            return;
+        }
+
+        elapsed -= pulseIn;
+        if (elapsed <= pulseOut)
+        {
+            SetEmissionColor(Color.Lerp(punishColor, holdColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, pulseOut))));
+            return;
+        }
+
+        elapsed -= pulseOut;
+        if (elapsed <= hold)
+        {
+            SetEmissionColor(holdColor);
+            return;
+        }
+
+        elapsed -= hold;
+        SetEmissionColor(Color.Lerp(holdColor, idleColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, settle))));
+    }
+
+    void UpdateTelegraphCue()
+    {
+        float duration = Mathf.Max(0.06f, _telegraphCueDuration);
+        float elapsed = Time.time - _telegraphCueStartTime;
+        if (elapsed >= duration)
+        {
+            _telegraphCueActive = false;
+            SetEmissionColor(idleColor);
+            enabled = false;
+            return;
+        }
+
+        Color targetColor = ResolveColor(_telegraphCueType);
+        int totalPulses = Mathf.Max(1, _telegraphCueType == AttackTelegraphType.Danger ? pulseCount + 1 : pulseCount);
+        float pulseDuration = Mathf.Max(0.0001f, duration / totalPulses);
+        float pulseElapsed = Mathf.Repeat(elapsed, pulseDuration);
+        float pulseT = pulseElapsed / pulseDuration;
+        float fadeInPortion = 0.32f;
+
+        if (pulseT <= fadeInPortion)
+        {
+            float t = pulseT / Mathf.Max(0.0001f, fadeInPortion);
+            SetEmissionColor(Color.Lerp(idleColor, targetColor, t));
+            return;
+        }
+
+        float fadeOutT = (pulseT - fadeInPortion) / Mathf.Max(0.0001f, 1f - fadeInPortion);
+        SetEmissionColor(Color.Lerp(targetColor, idleColor, fadeOutT));
     }
 
 #if UNITY_EDITOR
-    // 에디터에서 우클릭으로 바로 테스트할 수 있는 메뉴
-    [ContextMenu("Test Parryable Flash")]
-    void TestParryableFlash()
-    {
-        StartVisualCue(true);
-    }
+    [ContextMenu("Test Parry Telegraph")]
+    void TestParryTelegraph() => StartVisualCue(AttackTelegraphType.Parry, flashDuration);
 
-    [ContextMenu("Test Non-Parryable Flash")]
-    void TestNonParryableFlash()
-    {
-        StartVisualCue(false);
-    }
+    [ContextMenu("Test Guard Telegraph")]
+    void TestGuardTelegraph() => StartVisualCue(AttackTelegraphType.Guard, flashDuration);
 
-    [ContextMenu("Reset To Idle Color")]
-    void TestResetIdle()
-    {
-        ResetToIdle();
-    }
+    [ContextMenu("Test Dodge Telegraph")]
+    void TestDodgeTelegraph() => StartVisualCue(AttackTelegraphType.Dodge, flashDuration);
+
+    [ContextMenu("Test Danger Telegraph")]
+    void TestDangerTelegraph() => StartVisualCue(AttackTelegraphType.Danger, flashDuration);
+
+    [ContextMenu("Reset To Idle")]
+    void TestResetIdle() => ResetToIdle();
 #endif
 }

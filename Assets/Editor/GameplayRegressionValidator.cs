@@ -687,7 +687,7 @@ public static class GameplayRegressionValidator
                 Debug.LogError(details);
             else if (warnings.Count > 0)
                 Debug.LogWarning(details);
-            else
+            else if (showDialog)
                 Debug.Log(details);
 
             if (showDialog)

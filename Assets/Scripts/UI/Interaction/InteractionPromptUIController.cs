@@ -29,9 +29,13 @@ public class InteractionPromptUIController : MonoBehaviour
 
     // [헤더] 빌보드 회전: 수평(Y)만 회전할지 여부
     public bool billboardYawOnly = false;
+    [SerializeField] bool debugLogs = false;
+    [SerializeField, Range(0.01f, 0.2f)] float refreshInterval = 1f / 20f;
 
     Transform _target;
     CanvasGroup _cg;
+    float _nextRefreshAt;
+    string _lastPrompt;
 
     void Awake()
     {
@@ -51,18 +55,21 @@ public class InteractionPromptUIController : MonoBehaviour
         if (background == null)
             background = GetComponentInChildren<RectTransform>(true);
 
-        Debug.Log($"[Prompt] Show called. prompt='{prompt}' textRef={(text != null)} backgroundRef={(background != null)}");
+        if (debugLogs)
+            Debug.Log($"[Prompt] Show called. prompt='{prompt}' textRef={(text != null)} backgroundRef={(background != null)}");
 
         // 텍스트 세팅
-        if (text != null)
+        bool promptChanged = !string.Equals(_lastPrompt, prompt);
+        if (text != null && promptChanged)
             text.text = prompt;
+        _lastPrompt = prompt;
 
         // 활성화 먼저(레이아웃 계산은 활성화 상태에서만 정확)
         gameObject.SetActive(true);
         _cg.alpha = 1f;
 
         // 강제 레이아웃 갱신 (ContentSizeFitter / LayoutGroup 사용 시 필요)
-        if (background != null)
+        if (background != null && promptChanged)
             LayoutRebuilder.ForceRebuildLayoutImmediate(background);
 
         // 즉시 위치/회전 업데이트
@@ -73,6 +80,7 @@ public class InteractionPromptUIController : MonoBehaviour
     {
         gameObject.SetActive(false);
         _target = null;
+        _lastPrompt = null;
     }
 
     void UpdateTransformImmediate()
@@ -82,8 +90,8 @@ public class InteractionPromptUIController : MonoBehaviour
         var pos = _target.position + Vector3.up * yOffset;
         transform.position = pos;
 
-        var dist = Vector3.Distance(cam.transform.position, pos);
-        if (dist > hideDistance) { Hide(); return; }
+        Vector3 toCamera = cam.transform.position - pos;
+        if (toCamera.sqrMagnitude > hideDistance * hideDistance) { Hide(); return; }
 
         if (clampToScreen)
         {
@@ -101,6 +109,8 @@ public class InteractionPromptUIController : MonoBehaviour
     void LateUpdate()
     {
         if (!_target) return;
+        if (Time.unscaledTime < _nextRefreshAt) return;
+        _nextRefreshAt = Time.unscaledTime + Mathf.Max(1f / 20f, refreshInterval);
         UpdateTransformImmediate();
     }
 }

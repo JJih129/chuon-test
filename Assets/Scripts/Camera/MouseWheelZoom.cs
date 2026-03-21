@@ -1,33 +1,34 @@
-using UnityEngine;
-using Cinemachine;
+ï»¿using UnityEngine;
+using Unity.Cinemachine;
+#pragma warning disable CS0618
 
 /// ==============================
-/// ¡å º¯¼ö Çì´õ(ÇÑ±Û ¼³¸í)
-/// freeLook            : ¼öµ¿ Ä«¸Ş¶ó ÄÁÆ®·Ñ·¯(FreeLookCamera). ¶ô¿Â ¾Æ´Ò ¶§¸¸ Àû¿ë
-/// vcamProxy           : ¶ô¿Â VCam¿ë Transposer ÇÁ·Ï½Ã. ÀÖÀ¸¸é offsetZ¸¦ ¿ì¼± Á¶Àı
-/// brain               : È°¼º VCam ÆÇº°¿ë CinemachineBrain
-/// onlyActiveVCam      : ÇöÀç Ãâ·Â ÁßÀÎ Ä«¸Ş¶ó¸¸ Á¶Àı
-/// step                : ÈÙ 1Æ½´ç º¯È­·®(FOV µµ¼ö ¶Ç´Â Z¿ÀÇÁ¼Â)
-/// invertScroll        : ÈÙ ¹æÇâ ¹İÀü
-/// smoothSnap          : ÇÁ·Ï½Ã »ç¿ë ½Ã Áï½Ã ½º³ÀÇÒÁö ¿©ºÎ
-/// minFov/maxFov       : FreeLook(½Ã³×¸Ó½Å) FOV ÇÑ°è
-/// minZ/maxZ           : Transposer Z¿ÀÇÁ¼Â ÇÑ°è(À½¼ö ±¸°£ ÀÏ¹İÀû)
+/// â–¼ ë³€ìˆ˜ í—¤ë”(í•œê¸€ ì„¤ëª…)
+/// freeLook            : ìˆ˜ë™ ì¹´ë©”ë¼ ì»¨íŠ¸ë¡¤ëŸ¬(FreeLookCamera). ë½ì˜¨ ì•„ë‹ ë•Œë§Œ ì ìš©
+/// vcamProxy           : ë½ì˜¨ VCamìš© Transposer í”„ë¡ì‹œ. ìˆìœ¼ë©´ offsetZë¥¼ ìš°ì„  ì¡°ì ˆ
+/// brain               : í™œì„± VCam íŒë³„ìš© CinemachineBrain
+/// onlyActiveVCam      : í˜„ì¬ ì¶œë ¥ ì¤‘ì¸ ì¹´ë©”ë¼ë§Œ ì¡°ì ˆ
+/// step                : íœ  1í‹±ë‹¹ ë³€í™”ëŸ‰(FOV ë„ìˆ˜ ë˜ëŠ” Zì˜¤í”„ì…‹)
+/// invertScroll        : íœ  ë°©í–¥ ë°˜ì „
+/// smoothSnap          : í”„ë¡ì‹œ ì‚¬ìš© ì‹œ ì¦‰ì‹œ ìŠ¤ëƒ…í• ì§€ ì—¬ë¶€
+/// minFov/maxFov       : FreeLook(ì‹œë„¤ë¨¸ì‹ ) FOV í•œê³„
+/// minZ/maxZ           : Transposer Zì˜¤í”„ì…‹ í•œê³„(ìŒìˆ˜ êµ¬ê°„ ì¼ë°˜ì )
 /// ==============================
 [DisallowMultipleComponent]
 public class MouseWheelZoom : MonoBehaviour
 {
-    [Header("´ë»ó ÂüÁ¶")]
-    public FreeLookCamera freeLook;       // ¼±ÅÃ: ¶ô¿Â ¾Æ´Ò ¶§ »ç¿ë  // ref: FreeLookCamera.cs
-    public VCamTransposerProxy vcamProxy; // ¼±ÅÃ: ¶ô¿Â °æ·Î ¿ì¼±    // ref: VCamTransposerProxy.cs
-    public CinemachineBrain brain;        // Main Camera¿¡ ÀÖ´Â Brain
+    [Header("ëŒ€ìƒ ì°¸ì¡°")]
+    public FreeLookCamera freeLook;       // ì„ íƒ: ë½ì˜¨ ì•„ë‹ ë•Œ ì‚¬ìš©  // ref: FreeLookCamera.cs
+    public VCamTransposerProxy vcamProxy; // ì„ íƒ: ë½ì˜¨ ê²½ë¡œ ìš°ì„     // ref: VCamTransposerProxy.cs
+    public CinemachineBrain brain;        // Main Cameraì— ìˆëŠ” Brain
 
-    [Header("µ¿ÀÛ ¿É¼Ç")]
+    [Header("ë™ì‘ ì˜µì…˜")]
     public bool onlyActiveVCam = true;
     public float step = 0.5f;
     public bool invertScroll = false;
     public bool smoothSnap = false;
 
-    [Header("ÇÑ°è°ª")]
+    [Header("í•œê³„ê°’")]
     public float minFov = 30f;
     public float maxFov = 70f;
     public float minZ = -10f;
@@ -45,53 +46,43 @@ public class MouseWheelZoom : MonoBehaviour
         if (Mathf.Abs(wheel) < 0.01f) return;
         if (invertScroll) wheel = -wheel;
 
-        // 1) ¶ô¿Â °æ·Î: ÇÁ·Ï½Ã ÀÖÀ¸¸é ¿ì¼± »ç¿ë
+        // 1) ë½ì˜¨ ê²½ë¡œ: í”„ë¡ì‹œ ìˆìœ¼ë©´ ìš°ì„  ì‚¬ìš©
         if (vcamProxy && vcamProxy.isActiveAndEnabled)
         {
-            float dz = -wheel * step; // ÈÙ¡è=°¡±îÀÌ
+            float dz = -wheel * step; // íœ â†‘=ê°€ê¹Œì´
             vcamProxy.offsetZ = Mathf.Clamp(vcamProxy.offsetZ + dz, minZ, maxZ);
             if (!smoothSnap) vcamProxy.SnapNow();
             return;
         }
 
-        // 2) È°¼º VCamÀ» Brain¿¡¼­ ÆÇº°
+        // 2) í™œì„± VCamì„ Brainì—ì„œ íŒë³„
         var active = brain ? brain.ActiveVirtualCamera : null;
         if (onlyActiveVCam && active == null) return;
 
-        // FreeLookÀÎÁö, ÀÏ¹İ VCamÀÎÁö ºĞ±â
-        CinemachineFreeLook fl = null;
-        CinemachineVirtualCamera vcam = null;
+        // Legacy FreeLookì¸ì§€, ì¼ë°˜ CM Cameraì¸ì§€ ë¶„ê¸°
+        Component activeComponent = null;
+        CinemachineVirtualCameraBase activeCamera = null;
 
         if (active != null)
         {
-            var go = active.VirtualCameraGameObject;
+            activeComponent = active as Component;
+            var go = activeComponent != null ? activeComponent.gameObject : null;
             if (go)
-            {
-                fl = go.GetComponent<CinemachineFreeLook>();
-                vcam = go.GetComponent<CinemachineVirtualCamera>();
-            }
+                activeCamera = go.GetComponent<CinemachineVirtualCameraBase>();
         }
 
-        // 2-a) ÀÚÀ¯½ÃÁ¡ FreeLook ¡æ FOV·Î ÁÜ
-        if (fl != null)
+        // 2-a) ììœ ì‹œì  FreeLook â†’ FOVë¡œ ì¤Œ
+        if (activeComponent != null && CinemachineCompat.TryAdjustLegacyFreeLookLens(activeComponent, -wheel * (step * 5f), minFov, maxFov))
         {
-            var lens = fl.m_Lens;
-            lens.FieldOfView = Mathf.Clamp(lens.FieldOfView - wheel * (step * 5f), minFov, maxFov);
-            fl.m_Lens = lens;
             return;
         }
 
-        // 2-b) ÀÏ¹İ VCam ¡æ Transposer Z·Î ÁÜ
-        if (vcam != null)
+        // 2-b) ì¼ë°˜ VCam â†’ Transposer Zë¡œ ì¤Œ
+        if (activeCamera != null && CinemachineCompat.TryGetBodyFollowOffset(activeCamera, out var offset))
         {
-            var transposer = vcam.GetCinemachineComponent<CinemachineTransposer>();
-            if (transposer != null)
-            {
-                var off = transposer.m_FollowOffset;
-                off.z = Mathf.Clamp(off.z - wheel * step, minZ, maxZ); // ÈÙ¡è=°¡±îÀÌ
-                transposer.m_FollowOffset = off;
+            offset.z = Mathf.Clamp(offset.z - wheel * step, minZ, maxZ); // íœ â†‘=ê°€ê¹Œì´
+            if (CinemachineCompat.TrySetBodyFollowOffset(activeCamera, offset))
                 return;
-            }
         }
     }
 }
