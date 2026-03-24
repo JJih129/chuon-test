@@ -1036,7 +1036,6 @@ GameObject:
   - component: {fileID: 281972698}
   - component: {fileID: 281972706}
   - component: {fileID: 281972704}
-  - component: {fileID: 281972703}
   - component: {fileID: 281972707}
   - component: {fileID: 281972708}
   - component: {fileID: 281972710}
@@ -1053,6 +1052,8 @@ GameObject:
   - component: {fileID: 281972722}
   - component: {fileID: 281972723}
   - component: {fileID: 281972724}
+  - component: {fileID: 281972726}
+  - component: {fileID: 281972725}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -1478,21 +1479,6 @@ MonoBehaviour:
   chargeMaxStrength: 0.5
   chargeInTime: 0.35
   chargeOutTime: 0.25
---- !u!114 &281972703
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 281972682}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 018d0243e3676e949993b156449e99d1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  inputBlockerBehaviour: {fileID: 0}
-  guardController: {fileID: 281972713}
-  guardKey: 101
 --- !u!114 &281972704
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2066,6 +2052,46 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   attackHitboxes:
   - {fileID: 581649571}
+--- !u!114 &281972725
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d734cd737647624ca77193bf44eb867, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  director: {fileID: 281972726}
+  ultimateTimelineAsset: {fileID: 11400000, guid: 6a25cf4d2dc5abe45b624dfa25aae84e, type: 2}
+  useUnscaledDirectorTime: 1
+  inputBlockerBehaviour: {fileID: 281972706}
+  blockAllInputsDuringCutscene: 1
+  invulnerabilityToggleBehaviour: {fileID: 281972701}
+  setInvulnerableDuringCutscene: 1
+  freezeTimeScaleDuringCutscene: 0
+  enableDebugHotkey: 0
+  debugHotkey: 114
+  debugLog: 0
+--- !u!320 &281972726
+PlayableDirector:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 281972682}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_PlayableAsset: {fileID: 11400000, guid: 6a25cf4d2dc5abe45b624dfa25aae84e, type: 2}
+  m_InitialState: 0
+  m_WrapMode: 2
+  m_DirectorUpdateMode: 1
+  m_InitialTime: 0
+  m_SceneBindings: []
+  m_ExposedReferences:
+    m_References: []
 --- !u!1 &290598377
 GameObject:
   m_ObjectHideFlags: 0
