@@ -53,6 +53,8 @@ public class PlayerMoveController : MonoBehaviour
     private float _velY;
     private bool _externLocked; // 외부에서 이동을 막았는지 여부
 
+    public bool IsExternallyLocked => _externLocked;
+
     void Awake()
     {
         _cc = GetComponent<CharacterController>();

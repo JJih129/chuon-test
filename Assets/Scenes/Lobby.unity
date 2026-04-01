@@ -166,7 +166,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 14622526}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
   m_Name: 
@@ -1642,7 +1642,7 @@ MonoBehaviour:
   frontArcDegrees: 100
   flattenToGround: 1
   denyGuardWhileAttacking: 1
-  autoResumeGuardIfHolding: 1
+  autoResumeGuardIfHolding: 0
   chipDamageOnBlock: 0.1
   enablePerfectGuard: 1
   perfectGuardWindow: 0.12

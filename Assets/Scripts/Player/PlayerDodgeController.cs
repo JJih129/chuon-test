@@ -70,6 +70,8 @@ public class PlayerDodgeController : MonoBehaviour
     Vector3 dodgeDir;
     float baseSpeed;
 
+    public bool IsDodging => isDodging;
+
     void Reset()
     {
         if (!playerRoot) playerRoot = transform;
