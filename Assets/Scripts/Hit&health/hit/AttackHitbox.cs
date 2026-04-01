@@ -26,6 +26,10 @@ public class AttackHitbox : MonoBehaviour
 
     [Tooltip("해당 공격이 퍼펙트 회피 판정 대상으로 들어가는지 여부")]
     public bool canPerfectDodge = true;
+    public bool canParry = true;
+    public bool canGuard = true;
+    public bool isUnblockable = false;
+    public bool causesGuardBreak = false;
 
     // ─────────────────────────────────────
     // ② 공격자 / 레이어 필터
@@ -213,6 +217,10 @@ public class AttackHitbox : MonoBehaviour
         baseDamage      = damage;
         hitType         = type;
         canPerfectDodge = allowPerfectDodge;
+        canParry        = true;
+        canGuard        = true;
+        isUnblockable   = false;
+        causesGuardBreak = false;
 
         if (attackerOverride != null)
             attackerRoot = attackerOverride;
@@ -226,6 +234,29 @@ public class AttackHitbox : MonoBehaviour
     {
         baseDamage      = damage;
         canPerfectDodge = allowPerfectDodge;
+        canParry        = true;
+        canGuard        = true;
+        isUnblockable   = false;
+        causesGuardBreak = false;
+
+        if (attackerOverride != null)
+            attackerRoot = attackerOverride;
+    }
+
+    public void Configure(
+        float damage,
+        bool allowParry,
+        bool allowGuard,
+        bool unblockable,
+        bool guardBreak,
+        Transform attackerOverride = null)
+    {
+        baseDamage       = damage;
+        canPerfectDodge  = true;
+        canParry         = allowParry;
+        canGuard         = allowGuard;
+        isUnblockable    = unblockable;
+        causesGuardBreak = guardBreak;
 
         if (attackerOverride != null)
             attackerRoot = attackerOverride;
@@ -275,7 +306,11 @@ public class AttackHitbox : MonoBehaviour
             hitPoint        = hitPoint,
             hitDirection    = dir,
             attacker        = attackerRoot,
-            canPerfectDodge = canPerfectDodge
+            canPerfectDodge = canPerfectDodge,
+            canParry        = canParry,
+            canGuard        = canGuard,
+            isUnblockable   = isUnblockable,
+            causesGuardBreak = causesGuardBreak
         };
 
         if (enableLogs)

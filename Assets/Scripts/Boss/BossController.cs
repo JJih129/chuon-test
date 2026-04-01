@@ -8,6 +8,15 @@ using System.Collections;
 using System.Collections.Generic;
 using System;
 
+public enum BossAttackTelegraphStyle
+{
+    Auto,
+    Parry,
+    Guard,
+    Dodge,
+    Danger
+}
+
 public enum BossState
 {
     IntroIdle,   // 전투 시작 전 연출용 대기
@@ -31,6 +40,10 @@ public class AttackPattern
 
     [Tooltip("이 공격이 패링 가능한 공격인지 여부")]
     public bool isParryable;
+    public bool canGuard = true;
+    public bool isUnblockable = false;
+    public bool causesGuardBreak = false;
+    public BossAttackTelegraphStyle telegraphStyle = BossAttackTelegraphStyle.Auto;
 
     [Tooltip("이 패턴의 기본 데미지량")]
     public int damageAmount = 10;
@@ -52,6 +65,8 @@ public class AttackPattern
 
     [Tooltip("이 패턴 직전에 금지할 패턴 이름 (없으면 빈 문자열)")]
     public string forbiddenAfter;
+
+    public bool CanParry => isParryable && !isUnblockable;
 
     public bool CanExecute(BossController boss, float distance, string lastPattern)
     {
@@ -621,10 +636,16 @@ public class BossController : MonoBehaviour
         pattern.currentCooldown = pattern.cooldown;
 
         if (patternVisuals != null)
-            patternVisuals.SetParryable(pattern.isParryable);
+            patternVisuals.SetParryable(pattern.CanParry);
 
         if (attackHitbox != null)
-            attackHitbox.Configure(pattern.damageAmount, pattern.isParryable, transform);
+            attackHitbox.Configure(
+                pattern.damageAmount,
+                pattern.CanParry,
+                pattern.canGuard,
+                pattern.isUnblockable,
+                pattern.causesGuardBreak,
+                transform);
 
         if (!string.IsNullOrEmpty(pattern.animTriggerName))
             PlayAnimTrigger(pattern.animTriggerName);
