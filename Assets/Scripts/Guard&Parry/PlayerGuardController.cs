@@ -68,6 +68,8 @@ public class PlayerGuardController : MonoBehaviour
     public bool splitTapParryAndHoldGuard = true;
     [Tooltip("홀드로 가드 진입하기까지 필요한 시간(초)")]
     public float guardHoldDelay = 0.18f;
+    [Tooltip("가드 비주얼이 최소한으로 유지되는 시간(짧은 탭에서만 연타 재시작 방지)")]
+    public float guardVisualReleaseGrace = 0.12f;
 
     // ─────────────────────────────────────────────────────────────────────
     // ⑤ 대미지/패링
@@ -80,6 +82,19 @@ public class PlayerGuardController : MonoBehaviour
     public bool enablePerfectGuard = true;
     [Tooltip("패링 기본 창(초). 이벤트에서 길이 미지정 시 사용")]
     public float perfectGuardWindow = 0.12f;
+    [Tooltip("패링 입력 후 실제 판정이 열리기까지의 스타트업 시간(초, 실시간 기준)")]
+    public float parryStartupDuration = 0.045f;
+    [Tooltip("패링 실패 후 다음 패링 시도까지 필요한 회복 시간(초, 실시간 기준)")]
+    public float failedParryRecovery = 0.2f;
+    [Tooltip("이 시간 안의 연속 패링 시도는 연타로 간주")]
+    public float parrySpamChainWindow = 0.55f;
+    [Range(0f, 0.4f)]
+    [Tooltip("연타 스택당 줄어드는 패링 창 비율")]
+    public float parrySpamWindowDecayPerStack = 0.18f;
+    [Tooltip("연타 스택당 추가되는 패링 실패 회복 시간(초)")]
+    public float parrySpamRecoveryPenaltyPerStack = 0.08f;
+    [Tooltip("연타 페널티 최대 스택")]
+    public int maxParrySpamPenaltyStacks = 3;
     [Tooltip("가드 입력 직후 이 시간 안에 들어온 패링 이벤트만 허용")]
     public float parryEventAcceptWindow = 0.35f;
     [Tooltip("패링 창은 실시간 기준으로 닫힘(슬로우/히트스톱 영향 없음)")]
@@ -171,10 +186,14 @@ public class PlayerGuardController : MonoBehaviour
     public bool IsGuarding  { get; private set; }
     public bool IsAttacking { get; private set; }
     public bool IsParryWindowOpen => _parryOpen;
+    public bool IsParryRecovering => Time.realtimeSinceStartup < _parryRecoveryUntilRealtime;
     public bool IsGuardBroken => Time.realtimeSinceStartup < _guardBrokenUntilRealtime;
+    public bool IsGuardMovementActive => IsGuarding || (_guardHoldPending && !IsGuardBroken && !IsGuardActionBlocked());
     public float GuardStrainNormalized => !enableGuardStrain || maxGuardStrain <= 0f ? 0f : Mathf.Clamp01(_guardStrain / maxGuardStrain);
     public bool IsParryCounterReady => enableParryCounterWindow && Time.realtimeSinceStartup < _parryCounterUntilRealtime;
     public float ParryCounterRemaining => IsParryCounterReady ? Mathf.Max(0f, _parryCounterUntilRealtime - Time.realtimeSinceStartup) : 0f;
+    public float ParryRecoveryRemaining => IsParryRecovering ? Mathf.Max(0f, _parryRecoveryUntilRealtime - Time.realtimeSinceStartup) : 0f;
+    public float GuardBreakRemaining => IsGuardBroken ? Mathf.Max(0f, _guardBrokenUntilRealtime - Time.realtimeSinceStartup) : 0f;
 
     // 해시 및 존재 여부 캐시
     int _hashGuardBool, _hashAttackBool, _hashBlockTrig, _hashParryTrig, _hashGuardBreakTrig;
@@ -182,13 +201,23 @@ public class PlayerGuardController : MonoBehaviour
 
     // 패링 창
     bool _parryOpen;
+    bool _parryAttemptActive;
+    bool _parrySuccessPendingClose;
+    float _parryActivateAt = float.NegativeInfinity;
+    int _parrySpamPenaltyStacks;
+    float _lastParryAttemptStartedRealtime = float.NegativeInfinity;
     float _lastGuardPressedRealtime = float.NegativeInfinity;
     bool _parryAvailableThisGuard;
     bool _guardHoldPending;
+    bool _guardVisualRaised;
     bool _requireGuardReleaseAfterBreak;
     float _guardStrain;
     float _guardStrainRecoverAllowedRealtime;
     float _guardBrokenUntilRealtime = float.NegativeInfinity;
+    float _guardVisualMinHoldUntilRealtime = float.NegativeInfinity;
+    float _guardReactionVisualUntilRealtime = float.NegativeInfinity;
+    float _guardRearmBlockedUntilRealtime = float.NegativeInfinity;
+    float _parryRecoveryUntilRealtime = float.NegativeInfinity;
     float _parryCounterUntilRealtime = float.NegativeInfinity;
     float _parryCloseAt = float.NegativeInfinity;
     bool _parryUsesRealtimeClock;
@@ -198,7 +227,9 @@ public class PlayerGuardController : MonoBehaviour
     bool _moveLockedByTimer;
     float _moveUnlockAt = float.NegativeInfinity;
     IInputBlocker _inputBlocker;
+    PlayerCombatController _combatController;
     PlayerReferences _playerReferences;
+    PlayerInputCommandBuffer _inputCommandBuffer;
 
     void Awake()
     {
@@ -210,6 +241,10 @@ public class PlayerGuardController : MonoBehaviour
         if (!rb)       rb       = GetComponent<Rigidbody>();
         if (!ultimate) ultimate = GetComponent<PlayerUltimateController>();
         _inputBlocker = GetComponent<IInputBlocker>();
+        _combatController = GetComponent<PlayerCombatController>();
+        _inputCommandBuffer = GetComponent<PlayerInputCommandBuffer>();
+        if (_inputCommandBuffer == null)
+            _inputCommandBuffer = gameObject.AddComponent<PlayerInputCommandBuffer>();
 
         CacheAnimatorParams();
 
@@ -220,16 +255,17 @@ public class PlayerGuardController : MonoBehaviour
     {
         UpdateTimedStates();
 
-        if (animator && _hasAttackBool) IsAttacking = animator.GetBool(_hashAttackBool);
+        IsAttacking = ResolveAttackStateActive();
 
         RecoverGuardStrain();
 
         if (IsInputBlocked())
         {
             if (IsGuarding) SetGuarding(false);
-            if (_parryOpen) CloseParryWindow();
+            if (_parryOpen || _parryAttemptActive) CancelParryWindow();
             _guardHoldPending = false;
             _parryCounterUntilRealtime = float.NegativeInfinity;
+            ClearGuardVisualImmediate();
             return;
         }
 
@@ -247,6 +283,12 @@ public class PlayerGuardController : MonoBehaviour
                 ? guardAction.action.IsPressed()
                 : Input.GetKey(KeyCode.E);
 
+            if (pressedThisFrame)
+                _inputCommandBuffer?.RecordGuardPress();
+
+            if (releasedThisFrame)
+                _inputCommandBuffer?.RecordGuardRelease();
+
             if (_requireGuardReleaseAfterBreak)
             {
                 if (!holding)
@@ -257,10 +299,27 @@ public class PlayerGuardController : MonoBehaviour
                     SetGuarding(false);
             }
 
-            if ((denyGuardWhileAttacking && IsAttacking) || IsGuardBroken)
+            bool guardActionBlocked = IsGuardActionBlocked();
+            if (guardActionBlocked)
             {
                 pressedThisFrame = false;
-                holding = false;
+                if (IsGuarding)
+                    SetGuarding(false);
+
+                if (_parryOpen || _parryAttemptActive)
+                    CancelParryWindow();
+
+                if (splitTapParryAndHoldGuard && autoResumeGuardIfHolding && holding)
+                {
+                    if (!_guardHoldPending)
+                        _lastGuardPressedRealtime = Time.realtimeSinceStartup;
+
+                    _guardHoldPending = true;
+                }
+                else if (!holding)
+                {
+                    _guardHoldPending = false;
+                }
             }
 
             if (splitTapParryAndHoldGuard)
@@ -269,19 +328,14 @@ public class PlayerGuardController : MonoBehaviour
             }
             else
             {
-                if (pressedThisFrame)
+                if (pressedThisFrame && !guardActionBlocked)
                     ArmParryFromFreshPress();
 
-                if (autoResumeGuardIfHolding && holding) SetGuarding(true);
-                else if (!holding) SetGuarding(false);
+                if (autoResumeGuardIfHolding && holding && !guardActionBlocked) SetGuarding(true);
+                else if (!holding || guardActionBlocked) SetGuarding(false);
             }
         }
 
-        // 2) 애니 파라미터 동기화(외부가 SetBool 해도 읽어온다)
-        if (animator)
-        {
-            if (_hasGuardBool)  IsGuarding  = animator.GetBool(_hashGuardBool);
-        }
     }
 
     bool ShouldUseLegacyGuardFallback()
@@ -296,8 +350,10 @@ public class PlayerGuardController : MonoBehaviour
     public void SetGuarding(bool on)
     {
         bool changed = IsGuarding != on;
-        if (_hasGuardBool && animator) animator.SetBool(_hashGuardBool, on);
         IsGuarding = on;
+
+        if (on)
+            RaiseGuardVisualImmediate();
 
         if (!changed) return;
 
@@ -307,6 +363,7 @@ public class PlayerGuardController : MonoBehaviour
         _parryAvailableThisGuard = false;
         _guardHoldPending = false;
         CloseParryWindow();
+        RequestGuardVisualRelease();
     }
 
     // ───────────────────── 패링 창(애니 이벤트용) ─────────────────────
@@ -318,14 +375,52 @@ public class PlayerGuardController : MonoBehaviour
         if (!enablePerfectGuard)
             return;
 
-        _parryOpen = open;
-        _parryCloseAt = open ? float.PositiveInfinity : float.NegativeInfinity;
+        if (open)
+        {
+            if (!CanStartParryAttempt())
+                return;
+
+            OpenParryWindowImmediate(float.PositiveInfinity);
+            return;
+        }
+
+        CloseParryWindow();
     }
 
     public void CloseParryWindow()
     {
+        CloseParryWindowInternal(countAsFailure: true);
+    }
+
+    public void CancelParryWindow()
+    {
+        CloseParryWindowInternal(countAsFailure: false);
+    }
+
+    public void RegisterParrySuccess()
+    {
+        _parryAttemptActive = false;
+        _parrySuccessPendingClose = true;
+        _parryActivateAt = float.NegativeInfinity;
+        _parrySpamPenaltyStacks = 0;
+        _lastParryAttemptStartedRealtime = float.NegativeInfinity;
+        _parryRecoveryUntilRealtime = float.NegativeInfinity;
+        _guardRearmBlockedUntilRealtime = Mathf.Max(
+            _guardRearmBlockedUntilRealtime,
+            Time.realtimeSinceStartup + Mathf.Max(0.05f, parryMoveLock));
+    }
+
+    void CloseParryWindowInternal(bool countAsFailure)
+    {
+        bool shouldEnterRecovery = countAsFailure && _parryAttemptActive && !_parrySuccessPendingClose;
         _parryOpen = false;
+        _parryActivateAt = float.NegativeInfinity;
         _parryCloseAt = float.NegativeInfinity;
+        _parryAttemptActive = false;
+        _parrySuccessPendingClose = false;
+
+        if (shouldEnterRecovery)
+            EnterFailedParryRecovery();
     }
 
     void TryOpenParryWindow(float seconds)
@@ -334,7 +429,7 @@ public class PlayerGuardController : MonoBehaviour
         if (!CanAcceptParryEvent()) return;
 
         _parryAvailableThisGuard = false;
-        StartParryWindow(seconds);
+        OpenParryWindowImmediate(seconds);
     }
 
     void ArmParryFromFreshPress()
@@ -349,11 +444,12 @@ public class PlayerGuardController : MonoBehaviour
         {
             _lastGuardPressedRealtime = Time.realtimeSinceStartup;
             _guardHoldPending = true;
+            RaiseGuardVisual(guardVisualReleaseGrace);
 
-            if (enablePerfectGuard)
+            if (CanStartParryAttempt())
             {
                 _parryAvailableThisGuard = false;
-                StartParryWindow(perfectGuardWindow);
+                BeginParryAttempt(perfectGuardWindow);
             }
         }
 
@@ -361,26 +457,97 @@ public class PlayerGuardController : MonoBehaviour
         {
             _guardHoldPending = false;
             if (IsGuarding) SetGuarding(false);
+            else RequestGuardVisualRelease();
             return;
         }
 
         if (!autoResumeGuardIfHolding || !_guardHoldPending || IsGuarding)
             return;
 
+        if (IsGuardActionBlocked())
+            return;
+
+        if (IsParryRecovering || _parryAttemptActive || _parryOpen)
+            return;
+
+        if (Time.realtimeSinceStartup < _guardRearmBlockedUntilRealtime)
+            return;
+
         if (Time.realtimeSinceStartup - _lastGuardPressedRealtime >= Mathf.Max(0f, guardHoldDelay))
             SetGuarding(true);
     }
 
-    void StartParryWindow(float seconds)
+    void BeginParryAttempt(float seconds)
     {
-        _parryOpen = true;
+        if (!CanStartParryAttempt())
+            return;
+
+        float now = ResolveParryClockTime();
+        float startup = Mathf.Max(0f, parryStartupDuration);
+        RegisterParryAttemptStart();
+        float activeDuration = ResolveParryActiveDuration(seconds);
+        _parryAttemptActive = true;
+        _parrySuccessPendingClose = false;
         _parryUsesRealtimeClock = useRealtimeParryWindow;
-        _parryCloseAt = ResolveParryClockTime() + Mathf.Max(0f, seconds);
+        _parryActivateAt = now + startup;
+        _parryOpen = startup <= 0f;
+        _parryCloseAt = _parryActivateAt + activeDuration;
+    }
+
+    void OpenParryWindowImmediate(float seconds)
+    {
+        if (!CanStartParryAttempt())
+            return;
+
+        float now = ResolveParryClockTime();
+        RegisterParryAttemptStart();
+        float activeDuration = ResolveParryActiveDuration(seconds);
+        _parryAttemptActive = true;
+        _parrySuccessPendingClose = false;
+        _parryUsesRealtimeClock = useRealtimeParryWindow;
+        _parryActivateAt = now;
+        _parryOpen = true;
+        _parryCloseAt = now + activeDuration;
+    }
+
+    void RegisterParryAttemptStart()
+    {
+        float now = Time.realtimeSinceStartup;
+        float chainWindow = Mathf.Max(0.05f, parrySpamChainWindow);
+
+        if (!float.IsFinite(_lastParryAttemptStartedRealtime) || now - _lastParryAttemptStartedRealtime > chainWindow)
+            _parrySpamPenaltyStacks = 0;
+        else
+            _parrySpamPenaltyStacks = Mathf.Min(Mathf.Max(0, maxParrySpamPenaltyStacks), _parrySpamPenaltyStacks + 1);
+
+        _lastParryAttemptStartedRealtime = now;
+    }
+
+    float ResolveParryActiveDuration(float requestedDuration)
+    {
+        float duration = Mathf.Max(0.01f, requestedDuration);
+        if (_parrySpamPenaltyStacks <= 0)
+            return duration;
+
+        float decay = Mathf.Clamp01(parrySpamWindowDecayPerStack) * _parrySpamPenaltyStacks;
+        float scale = Mathf.Max(0.35f, 1f - decay);
+        return Mathf.Max(0.03f, duration * scale);
+    }
+
+    bool CanStartParryAttempt()
+    {
+        return enablePerfectGuard
+            && !_parryAttemptActive
+            && !_parryOpen
+            && !IsGuardActionBlocked()
+            && !IsGuardBroken
+            && !IsInputBlocked()
+            && !IsParryRecovering;
     }
 
     bool CanAcceptParryEvent()
     {
-        if (!enablePerfectGuard || !IsGuarding || !_parryAvailableThisGuard)
+        if (!enablePerfectGuard || !IsGuarding || !_parryAvailableThisGuard || IsParryRecovering || IsGuardActionBlocked())
             return false;
 
         if (!float.IsFinite(_lastGuardPressedRealtime))
@@ -392,14 +559,28 @@ public class PlayerGuardController : MonoBehaviour
     // ───────────────────── 리액션 트리거(이벤트 포함) ─────────────────────
     public void PlayBlockReaction()
     {
-        if (_hasBlockTrig && animator) animator.SetTrigger(_hashBlockTrig);
+        RaiseGuardVisualImmediate();
+        _guardReactionVisualUntilRealtime = Mathf.Max(
+            _guardReactionVisualUntilRealtime,
+            Time.realtimeSinceStartup + Mathf.Max(0.05f, blockMoveLock));
+        if (_hasBlockTrig && animator)
+        {
+            animator.ResetTrigger(_hashBlockTrig);
+            animator.SetTrigger(_hashBlockTrig);
+        }
         if (lockMoveOnBlock) LockMoveFor(blockMoveLock);
         OnGuardBlock?.Invoke();
     }
 
     public void PlayParrySuccess()
     {
-        if (_hasParryTrig && animator) animator.SetTrigger(_hashParryTrig);
+        _guardReactionVisualUntilRealtime = float.NegativeInfinity;
+        ClearGuardVisualImmediate();
+        if (_hasParryTrig && animator)
+        {
+            animator.ResetTrigger(_hashParryTrig);
+            animator.SetTrigger(_hashParryTrig);
+        }
         RecoverGuardStrainFromParry();
         if (lockMoveOnParry) LockMoveFor(parryMoveLock);
         if (grantUltimateOnParry && ultimate) ultimate.AddGauge(ultimateGainOnParry);
@@ -453,6 +634,15 @@ public class PlayerGuardController : MonoBehaviour
         return true;
     }
 
+    public bool ForceGuardBreakFromAttack()
+    {
+        if (IsGuardBroken)
+            return true;
+
+        TriggerGuardBreak();
+        return true;
+    }
+
     public void RecoverGuardStrainFromParry()
     {
         if (!enableGuardStrain || parryStrainRecover <= 0f)
@@ -469,8 +659,7 @@ public class PlayerGuardController : MonoBehaviour
     {
         isParry = false; isBlock = false; chipMul = chipDamageOnBlock;
 
-        if (!IsGuarding) return false;
-        if (denyGuardWhileAttacking && IsAttacking) return false;
+        if (!CanResolveGuardBlock() && !CanResolveParryDefense()) return false;
 
         Vector3 fwd = GetGuardForward().normalized;
         Vector3 dir = (hitPoint - GetGuardOrigin()).normalized;
@@ -482,8 +671,9 @@ public class PlayerGuardController : MonoBehaviour
         bool inFront = angle <= (frontArcDegrees * 0.5f);
         if (!inFront) return false;
 
-        if (enablePerfectGuard && _parryOpen) { isParry = true;  return true; }
-        isBlock = true;  return true;
+        if (CanResolveParryDefense()) { isParry = true;  return true; }
+        if (CanResolveGuardBlock()) { isBlock = true;  return true; }
+        return false;
     }
 
     public Vector3 GetGuardForward()
@@ -518,13 +708,23 @@ public class PlayerGuardController : MonoBehaviour
         _guardStrainRecoverAllowedRealtime = _guardBrokenUntilRealtime + Mathf.Max(0f, guardStrainRecoverDelay);
         _guardHoldPending = false;
         _parryAvailableThisGuard = false;
+        _parryRecoveryUntilRealtime = float.NegativeInfinity;
+        _parrySpamPenaltyStacks = 0;
+        _lastParryAttemptStartedRealtime = float.NegativeInfinity;
+        _guardRearmBlockedUntilRealtime = float.NegativeInfinity;
         _parryCounterUntilRealtime = float.NegativeInfinity;
         _requireGuardReleaseAfterBreak = true;
+        _guardReactionVisualUntilRealtime = float.NegativeInfinity;
+        ClearGuardVisualImmediate();
 
         if (IsGuarding) SetGuarding(false);
         else CloseParryWindow();
 
-        if (_hasGuardBreakTrig && animator) animator.SetTrigger(_hashGuardBreakTrig);
+        if (_hasGuardBreakTrig && animator)
+        {
+            animator.ResetTrigger(_hashGuardBreakTrig);
+            animator.SetTrigger(_hashGuardBreakTrig);
+        }
         LockMoveFor(guardBreakDuration);
         OnGuardBreak?.Invoke();
     }
@@ -617,8 +817,14 @@ public class PlayerGuardController : MonoBehaviour
 
     void UpdateTimedStates()
     {
+        if (_parryAttemptActive && !_parryOpen && float.IsFinite(_parryActivateAt) && ResolveParryClockTime() >= _parryActivateAt)
+            _parryOpen = true;
+
         if (_parryOpen && float.IsFinite(_parryCloseAt) && ResolveParryClockTime() >= _parryCloseAt)
             CloseParryWindow();
+
+        if (_guardVisualRaised && !ShouldKeepGuardVisualRaised() && Time.realtimeSinceStartup >= ResolveGuardVisualReleaseTime())
+            ClearGuardVisualImmediate();
 
         if (_moveLockedByTimer && Time.time >= _moveUnlockAt)
             ReleaseMoveLock();
@@ -627,6 +833,114 @@ public class PlayerGuardController : MonoBehaviour
     float ResolveParryClockTime()
     {
         return _parryUsesRealtimeClock ? Time.realtimeSinceStartup : Time.time;
+    }
+
+    public float GetParryStartupRemaining()
+    {
+        if (!_parryAttemptActive || _parryOpen || !float.IsFinite(_parryActivateAt))
+            return 0f;
+
+        return Mathf.Max(0f, _parryActivateAt - ResolveParryClockTime());
+    }
+
+    public float GetParryWindowRemaining()
+    {
+        if (!_parryOpen || !float.IsFinite(_parryCloseAt))
+            return 0f;
+
+        return Mathf.Max(0f, _parryCloseAt - ResolveParryClockTime());
+    }
+
+    void EnterFailedParryRecovery()
+    {
+        float recovery = Mathf.Max(0f, failedParryRecovery)
+            + (Mathf.Max(0f, parrySpamRecoveryPenaltyPerStack) * _parrySpamPenaltyStacks);
+        if (recovery <= 0f)
+            return;
+
+        _parryRecoveryUntilRealtime = Mathf.Max(_parryRecoveryUntilRealtime, Time.realtimeSinceStartup + recovery);
+    }
+
+    void RaiseGuardVisualImmediate()
+    {
+        RaiseGuardVisual(0f);
+    }
+
+    void RaiseGuardVisual(float minHoldDuration)
+    {
+        float holdUntil = Time.realtimeSinceStartup + Mathf.Max(0f, minHoldDuration);
+        _guardVisualMinHoldUntilRealtime = Mathf.Max(_guardVisualMinHoldUntilRealtime, holdUntil);
+
+        if (_guardVisualRaised)
+            return;
+
+        _guardVisualRaised = true;
+        if (_hasGuardBool && animator)
+            animator.SetBool(_hashGuardBool, true);
+    }
+
+    void RequestGuardVisualRelease()
+    {
+        if (ShouldKeepGuardVisualRaised())
+            return;
+
+        if (Time.realtimeSinceStartup >= ResolveGuardVisualReleaseTime())
+            ClearGuardVisualImmediate();
+    }
+
+    void ClearGuardVisualImmediate()
+    {
+        _guardVisualMinHoldUntilRealtime = float.NegativeInfinity;
+        _guardReactionVisualUntilRealtime = float.NegativeInfinity;
+        if (!_guardVisualRaised)
+            return;
+
+        _guardVisualRaised = false;
+        if (_hasGuardBool && animator)
+            animator.SetBool(_hashGuardBool, false);
+    }
+
+    bool ShouldKeepGuardVisualRaised()
+    {
+        return IsGuarding
+            || _guardHoldPending
+            || _parryAttemptActive
+            || _parryOpen
+            || Time.realtimeSinceStartup < _guardReactionVisualUntilRealtime;
+    }
+
+    float ResolveGuardVisualReleaseTime()
+    {
+        return Mathf.Max(_guardVisualMinHoldUntilRealtime, _guardReactionVisualUntilRealtime);
+    }
+
+    bool IsGuardActionBlocked()
+    {
+        if (IsGuardBroken)
+            return true;
+
+        if (_combatController != null && _combatController.IsInHit)
+            return true;
+
+        return denyGuardWhileAttacking && ResolveAttackStateActive();
+    }
+
+    bool ResolveAttackStateActive()
+    {
+        if (_combatController != null && _combatController.IsAttacking)
+            return true;
+
+        return animator != null && _hasAttackBool && animator.GetBool(_hashAttackBool);
+    }
+
+    public bool CanResolveParryDefense()
+    {
+        return _parryOpen && !IsGuardActionBlocked();
+    }
+
+    public bool CanResolveGuardBlock()
+    {
+        return IsGuarding && !IsGuardActionBlocked();
     }
 
     void ReleaseMoveLock()

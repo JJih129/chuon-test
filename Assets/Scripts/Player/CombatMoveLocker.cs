@@ -38,6 +38,8 @@ public class CombatMoveLocker : MonoBehaviour
     bool _applied; // 현재 잠금 적용 상태
     Animator _cachedAnimator;
     PlayerReferences _playerReferences;
+    bool _cachedRootMotionBeforeLock;
+    bool _hasCachedRootMotionBeforeLock;
 
     void Awake()
     {
@@ -46,6 +48,8 @@ public class CombatMoveLocker : MonoBehaviour
             _cachedAnimator = _playerReferences != null ? _playerReferences.MainAnimator ?? GetComponentInChildren<Animator>(true) : GetComponentInChildren<Animator>(true);
         else
             _cachedAnimator = rootMotionAnimator;
+
+        CacheAnimatorRootMotionState();
     }
 
     public bool IsLocked => _reasons.Count > 0;
@@ -130,6 +134,7 @@ public class CombatMoveLocker : MonoBehaviour
         if (!_applied)
         {
             _applied = true;
+            CacheAnimatorRootMotionState();
             foreach (var b in moveBehaviours)
                 if (b) b.enabled = false;
         }
@@ -142,7 +147,12 @@ public class CombatMoveLocker : MonoBehaviour
         }
 
         if (_cachedAnimator && _cachedAnimator.enabled)
-            _cachedAnimator.applyRootMotion = !wantDisableRM;
+        {
+            if (wantDisableRM)
+                _cachedAnimator.applyRootMotion = false;
+            else if (_hasCachedRootMotionBeforeLock)
+                _cachedAnimator.applyRootMotion = _cachedRootMotionBeforeLock;
+        }
     }
 
     void ClearLock()
@@ -153,7 +163,19 @@ public class CombatMoveLocker : MonoBehaviour
         foreach (var b in moveBehaviours)
             if (b) b.enabled = true;
 
-        if (_cachedAnimator) _cachedAnimator.applyRootMotion = true;
+        if (_cachedAnimator && _hasCachedRootMotionBeforeLock)
+            _cachedAnimator.applyRootMotion = _cachedRootMotionBeforeLock;
+
+        _hasCachedRootMotionBeforeLock = false;
+    }
+
+    void CacheAnimatorRootMotionState()
+    {
+        if (_cachedAnimator == null)
+            return;
+
+        _cachedRootMotionBeforeLock = _cachedAnimator.applyRootMotion;
+        _hasCachedRootMotionBeforeLock = true;
     }
 
 #if UNITY_EDITOR
@@ -164,6 +186,9 @@ public class CombatMoveLocker : MonoBehaviour
             _cachedAnimator = _playerReferences != null ? _playerReferences.MainAnimator ?? GetComponentInChildren<Animator>(true) : GetComponentInChildren<Animator>(true);
         else
             _cachedAnimator = rootMotionAnimator;
+
+        if (!Application.isPlaying)
+            CacheAnimatorRootMotionState();
     }
 #endif
 }

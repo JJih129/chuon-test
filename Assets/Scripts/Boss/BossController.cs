@@ -49,6 +49,9 @@ public class AttackPattern
     [Tooltip("이 공격이 패링 가능한 공격인지 여부")]
     public bool isParryable;
     public bool canPerfectDodge = true;
+    public bool canGuard = true;
+    public bool isUnblockable = false;
+    public bool causesGuardBreak = false;
 
     [Tooltip("이 패턴의 기본 데미지량")]
     public int damageAmount = 10;
@@ -72,6 +75,16 @@ public class AttackPattern
 
     [Tooltip("두 번째 경고가 필요할 때 HUD에 붙는 접미사.")]
     public string secondaryTelegraphSuffix = "HOLD";
+
+    [Header("Pre-Attack Pose")]
+    [Tooltip("패링 불가 패턴일 때 선행 자세를 잠깐 잡은 뒤 공격합니다.")]
+    public bool usePreAttackPoseWhenNotParryable = false;
+    [Tooltip("선행 자세용 Animator 트리거. 비워두면 자세 없이 대기만 합니다.")]
+    public string preAttackPoseTriggerName;
+    [Tooltip("선행 자세 유지 시간(초). 0이면 사용하지 않습니다.")]
+    public float preAttackPoseDuration = 0f;
+    [Tooltip("선행 자세 중 HUD에 표시할 라벨. 비워두면 READY를 자동으로 붙입니다.")]
+    public string preAttackPoseLabel;
 
     [Header("쿨타임 / 가중치 / 거리 조건 (한글 설명)")]
     [Tooltip("패턴 사용 후 다시 사용할 때까지의 쿨타임(초)")]
@@ -184,13 +197,16 @@ public class AttackPattern
         if (telegraphType != AttackTelegraphType.Auto)
             return telegraphType;
 
-        if (damageAmount >= 30)
+        if (isUnblockable || (!canGuard && causesGuardBreak))
             return AttackTelegraphType.Danger;
 
-        if (maxRange >= 6f)
-            return AttackTelegraphType.Dodge;
+        if (isParryable)
+            return AttackTelegraphType.Parry;
 
-        return isParryable ? AttackTelegraphType.Parry : AttackTelegraphType.Dodge;
+        if (canGuard)
+            return AttackTelegraphType.Guard;
+
+        return AttackTelegraphType.Dodge;
     }
 
     public float ResolveTelegraphLeadTime()
@@ -219,7 +235,7 @@ public class AttackPattern
 
     public bool ResolveCanParry()
     {
-        switch (ResolveTelegraphType())
+        switch (telegraphType != AttackTelegraphType.Auto ? telegraphType : ResolveTelegraphType())
         {
             case AttackTelegraphType.Parry:
                 return isParryable;
@@ -236,9 +252,21 @@ public class AttackPattern
         return canPerfectDodge;
     }
 
+    public bool ResolveCanGuard()
+    {
+        return canGuard && !ResolveIsUnblockable();
+    }
+
     public bool ResolveIsUnblockable()
     {
-        return ResolveTelegraphType() == AttackTelegraphType.Danger;
+        return isUnblockable
+            || telegraphType == AttackTelegraphType.Danger
+            || (telegraphType == AttackTelegraphType.Auto && !canGuard && causesGuardBreak);
+    }
+
+    public bool ResolveCausesGuardBreak()
+    {
+        return causesGuardBreak;
     }
 
     public float ResolveRecoveryTime()
@@ -357,6 +385,33 @@ public class AttackPattern
         return $"{ResolveTelegraphLabel()} {suffix}";
     }
 
+    public bool ResolveUsePreAttackPose()
+    {
+        return usePreAttackPoseWhenNotParryable
+            && !ResolveCanParry()
+            && preAttackPoseDuration > 0.01f;
+    }
+
+    public float ResolvePreAttackPoseDuration()
+    {
+        return ResolveUsePreAttackPose() ? Mathf.Max(0f, preAttackPoseDuration) : 0f;
+    }
+
+    public string ResolvePreAttackPoseTriggerName()
+    {
+        return string.IsNullOrWhiteSpace(preAttackPoseTriggerName)
+            ? string.Empty
+            : preAttackPoseTriggerName.Trim();
+    }
+
+    public string ResolvePreAttackPoseLabel()
+    {
+        if (!string.IsNullOrWhiteSpace(preAttackPoseLabel))
+            return preAttackPoseLabel.Trim().ToUpperInvariant();
+
+        return $"{ResolveTelegraphLabel()} READY";
+    }
+
     public bool ResolveCanChainFollowUp()
     {
         if (allowFollowUpChain)
@@ -454,7 +509,7 @@ public class AttackPattern
     }
 }
 
-public class BossController : MonoBehaviour, IUltimateVictimState
+public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 {
     const string FollowUpTelegraphPrefix = "CHAIN";
     const float FollowUpTelegraphLeadScale = 0.82f;
@@ -474,6 +529,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
     [Tooltip("공격 패턴 비주얼(가드 가능/불가 표시 등)")]
     public PatternVisuals patternVisuals;
+    [Tooltip("공격 선행 바닥 위험 구역 표시용")]
+    [SerializeField] private BossGroundTelegraph groundTelegraph;
+    [Tooltip("패링 불가 패턴 선행 자세에 사용할 기본 애니메이션 클립. 비워두면 트리거/대기만 사용합니다.")]
+    [SerializeField] private AnimationClip defaultPreAttackPoseClip;
+    [Tooltip("패링 불가 패턴이면 별도 설정이 없어도 기본 발도 자세를 사용합니다.")]
+    [SerializeField] private bool useDefaultPreAttackPoseForNonParryable = true;
+    [Tooltip("기본 발도 자세 유지 시간(초)")]
+    [SerializeField, Min(0f)] private float defaultPreAttackPoseDuration = 0.42f;
+    [Tooltip("기본 발도 자세 HUD 라벨")]
+    [SerializeField] private string defaultPreAttackPoseLabel = "READY";
 
     [Header("물리 이동 설정 (한글 설명)")]
     [Tooltip("보스 이동에 사용할 Rigidbody (없으면 Transform 직접 이동)")]
@@ -488,6 +553,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     [Tooltip("보스 무기/팔 등에 붙은 AttackHitbox")]
     public AttackHitbox attackHitbox;
 
+    [Header("Damage")]
+    [SerializeField, Range(0.1f, 2f)] private float outgoingDamageMultiplier = 0.5f;
+
     [Tooltip("플레이어 행동 기반 패턴 제어용 트래커(선택)")]
     public PlayerTracker playerTracker;
 
@@ -501,24 +569,59 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     [Tooltip("공격 후 CombatIdle 상태 유지 시간(초). 0이면 바로 다음 상태로 이동.")]
     public float combatIdleTime = 0.3f;
 
+    [Tooltip("궁극기 victim 상태 해제 직후 AI가 다시 패턴을 잡기 전 쉬는 시간(초).")]
+    [SerializeField] private float ultimateVictimRecoveryDuration = 1.2f;
+
     [Tooltip("공격 상태에서 애니메이션 종료를 기다리는 최대 시간 (초). 안전장치 역할")]
     public float maxAttackStateWaitTime = 2.0f;
 
     [Header("Phase Tuning")]
     [Range(0.15f, 0.95f)] [SerializeField] private float phaseTwoThresholdNormalized = 0.66f;
     [Range(0.05f, 0.75f)] [SerializeField] private float phaseThreeThresholdNormalized = 0.33f;
-    [SerializeField] private float phaseTwoTelegraphScale = 0.92f;
-    [SerializeField] private float phaseThreeTelegraphScale = 0.82f;
+    [SerializeField] private float phaseTwoTelegraphScale = 0.96f;
+    [SerializeField] private float phaseThreeTelegraphScale = 0.90f;
     [Range(0f, 0.5f)] [SerializeField] private float phaseTwoFollowUpChanceBonus = 0.08f;
     [Range(0f, 0.5f)] [SerializeField] private float phaseThreeFollowUpChanceBonus = 0.16f;
     [SerializeField] private int phaseThreeExtraFollowUpChains = 1;
     [SerializeField] private float phaseEntryPressureDuration = 5f;
     [SerializeField] private float phaseEntryUnlockedPatternWeight = 1.75f;
 
+    [Header("Tempo Tuning")]
+    [SerializeField] private float minimumParryTelegraphLeadTime = 0.22f;
+    [SerializeField] private float minimumGuardTelegraphLeadTime = 0.24f;
+    [SerializeField] private float minimumDodgeTelegraphLeadTime = 0.30f;
+    [SerializeField] private float minimumDangerTelegraphLeadTime = 0.42f;
+    [SerializeField] private float minimumParryPunishWindow = 0.34f;
+    [SerializeField] private float minimumGuardPunishWindow = 0.30f;
+    [SerializeField] private float minimumDodgePunishWindow = 0.46f;
+    [SerializeField] private float minimumDangerPunishWindow = 0.62f;
+    [Header("Parry Reaction")]
+    [SerializeField, Range(0.04f, 0.35f)] private float parryStunDuration = 0.22f;
+    [SerializeField, Min(0.1f)] private float parryRecoveryDuration = 0.55f;
+    [SerializeField, Min(0.1f)] private float parryPunishWindowDuration = 0.55f;
+    [SerializeField, Range(1f, 3f)] private float parryPunishDamageMultiplier = 1.35f;
+    [SerializeField] private string parryPunishSource = "PARRY";
+    [SerializeField] private string parryStunTriggerName = "Stagger";
+    [SerializeField] private string parryStunStateName = "Break";
+    [SerializeField, Range(0f, 0.08f)] private float parryStunTransitionDuration = 0.03f;
+    [SerializeField] private float followUpRecoveryTax = 0.18f;
+    [Range(0f, 1f)] [SerializeField] private float fakeOutFollowUpChanceMultiplier = 0.18f;
+    [Range(0f, 1f)] [SerializeField] private float dangerFollowUpChanceMultiplier = 0.06f;
+    [Range(0f, 1f)] [SerializeField] private float punishHeavyFollowUpChanceMultiplier = 0.24f;
+    [Range(0.05f, 1f)] [SerializeField] private float immediateRepeatPatternWeightMultiplier = 0.22f;
+    [Range(0.05f, 1f)] [SerializeField] private float recentRepeatPatternWeightMultiplier = 0.60f;
+    [Range(0.25f, 1f)] [SerializeField] private float repeatedTelegraphWeightMultiplier = 0.82f;
+    [Range(1, 4)] [SerializeField] private int recentPatternMemory = 3;
+
     [Header("Debug")]
     [SerializeField] private bool enableStateLogs = false;
 
     private Coroutine _stateRoutine;
+    private Coroutine _parryStunRoutine;
+    private UltimateAnimatorClipSampler _preAttackPoseClipSampler;
+    private bool _isPreAttackPoseActive;
+    private float _preAttackPoseElapsed;
+    private float _preAttackPoseDurationRuntime;
     private bool _isDead;
     public event Action<AttackTelegraphType, float, string> OnAttackTelegraph;
     public event Action<float, float, string> OnPunishWindowOpened;
@@ -531,6 +634,24 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
     [Tooltip("이 거리 이내로 들어오면 이동을 멈추고 공격 준비")]
     public float stoppingDistance = 1.0f;
+
+    [Tooltip("공격 상태로 전환할 추가 거리 버퍼. 너무 멀리서 바로 공격으로 넘어가는 현상을 줄입니다.")]
+    [SerializeField] private float attackCommitDistanceBuffer = 0.28f;
+
+    [Tooltip("근거리에서 감속을 시작할 거리. stoppingDistance보다 커야 자연스럽게 접근합니다.")]
+    [SerializeField] private float moveSlowdownDistance = 1.75f;
+
+    [Tooltip("감속 구간에서도 유지할 최소 접근 속도 비율.")]
+    [Range(0.15f, 1f)] [SerializeField] private float closeApproachSpeedMultiplier = 0.38f;
+
+    [Tooltip("일반 추적 중 회전 속도(도/초).")]
+    [SerializeField] private float chaseTurnSpeed = 360f;
+
+    [Tooltip("근거리에서 플레이어를 놓치지 않도록 쓰는 추가 회전 속도(도/초).")]
+    [SerializeField] private float closeChaseTurnSpeed = 540f;
+
+    [Tooltip("근거리 회전 보정이 강화되는 거리.")]
+    [SerializeField] private float closeChaseTurnDistance = 1.8f;
 
     [Tooltip("Blend Tree로 전달할 MoveSpeed 보간 시간 (0에 가까울수록 즉각 반응)")]
     [Range(0.01f, 0.5f)]
@@ -580,6 +701,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     private bool _cachedUltimateVictimAnimatorState;
     private AnimatorUpdateMode _ultimateVictimAnimatorUpdateMode = AnimatorUpdateMode.Normal;
     private bool _ultimateVictimAnimatorApplyRootMotion;
+    private float _ultimateVictimAnimatorSpeed = 1f;
     private bool _ultimateVictimRigidbodyWasKinematic;
     private RigidbodyConstraints _ultimateVictimRigidbodyConstraints;
     private Vector3 _ultimateVictimOriginalPosition;
@@ -589,6 +711,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     private Quaternion _ultimateVictimAnchorRotation = Quaternion.identity;
     private bool _hasUltimateVictimAnchor;
     private bool _delayDestroyUntilUltimateVictimEnds;
+    private PlayerReferences _cachedGameplayPlayerReferences;
+    private Transform _cachedGameplayPlayerTarget;
+    private int _lastGameplayPlayerTargetResolveFrame = -1;
+    private int _parryStunTriggerHash;
+    private int _parryStunStateHash;
+    private bool _hasParryStunTrigger;
+    private bool _parryStunUsedAnimatorFreezeFallback;
+    private float _parryStunCachedAnimatorSpeed = 1f;
 
     [Header("공격 전 회전 보정 (한글 설명)")]
     [Tooltip("Attack/백스텝 시작 전에 플레이어 방향으로 회전 보정을 할지 여부")]
@@ -607,6 +737,18 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     [Tooltip("이 거리보다 가까워지면 백스텝을 시도 (m)")]
     public float backstepTriggerDistance = 1.0f;
 
+    [Tooltip("지정 거리 안에서 이 시간 이상 압박을 받아야 백스텝을 허용합니다.")]
+    [SerializeField] private float backstepPressureHoldTime = 0.12f;
+
+    [Tooltip("백스텝 판단 거리를 공격 진입 거리보다 더 안쪽으로 좁히는 비율.")]
+    [Range(0.1f, 1f)] [SerializeField] private float backstepInnerDistanceRatio = 0.72f;
+
+    [Tooltip("플레이어가 보스 정면에 어느 정도 들어와 있을 때만 백스텝을 허용합니다.")]
+    [Range(-1f, 1f)] [SerializeField] private float backstepFrontArcDot = 0.15f;
+
+    [Tooltip("뒤로 빠질 공간이 이 비율보다 적으면 백스텝 대신 공격을 유지합니다.")]
+    [Range(0f, 1f)] [SerializeField] private float minimumBackstepClearanceRatio = 0.45f;
+
     [Tooltip("백스텝 애니메이션 트리거 이름 (Animator 트리거 파라미터와 동일하게 설정)")]
     public string backstepAnimTriggerName = "Backstep";
 
@@ -620,9 +762,17 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     public float backstepCooldown = 3.0f;
 
     private float _backstepCooldownTimer;
+    private float _closePressureStartedAt = float.NegativeInfinity;
     readonly RaycastHit[] _movementSweepHits = new RaycastHit[16];
     readonly List<AttackPattern> _patternCandidatesCache = new List<AttackPattern>(16);
     readonly List<AttackPattern> _followUpCandidatesCache = new List<AttackPattern>(16);
+    readonly Dictionary<string, AttackPattern> _patternLookup = new Dictionary<string, AttackPattern>(16, StringComparer.OrdinalIgnoreCase);
+    readonly string[] _recentPatternNames = new string[4];
+    readonly AttackTelegraphType[] _recentTelegraphTypes = new AttackTelegraphType[4];
+    float[] _selectionWeightCache = new float[16];
+    int _recentPatternWriteIndex;
+    int _recentPatternRecordedCount;
+    int _lastPatternCooldownSyncFrame = -1;
 
     [Header("사망시 오브젝트 정리 (한글 설명)")]
     [Tooltip("보스 사망 시 자동으로 오브젝트를 파괴할지 여부")]
@@ -647,13 +797,34 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     public float PunishWindowRemaining => IsPunishWindowActive ? Mathf.Max(0f, _punishWindowUntilTime - Time.time) : 0f;
     public string PunishSourcePattern => _punishSourcePattern;
     public bool IsInUltimateVictimState => _isUltimateVictim;
+    public string CurrentPatternName => _currentPattern != null ? _currentPattern.patternName : string.Empty;
+    public string CurrentPatternTriggerName => _currentPattern != null ? _currentPattern.animTriggerName : string.Empty;
+    public AttackTelegraphType CurrentPatternTelegraphType => _currentPattern != null ? _currentPattern.ResolveTelegraphType() : AttackTelegraphType.Auto;
+    public bool CanProcessAttackAnimationEvents => !_isDead && !_isUltimateVictim && currentState == BossState.Attack && _currentPattern != null;
 
     void Awake()
     {
+        AssignDefaultPreAttackPoseClipIfNeeded();
+        BossReferences bossReferences = GetComponent<BossReferences>();
+        if (bossAnimator == null && bossReferences != null && bossReferences.MainAnimator != null)
+            bossAnimator = bossReferences.MainAnimator;
+        if (attackHitbox == null && bossReferences != null && bossReferences.AttackHitbox != null)
+            attackHitbox = bossReferences.AttackHitbox;
+        if (patternVisuals == null && bossReferences != null && bossReferences.PatternVisuals != null)
+            patternVisuals = bossReferences.PatternVisuals;
+        if (groundTelegraph == null)
+            groundTelegraph = GetComponentInChildren<BossGroundTelegraph>(true);
+        if (groundTelegraph == null)
+            groundTelegraph = CreateRuntimeGroundTelegraph();
+
         if (rb == null)
             rb = GetComponent<Rigidbody>();
         if (bodyCollider == null)
             bodyCollider = GetComponent<CapsuleCollider>();
+        if (bossAnimator == null)
+            bossAnimator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
+        CacheParryStunAnimatorHooks();
+        _preAttackPoseClipSampler ??= new UltimateAnimatorClipSampler("BossPreAttackPoseSampler");
 
         if (attackHitbox != null)
         {
@@ -673,17 +844,30 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             breakController.OnBreakExit.AddListener(OnBreakExit);
         }
 
+        RebuildPatternLookup();
         RefreshPatternCooldownState();
+        EnsureGameplayPlayerTarget(forceRefresh: true);
+    }
+
+    void OnValidate()
+    {
+        AssignDefaultPreAttackPoseClipIfNeeded();
+        RebuildPatternLookup();
     }
 
     void Start()
     {
+        EnsureGameplayPlayerTarget(forceRefresh: true);
         RefreshPhaseState(true);
         SetState(BossState.IntroIdle);
     }
 
     void OnDestroy()
     {
+        StopPreAttackPosePlayback();
+        _preAttackPoseClipSampler?.Dispose();
+        _preAttackPoseClipSampler = null;
+
         if (bossHealth != null)
         {
             bossHealth.OnDied -= OnBossDied;
@@ -703,6 +887,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
     void LateUpdate()
     {
+        UpdatePreAttackPoseSampling();
         ApplyUltimateVictimAnchor();
     }
 
@@ -762,6 +947,41 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         }
     }
 
+    float ResolveMinimumTelegraphLeadTime(AttackPattern pattern, bool isQueuedFollowUp)
+    {
+        if (pattern == null)
+            return 0.08f;
+
+        float minimum;
+        switch (pattern.ResolveTelegraphType())
+        {
+            case AttackTelegraphType.Parry:
+                minimum = minimumParryTelegraphLeadTime;
+                break;
+            case AttackTelegraphType.Guard:
+                minimum = minimumGuardTelegraphLeadTime;
+                break;
+            case AttackTelegraphType.Danger:
+                minimum = minimumDangerTelegraphLeadTime;
+                break;
+            case AttackTelegraphType.Dodge:
+            case AttackTelegraphType.Auto:
+            default:
+                minimum = minimumDodgeTelegraphLeadTime;
+                break;
+        }
+
+        if (pattern.ResolveTimingStyle() == AttackTimingStyle.FakeOut)
+            minimum = Mathf.Max(minimum, 0.24f);
+        else if (pattern.ResolveTimingStyle() == AttackTimingStyle.Delayed)
+            minimum = Mathf.Max(minimum, 0.18f);
+
+        if (isQueuedFollowUp)
+            minimum = Mathf.Max(0.12f, minimum * 0.82f);
+
+        return Mathf.Max(0.08f, minimum);
+    }
+
     float ResolvePhaseFollowUpChanceBonus()
     {
         switch (_currentPhase)
@@ -773,6 +993,31 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             default:
                 return 0f;
         }
+    }
+
+    float ResolveFollowUpChance(AttackPattern sourcePattern)
+    {
+        if (sourcePattern == null)
+            return 0f;
+
+        float chance = Mathf.Clamp01(sourcePattern.ResolveFollowUpChance() + ResolvePhaseFollowUpChanceBonus());
+        if (chance <= 0.001f)
+            return 0f;
+
+        AttackTelegraphType sourceType = sourcePattern.ResolveTelegraphType();
+        if (sourceType == AttackTelegraphType.Danger)
+            chance *= dangerFollowUpChanceMultiplier;
+
+        if (sourcePattern.ResolveTimingStyle() == AttackTimingStyle.FakeOut)
+            chance *= fakeOutFollowUpChanceMultiplier;
+
+        if (sourcePattern.ResolvePunishDamageMultiplier() >= 1.20f || sourcePattern.ResolvePunishWindowDuration() >= 0.60f)
+            chance *= punishHeavyFollowUpChanceMultiplier;
+
+        if (_followUpChainDepth > 0)
+            chance *= 0.62f;
+
+        return Mathf.Clamp01(chance);
     }
 
     int ResolveActiveMaxFollowUpChains()
@@ -798,13 +1043,13 @@ public class BossController : MonoBehaviour, IUltimateVictimState
                 switch (type)
                 {
                     case AttackTelegraphType.Dodge:
-                        multiplier = 1.42f;
+                        multiplier = 1.32f;
                         break;
                     case AttackTelegraphType.Guard:
-                        multiplier = 1.14f;
+                        multiplier = 1.10f;
                         break;
                     case AttackTelegraphType.Parry:
-                        multiplier = 0.90f;
+                        multiplier = 0.96f;
                         break;
                     case AttackTelegraphType.Danger:
                         multiplier = 0.95f;
@@ -816,16 +1061,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
                 switch (type)
                 {
                     case AttackTelegraphType.Danger:
-                        multiplier = 1.55f;
+                        multiplier = 1.34f;
                         break;
                     case AttackTelegraphType.Dodge:
-                        multiplier = 1.26f;
+                        multiplier = 1.18f;
                         break;
                     case AttackTelegraphType.Guard:
                         multiplier = 1.08f;
                         break;
                     case AttackTelegraphType.Parry:
-                        multiplier = 0.72f;
+                        multiplier = 0.84f;
                         break;
                 }
                 break;
@@ -837,7 +1082,91 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         if (Time.time < _phaseEntryPressureUntilTime && pattern.ResolveMinPhase() == _currentPhase)
             multiplier *= Mathf.Max(1f, phaseEntryUnlockedPatternWeight);
 
+        multiplier *= ResolvePatternVarietyWeightMultiplier(pattern, isFollowUp);
+
         return multiplier;
+    }
+
+    float ResolvePatternVarietyWeightMultiplier(AttackPattern pattern, bool isFollowUp)
+    {
+        if (pattern == null)
+            return 1f;
+
+        float multiplier = 1f;
+        if (IsImmediateRepeatPattern(pattern.patternName))
+            multiplier *= immediateRepeatPatternWeightMultiplier;
+        else if (WasPatternUsedRecently(pattern.patternName, 3))
+            multiplier *= recentRepeatPatternWeightMultiplier;
+
+        if (CountRecentTelegraphMatches(pattern.ResolveTelegraphType(), 2) >= 2)
+            multiplier *= repeatedTelegraphWeightMultiplier;
+
+        if (isFollowUp && IsImmediateRepeatPattern(pattern.patternName))
+            multiplier *= 0.85f;
+
+        return Mathf.Max(0.05f, multiplier);
+    }
+
+    int ResolveRecentPatternCapacity()
+    {
+        return Mathf.Clamp(recentPatternMemory, 1, _recentPatternNames.Length);
+    }
+
+    void RecordPatternHistory(AttackPattern pattern)
+    {
+        if (pattern == null)
+            return;
+
+        int capacity = ResolveRecentPatternCapacity();
+        _recentPatternNames[_recentPatternWriteIndex] = pattern.patternName ?? string.Empty;
+        _recentTelegraphTypes[_recentPatternWriteIndex] = pattern.ResolveTelegraphType();
+        _recentPatternWriteIndex = (_recentPatternWriteIndex + 1) % capacity;
+        _recentPatternRecordedCount = Mathf.Min(capacity, _recentPatternRecordedCount + 1);
+    }
+
+    bool IsImmediateRepeatPattern(string patternName)
+    {
+        if (string.IsNullOrEmpty(patternName) || _recentPatternRecordedCount <= 0)
+            return false;
+
+        int capacity = ResolveRecentPatternCapacity();
+        int lastIndex = (_recentPatternWriteIndex - 1 + capacity) % capacity;
+        return string.Equals(_recentPatternNames[lastIndex], patternName, StringComparison.Ordinal);
+    }
+
+    bool WasPatternUsedRecently(string patternName, int lookback)
+    {
+        if (string.IsNullOrEmpty(patternName) || _recentPatternRecordedCount <= 0)
+            return false;
+
+        int capacity = ResolveRecentPatternCapacity();
+        int count = Mathf.Min(_recentPatternRecordedCount, Mathf.Clamp(lookback, 1, capacity));
+        for (int i = 0; i < count; i++)
+        {
+            int index = (_recentPatternWriteIndex - 1 - i + capacity) % capacity;
+            if (string.Equals(_recentPatternNames[index], patternName, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    int CountRecentTelegraphMatches(AttackTelegraphType telegraphType, int lookback)
+    {
+        if (_recentPatternRecordedCount <= 0)
+            return 0;
+
+        int capacity = ResolveRecentPatternCapacity();
+        int count = Mathf.Min(_recentPatternRecordedCount, Mathf.Clamp(lookback, 1, capacity));
+        int matches = 0;
+        for (int i = 0; i < count; i++)
+        {
+            int index = (_recentPatternWriteIndex - 1 - i + capacity) % capacity;
+            if (_recentTelegraphTypes[index] == telegraphType)
+                matches++;
+        }
+
+        return matches;
     }
 
     string ResolvePhaseLabel()
@@ -879,15 +1208,29 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         if (_isDead) return;
         if (currentState == newState && !forceRestart) return;
 
+        if (newState == BossState.Detect || newState == BossState.Move || newState == BossState.Attack)
+            EnsureGameplayPlayerTarget();
+
         if (_stateRoutine != null)
         {
             StopCoroutine(_stateRoutine);
             _stateRoutine = null;
         }
+        StopPreAttackPosePlayback();
+
+        if (_parryStunRoutine != null)
+        {
+            StopCoroutine(_parryStunRoutine);
+            _parryStunRoutine = null;
+        }
+        ReleaseParryStunAnimationFallback();
 
         var old = currentState;
         currentState = newState;
         LogState($"[BossFSM] {old} → {newState}");
+
+        if (currentState != BossState.Attack)
+            HideGroundTelegraph();
 
         switch (currentState)
         {
@@ -937,14 +1280,20 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     {
         if (_isDead) return;
         _isDead = true;
-        ClearPunishWindow();
-        ClearQueuedFollowUp();
+        AbortAttackExecution(clearPunishWindow: true);
 
         if (_stateRoutine != null)
         {
             StopCoroutine(_stateRoutine);
             _stateRoutine = null;
         }
+
+        if (_parryStunRoutine != null)
+        {
+            StopCoroutine(_parryStunRoutine);
+            _parryStunRoutine = null;
+        }
+        ReleaseParryStunAnimationFallback();
 
         currentState = BossState.Dead;
         UpdateMoveAnimation(0f);
@@ -976,13 +1325,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState
                 bossAnimator.SetBool(AnimParam_IsBreak, true);
             return;
         }
-        ClearPunishWindow();
-        ClearQueuedFollowUp();
 
-        if (attackHitbox != null)
-            attackHitbox.DeactivateWindow();
-
-        _currentPattern = null;
+        if (_parryStunRoutine != null)
+        {
+            StopCoroutine(_parryStunRoutine);
+            _parryStunRoutine = null;
+        }
+        ReleaseParryStunAnimationFallback();
+        AbortAttackExecution(clearPunishWindow: true);
         UpdateMoveAnimation(0f);
 
         if (bossAnimator != null)
@@ -1007,6 +1357,46 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         SetState(BossState.Detect);
     }
 
+    public void OnParried(GameObject parrier, float riposteDamage, float stunDuration)
+    {
+        if (breakController != null && !_isDead && !_isUltimateVictim && !breakController.IsInBreak)
+            breakController.AddBreak(0f, BossBreakController.BreakSource.Parry);
+
+        NotifyParried(stunDuration);
+    }
+
+    public void NotifyParried()
+    {
+        NotifyParried(parryStunDuration);
+    }
+
+    void NotifyParried(float stunDuration)
+    {
+        if (_isDead || _isUltimateVictim)
+            return;
+
+        if (breakController != null && breakController.IsInBreak)
+            return;
+
+        if (_stateRoutine != null)
+        {
+            StopCoroutine(_stateRoutine);
+            _stateRoutine = null;
+        }
+
+        if (_parryStunRoutine != null)
+        {
+            StopCoroutine(_parryStunRoutine);
+            _parryStunRoutine = null;
+        }
+        ReleaseParryStunAnimationFallback();
+        AbortAttackExecution(clearPunishWindow: true);
+        currentState = BossState.CombatIdle;
+        UpdateMoveAnimation(0f);
+        PlayParryStunAnimation();
+        _parryStunRoutine = StartCoroutine(Co_HandleParryStunInterrupt(Mathf.Max(0.04f, stunDuration)));
+    }
+
     // ==================== 사망 후 파괴 처리 ====================
 
     IEnumerator Co_DestroyHierarchyAfterDead()
@@ -1015,6 +1405,38 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             yield return new WaitForSeconds(destroyDelayAfterDead);
 
         FinalizeDeathAndDestroy();
+    }
+
+    IEnumerator Co_HandleParryStunInterrupt(float stunDuration)
+    {
+        float remaining = Mathf.Max(0.04f, stunDuration);
+        LogState("[BossFSM] Parry stun interrupt");
+
+        while (!_isDead && remaining > 0f)
+        {
+            remaining -= Time.deltaTime;
+            UpdateMoveAnimation(0f);
+            yield return null;
+        }
+
+        _parryStunRoutine = null;
+        ReleaseParryStunAnimationFallback();
+
+        if (_isDead || _isUltimateVictim)
+            yield break;
+
+        if (breakController != null && breakController.IsInBreak)
+        {
+            SetState(BossState.Break, true);
+            yield break;
+        }
+
+        StageAttackRecovery(
+            string.IsNullOrWhiteSpace(parryPunishSource) ? "PARRY" : parryPunishSource.Trim().ToUpperInvariant(),
+            Mathf.Max(combatIdleTime, parryRecoveryDuration),
+            Mathf.Max(minimumParryPunishWindow, parryPunishWindowDuration),
+            Mathf.Max(1f, parryPunishDamageMultiplier));
+        SetState(BossState.CombatIdle, true);
     }
 
     /// <summary>
@@ -1124,6 +1546,62 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     /// <summary>
     /// 플레이어 방향으로 즉시 스냅 회전 (Y축만).
     /// </summary>
+    void CacheParryStunAnimatorHooks()
+    {
+        _parryStunTriggerHash = string.IsNullOrWhiteSpace(parryStunTriggerName) ? 0 : Animator.StringToHash(parryStunTriggerName);
+        _parryStunStateHash = string.IsNullOrWhiteSpace(parryStunStateName) ? 0 : Animator.StringToHash(parryStunStateName);
+        _hasParryStunTrigger = false;
+
+        if (bossAnimator == null || bossAnimator.runtimeAnimatorController == null || _parryStunTriggerHash == 0)
+            return;
+
+        AnimatorControllerParameter[] parameters = bossAnimator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            AnimatorControllerParameter parameter = parameters[i];
+            if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.nameHash == _parryStunTriggerHash)
+            {
+                _hasParryStunTrigger = true;
+                break;
+            }
+        }
+    }
+
+    void PlayParryStunAnimation()
+    {
+        if (bossAnimator == null)
+            return;
+
+        ReleaseParryStunAnimationFallback();
+
+        if (_hasParryStunTrigger && !string.IsNullOrEmpty(parryStunTriggerName))
+        {
+            PlayAnimTrigger(parryStunTriggerName);
+            return;
+        }
+
+        if (_parryStunStateHash != 0 && bossAnimator.HasState(0, _parryStunStateHash))
+        {
+            bossAnimator.CrossFadeInFixedTime(_parryStunStateHash, parryStunTransitionDuration, 0);
+            return;
+        }
+
+        // Freeze the interrupted attack if no dedicated parry stun clip is configured.
+        _parryStunCachedAnimatorSpeed = bossAnimator.speed;
+        bossAnimator.speed = 0f;
+        _parryStunUsedAnimatorFreezeFallback = true;
+    }
+
+    void ReleaseParryStunAnimationFallback()
+    {
+        if (!_parryStunUsedAnimatorFreezeFallback)
+            return;
+
+        _parryStunUsedAnimatorFreezeFallback = false;
+        if (bossAnimator != null)
+            bossAnimator.speed = _parryStunCachedAnimatorSpeed;
+    }
+
     void FaceToPlayerInstant()
     {
         if (playerTarget == null) return;
@@ -1174,6 +1652,118 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             transform.rotation, targetRot, speedDegPerSec * deltaTime);
     }
 
+    float ResolveAttackDecisionDistance()
+    {
+        return Mathf.Max(stoppingDistance, stoppingDistance + attackCommitDistanceBuffer);
+    }
+
+    float ResolveApproachSpeedMultiplier(float distanceToPlayer)
+    {
+        float minSpeed = Mathf.Clamp(closeApproachSpeedMultiplier, 0.15f, 1f);
+        float slowdownStart = Mathf.Max(stoppingDistance + 0.05f, moveSlowdownDistance);
+
+        if (distanceToPlayer >= slowdownStart)
+            return 1f;
+
+        if (distanceToPlayer <= stoppingDistance)
+            return minSpeed;
+
+        float t = Mathf.InverseLerp(stoppingDistance, slowdownStart, distanceToPlayer);
+        return Mathf.Lerp(minSpeed, 1f, t);
+    }
+
+    float ResolveChaseTurnSpeed(float distanceToPlayer)
+    {
+        float closeDistance = Mathf.Max(stoppingDistance + 0.1f, closeChaseTurnDistance);
+        return distanceToPlayer <= closeDistance
+            ? Mathf.Max(chaseTurnSpeed, closeChaseTurnSpeed)
+            : Mathf.Max(60f, chaseTurnSpeed);
+    }
+
+    float ResolveBackstepDecisionDistance()
+    {
+        float innerRatio = Mathf.Clamp(backstepInnerDistanceRatio, 0.1f, 1f);
+        float attackDistance = ResolveAttackDecisionDistance();
+        float triggerDistance = backstepTriggerDistance > 0.01f ? backstepTriggerDistance : attackDistance * innerRatio;
+        return Mathf.Min(triggerDistance, attackDistance * innerRatio);
+    }
+
+    void UpdateClosePressureState(float distanceToPlayer)
+    {
+        if (playerTarget == null || distanceToPlayer > ResolveBackstepDecisionDistance())
+        {
+            _closePressureStartedAt = float.NegativeInfinity;
+            return;
+        }
+
+        if (float.IsNegativeInfinity(_closePressureStartedAt))
+            _closePressureStartedAt = Time.time;
+    }
+
+    bool HasSatisfiedBackstepPressureHold()
+    {
+        return backstepPressureHoldTime <= 0.001f ||
+               (!float.IsNegativeInfinity(_closePressureStartedAt) &&
+                Time.time - _closePressureStartedAt >= backstepPressureHoldTime);
+    }
+
+    bool IsPlayerInsideBackstepFrontArc()
+    {
+        if (playerTarget == null)
+            return false;
+
+        Vector3 toPlayer = playerTarget.position - transform.position;
+        toPlayer.y = 0f;
+        if (toPlayer.sqrMagnitude <= 0.0001f)
+            return false;
+
+        return Vector3.Dot(transform.forward, toPlayer.normalized) >= backstepFrontArcDot;
+    }
+
+    bool HasBackstepClearance()
+    {
+        if (!useCollisionAwareMovement)
+            return true;
+
+        float requestedDistance = backstepSpeed > 0f && backstepDuration > 0.0001f
+            ? backstepSpeed * backstepDuration
+            : 0f;
+
+        if (requestedDistance <= 0.05f)
+            return true;
+
+        Vector3 awayFromPlayer = transform.position - playerTarget.position;
+        awayFromPlayer.y = 0f;
+        if (awayFromPlayer.sqrMagnitude <= 0.0001f)
+            awayFromPlayer = -transform.forward;
+        else
+            awayFromPlayer.Normalize();
+
+        Vector3 currentPos = rb != null ? rb.position : transform.position;
+        float clearance = MeasureMovementClearance(currentPos, awayFromPlayer, requestedDistance);
+        return clearance >= requestedDistance * Mathf.Clamp01(minimumBackstepClearanceRatio);
+    }
+
+    bool ShouldTriggerBackstep(float distanceToPlayer)
+    {
+        if (!useBackstepWhenTooClose || playerTarget == null)
+            return false;
+
+        if (Time.time < _backstepCooldownTimer)
+            return false;
+
+        if (distanceToPlayer > ResolveBackstepDecisionDistance())
+            return false;
+
+        if (!HasSatisfiedBackstepPressureHold())
+            return false;
+
+        if (!IsPlayerInsideBackstepFrontArc())
+            return false;
+
+        return HasBackstepClearance();
+    }
+
     // ==================== 상태별 코루틴 ====================
 
     IEnumerator Co_HandleIntroIdle()
@@ -1193,6 +1783,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     IEnumerator Co_HandleDetect()
     {
         yield return null;
+        EnsureGameplayPlayerTarget();
 
         if (playerTarget == null)
         {
@@ -1201,9 +1792,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         }
 
         float distance = Vector3.Distance(transform.position, playerTarget.position);
+        UpdateClosePressureState(distance);
         UpdateMoveAnimation(0f);
 
-        if (distance > stoppingDistance + 1.0f)
+        if (distance > ResolveAttackDecisionDistance())
             SetState(BossState.Move);
         else
             SetState(BossState.Attack);
@@ -1215,6 +1807,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
         while (currentState == BossState.Move && !_isDead)
         {
+            EnsureGameplayPlayerTarget();
+
             if (playerTarget == null)
             {
                 UpdateMoveAnimation(0f);
@@ -1224,8 +1818,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             Vector3 toPlayer = playerTarget.position - transform.position;
             toPlayer.y = 0f;
             float distance = toPlayer.magnitude;
+            UpdateClosePressureState(distance);
 
-            if (distance <= stoppingDistance)
+            float attackDecisionDistance = ResolveAttackDecisionDistance();
+            if (distance <= attackDecisionDistance)
             {
                 UpdateMoveAnimation(0f);
                 SetState(BossState.Attack);
@@ -1236,14 +1832,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             if (dir.sqrMagnitude > 0.0001f)
             {
                 Quaternion look = Quaternion.LookRotation(dir);
-                transform.rotation = Quaternion.Slerp(
-                    transform.rotation, look, Time.deltaTime * 5f);
+                float turnSpeed = ResolveChaseTurnSpeed(distance);
+                transform.rotation = Quaternion.RotateTowards(
+                    transform.rotation, look, turnSpeed * Time.deltaTime);
             }
 
-            Vector3 delta = dir * moveSpeed * Time.deltaTime;
+            float moveSpeedMultiplier = ResolveApproachSpeedMultiplier(distance);
+            Vector3 delta = dir * (moveSpeed * moveSpeedMultiplier * Time.deltaTime);
             ApplyMovementDelta(delta);
 
-            UpdateMoveAnimation(1f);
+            UpdateMoveAnimation(moveSpeedMultiplier);
             yield return null;
         }
     }
@@ -1281,6 +1879,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState
     IEnumerator Co_PerformAttack()
     {
         float distance = 0f;
+        EnsureGameplayPlayerTarget();
 
         if (playerTarget == null)
         {
@@ -1295,22 +1894,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             yield return new WaitForSeconds(_queuedFollowUpDelay);
 
         // 0) 공격 시작 전에 플레이어 쪽으로 회전 보정
-        if (snapRotationToPlayerOnAttack)
-        {
-            if (preAttackRotateTime > 0f)
-                yield return StartCoroutine(Co_FacePlayerShort(preAttackRotateTime, preAttackRotateSpeed));
-            else
-                FaceToPlayerInstant();
-        }
-
-        // 1) 거리 다시 측정 후 백스텝 여부 결정
         distance = Vector3.Distance(transform.position, playerTarget.position);
+        UpdateClosePressureState(distance);
 
-        if (!isQueuedFollowUp &&
-            useBackstepWhenTooClose &&
-            distance < backstepTriggerDistance &&
-            Time.time >= _backstepCooldownTimer)
+        if (!isQueuedFollowUp && ShouldTriggerBackstep(distance))
         {
+            _closePressureStartedAt = float.NegativeInfinity;
             yield return StartCoroutine(Co_Backstep());
 
             _backstepCooldownTimer = Time.time + backstepCooldown;
@@ -1321,7 +1910,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             yield break;
         }
 
-        // 2) 일반 공격 패턴
+        _closePressureStartedAt = float.NegativeInfinity;
+
+        if (snapRotationToPlayerOnAttack)
+        {
+            if (preAttackRotateTime > 0f)
+                yield return StartCoroutine(Co_FacePlayerShort(preAttackRotateTime, preAttackRotateSpeed));
+            else
+                FaceToPlayerInstant();
+        }
+
         if (allPatterns == null || allPatterns.Count == 0)
         {
             SetState(BossState.CombatIdle);
@@ -1334,7 +1932,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         if (pattern == null)
         {
             LogStateWarning("[BossFSM] 사용할 수 있는 패턴이 없음 → CombatIdle");
-            SetState(distance > stoppingDistance + 0.35f ? BossState.Move : BossState.CombatIdle);
+            SetState(distance > ResolveAttackDecisionDistance() ? BossState.Move : BossState.CombatIdle);
             yield break;
         }
 
@@ -1343,26 +1941,45 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
         _currentPattern         = pattern;
         _lastExecutedPattern    = pattern.patternName;
+        RecordPatternHistory(pattern);
         pattern.StartCooldown(Time.time);
         AttackTelegraphType telegraphType = pattern.ResolveTelegraphType();
-        float telegraphLeadTime = pattern.ResolveTelegraphLeadTime() * ResolvePhaseTelegraphScale();
+        float telegraphLeadTime = Mathf.Max(
+            ResolveMinimumTelegraphLeadTime(pattern, isQueuedFollowUp),
+            pattern.ResolveTelegraphLeadTime() * ResolvePhaseTelegraphScale());
         string telegraphLabel = pattern.ResolveTelegraphLabel();
         AttackTimingStyle timingStyle = pattern.ResolveTimingStyle();
         float extraHoldDelay = pattern.ResolveExtraHoldDelay();
         string secondaryTelegraphLabel = pattern.ResolveSecondaryTelegraphLabel();
         bool canParry = pattern.ResolveCanParry();
         bool canPerfectDodge = pattern.ResolveCanPerfectDodge();
+        bool canGuard = pattern.ResolveCanGuard();
         bool isUnblockable = pattern.ResolveIsUnblockable();
-        float recoveryTime = pattern.ResolveRecoveryTime();
-        float punishWindowDuration = pattern.ResolvePunishWindowDuration();
+        bool causesGuardBreak = pattern.ResolveCausesGuardBreak();
+        float recoveryTime = ResolvePatternRecoveryTime(pattern, isQueuedFollowUp);
+        float punishWindowDuration = ResolvePatternPunishWindow(pattern, recoveryTime, isQueuedFollowUp);
         float punishDamageMultiplier = pattern.ResolvePunishDamageMultiplier();
+        float preAttackPoseDuration = ResolvePatternPreAttackPoseDuration(pattern);
+        string preAttackPoseTrigger = ResolvePatternPreAttackPoseTriggerName(pattern);
+        string preAttackPoseLabel = ResolvePatternPreAttackPoseLabel(pattern);
 
         if (isQueuedFollowUp)
         {
-            telegraphLeadTime = Mathf.Max(0.08f, telegraphLeadTime * FollowUpTelegraphLeadScale);
+            telegraphLeadTime = Mathf.Max(
+                ResolveMinimumTelegraphLeadTime(pattern, true),
+                telegraphLeadTime * FollowUpTelegraphLeadScale);
             telegraphLabel = $"{FollowUpTelegraphPrefix} {telegraphLabel}";
             secondaryTelegraphLabel = $"{FollowUpTelegraphPrefix} {secondaryTelegraphLabel}";
         }
+
+        float totalTelegraphDuration = telegraphLeadTime;
+        if ((timingStyle == AttackTimingStyle.Delayed || timingStyle == AttackTimingStyle.FakeOut) && extraHoldDelay > 0.01f)
+            totalTelegraphDuration += extraHoldDelay;
+        if (preAttackPoseDuration > 0.01f)
+            totalTelegraphDuration += preAttackPoseDuration;
+
+        if (groundTelegraph != null && attackHitbox != null && attackHitbox.Collider != null)
+            groundTelegraph.ShowCue(attackHitbox.Collider, telegraphType, totalTelegraphDuration, transform);
 
         if (patternVisuals != null)
             patternVisuals.StartVisualCue(telegraphType, telegraphLeadTime);
@@ -1385,10 +2002,37 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             yield return new WaitForSeconds(extraHoldDelay);
         }
 
+        if (preAttackPoseDuration > 0.01f)
+        {
+            if (patternVisuals != null)
+                patternVisuals.StartVisualCue(telegraphType, preAttackPoseDuration);
+
+            OnAttackTelegraph?.Invoke(telegraphType, preAttackPoseDuration, preAttackPoseLabel);
+
+            AnimationClip preAttackPoseClip = ResolvePreAttackPoseClip();
+            if (preAttackPoseClip != null && bossAnimator != null)
+            {
+                yield return Co_PlayPreAttackPoseClip(preAttackPoseClip, preAttackPoseDuration);
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(preAttackPoseTrigger))
+                    PlayAnimTrigger(preAttackPoseTrigger);
+
+                yield return new WaitForSeconds(preAttackPoseDuration);
+            }
+        }
+
+        HideGroundTelegraph();
+
         ApplyPatternHitboxTuning(pattern);
 
         if (attackHitbox != null)
-            attackHitbox.Configure(pattern.damageAmount, canParry, canPerfectDodge, isUnblockable, transform);
+        {
+            float resolvedDamage = Mathf.Max(0f, pattern.damageAmount * Mathf.Max(0f, outgoingDamageMultiplier));
+            attackHitbox.canPerfectDodge = canPerfectDodge;
+            attackHitbox.Configure(resolvedDamage, canParry, canGuard, isUnblockable, causesGuardBreak, transform);
+        }
 
         if (!string.IsNullOrEmpty(pattern.animTriggerName))
             PlayAnimTrigger(pattern.animTriggerName);
@@ -1452,6 +2096,63 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         SetState(BossState.CombatIdle);
     }
 
+    float ResolvePatternRecoveryTime(AttackPattern pattern, bool isQueuedFollowUp)
+    {
+        if (pattern == null)
+            return combatIdleTime;
+
+        float recovery = Mathf.Max(0f, pattern.ResolveRecoveryTime());
+        if (isQueuedFollowUp)
+            recovery += Mathf.Max(0f, followUpRecoveryTax);
+
+        return recovery;
+    }
+
+    float ResolveMinimumPunishWindow(AttackPattern pattern, bool isQueuedFollowUp)
+    {
+        if (pattern == null)
+            return 0f;
+
+        float minimum;
+        switch (pattern.ResolveTelegraphType())
+        {
+            case AttackTelegraphType.Parry:
+                minimum = minimumParryPunishWindow;
+                break;
+            case AttackTelegraphType.Guard:
+                minimum = minimumGuardPunishWindow;
+                break;
+            case AttackTelegraphType.Danger:
+                minimum = minimumDangerPunishWindow;
+                break;
+            case AttackTelegraphType.Dodge:
+            case AttackTelegraphType.Auto:
+            default:
+                minimum = minimumDodgePunishWindow;
+                break;
+        }
+
+        if (pattern.ResolveTimingStyle() == AttackTimingStyle.FakeOut)
+            minimum = Mathf.Max(minimum, 0.34f);
+
+        if (isQueuedFollowUp)
+            minimum = Mathf.Max(minimum, 0.26f + (Mathf.Max(0f, followUpRecoveryTax) * 0.45f));
+
+        return Mathf.Max(0f, minimum);
+    }
+
+    float ResolvePatternPunishWindow(AttackPattern pattern, float recoveryTime, bool isQueuedFollowUp)
+    {
+        if (pattern == null)
+            return Mathf.Max(0f, recoveryTime);
+
+        float punishWindow = Mathf.Max(pattern.ResolvePunishWindowDuration(), ResolveMinimumPunishWindow(pattern, isQueuedFollowUp));
+        if (recoveryTime > 0.01f)
+            return Mathf.Min(recoveryTime, punishWindow);
+
+        return punishWindow;
+    }
+
     void ClearPunishWindow()
     {
         bool wasActive = IsPunishWindowActive;
@@ -1474,25 +2175,23 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         _followUpChainDepth = 0;
     }
 
-    void RefreshPatternCooldownState()
+    void AbortAttackExecution(bool clearPunishWindow)
     {
-        if (allPatterns == null)
-            return;
+        StopPreAttackPosePlayback();
+        HideGroundTelegraph();
+        ClearQueuedFollowUp();
+        _pendingCombatIdleDuration = -1f;
 
-        for (int i = 0; i < allPatterns.Count; i++)
-        {
-            AttackPattern pattern = allPatterns[i];
-            if (pattern == null)
-                continue;
+        if (clearPunishWindow)
+            ClearPunishWindow();
 
-            pattern.RestoreCooldownAnchor(Time.time);
-            pattern.SyncCooldown(Time.time);
-            if (pattern.currentCooldown > 0f)
-                break;
-        }
+        if (attackHitbox != null)
+            attackHitbox.DeactivateWindow();
+
+        _currentPattern = null;
     }
 
-    void SyncPatternCooldowns()
+    void RefreshPatternCooldownState()
     {
         if (allPatterns == null)
             return;
@@ -1504,8 +2203,64 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             if (pattern == null)
                 continue;
 
+            pattern.RestoreCooldownAnchor(now);
+            pattern.SyncCooldown(now);
+            if (pattern.currentCooldown > 0f)
+                break;
+        }
+
+        _lastPatternCooldownSyncFrame = Time.frameCount;
+    }
+
+    void SyncPatternCooldowns()
+    {
+        if (allPatterns == null)
+            return;
+
+        int currentFrame = Time.frameCount;
+        if (_lastPatternCooldownSyncFrame == currentFrame)
+            return;
+
+        _lastPatternCooldownSyncFrame = currentFrame;
+        float now = Time.time;
+        for (int i = 0; i < allPatterns.Count; i++)
+        {
+            AttackPattern pattern = allPatterns[i];
+            if (pattern == null)
+                continue;
+
             pattern.SyncCooldown(now);
         }
+    }
+
+    void RebuildPatternLookup()
+    {
+        _patternLookup.Clear();
+        if (allPatterns == null)
+            return;
+
+        for (int i = 0; i < allPatterns.Count; i++)
+        {
+            AttackPattern pattern = allPatterns[i];
+            if (pattern == null || string.IsNullOrWhiteSpace(pattern.patternName))
+                continue;
+
+            string key = pattern.patternName.Trim();
+            if (!_patternLookup.ContainsKey(key))
+                _patternLookup.Add(key, pattern);
+        }
+    }
+
+    bool TryGetPatternByName(string patternName, out AttackPattern pattern)
+    {
+        pattern = null;
+        if (string.IsNullOrWhiteSpace(patternName))
+            return false;
+
+        if (_patternLookup.Count == 0)
+            RebuildPatternLookup();
+
+        return _patternLookup.TryGetValue(patternName.Trim(), out pattern);
     }
 
     public void BeginUltimateVictimState(Transform attacker, float durationHint)
@@ -1520,21 +2275,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         _isUltimateVictim = true;
         CacheUltimateVictimWorldPose();
         _delayDestroyUntilUltimateVictimEnds = false;
-        ClearPunishWindow();
-        ClearQueuedFollowUp();
+        AbortAttackExecution(clearPunishWindow: true);
 
         if (_stateRoutine != null)
         {
             StopCoroutine(_stateRoutine);
             _stateRoutine = null;
         }
-
-        _currentPattern = null;
+        ReleaseParryStunAnimationFallback();
         _pendingCombatIdleDuration = -1f;
         UpdateMoveAnimation(0f);
-
-        if (attackHitbox != null)
-            attackHitbox.DeactivateWindow();
 
         if (rb != null)
         {
@@ -1551,8 +2301,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             _cachedUltimateVictimAnimatorState = true;
             _ultimateVictimAnimatorUpdateMode = bossAnimator.updateMode;
             _ultimateVictimAnimatorApplyRootMotion = bossAnimator.applyRootMotion;
+            _ultimateVictimAnimatorSpeed = bossAnimator.speed;
             bossAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
             bossAnimator.applyRootMotion = false;
+            bossAnimator.speed = 0f;
         }
 
         if (!_isDead)
@@ -1588,12 +2340,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
     public void EndUltimateVictimState()
     {
+        if (this == null)
+            return;
+
         if (!_isUltimateVictim)
             return;
 
         _isUltimateVictim = false;
         _hasUltimateVictimAnchor = false;
         RestoreUltimateVictimWorldPose();
+        EnsureGameplayPlayerTarget(forceRefresh: true);
 
         if (rb != null)
         {
@@ -1610,6 +2366,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         {
             bossAnimator.updateMode = _ultimateVictimAnimatorUpdateMode;
             bossAnimator.applyRootMotion = _ultimateVictimAnimatorApplyRootMotion;
+            bossAnimator.speed = _ultimateVictimAnimatorSpeed;
             _cachedUltimateVictimAnimatorState = false;
         }
 
@@ -1634,7 +2391,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         if (bossAnimator != null)
             bossAnimator.SetBool(AnimParam_IsBreak, false);
 
-        SetState(BossState.Detect, true);
+        AbortAttackExecution(clearPunishWindow: true);
+        UpdateMoveAnimation(0f);
+        _pendingCombatIdleDuration = Mathf.Max(Mathf.Max(0f, combatIdleTime), Mathf.Max(0f, ultimateVictimRecoveryDuration));
+        SetState(BossState.CombatIdle, true);
     }
 
     void CacheUltimateVictimWorldPose()
@@ -1655,6 +2415,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
     void RestoreUltimateVictimWorldPose()
     {
+        if (this == null)
+            return;
+
         if (!_hasUltimateVictimOriginalPose)
             return;
 
@@ -1671,6 +2434,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState
 
     void ApplyUltimateVictimAnchor()
     {
+        if (this == null)
+            return;
+
         if (!_isUltimateVictim || !_hasUltimateVictimAnchor)
             return;
 
@@ -1681,6 +2447,63 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             rb.position = _ultimateVictimAnchorPosition;
             rb.rotation = _ultimateVictimAnchorRotation;
         }
+    }
+
+    void EnsureGameplayPlayerTarget(bool forceRefresh = false)
+    {
+        if (!forceRefresh && IsValidGameplayPlayerTarget(playerTarget))
+        {
+            _cachedGameplayPlayerTarget = playerTarget;
+            return;
+        }
+
+        if (!forceRefresh && _lastGameplayPlayerTargetResolveFrame == Time.frameCount)
+            return;
+
+        _lastGameplayPlayerTargetResolveFrame = Time.frameCount;
+        Transform resolved = ResolveGameplayPlayerTarget(forceRefresh);
+        if (resolved != null)
+            playerTarget = resolved;
+    }
+
+    Transform ResolveGameplayPlayerTarget(bool forceRefresh)
+    {
+        if (!forceRefresh && IsValidGameplayPlayerTarget(_cachedGameplayPlayerTarget))
+            return _cachedGameplayPlayerTarget;
+
+        if (_cachedGameplayPlayerReferences == null || !_cachedGameplayPlayerReferences)
+            _cachedGameplayPlayerReferences = GameplaySceneCache.ResolvePlayerReferences();
+
+        if ((_cachedGameplayPlayerReferences == null || !_cachedGameplayPlayerReferences) && Application.isPlaying)
+            _cachedGameplayPlayerReferences = FindFirstObjectByType<PlayerReferences>();
+
+        Transform resolved = _cachedGameplayPlayerReferences != null
+            ? _cachedGameplayPlayerReferences.PlayerRoot
+            : null;
+
+        if (!IsValidGameplayPlayerTarget(resolved) && IsValidGameplayPlayerTarget(playerTarget))
+            resolved = playerTarget;
+
+        _cachedGameplayPlayerTarget = resolved;
+        return resolved;
+    }
+
+    bool IsValidGameplayPlayerTarget(Transform target)
+    {
+        if (target == null)
+            return false;
+
+        GameObject targetObject = target.gameObject;
+        if (targetObject == null || !targetObject.activeInHierarchy)
+            return false;
+
+        if (target.GetComponentInParent<UltimatePresentationClone>() != null)
+            return false;
+
+        if (target.GetComponentInParent<UltimateStageRuntime>() != null)
+            return false;
+
+        return true;
     }
 
     void CacheAttackHitboxDefaults()
@@ -1718,7 +2541,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         if (_followUpChainDepth >= ResolveActiveMaxFollowUpChains())
             return false;
 
-        float chance = Mathf.Clamp01(sourcePattern.ResolveFollowUpChance() + ResolvePhaseFollowUpChanceBonus());
+        float chance = ResolveFollowUpChance(sourcePattern);
         if (chance <= 0.001f || UnityEngine.Random.value > chance)
             return false;
 
@@ -1747,24 +2570,15 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             ? sourcePattern.forcedFollowUpPattern.Trim()
             : string.Empty;
 
-        if (!string.IsNullOrEmpty(forcedPattern))
+        if (TryGetPatternByName(forcedPattern, out AttackPattern forcedFollowUp))
         {
-            foreach (AttackPattern pattern in allPatterns)
-            {
-                if (pattern == null)
-                    continue;
-
-                if (!string.Equals(pattern.patternName, forcedPattern, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (pattern.ResolveTelegraphType() == AttackTelegraphType.Danger)
-                    return null;
-
-                if (pattern.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
-                    return pattern;
-
+            if (forcedFollowUp.ResolveTelegraphType() == AttackTelegraphType.Danger)
                 return null;
-            }
+
+            if (forcedFollowUp.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
+                return forcedFollowUp;
+
+            return null;
         }
 
         List<AttackPattern> candidates = _followUpCandidatesCache;
@@ -1795,9 +2609,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         if (candidates == null || candidates.Count == 0)
             return null;
 
+        EnsureSelectionWeightCacheCapacity(candidates.Count);
+
         float totalWeight = 0f;
         for (int i = 0; i < candidates.Count; i++)
-            totalWeight += Mathf.Max(0.01f, candidates[i].weight * ResolveFollowUpWeightMultiplier(sourcePattern, candidates[i]) * ResolvePhasePatternWeightMultiplier(candidates[i], true));
+        {
+            AttackPattern candidate = candidates[i];
+            float weight = Mathf.Max(0.01f, candidate.weight * ResolveFollowUpWeightMultiplier(sourcePattern, candidate) * ResolvePhasePatternWeightMultiplier(candidate, true));
+            _selectionWeightCache[i] = weight;
+            totalWeight += weight;
+        }
 
         if (totalWeight <= 0.01f)
             return candidates[0];
@@ -1806,10 +2627,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         float accumulated = 0f;
         for (int i = 0; i < candidates.Count; i++)
         {
-            AttackPattern candidate = candidates[i];
-            accumulated += Mathf.Max(0.01f, candidate.weight * ResolveFollowUpWeightMultiplier(sourcePattern, candidate) * ResolvePhasePatternWeightMultiplier(candidate, true));
+            accumulated += _selectionWeightCache[i];
             if (roll <= accumulated)
-                return candidate;
+                return candidates[i];
         }
 
         return candidates[candidates.Count - 1];
@@ -1846,6 +2666,110 @@ public class BossController : MonoBehaviour, IUltimateVictimState
             multiplier *= 0.92f;
 
         return multiplier;
+    }
+
+    AnimationClip ResolvePreAttackPoseClip()
+    {
+        return defaultPreAttackPoseClip;
+    }
+
+    float ResolvePatternPreAttackPoseDuration(AttackPattern pattern)
+    {
+        if (pattern == null)
+            return 0f;
+
+        float patternDuration = pattern.ResolvePreAttackPoseDuration();
+        if (patternDuration > 0.01f)
+            return patternDuration;
+
+        if (!useDefaultPreAttackPoseForNonParryable)
+            return 0f;
+
+        if (pattern.ResolveCanParry())
+            return 0f;
+
+        return defaultPreAttackPoseClip != null ? Mathf.Max(0f, defaultPreAttackPoseDuration) : 0f;
+    }
+
+    string ResolvePatternPreAttackPoseTriggerName(AttackPattern pattern)
+    {
+        return pattern == null ? string.Empty : pattern.ResolvePreAttackPoseTriggerName();
+    }
+
+    string ResolvePatternPreAttackPoseLabel(AttackPattern pattern)
+    {
+        if (pattern == null)
+            return defaultPreAttackPoseLabel;
+
+        string patternLabel = pattern.ResolvePreAttackPoseLabel();
+        if (pattern.ResolvePreAttackPoseDuration() > 0.01f)
+            return patternLabel;
+
+        if (!useDefaultPreAttackPoseForNonParryable || pattern.ResolveCanParry())
+            return patternLabel;
+
+        return string.IsNullOrWhiteSpace(defaultPreAttackPoseLabel)
+            ? $"{pattern.ResolveTelegraphLabel()} READY"
+            : defaultPreAttackPoseLabel.Trim().ToUpperInvariant();
+    }
+
+    IEnumerator Co_PlayPreAttackPoseClip(AnimationClip clip, float duration)
+    {
+        if (clip == null || bossAnimator == null)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0.01f, duration));
+            yield break;
+        }
+
+        _preAttackPoseClipSampler ??= new UltimateAnimatorClipSampler("BossPreAttackPoseSampler");
+        if (!_preAttackPoseClipSampler.Begin(bossAnimator, clip))
+        {
+            yield return new WaitForSeconds(Mathf.Max(0.01f, duration));
+            yield break;
+        }
+
+        float safeDuration = Mathf.Max(0.01f, duration);
+        _isPreAttackPoseActive = true;
+        _preAttackPoseElapsed = 0f;
+        _preAttackPoseDurationRuntime = safeDuration;
+        _preAttackPoseClipSampler.SampleNormalized(0f);
+
+        while (_preAttackPoseElapsed < safeDuration && !_isDead && currentState == BossState.Attack)
+        {
+            _preAttackPoseElapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        _preAttackPoseClipSampler.SampleNormalized(1f);
+        StopPreAttackPosePlayback();
+    }
+
+    void StopPreAttackPosePlayback()
+    {
+        _isPreAttackPoseActive = false;
+        _preAttackPoseElapsed = 0f;
+        _preAttackPoseDurationRuntime = 0f;
+        _preAttackPoseClipSampler?.StopPlayback();
+    }
+
+    void UpdatePreAttackPoseSampling()
+    {
+        if (!_isPreAttackPoseActive || _preAttackPoseClipSampler == null || bossAnimator == null)
+            return;
+
+        float safeDuration = Mathf.Max(0.01f, _preAttackPoseDurationRuntime);
+        float normalizedTime = Mathf.Clamp01(_preAttackPoseElapsed / safeDuration);
+        _preAttackPoseClipSampler.SampleNormalized(normalizedTime);
+    }
+
+    void AssignDefaultPreAttackPoseClipIfNeeded()
+    {
+#if UNITY_EDITOR
+        if (defaultPreAttackPoseClip != null)
+            return;
+
+        defaultPreAttackPoseClip = UnityEditor.AssetDatabase.LoadAssetAtPath<AnimationClip>("Assets/발도자세.anim");
+#endif
     }
 
     /// <summary>
@@ -1960,7 +2884,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState
                 continue;
 
             float cooldownScore = Mathf.Max(0f, pattern.currentCooldown);
-            float weightBias = Mathf.Max(0.01f, pattern.weight * ResolvePhasePatternWeightMultiplier(pattern, false));
+            float phaseWeight = ResolvePhasePatternWeightMultiplier(pattern, false);
+            float weightBias = Mathf.Max(0.01f, pattern.weight * phaseWeight);
             float score = (cooldownScore / weightBias) + (rangeGap * 4f);
 
             if (score < bestScore)
@@ -1992,9 +2917,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         if (candidates == null || candidates.Count == 0)
             return null;
 
+        EnsureSelectionWeightCacheCapacity(candidates.Count);
+
         float totalWeight = 0f;
-        foreach (var p in candidates)
-            totalWeight += Mathf.Max(0.01f, p.weight * ResolvePhasePatternWeightMultiplier(p, false));
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            AttackPattern candidate = candidates[i];
+            float weight = Mathf.Max(0.01f, candidate.weight * ResolvePhasePatternWeightMultiplier(candidate, false));
+            _selectionWeightCache[i] = weight;
+            totalWeight += weight;
+        }
 
         if (totalWeight <= 0f)
             return candidates[0];
@@ -2002,15 +2934,43 @@ public class BossController : MonoBehaviour, IUltimateVictimState
         float r = UnityEngine.Random.value * totalWeight;
         float accum = 0f;
 
-        foreach (var p in candidates)
+        for (int i = 0; i < candidates.Count; i++)
         {
-            float w = Mathf.Max(0.01f, p.weight * ResolvePhasePatternWeightMultiplier(p, false));
-            accum += w;
+            accum += _selectionWeightCache[i];
             if (r <= accum)
-                return p;
+                return candidates[i];
         }
 
         return candidates[candidates.Count - 1];
+    }
+
+    void EnsureSelectionWeightCacheCapacity(int count)
+    {
+        if (_selectionWeightCache != null && _selectionWeightCache.Length >= count)
+            return;
+
+        int newCapacity = Mathf.Max(16, count);
+        if (_selectionWeightCache == null)
+        {
+            _selectionWeightCache = new float[newCapacity];
+            return;
+        }
+
+        Array.Resize(ref _selectionWeightCache, newCapacity);
+    }
+
+    BossGroundTelegraph CreateRuntimeGroundTelegraph()
+    {
+        GameObject runtimeObject = new GameObject("RuntimeGroundTelegraph");
+        runtimeObject.hideFlags = HideFlags.HideAndDontSave;
+        runtimeObject.transform.SetParent(transform, false);
+        return runtimeObject.AddComponent<BossGroundTelegraph>();
+    }
+
+    void HideGroundTelegraph()
+    {
+        if (groundTelegraph != null)
+            groundTelegraph.HideCue();
     }
 
     // ==================== 이동 애니 (BlendTree) ====================

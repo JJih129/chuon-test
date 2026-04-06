@@ -1,0 +1,307 @@
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class BossReferences : MonoBehaviour
+{
+    const string VisualRootName = "VisualRoot";
+    const string VfxPivotName = "VfxPivot";
+    const string AttackHitboxSocketName = "AttackHitboxSocket";
+
+    [Header("Root")]
+    [SerializeField] private Transform bossRoot;
+    [SerializeField] private Transform visualRoot;
+    [SerializeField] private BossVisualRig visualRig;
+    [SerializeField] private Transform vfxPivot;
+
+    [Header("Runtime")]
+    [SerializeField] private Animator mainAnimator;
+    [SerializeField] private AttackHitbox attackHitbox;
+    [SerializeField] private PatternVisuals patternVisuals;
+    [SerializeField] private Transform attackHitboxSocket;
+
+    public Transform BossRoot => bossRoot ? bossRoot : transform;
+    public Transform VisualRoot => visualRoot;
+    public BossVisualRig VisualRig => visualRig;
+    public Transform VfxPivot => vfxPivot;
+    public Animator MainAnimator => mainAnimator ? mainAnimator : GetComponent<Animator>();
+    public AttackHitbox AttackHitbox => attackHitbox;
+    public PatternVisuals PatternVisuals => patternVisuals;
+    public Transform AttackHitboxSocket => attackHitboxSocket;
+
+    void Reset()
+    {
+        SyncSerializedReferences();
+    }
+
+    void Awake()
+    {
+        SyncSerializedReferences();
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+        {
+            AutoWire();
+            ApplyVisualRigToAnimator();
+        }
+    }
+#endif
+
+    public void SyncSerializedReferences()
+    {
+        AutoWire();
+        ApplyVisualRigToAnimator();
+        SyncGameplayBindings();
+    }
+
+    public void ApplyVisualRigToAnimator()
+    {
+        if (mainAnimator == null || visualRig == null)
+            return;
+
+        Avatar rigAvatar = visualRig.Avatar;
+        if (rigAvatar != null && mainAnimator.avatar != rigAvatar)
+            mainAnimator.avatar = rigAvatar;
+
+        Animator rigAnimator = visualRig.SourceAnimator;
+        if (rigAnimator != null && rigAnimator != mainAnimator)
+        {
+            rigAnimator.applyRootMotion = false;
+            rigAnimator.enabled = false;
+        }
+    }
+
+    void SyncGameplayBindings()
+    {
+        SyncAttackHitboxBinding();
+        HideLegacyRenderers();
+    }
+
+    void SyncAttackHitboxBinding()
+    {
+        if (attackHitbox == null)
+            return;
+
+        if (attackHitbox.attackerRoot != BossRoot)
+            attackHitbox.attackerRoot = BossRoot;
+
+        HideRendererHierarchy(attackHitbox.transform);
+
+        if (!TryResolveAttackHitboxAnchor(out Transform desiredParent, out Vector3 desiredLocalPosition, out Quaternion desiredLocalRotation, out Vector3 desiredLocalScale))
+            return;
+
+        Transform socket = EnsureAttackHitboxSocket(desiredParent);
+        if (socket == null)
+            return;
+
+        if (socket.localPosition != desiredLocalPosition)
+            socket.localPosition = desiredLocalPosition;
+        if (socket.localRotation != desiredLocalRotation)
+            socket.localRotation = desiredLocalRotation;
+        if (socket.localScale != desiredLocalScale)
+            socket.localScale = desiredLocalScale;
+
+        Transform hitboxTransform = attackHitbox.transform;
+        if (hitboxTransform.parent != socket)
+            hitboxTransform.SetParent(socket, false);
+
+        if (hitboxTransform.localPosition != Vector3.zero)
+            hitboxTransform.localPosition = Vector3.zero;
+        if (hitboxTransform.localRotation != Quaternion.identity)
+            hitboxTransform.localRotation = Quaternion.identity;
+        if (hitboxTransform.localScale != Vector3.one)
+            hitboxTransform.localScale = Vector3.one;
+    }
+
+    bool TryResolveAttackHitboxAnchor(out Transform desiredParent, out Vector3 desiredLocalPosition, out Quaternion desiredLocalRotation, out Vector3 desiredLocalScale)
+    {
+        desiredParent = null;
+        desiredLocalPosition = Vector3.zero;
+        desiredLocalRotation = Quaternion.identity;
+        desiredLocalScale = Vector3.one;
+
+        if (attackHitbox == null)
+            return false;
+
+        string attackHitboxName = attackHitbox.gameObject.name;
+        if (visualRig != null && visualRig.VisualRoot != null)
+        {
+            Transform matchingVisual = FindDescendantByName(visualRig.VisualRoot, attackHitboxName, attackHitbox.transform);
+            if (matchingVisual != null && matchingVisual.parent != null)
+            {
+                desiredParent = matchingVisual.parent;
+                desiredLocalPosition = matchingVisual.localPosition;
+                desiredLocalRotation = matchingVisual.localRotation;
+                desiredLocalScale = matchingVisual.localScale;
+                return true;
+            }
+        }
+
+        if (mainAnimator != null && mainAnimator.avatar != null && mainAnimator.isHuman)
+        {
+            Transform rightHand = mainAnimator.GetBoneTransform(HumanBodyBones.RightHand);
+            if (rightHand == null)
+                rightHand = mainAnimator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+            if (rightHand == null)
+                rightHand = mainAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+
+            if (rightHand != null)
+            {
+                desiredParent = rightHand;
+                return true;
+            }
+        }
+
+        desiredParent = visualRoot ? visualRoot : BossRoot;
+        return desiredParent != null;
+    }
+
+    Transform EnsureAttackHitboxSocket(Transform desiredParent)
+    {
+        if (desiredParent == null)
+            return null;
+
+        if (attackHitboxSocket == null)
+            attackHitboxSocket = FindDescendantByName(desiredParent, AttackHitboxSocketName, attackHitbox != null ? attackHitbox.transform : null);
+
+        if (attackHitboxSocket == null)
+        {
+            GameObject socketObject = new GameObject(AttackHitboxSocketName);
+            attackHitboxSocket = socketObject.transform;
+        }
+
+        if (attackHitboxSocket.parent != desiredParent)
+            attackHitboxSocket.SetParent(desiredParent, false);
+
+        if (attackHitboxSocket.name != AttackHitboxSocketName)
+            attackHitboxSocket.name = AttackHitboxSocketName;
+
+        return attackHitboxSocket;
+    }
+
+    void HideLegacyRenderers()
+    {
+        Renderer patternRenderer = patternVisuals != null ? patternVisuals.visualPartRenderer : null;
+
+        MeshRenderer[] meshRenderers = GetComponentsInChildren<MeshRenderer>(true);
+        for (int i = 0; i < meshRenderers.Length; i++)
+            ApplyRendererVisibility(meshRenderers[i], patternRenderer);
+
+        SkinnedMeshRenderer[] skinnedMeshRenderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (int i = 0; i < skinnedMeshRenderers.Length; i++)
+            ApplyRendererVisibility(skinnedMeshRenderers[i], patternRenderer);
+    }
+
+    void ApplyRendererVisibility(Renderer renderer, Renderer patternRenderer)
+    {
+        if (renderer == null)
+            return;
+
+        if (attackHitbox != null && renderer.transform.IsChildOf(attackHitbox.transform))
+        {
+            if (renderer.enabled)
+                renderer.enabled = false;
+            return;
+        }
+
+        if (patternRenderer != null && renderer == patternRenderer)
+        {
+            if (!renderer.enabled)
+                renderer.enabled = true;
+            return;
+        }
+
+        if (visualRoot != null && renderer.transform.IsChildOf(visualRoot))
+        {
+            if (!renderer.enabled)
+                renderer.enabled = true;
+            return;
+        }
+
+        if (renderer.enabled)
+            renderer.enabled = false;
+    }
+
+    static void HideRendererHierarchy(Transform root)
+    {
+        if (root == null)
+            return;
+
+        MeshRenderer[] meshRenderers = root.GetComponentsInChildren<MeshRenderer>(true);
+        for (int i = 0; i < meshRenderers.Length; i++)
+        {
+            if (meshRenderers[i] != null && meshRenderers[i].enabled)
+                meshRenderers[i].enabled = false;
+        }
+
+        SkinnedMeshRenderer[] skinnedMeshRenderers = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (int i = 0; i < skinnedMeshRenderers.Length; i++)
+        {
+            if (skinnedMeshRenderers[i] != null && skinnedMeshRenderers[i].enabled)
+                skinnedMeshRenderers[i].enabled = false;
+        }
+    }
+
+    void AutoWire()
+    {
+        if (!bossRoot)
+            bossRoot = transform;
+
+        if (!visualRoot)
+            visualRoot = transform.Find(VisualRootName);
+
+        if (!visualRig)
+        {
+            if (visualRoot)
+                visualRig = visualRoot.GetComponentInChildren<BossVisualRig>(true);
+
+            if (!visualRig)
+                visualRig = GetComponentInChildren<BossVisualRig>(true);
+        }
+
+        if (!mainAnimator)
+            mainAnimator = GetComponent<Animator>() ?? (visualRig ? visualRig.SourceAnimator : null) ?? GetComponentInChildren<Animator>(true);
+
+        if (!attackHitbox)
+            attackHitbox = GetComponentInChildren<AttackHitbox>(true);
+
+        if (!vfxPivot)
+            vfxPivot = transform.Find(VfxPivotName) ?? transform.Find("VFXPivot");
+
+        if (!patternVisuals)
+            patternVisuals = GetComponentInChildren<PatternVisuals>(true);
+
+        if (!attackHitboxSocket && attackHitbox != null && attackHitbox.transform.parent != null && attackHitbox.transform.parent.name == AttackHitboxSocketName)
+            attackHitboxSocket = attackHitbox.transform.parent;
+    }
+
+    static Transform FindDescendantByName(Transform root, string targetName, Transform excludedRoot)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(targetName))
+            return null;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child == null)
+                continue;
+
+            if (excludedRoot != null && child == excludedRoot)
+                continue;
+
+            if (excludedRoot != null && child.IsChildOf(excludedRoot))
+                continue;
+
+            if (child.name == targetName)
+                return child;
+
+            Transform nested = FindDescendantByName(child, targetName, excludedRoot);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
+    }
+}

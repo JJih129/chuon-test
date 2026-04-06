@@ -114,7 +114,7 @@ MonoBehaviour:
   fireCooldown: 6
   projectileSpeed: 8
   projectileDamage: 10
-  maxHP: 90
+  maxHP: 20
   hitVFX: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
   deathVFX: {fileID: 0}
   droneRenderer: {fileID: 0}
@@ -130,8 +130,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65a150d036cc9f04cb4c92a0b5289b8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHP: 30
-  currentHP: 30
+  maxHP: 20
+  currentHP: 20
   hitEffectPrefab: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
 --- !u!114 &5536954089091496085
 MonoBehaviour:
@@ -185,8 +185,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Size: {x: 1.18, y: 1.95, z: 1.18}
+  m_Center: {x: 0, y: -0.45, z: 0}
 --- !u!114 &1749532117563174667
 MonoBehaviour:
   m_ObjectHideFlags: 0

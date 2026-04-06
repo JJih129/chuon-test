@@ -47,9 +47,9 @@ public class TutorialManager : MonoBehaviour
     public float textTypingSpeed = 0.05f;
 
     [Header("■ 훈련 설정")]
-    public int targetDodgeCount = 2;
-    public int targetGuardCount = 3;
-    public int targetParryCount = 1;
+    public int targetDodgeCount = 5;
+    public int targetGuardCount = 5;
+    public int targetParryCount = 5;
 
     // ──────────────────────────────────────────────
     // 상태 변수 (내부 로직용)
@@ -58,7 +58,7 @@ public class TutorialManager : MonoBehaviour
     private int currentDodgeCount = 0;
     private bool isGoalReached = false;
     private int currentAttackCount = 0;
-    private int maxAttackCount = 4;
+    private int maxAttackCount = 5;
     private int currentGuardCount = 0;
     private int currentParryCount = 0;
 
@@ -192,7 +192,7 @@ public class TutorialManager : MonoBehaviour
         currentStep = TutorialStep.None;
         yield return StartCoroutine(PlayDialogue("EGO", "몸이 좀 풀린 것 같네! 이제 검을 휘둘러보자.", attackDelay));
         yield return StartCoroutine(PlayDialogue("EGO", "마우스 좌클릭으로 약공격, 우클릭으로 강공격을 할 수 있어.", attackDelay));
-        yield return StartCoroutine(PlayDialogue("EGO", "오케이 이번엔 콤보를 사용해보자. 약공격을 4번 연속 입력하면 돼.", attackDelay));
+        yield return StartCoroutine(PlayDialogue("EGO", "오케이 이번엔 콤보를 사용해보자. 약공격을 5번 연속 입력하면 돼.", attackDelay));
 
         if (dialogueGroup) dialogueGroup.DOFade(0, 0.5f);
         if (comboGuidePanel)
@@ -210,6 +210,7 @@ public class TutorialManager : MonoBehaviour
     public void OnEnemyHit()
     {
         if (currentStep != TutorialStep.Attack) return;
+        if (currentAttackCount >= maxAttackCount) return;
 
         currentAttackCount++;
         UpdateQuestUI("전투 훈련", $"허수아비를 공격하세요.\n({currentAttackCount} / {maxAttackCount})");

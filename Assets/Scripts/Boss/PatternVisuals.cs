@@ -1,15 +1,36 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public class PatternVisuals : MonoBehaviour
 {
+    struct RendererBinding
+    {
+        public Renderer Renderer;
+        public int ColorPropertyId;
+        public Color IdleColor;
+        public bool UsesOriginalBaseColor;
+    }
+
     [Header("Renderer")]
-    [Tooltip("텔레그래프를 보여줄 렌더러. 비우면 자식에서 자동 탐색합니다.")]
+    [Tooltip("대표 렌더러. 비우면 자식에서 자동 탐색합니다.")]
     public Renderer visualPartRenderer;
+    [Tooltip("직접 지정할 추가 렌더러들. 비우면 자동 수집만 사용합니다.")]
+    public Renderer[] additionalRenderers;
+    [SerializeField] bool autoCollectChildRenderers = true;
+    [SerializeField] bool includeInactiveRenderers = true;
+    [SerializeField] bool ignorePlaneNamedRenderers = true;
+    [SerializeField] bool ignoreParticleRenderers = true;
 
     [Header("Material Property")]
-    [Tooltip("Emission이나 BaseColor 같은 색상 프로퍼티 이름")]
+    [Tooltip("우선 적용할 색상 프로퍼티 이름")]
     public string emissionColorName = "_EmissionColor";
+    [Tooltip("Emission이 없을 때 사용할 기본 색상 프로퍼티 이름")]
+    public string baseColorName = "_BaseColor";
+    [Tooltip("구형 셰이더용 기본 색상 프로퍼티 이름")]
+    public string legacyColorName = "_Color";
+    [Range(0.1f, 1f)] public float baseColorCueBlend = 0.55f;
 
     [Header("Telegraph Colors")]
     [ColorUsage(true, true)] public Color parryColor = new Color(1.00f, 0.66f, 0.08f) * 5f;
@@ -25,8 +46,11 @@ public class PatternVisuals : MonoBehaviour
     [Range(0.1f, 1f)] public float punishHoldIntensity = 0.42f;
 
     MaterialPropertyBlock _propertyBlock;
+    RendererBinding[] _rendererBindings = Array.Empty<RendererBinding>();
     int _emissionColorId;
-    Color _lastEmissionColor = new Color(float.NaN, float.NaN, float.NaN, float.NaN);
+    int _baseColorId;
+    int _legacyColorId;
+    Color _lastCueColor = new Color(float.NaN, float.NaN, float.NaN, float.NaN);
     bool _telegraphCueActive;
     AttackTelegraphType _telegraphCueType;
     float _telegraphCueStartTime;
@@ -37,31 +61,32 @@ public class PatternVisuals : MonoBehaviour
 
     void Awake()
     {
-        if (visualPartRenderer == null)
-            visualPartRenderer = GetComponentInChildren<Renderer>(true);
+        _propertyBlock = new MaterialPropertyBlock();
+        _emissionColorId = Shader.PropertyToID(emissionColorName);
+        _baseColorId = Shader.PropertyToID(baseColorName);
+        _legacyColorId = Shader.PropertyToID(legacyColorName);
 
-        if (visualPartRenderer == null)
+        ResolveRendererBindings();
+        if (_rendererBindings.Length == 0)
         {
             Debug.LogError("[PatternVisuals] Target renderer is missing.", this);
             enabled = false;
             return;
         }
 
-        _propertyBlock = new MaterialPropertyBlock();
-        _emissionColorId = Shader.PropertyToID(emissionColorName);
-        SetEmissionColor(idleColor);
+        SetCueColor(idleColor);
         enabled = false;
     }
 
     void Update()
     {
-        UpdatePunishCue();
+        UpdateCue();
     }
 
     void OnDisable()
     {
-        StopFlash();
-        SetEmissionColor(idleColor);
+        StopCue();
+        SetCueColor(idleColor);
     }
 
     public void SetParryable(bool isParryable)
@@ -79,19 +104,23 @@ public class PatternVisuals : MonoBehaviour
         if (!gameObject.activeInHierarchy)
             return;
 
+        EnsureRendererBindings();
+        if (_rendererBindings.Length == 0)
+            return;
+
         enabled = true;
-        StopFlash();
+        StopCue();
         _telegraphCueActive = true;
         _telegraphCueType = telegraphType;
         _telegraphCueStartTime = Time.time;
         _telegraphCueDuration = Mathf.Max(0.06f, duration);
-        SetEmissionColor(idleColor);
+        SetCueColor(idleColor);
     }
 
     public void ResetToIdle()
     {
-        StopFlash();
-        SetEmissionColor(idleColor);
+        StopCue();
+        SetCueColor(idleColor);
         enabled = false;
     }
 
@@ -100,15 +129,156 @@ public class PatternVisuals : MonoBehaviour
         if (!gameObject.activeInHierarchy)
             return;
 
+        EnsureRendererBindings();
+        if (_rendererBindings.Length == 0)
+            return;
+
         enabled = true;
-        StopFlash();
+        StopCue();
         _punishCueActive = true;
         _punishCueStartTime = Time.unscaledTime;
         _punishCueDuration = Mathf.Max(0.08f, duration);
-        SetEmissionColor(idleColor);
+        SetCueColor(idleColor);
     }
 
-    void StopFlash()
+    void EnsureRendererBindings()
+    {
+        for (int i = 0; i < _rendererBindings.Length; i++)
+        {
+            if (_rendererBindings[i].Renderer != null)
+                return;
+        }
+
+        ResolveRendererBindings();
+    }
+
+    void ResolveRendererBindings()
+    {
+        if (visualPartRenderer == null)
+            visualPartRenderer = FindFirstEligibleRenderer();
+
+        List<RendererBinding> bindings = new List<RendererBinding>(8);
+        HashSet<Renderer> seen = new HashSet<Renderer>();
+
+        TryRegisterRenderer(visualPartRenderer, bindings, seen);
+
+        if (additionalRenderers != null)
+        {
+            for (int i = 0; i < additionalRenderers.Length; i++)
+                TryRegisterRenderer(additionalRenderers[i], bindings, seen);
+        }
+
+        if (autoCollectChildRenderers)
+        {
+            Renderer[] childRenderers = GetComponentsInChildren<Renderer>(includeInactiveRenderers);
+            for (int i = 0; i < childRenderers.Length; i++)
+                TryRegisterRenderer(childRenderers[i], bindings, seen);
+        }
+
+        _rendererBindings = bindings.ToArray();
+        if (visualPartRenderer == null && _rendererBindings.Length > 0)
+            visualPartRenderer = _rendererBindings[0].Renderer;
+    }
+
+    Renderer FindFirstEligibleRenderer()
+    {
+        Renderer[] childRenderers = GetComponentsInChildren<Renderer>(includeInactiveRenderers);
+        for (int i = 0; i < childRenderers.Length; i++)
+        {
+            if (IsEligibleRenderer(childRenderers[i]))
+                return childRenderers[i];
+        }
+
+        return null;
+    }
+
+    void TryRegisterRenderer(Renderer candidate, List<RendererBinding> bindings, HashSet<Renderer> seen)
+    {
+        if (!IsEligibleRenderer(candidate) || !seen.Add(candidate))
+            return;
+
+        if (!TryResolveColorBinding(candidate, out RendererBinding binding))
+            return;
+
+        bindings.Add(binding);
+    }
+
+    bool IsEligibleRenderer(Renderer candidate)
+    {
+        if (candidate == null)
+            return false;
+
+        if (ignoreParticleRenderers && candidate is ParticleSystemRenderer)
+            return false;
+
+        string candidateName = candidate.name ?? string.Empty;
+        if (ignorePlaneNamedRenderers && candidateName.StartsWith("Plane", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (candidateName.IndexOf("Particle View", StringComparison.OrdinalIgnoreCase) >= 0)
+            return false;
+
+        return true;
+    }
+
+    bool TryResolveColorBinding(Renderer candidate, out RendererBinding binding)
+    {
+        binding = default;
+        if (candidate == null)
+            return false;
+
+        Material[] materials = candidate.sharedMaterials;
+        Color resolvedBaseColor = Color.white;
+
+        for (int i = 0; i < materials.Length; i++)
+        {
+            Material material = materials[i];
+            if (material == null)
+                continue;
+
+            if (material.HasProperty(_emissionColorId))
+            {
+                binding = new RendererBinding
+                {
+                    Renderer = candidate,
+                    ColorPropertyId = _emissionColorId,
+                    IdleColor = idleColor,
+                    UsesOriginalBaseColor = false
+                };
+                return true;
+            }
+
+            if (material.HasProperty(_baseColorId))
+            {
+                resolvedBaseColor = material.GetColor(_baseColorId);
+                binding = new RendererBinding
+                {
+                    Renderer = candidate,
+                    ColorPropertyId = _baseColorId,
+                    IdleColor = resolvedBaseColor,
+                    UsesOriginalBaseColor = true
+                };
+                return true;
+            }
+
+            if (material.HasProperty(_legacyColorId))
+            {
+                resolvedBaseColor = material.GetColor(_legacyColorId);
+                binding = new RendererBinding
+                {
+                    Renderer = candidate,
+                    ColorPropertyId = _legacyColorId,
+                    IdleColor = resolvedBaseColor,
+                    UsesOriginalBaseColor = true
+                };
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void StopCue()
     {
         _telegraphCueActive = false;
         _punishCueActive = false;
@@ -131,19 +301,29 @@ public class PatternVisuals : MonoBehaviour
         }
     }
 
-    void SetEmissionColor(Color color)
+    void SetCueColor(Color color)
     {
-        if (visualPartRenderer == null)
-            return;
-        if (_lastEmissionColor.Equals(color))
+        if (_rendererBindings.Length == 0 || _lastCueColor.Equals(color))
             return;
 
-        _propertyBlock.SetColor(_emissionColorId, color);
-        visualPartRenderer.SetPropertyBlock(_propertyBlock);
-        _lastEmissionColor = color;
+        for (int i = 0; i < _rendererBindings.Length; i++)
+        {
+            RendererBinding binding = _rendererBindings[i];
+            if (binding.Renderer == null || binding.ColorPropertyId == 0)
+                continue;
+
+            _propertyBlock.Clear();
+            Color resolvedColor = binding.UsesOriginalBaseColor
+                ? ResolveBaseColorCue(binding.IdleColor, color)
+                : color;
+            _propertyBlock.SetColor(binding.ColorPropertyId, resolvedColor);
+            binding.Renderer.SetPropertyBlock(_propertyBlock);
+        }
+
+        _lastCueColor = color;
     }
 
-    void UpdatePunishCue()
+    void UpdateCue()
     {
         if (_telegraphCueActive)
         {
@@ -151,9 +331,17 @@ public class PatternVisuals : MonoBehaviour
             return;
         }
 
-        if (!_punishCueActive)
+        if (_punishCueActive)
+        {
+            UpdatePunishCue();
             return;
+        }
 
+        enabled = false;
+    }
+
+    void UpdatePunishCue()
+    {
         float duration = Mathf.Max(0.08f, _punishCueDuration);
         float pulseIn = Mathf.Min(0.10f, duration * 0.22f);
         float pulseOut = Mathf.Min(0.12f, duration * 0.24f);
@@ -165,33 +353,33 @@ public class PatternVisuals : MonoBehaviour
         if (elapsed >= duration)
         {
             _punishCueActive = false;
-            SetEmissionColor(idleColor);
+            SetCueColor(idleColor);
             enabled = false;
             return;
         }
 
         if (elapsed <= pulseIn)
         {
-            SetEmissionColor(Color.Lerp(idleColor, punishColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, pulseIn))));
+            SetCueColor(Color.Lerp(idleColor, punishColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, pulseIn))));
             return;
         }
 
         elapsed -= pulseIn;
         if (elapsed <= pulseOut)
         {
-            SetEmissionColor(Color.Lerp(punishColor, holdColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, pulseOut))));
+            SetCueColor(Color.Lerp(punishColor, holdColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, pulseOut))));
             return;
         }
 
         elapsed -= pulseOut;
         if (elapsed <= hold)
         {
-            SetEmissionColor(holdColor);
+            SetCueColor(holdColor);
             return;
         }
 
         elapsed -= hold;
-        SetEmissionColor(Color.Lerp(holdColor, idleColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, settle))));
+        SetCueColor(Color.Lerp(holdColor, idleColor, Mathf.Clamp01(elapsed / Mathf.Max(0.0001f, settle))));
     }
 
     void UpdateTelegraphCue()
@@ -201,7 +389,7 @@ public class PatternVisuals : MonoBehaviour
         if (elapsed >= duration)
         {
             _telegraphCueActive = false;
-            SetEmissionColor(idleColor);
+            SetCueColor(idleColor);
             enabled = false;
             return;
         }
@@ -211,17 +399,30 @@ public class PatternVisuals : MonoBehaviour
         float pulseDuration = Mathf.Max(0.0001f, duration / totalPulses);
         float pulseElapsed = Mathf.Repeat(elapsed, pulseDuration);
         float pulseT = pulseElapsed / pulseDuration;
-        float fadeInPortion = 0.32f;
+        float fadeInPortion = _telegraphCueType == AttackTelegraphType.Danger ? 0.22f : 0.32f;
 
         if (pulseT <= fadeInPortion)
         {
             float t = pulseT / Mathf.Max(0.0001f, fadeInPortion);
-            SetEmissionColor(Color.Lerp(idleColor, targetColor, t));
+            SetCueColor(Color.Lerp(idleColor, targetColor, t));
             return;
         }
 
         float fadeOutT = (pulseT - fadeInPortion) / Mathf.Max(0.0001f, 1f - fadeInPortion);
-        SetEmissionColor(Color.Lerp(targetColor, idleColor, fadeOutT));
+        SetCueColor(Color.Lerp(targetColor, idleColor, fadeOutT));
+    }
+
+    Color ResolveBaseColorCue(Color baseColor, Color cueColor)
+    {
+        if (cueColor.Equals(idleColor))
+            return baseColor;
+
+        Color clampedCue = new Color(
+            Mathf.Clamp01(cueColor.r),
+            Mathf.Clamp01(cueColor.g),
+            Mathf.Clamp01(cueColor.b),
+            Mathf.Max(baseColor.a, cueColor.a));
+        return Color.Lerp(baseColor, clampedCue, Mathf.Clamp01(baseColorCueBlend));
     }
 
 #if UNITY_EDITOR

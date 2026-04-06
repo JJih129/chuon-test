@@ -12,10 +12,13 @@ public class AttackHitbox : MonoBehaviour
     public HitType hitType = HitType.Normal;
     public bool canParry = true;
     public bool canPerfectDodge = true;
+    public bool canGuard = true;
+    public bool causesGuardBreak = false;
     public bool unblockable = false;
 
     [Header("Attacker")]
     public Transform attackerRoot;
+    public int attackSequenceId;
 
     [Header("Filters")]
     public LayerMask hitLayers = ~0;
@@ -33,6 +36,15 @@ public class AttackHitbox : MonoBehaviour
     [Min(4)] public int expandedHitBufferSize = 24;
     [Range(0.1f, 1f)] public float meshExpandedPaddingScale = 0.6f;
     [Min(0f)] public float expandedScanInterval = 0.06f;
+    [Min(0f)] public float expandedScanPositionThreshold = 0.015f;
+    [Range(0f, 30f)] public float expandedScanRotationThreshold = 1.5f;
+
+    [Header("Sweep Detection")]
+    public bool useSweepHitDetection = true;
+    [Min(0.01f)] public float sweepStepDistance = 0.35f;
+    [Min(0f)] public float sweepMinTravelDistance = 0.02f;
+    [Range(1, 8)] public int maxSweepSubsteps = 4;
+    [Range(0f, 45f)] public float sweepRotationThreshold = 6f;
 
     [Header("Runtime Preview")]
     public bool showRuntimeHitboxPreview = false;
@@ -46,9 +58,16 @@ public class AttackHitbox : MonoBehaviour
     [Header("Debug")]
     public bool enableLogs = false;
 
+    static readonly WaitForFixedUpdate ExpandedScanFixedYield = new WaitForFixedUpdate();
+    const int ReceiverCacheSoftLimit = 128;
+    const int RootReceiverCacheSoftLimit = 64;
+
     Collider _col;
     readonly HashSet<IDamageReceiver> _alreadyHit = new HashSet<IDamageReceiver>();
+    readonly Dictionary<int, Object> _receiverCache = new Dictionary<int, Object>(32);
+    readonly Dictionary<int, Object> _receiverCacheByRoot = new Dictionary<int, Object>(16);
     Coroutine _oneShotRoutine;
+    Coroutine _expandedScanRoutine;
     Collider[] _expandedHitResults;
     readonly List<LineRenderer> _previewLines = new List<LineRenderer>();
     GameObject _previewRoot;
@@ -58,8 +77,18 @@ public class AttackHitbox : MonoBehaviour
     MeshRenderer _previewShellRenderer;
     PrimitiveType _previewShellType = PrimitiveType.Cube;
     float _previewHideAtRealtime = float.NegativeInfinity;
-    float _nextExpandedScanAt;
+    float _expandedScanWaitDuration = float.NegativeInfinity;
+    WaitForSeconds _expandedScanWait;
     bool _sleepAfterPreviewHide;
+    bool _hasPreviousSweepPose;
+    bool _hasLastExpandedScanPose;
+    Vector3 _previousSweepPosition;
+    Vector3 _lastExpandedScanPosition;
+    Quaternion _previousSweepRotation = Quaternion.identity;
+    Quaternion _lastExpandedScanRotation = Quaternion.identity;
+    Transform _attackerRootRoot;
+    bool _supportsTriggerHits = true;
+    bool _forceExpandedDetectionForUnsupportedTrigger;
 
     public Collider Collider => _col;
 
@@ -89,21 +118,32 @@ public class AttackHitbox : MonoBehaviour
             return;
         }
 
-        if (!_col.isTrigger)
-            _col.isTrigger = true;
-
         if (_col is MeshCollider meshCol)
         {
             if (!meshCol.convex)
-                Debug.LogWarning("[AttackHitbox] MeshCollider should usually be Convex for moving trigger hitboxes.", this);
+            {
+                _supportsTriggerHits = false;
+                _forceExpandedDetectionForUnsupportedTrigger = true;
+                if (_col.isTrigger)
+                    _col.isTrigger = false;
+            }
+            else if (!_col.isTrigger)
+            {
+                _col.isTrigger = true;
+            }
 
             if (meshCol.sharedMesh == null)
                 Debug.LogWarning("[AttackHitbox] MeshCollider.sharedMesh is missing.", this);
+        }
+        else if (!_col.isTrigger)
+        {
+            _col.isTrigger = true;
         }
 
         if (attackerRoot == null)
             attackerRoot = transform.root;
 
+        RefreshAttackerRootCache();
         _expandedHitResults = new Collider[Mathf.Max(4, expandedHitBufferSize)];
         RefreshExecutionState();
     }
@@ -112,12 +152,18 @@ public class AttackHitbox : MonoBehaviour
     {
         _alreadyHit.Clear();
         _sleepAfterPreviewHide = false;
+        _hasLastExpandedScanPose = false;
+        CaptureCurrentSweepPose();
+        TryStartExpandedDetectionRoutine();
     }
 
     void OnDisable()
     {
         _alreadyHit.Clear();
         _sleepAfterPreviewHide = false;
+        _hasPreviousSweepPose = false;
+        _hasLastExpandedScanPose = false;
+        StopExpandedDetectionRoutine();
 
         if (_previewRoot != null && _previewRoot.activeSelf)
             _previewRoot.SetActive(false);
@@ -131,6 +177,10 @@ public class AttackHitbox : MonoBehaviour
 
     void OnDestroy()
     {
+        StopExpandedDetectionRoutine();
+        _receiverCache.Clear();
+        _receiverCacheByRoot.Clear();
+
         if (_previewMaterial != null)
             Destroy(_previewMaterial);
 
@@ -139,22 +189,6 @@ public class AttackHitbox : MonoBehaviour
 
         if (_previewRoot != null)
             Destroy(_previewRoot);
-    }
-
-    void FixedUpdate()
-    {
-        if (!useExpandedHitDetection || _col == null || !_col.enabled)
-            return;
-
-        if (maxUniqueTargetsPerActivation > 0 && _alreadyHit.Count >= maxUniqueTargetsPerActivation)
-            return;
-
-        if (expandedScanInterval > 0f && Time.time < _nextExpandedScanAt)
-            return;
-
-        _nextExpandedScanAt = Time.time + expandedScanInterval;
-        EnsureExpandedHitBuffer();
-        ScanExpandedTargets();
     }
 
     void LateUpdate()
@@ -202,7 +236,10 @@ public class AttackHitbox : MonoBehaviour
         _sleepAfterPreviewHide = false;
         _col.enabled = true;
         _alreadyHit.Clear();
+        _hasLastExpandedScanPose = false;
+        CaptureCurrentSweepPose();
         SetPreviewVisible(true);
+        TryStartExpandedDetectionRoutine();
 
         if (!hitEachReceiverOncePerActivation && useOneShotWindow && oneShotWindow > 0f)
         {
@@ -223,7 +260,9 @@ public class AttackHitbox : MonoBehaviour
 
         _col.enabled = false;
         _alreadyHit.Clear();
+        _hasPreviousSweepPose = false;
         SetPreviewVisible(false);
+        StopExpandedDetectionRoutine();
 
         if (_oneShotRoutine != null)
         {
@@ -247,6 +286,52 @@ public class AttackHitbox : MonoBehaviour
         _oneShotRoutine = null;
     }
 
+    void TryStartExpandedDetectionRoutine()
+    {
+        if (!ShouldRunExpandedDetection() || _expandedScanRoutine != null || _col == null || !_col.enabled)
+            return;
+
+        EnsureExpandedHitBuffer();
+        _expandedScanRoutine = StartCoroutine(CoExpandedDetection());
+    }
+
+    void StopExpandedDetectionRoutine()
+    {
+        if (_expandedScanRoutine == null)
+            return;
+
+        StopCoroutine(_expandedScanRoutine);
+        _expandedScanRoutine = null;
+    }
+
+    IEnumerator CoExpandedDetection()
+    {
+        while (_col != null && _col.enabled && ShouldRunExpandedDetection())
+        {
+            if (maxUniqueTargetsPerActivation <= 0 || _alreadyHit.Count < maxUniqueTargetsPerActivation)
+                ScanExpandedTargets();
+
+            yield return GetExpandedScanYield();
+        }
+
+        _expandedScanRoutine = null;
+    }
+
+    YieldInstruction GetExpandedScanYield()
+    {
+        float interval = Mathf.Max(0f, expandedScanInterval);
+        if (interval <= 0f)
+            return ExpandedScanFixedYield;
+
+        if (_expandedScanWait == null || !Mathf.Approximately(_expandedScanWaitDuration, interval))
+        {
+            _expandedScanWaitDuration = interval;
+            _expandedScanWait = new WaitForSeconds(interval);
+        }
+
+        return _expandedScanWait;
+    }
+
     public void Configure(
         float damage,
         HitType type,
@@ -263,26 +348,35 @@ public class AttackHitbox : MonoBehaviour
 
         if (attackerOverride != null)
             attackerRoot = attackerOverride;
+
+        RefreshAttackerRootCache();
     }
 
     public void Configure(
         float damage,
         bool allowParry,
-        bool allowPerfectDodge,
+        bool allowGuard,
         bool isUnblockable = false,
+        bool guardBreak = false,
         Transform attackerOverride = null)
     {
         baseDamage = damage;
         canParry = allowParry;
-        canPerfectDodge = allowPerfectDodge;
+        canGuard = allowGuard;
         unblockable = isUnblockable;
+        causesGuardBreak = guardBreak;
 
         if (attackerOverride != null)
             attackerRoot = attackerOverride;
+
+        RefreshAttackerRootCache();
     }
 
     void OnTriggerEnter(Collider other)
     {
+        if (!_supportsTriggerHits)
+            return;
+
         TryApplyHit(other);
     }
 
@@ -294,7 +388,8 @@ public class AttackHitbox : MonoBehaviour
         if (maxUniqueTargetsPerActivation > 0 && _alreadyHit.Count >= maxUniqueTargetsPerActivation)
             return;
 
-        if (attackerRoot != null && other.transform.root == attackerRoot.root)
+        Transform otherRoot = other.transform.root;
+        if (_attackerRootRoot != null && otherRoot == _attackerRootRoot)
             return;
 
         if (ignoreTriggerColliders && other.isTrigger)
@@ -303,8 +398,7 @@ public class AttackHitbox : MonoBehaviour
         if (((1 << other.gameObject.layer) & hitLayers) == 0)
             return;
 
-        IDamageReceiver receiver = other.GetComponentInParent<IDamageReceiver>();
-        if (receiver == null)
+        if (!TryResolveDamageReceiver(other, otherRoot, out IDamageReceiver receiver))
             return;
 
         bool dedupeByReceiver = hitEachReceiverOncePerActivation || useOneShotWindow;
@@ -315,7 +409,7 @@ public class AttackHitbox : MonoBehaviour
             _alreadyHit.Add(receiver);
 
         Vector3 attackerPos = attackerRoot != null ? attackerRoot.position : transform.position;
-        Vector3 hitPoint = other.ClosestPoint(attackerPos);
+        Vector3 hitPoint = ResolveHitPoint(other, attackerPos);
 
         Vector3 dir = hitPoint - attackerPos;
         if (dir.sqrMagnitude > 0.0001f)
@@ -330,8 +424,11 @@ public class AttackHitbox : MonoBehaviour
             hitPoint = hitPoint,
             hitDirection = dir,
             attacker = attackerRoot,
+            attackSequenceId = attackSequenceId,
             canParry = canParry,
             canPerfectDodge = canPerfectDodge,
+            canGuard = canGuard,
+            causesGuardBreak = causesGuardBreak,
             unblockable = unblockable
         };
 
@@ -343,7 +440,99 @@ public class AttackHitbox : MonoBehaviour
 
     void ScanExpandedTargets()
     {
-        int hitCount = OverlapExpandedHitbox();
+        Vector3 currentPosition = transform.position;
+        Quaternion currentRotation = transform.rotation;
+        if (CanSkipExpandedScan(currentPosition, currentRotation))
+            return;
+
+        Vector3 absScale = AbsVector(transform.lossyScale);
+        QueryTriggerInteraction queryTriggerInteraction = ignoreTriggerColliders
+            ? QueryTriggerInteraction.Ignore
+            : QueryTriggerInteraction.Collide;
+        float effectivePadding = useExpandedHitDetection ? GetEffectiveExpandedPadding() : 0f;
+
+        if (useSweepHitDetection && _hasPreviousSweepPose)
+            ScanExpandedTargetsAlongSweep(
+                _previousSweepPosition,
+                _previousSweepRotation,
+                currentPosition,
+                currentRotation,
+                absScale,
+                queryTriggerInteraction,
+                effectivePadding);
+        else
+            ScanExpandedTargetsAtPose(currentPosition, currentRotation, absScale, queryTriggerInteraction, effectivePadding);
+
+        _previousSweepPosition = currentPosition;
+        _previousSweepRotation = currentRotation;
+        _hasPreviousSweepPose = true;
+        _lastExpandedScanPosition = currentPosition;
+        _lastExpandedScanRotation = currentRotation;
+        _hasLastExpandedScanPose = true;
+    }
+
+    bool CanSkipExpandedScan(Vector3 currentPosition, Quaternion currentRotation)
+    {
+        if (!_supportsTriggerHits || _forceExpandedDetectionForUnsupportedTrigger)
+            return false;
+
+        if (!_hasLastExpandedScanPose)
+            return false;
+
+        float positionThreshold = Mathf.Max(0f, expandedScanPositionThreshold);
+        if ((currentPosition - _lastExpandedScanPosition).sqrMagnitude >= positionThreshold * positionThreshold)
+            return false;
+
+        float rotationThreshold = Mathf.Max(0f, expandedScanRotationThreshold);
+        if (Quaternion.Angle(currentRotation, _lastExpandedScanRotation) >= rotationThreshold)
+            return false;
+
+        return true;
+    }
+
+    void ScanExpandedTargetsAlongSweep(
+        Vector3 fromPosition,
+        Quaternion fromRotation,
+        Vector3 toPosition,
+        Quaternion toRotation,
+        Vector3 absScale,
+        QueryTriggerInteraction queryTriggerInteraction,
+        float effectivePadding)
+    {
+        float travelDistance = Vector3.Distance(fromPosition, toPosition);
+        float travelAngle = Quaternion.Angle(fromRotation, toRotation);
+        bool needsSweep = travelDistance >= sweepMinTravelDistance || travelAngle >= sweepRotationThreshold;
+        if (!needsSweep)
+        {
+            ScanExpandedTargetsAtPose(toPosition, toRotation, absScale, queryTriggerInteraction, effectivePadding);
+            return;
+        }
+
+        int distanceSteps = sweepStepDistance > 0.0001f
+            ? Mathf.CeilToInt(travelDistance / sweepStepDistance)
+            : 1;
+        int rotationSteps = sweepRotationThreshold > 0.0001f
+            ? Mathf.CeilToInt(travelAngle / sweepRotationThreshold)
+            : 1;
+        int substeps = Mathf.Clamp(Mathf.Max(1, Mathf.Max(distanceSteps, rotationSteps)), 1, maxSweepSubsteps);
+
+        for (int i = 1; i <= substeps; i++)
+        {
+            float t = i / (float)substeps;
+            Vector3 samplePosition = Vector3.Lerp(fromPosition, toPosition, t);
+            Quaternion sampleRotation = Quaternion.Slerp(fromRotation, toRotation, t);
+            ScanExpandedTargetsAtPose(samplePosition, sampleRotation, absScale, queryTriggerInteraction, effectivePadding);
+        }
+    }
+
+    void ScanExpandedTargetsAtPose(
+        Vector3 samplePosition,
+        Quaternion sampleRotation,
+        Vector3 absScale,
+        QueryTriggerInteraction queryTriggerInteraction,
+        float effectivePadding)
+    {
+        int hitCount = OverlapExpandedHitbox(samplePosition, sampleRotation, absScale, queryTriggerInteraction, effectivePadding);
         for (int i = 0; i < hitCount; i++)
         {
             Collider other = _expandedHitResults[i];
@@ -352,24 +541,92 @@ public class AttackHitbox : MonoBehaviour
         }
     }
 
-    int OverlapExpandedHitbox()
+    bool TryResolveDamageReceiver(Collider other, Transform otherRoot, out IDamageReceiver receiver)
     {
-        QueryTriggerInteraction queryTriggerInteraction = ignoreTriggerColliders
-            ? QueryTriggerInteraction.Ignore
-            : QueryTriggerInteraction.Collide;
-        float effectivePadding = GetEffectiveExpandedPadding();
+        receiver = null;
+        if (other == null)
+            return false;
 
+        int colliderId = other.GetInstanceID();
+        if (_receiverCache.TryGetValue(colliderId, out Object cachedObject))
+        {
+            if (cachedObject != null)
+            {
+                receiver = cachedObject as IDamageReceiver;
+                if (receiver != null)
+                    return true;
+            }
+
+            _receiverCache.Remove(colliderId);
+        }
+
+        int rootId = 0;
+        if (otherRoot != null)
+        {
+            rootId = otherRoot.GetInstanceID();
+            if (_receiverCacheByRoot.TryGetValue(rootId, out cachedObject))
+            {
+                if (cachedObject != null)
+                {
+                    receiver = cachedObject as IDamageReceiver;
+                    if (receiver != null)
+                    {
+                        if (_receiverCache.Count >= ReceiverCacheSoftLimit)
+                            _receiverCache.Clear();
+
+                        _receiverCache[colliderId] = cachedObject;
+                        return true;
+                    }
+                }
+
+                _receiverCacheByRoot.Remove(rootId);
+            }
+        }
+
+        receiver = other.GetComponentInParent<IDamageReceiver>();
+        Object receiverObject = receiver as Object;
+        if (receiverObject == null)
+            return false;
+
+        if (_receiverCache.Count >= ReceiverCacheSoftLimit)
+            _receiverCache.Clear();
+
+        _receiverCache[colliderId] = receiverObject;
+
+        if (rootId != 0)
+        {
+            if (_receiverCacheByRoot.Count >= RootReceiverCacheSoftLimit)
+                _receiverCacheByRoot.Clear();
+
+            _receiverCacheByRoot[rootId] = receiverObject;
+        }
+
+        return true;
+    }
+
+    void RefreshAttackerRootCache()
+    {
+        _attackerRootRoot = attackerRoot != null ? attackerRoot.root : null;
+    }
+
+    int OverlapExpandedHitbox(
+        Vector3 samplePosition,
+        Quaternion sampleRotation,
+        Vector3 absScale,
+        QueryTriggerInteraction queryTriggerInteraction,
+        float effectivePadding)
+    {
         if (_col is BoxCollider boxCollider)
-            return OverlapExpandedBox(boxCollider, queryTriggerInteraction, effectivePadding);
+            return OverlapExpandedBox(boxCollider, samplePosition, sampleRotation, absScale, queryTriggerInteraction, effectivePadding);
 
         if (_col is SphereCollider sphereCollider)
-            return OverlapExpandedSphere(sphereCollider, queryTriggerInteraction, effectivePadding);
+            return OverlapExpandedSphere(sphereCollider, samplePosition, sampleRotation, absScale, queryTriggerInteraction, effectivePadding);
 
         if (_col is CapsuleCollider capsuleCollider)
-            return OverlapExpandedCapsule(capsuleCollider, queryTriggerInteraction, effectivePadding);
+            return OverlapExpandedCapsule(capsuleCollider, samplePosition, sampleRotation, absScale, queryTriggerInteraction, effectivePadding);
 
         if (_col is MeshCollider meshCollider)
-            return OverlapExpandedMesh(meshCollider, queryTriggerInteraction, effectivePadding);
+            return OverlapExpandedMesh(meshCollider, samplePosition, sampleRotation, absScale, queryTriggerInteraction, effectivePadding);
 
         Bounds bounds = _col.bounds;
         float radius = Mathf.Max(bounds.extents.x, Mathf.Max(bounds.extents.y, bounds.extents.z)) + effectivePadding;
@@ -388,6 +645,22 @@ public class AttackHitbox : MonoBehaviour
     bool ShouldShowRuntimePreview()
     {
         return showRuntimeHitboxPreview && (Application.isEditor || Debug.isDebugBuild);
+    }
+
+    bool ShouldRunExpandedDetection()
+    {
+        return useExpandedHitDetection || useSweepHitDetection || _forceExpandedDetectionForUnsupportedTrigger;
+    }
+
+    Vector3 ResolveHitPoint(Collider other, Vector3 attackerPos)
+    {
+        if (other == null)
+            return attackerPos;
+
+        if (other is MeshCollider meshCollider && !meshCollider.convex)
+            return meshCollider.bounds.ClosestPoint(attackerPos);
+
+        return other.ClosestPoint(attackerPos);
     }
 
     void RefreshExecutionState()
@@ -849,24 +1122,40 @@ public class AttackHitbox : MonoBehaviour
         }
     }
 
-    int OverlapExpandedBox(BoxCollider boxCollider, QueryTriggerInteraction queryTriggerInteraction, float padding)
+    int OverlapExpandedBox(
+        BoxCollider boxCollider,
+        Vector3 samplePosition,
+        Quaternion sampleRotation,
+        Vector3 absScale,
+        QueryTriggerInteraction queryTriggerInteraction,
+        float padding)
     {
-        Vector3 absScale = AbsVector(transform.lossyScale);
-        Vector3 center = transform.TransformPoint(boxCollider.center);
+        Vector3 center = TransformPointAtPose(samplePosition, sampleRotation, boxCollider.center, absScale);
         Vector3 halfExtents = Vector3.Scale(boxCollider.size * 0.5f, absScale) + (Vector3.one * padding);
-        return Physics.OverlapBoxNonAlloc(center, halfExtents, _expandedHitResults, transform.rotation, hitLayers, queryTriggerInteraction);
+        return Physics.OverlapBoxNonAlloc(center, halfExtents, _expandedHitResults, sampleRotation, hitLayers, queryTriggerInteraction);
     }
 
-    int OverlapExpandedSphere(SphereCollider sphereCollider, QueryTriggerInteraction queryTriggerInteraction, float padding)
+    int OverlapExpandedSphere(
+        SphereCollider sphereCollider,
+        Vector3 samplePosition,
+        Quaternion sampleRotation,
+        Vector3 absScale,
+        QueryTriggerInteraction queryTriggerInteraction,
+        float padding)
     {
-        Vector3 center = transform.TransformPoint(sphereCollider.center);
-        float radius = sphereCollider.radius * MaxComponent(AbsVector(transform.lossyScale)) + padding;
+        Vector3 center = TransformPointAtPose(samplePosition, sampleRotation, sphereCollider.center, absScale);
+        float radius = sphereCollider.radius * MaxComponent(absScale) + padding;
         return Physics.OverlapSphereNonAlloc(center, radius, _expandedHitResults, hitLayers, queryTriggerInteraction);
     }
 
-    int OverlapExpandedCapsule(CapsuleCollider capsuleCollider, QueryTriggerInteraction queryTriggerInteraction, float padding)
+    int OverlapExpandedCapsule(
+        CapsuleCollider capsuleCollider,
+        Vector3 samplePosition,
+        Quaternion sampleRotation,
+        Vector3 absScale,
+        QueryTriggerInteraction queryTriggerInteraction,
+        float padding)
     {
-        Vector3 absScale = AbsVector(transform.lossyScale);
         int axis = Mathf.Clamp(capsuleCollider.direction, 0, 2);
         float axisScale = GetAxis(absScale, axis);
         float radiusScale = axis == 0
@@ -878,15 +1167,21 @@ public class AttackHitbox : MonoBehaviour
         float radius = capsuleCollider.radius * radiusScale + padding;
         float height = Mathf.Max(capsuleCollider.height * axisScale, radius * 2f);
         float halfSegment = Mathf.Max(0f, (height * 0.5f) - radius);
-        Vector3 center = transform.TransformPoint(capsuleCollider.center);
-        Vector3 axisDirection = transform.TransformDirection(GetAxisVector(axis)).normalized;
+        Vector3 center = TransformPointAtPose(samplePosition, sampleRotation, capsuleCollider.center, absScale);
+        Vector3 axisDirection = (sampleRotation * GetAxisVector(axis)).normalized;
         Vector3 point0 = center + axisDirection * halfSegment;
         Vector3 point1 = center - axisDirection * halfSegment;
 
         return Physics.OverlapCapsuleNonAlloc(point0, point1, radius, _expandedHitResults, hitLayers, queryTriggerInteraction);
     }
 
-    int OverlapExpandedMesh(MeshCollider meshCollider, QueryTriggerInteraction queryTriggerInteraction, float padding)
+    int OverlapExpandedMesh(
+        MeshCollider meshCollider,
+        Vector3 samplePosition,
+        Quaternion sampleRotation,
+        Vector3 absScale,
+        QueryTriggerInteraction queryTriggerInteraction,
+        float padding)
     {
         if (meshCollider.sharedMesh == null)
         {
@@ -896,7 +1191,6 @@ public class AttackHitbox : MonoBehaviour
         }
 
         Bounds localBounds = meshCollider.sharedMesh.bounds;
-        Vector3 absScale = AbsVector(transform.lossyScale);
         Vector3 scaledExtents = Vector3.Scale(localBounds.extents, absScale);
         int dominantAxis = DominantAxis(scaledExtents);
         float dominantExtent = GetAxis(scaledExtents, dominantAxis);
@@ -906,16 +1200,29 @@ public class AttackHitbox : MonoBehaviour
                 ? Mathf.Max(scaledExtents.x, scaledExtents.z)
                 : Mathf.Max(scaledExtents.x, scaledExtents.y);
 
-        Vector3 center = transform.TransformPoint(localBounds.center);
+        Vector3 center = TransformPointAtPose(samplePosition, sampleRotation, localBounds.center, absScale);
         float radius = Mathf.Max(0.04f, crossExtent + padding);
         float halfSegment = Mathf.Max(0f, dominantExtent - radius);
         if (halfSegment <= 0.001f)
             return Physics.OverlapSphereNonAlloc(center, radius, _expandedHitResults, hitLayers, queryTriggerInteraction);
 
-        Vector3 axisDirection = transform.TransformDirection(GetAxisVector(dominantAxis)).normalized;
+        Vector3 axisDirection = (sampleRotation * GetAxisVector(dominantAxis)).normalized;
         Vector3 point0 = center + axisDirection * halfSegment;
         Vector3 point1 = center - axisDirection * halfSegment;
         return Physics.OverlapCapsuleNonAlloc(point0, point1, radius, _expandedHitResults, hitLayers, queryTriggerInteraction);
+    }
+
+    void CaptureCurrentSweepPose()
+    {
+        _previousSweepPosition = transform.position;
+        _previousSweepRotation = transform.rotation;
+        _hasPreviousSweepPose = true;
+    }
+
+    static Vector3 TransformPointAtPose(Vector3 worldPosition, Quaternion worldRotation, Vector3 localPoint, Vector3 lossyScale)
+    {
+        Vector3 scaled = Vector3.Scale(localPoint, lossyScale);
+        return worldPosition + worldRotation * scaled;
     }
 
     void EnsureExpandedHitBuffer()

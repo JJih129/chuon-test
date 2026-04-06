@@ -46,7 +46,7 @@ public class EnemyHPBar : MonoBehaviour
 
     void Awake()
     {
-        _cam = Camera.main;
+        _cam = GameplaySceneCache.ResolveMainCamera();
         _camTransform = _cam != null ? _cam.transform : null;
         _rt = transform as RectTransform;
         _isUI = (_rt != null);
@@ -83,7 +83,7 @@ public class EnemyHPBar : MonoBehaviour
         _isCurrentlyVisible = gameObject.activeSelf;
         if (_cam == null)
         {
-            _cam = Camera.main;
+            _cam = GameplaySceneCache.ResolveMainCamera();
             _camTransform = _cam != null ? _cam.transform : null;
         }
     }
@@ -111,7 +111,7 @@ public class EnemyHPBar : MonoBehaviour
         {
             if (_cam == null)
             {
-                _cam = Camera.main;
+                _cam = GameplaySceneCache.ResolveMainCamera();
                 _camTransform = _cam != null ? _cam.transform : null;
             }
             if (_cam == null) return;
@@ -148,7 +148,7 @@ public class EnemyHPBar : MonoBehaviour
         transform.position = target.position + offset;
         if (_cam == null)
         {
-            _cam = Camera.main;
+            _cam = GameplaySceneCache.ResolveMainCamera();
             _camTransform = _cam != null ? _cam.transform : null;
         }
         if (_cam != null)

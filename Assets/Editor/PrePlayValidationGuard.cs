@@ -5,6 +5,7 @@ using UnityEngine;
 public static class PrePlayValidationGuard
 {
     const string EnabledPrefKey = "ProjectChuOn.Validation.AutoRunBeforePlay";
+    const string DefaultOffMigrationPrefKey = "ProjectChuOn.Validation.AutoRunBeforePlay.DefaultOffMigration";
     static bool _isRunning;
     static bool _isCancellingPlay;
 
@@ -12,6 +13,12 @@ public static class PrePlayValidationGuard
 
     static PrePlayValidationGuard()
     {
+        if (!EditorPrefs.GetBool(DefaultOffMigrationPrefKey, false))
+        {
+            EditorPrefs.SetBool(EnabledPrefKey, false);
+            EditorPrefs.SetBool(DefaultOffMigrationPrefKey, true);
+        }
+
         EditorApplication.playModeStateChanged -= HandlePlayModeStateChanged;
         EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
         EditorApplication.delayCall += RefreshMenuCheckmark;
@@ -19,7 +26,7 @@ public static class PrePlayValidationGuard
 
     static bool Enabled
     {
-        get => EditorPrefs.GetBool(EnabledPrefKey, true);
+        get => EditorPrefs.GetBool(EnabledPrefKey, false);
         set => EditorPrefs.SetBool(EnabledPrefKey, value);
     }
 

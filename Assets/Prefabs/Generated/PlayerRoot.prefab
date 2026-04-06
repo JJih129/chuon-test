@@ -905,7 +905,6 @@ GameObject:
   m_Component:
   - component: {fileID: 9217704258761649807}
   - component: {fileID: 7261877498965566706}
-  - component: {fileID: 1845636368799490645}
   - component: {fileID: 7796985139684201708}
   - component: {fileID: 5777839405900600649}
   - component: {fileID: 192257646706784962}
@@ -920,11 +919,9 @@ GameObject:
   - component: {fileID: 5966807771669202412}
   - component: {fileID: 4023473015550230476}
   - component: {fileID: 5743109911800676726}
-  - component: {fileID: 5822171278862030820}
   - component: {fileID: 30617296786033422}
   - component: {fileID: 6781616526493563612}
   - component: {fileID: 444060228122662876}
-  - component: {fileID: 804239227037923123}
   - component: {fileID: 2924964680046654104}
   - component: {fileID: 6669824055994905385}
   - component: {fileID: 1662422217768781370}
@@ -989,33 +986,6 @@ CharacterController:
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 1, z: 0}
---- !u!54 &1845636368799490645
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3762919195783750324}
-  serializedVersion: 4
-  m_Mass: 1
-  m_Drag: 0
-  m_AngularDrag: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 0
-  m_IsKinematic: 1
-  m_Interpolate: 0
-  m_Constraints: 0
-  m_CollisionDetection: 0
 --- !u!82 &7796985139684201708
 AudioSource:
   m_ObjectHideFlags: 0
@@ -1125,7 +1095,7 @@ Animator:
   m_Controller: {fileID: 9100000, guid: 803dcc8cbc95f314b8420508ef9638ca, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 0
-  m_ApplyRootMotion: 1
+  m_ApplyRootMotion: 0
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
   m_WarningMessage: 
@@ -1188,7 +1158,7 @@ MonoBehaviour:
   guardBackMul: 0.45
   guardStrafeMul: 0.6
   gravity: 20
-  groundSnap: 0.1
+  groundSnap: 0.03
   p_Speed: speed
 --- !u!114 &3629856975197315660
 MonoBehaviour:
@@ -1246,7 +1216,7 @@ MonoBehaviour:
   dodgeSpeed: 8.4
   dodgeDistance: 12
   dodgeDuration: 0.4
-  dodgeCooldown: 1
+  dodgeCooldown: 0.08
   sideStepOnPerfectDodge: 1
   perfectDodgeRewindNormalizedTime: 0.28
   openPerfectDodgeWindowOnDodgeStart: 1
@@ -1565,28 +1535,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2ea0be61c075d4d458214b4607540a40, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!114 &5822171278862030820
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3762919195783750324}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 727158e5c1648994cb46051a07a50065, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  inAir: 0
-  staggered: 0
-  attacking: 0
-  guarding: 0
-  dodging: 0
-  characterController: {fileID: 7261877498965566706}
-  combatController: {fileID: 3625136038103508255}
-  guardController: {fileID: 6669824055994905385}
-  dodgeController: {fileID: 3985815088285802993}
-  playerHealth: {fileID: 192257646706784962}
 --- !u!114 &30617296786033422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1658,19 +1606,6 @@ MonoBehaviour:
   debugLogs: 0
   interactionCheckInterval: 0.04
   hoverGrace: 0.12
---- !u!114 &804239227037923123
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3762919195783750324}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9e2c382d07a120b43a52a9ed1428a232, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  guard: {fileID: 0}
 --- !u!114 &2924964680046654104
 MonoBehaviour:
   m_ObjectHideFlags: 0

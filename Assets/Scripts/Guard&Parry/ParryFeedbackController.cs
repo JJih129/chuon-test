@@ -2,6 +2,7 @@
 using System.Collections;
 using UnityEngine;
 using Unity.Cinemachine;
+using UnityEngine.InputSystem;
 #pragma warning disable CS0618
 
 /// Handles parry, block, and perfect-dodge feedback.
@@ -11,12 +12,15 @@ public class ParryFeedbackController : MonoBehaviour
 {
     [Header("Hit Stop")]
     [SerializeField] bool useHitStop = true;
+    [SerializeField] bool useParryHitStop = true;
+    [SerializeField] bool useBlockHitStop = false;
 
     [Tooltip("Time scale used for parry hit stop.")]
     public float parryTimeScale = 0.05f;
 
     [Tooltip("Realtime duration for parry hit stop.")]
     public float parryStopDuration = 0.08f;
+    [SerializeField, Min(0f)] float parryHitStopMinIntervalRealtime = 0.03f;
 
     [Tooltip("Time scale used for block hit stop.")]
     public float blockTimeScale = 0.25f;
@@ -40,6 +44,8 @@ public class ParryFeedbackController : MonoBehaviour
     [Tooltip("Parry impulse direction and strength.")]
     public Vector3 parryVelocity = new(0f, -1f, 0f);
     [Range(0f, 3f)] public float parryForce = 1.5f;
+    [SerializeField, Range(0f, 1f)] float parryImpulseMultiplier = 0.42f;
+    [SerializeField, Range(0f, 1f)] float parryShakeMultiplier = 0.45f;
 
     [Tooltip("Block impulse direction and strength.")]
     public Vector3 blockVelocity = new(0f, -0.6f, 0f);
@@ -68,19 +74,31 @@ public class ParryFeedbackController : MonoBehaviour
     [SerializeField] AudioClip dodgeClip;
     [Range(0f, 1f)] [SerializeField] float sfxVolume = 0.9f;
 
+    [Header("Rumble")]
+    [SerializeField] bool useParryRumble = true;
+    [SerializeField, Range(0f, 1f)] float parryLowFrequencyRumble = 0.16f;
+    [SerializeField, Range(0f, 1f)] float parryHighFrequencyRumble = 0.34f;
+    [SerializeField, Min(0f)] float parryRumbleDuration = 0.055f;
+
     [Header("Policy")]
     [SerializeField] bool useCombatFeelPolicy = true;
 
     [Header("Debug")]
     [SerializeField] bool debugLog = false;
 
-    float _defaultFixedDelta;
     Coroutine _hitStopCo;
+    Coroutine _rumbleCo;
+    float _lastHitStopRealtime = float.NegativeInfinity;
 
     void Awake()
     {
-        _defaultFixedDelta = Time.fixedDeltaTime;
         if (!fallbackCamera && Camera.main) fallbackCamera = Camera.main.transform;
+    }
+
+    void OnDisable()
+    {
+        CombatFeelRuntimeUtility.ForceRestoreActiveHitStop(this, ref _hitStopCo);
+        StopParryRumble();
     }
 
     // ===== External API =====
@@ -88,8 +106,15 @@ public class ParryFeedbackController : MonoBehaviour
     {
         CombatFeelPreset preset = ResolveDefensePreset(DefenseFeelKind.Parry);
         if (debugLog) Debug.Log("[ParryFX] Parry", this);
-        if (useHitStop) StartHitStop(preset.TimeScale, preset.StopDuration);
-        ShakeCamera(parryVelocity, preset.CameraImpulseForce, preset.CameraShakeAmplitude, preset.CameraShakeDuration);
+        if (useHitStop && useParryHitStop)
+            StartHitStop(preset.TimeScale, preset.StopDuration, parryHitStopMinIntervalRealtime);
+
+        ShakeCamera(
+            parryVelocity,
+            preset.CameraImpulseForce * parryImpulseMultiplier,
+            preset.CameraShakeAmplitude * parryShakeMultiplier,
+            preset.CameraShakeDuration * parryShakeMultiplier);
+        PlayParryRumble();
         SpawnVfx(parryVfxPrefab, hitPoint);
         PlaySfx(parryClip, preset);
     }
@@ -98,7 +123,7 @@ public class ParryFeedbackController : MonoBehaviour
     {
         CombatFeelPreset preset = ResolveDefensePreset(DefenseFeelKind.Block);
         if (debugLog) Debug.Log("[ParryFX] Block", this);
-        if (useHitStop) StartHitStop(preset.TimeScale, preset.StopDuration);
+        if (useHitStop && useBlockHitStop) StartHitStop(preset.TimeScale, preset.StopDuration);
         ShakeCamera(blockVelocity, preset.CameraImpulseForce, preset.CameraShakeAmplitude, preset.CameraShakeDuration);
         SpawnVfx(blockVfxPrefab, hitPoint);
         PlaySfx(blockClip, preset);
@@ -124,25 +149,16 @@ public class ParryFeedbackController : MonoBehaviour
     public void PlayPerfectDodgeFeedback() => PlayPerfectDodgeFeedback(transform.position, transform);
     public void PlayGuardBlockFeedback()   => PlayGuardBlockFeedback(transform.position, transform);
 
-    void StartHitStop(float scale, float duration)
+    void StartHitStop(float scale, float duration, float minIntervalRealtime = 0f)
     {
-        if (_hitStopCo != null) StopCoroutine(_hitStopCo);
-        _hitStopCo = StartCoroutine(CoHitStop(Mathf.Clamp01(scale), Mathf.Max(0f, duration)));
-    }
-
-    IEnumerator CoHitStop(float scale, float duration)
-    {
-        float prevScale = Time.timeScale;
-        float prevFixed = Time.fixedDeltaTime;
-
-        Time.timeScale = Mathf.Max(0.0001f, scale);
-        if (scaleFixedDeltaTime) Time.fixedDeltaTime = _defaultFixedDelta * Time.timeScale;
-
-        yield return new WaitForSecondsRealtime(duration);
-
-        Time.timeScale = 1f;
-        Time.fixedDeltaTime = scaleFixedDeltaTime ? _defaultFixedDelta : prevFixed;
-        _hitStopCo = null;
+        CombatFeelRuntimeUtility.StartHitStop(
+            this,
+            ref _hitStopCo,
+            scale,
+            duration,
+            scaleFixedDeltaTime,
+            minIntervalRealtime,
+            ref _lastHitStopRealtime);
     }
 
     CombatFeelPreset ResolveDefensePreset(DefenseFeelKind kind)
@@ -209,5 +225,43 @@ public class ParryFeedbackController : MonoBehaviour
 
         float scaledVolume = Mathf.Clamp01(sfxVolume * preset.AudioVolumeMultiplier);
         audioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(scaledVolume));
+    }
+
+    void PlayParryRumble()
+    {
+        if (!useParryRumble || parryRumbleDuration <= 0f)
+            return;
+
+        Gamepad gamepad = Gamepad.current;
+        if (gamepad == null)
+            return;
+
+        StopParryRumble();
+        _rumbleCo = StartCoroutine(CoParryRumble(
+            gamepad,
+            Mathf.Clamp01(parryLowFrequencyRumble),
+            Mathf.Clamp01(parryHighFrequencyRumble),
+            parryRumbleDuration));
+    }
+
+    IEnumerator CoParryRumble(Gamepad gamepad, float lowFrequency, float highFrequency, float duration)
+    {
+        gamepad.SetMotorSpeeds(lowFrequency, highFrequency);
+        yield return new WaitForSecondsRealtime(duration);
+        gamepad.SetMotorSpeeds(0f, 0f);
+        _rumbleCo = null;
+    }
+
+    void StopParryRumble()
+    {
+        if (_rumbleCo != null)
+        {
+            StopCoroutine(_rumbleCo);
+            _rumbleCo = null;
+        }
+
+        Gamepad gamepad = Gamepad.current;
+        if (gamepad != null)
+            gamepad.SetMotorSpeeds(0f, 0f);
     }
 }

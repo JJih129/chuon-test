@@ -1,0 +1,27 @@
+Boss visual root: boss/VisualRoot/BossVisual
+Renderer count: 5
+
+SkinnedMeshRenderer: boss/VisualRoot/BossVisual/Body
+  materials: Boss_Body_01
+  mesh: Body
+  subMeshes: 1
+
+MeshRenderer: boss/VisualRoot/BossVisual/mixamorig:Hips/mixamorig:Spine/mixamorig:Spine1/mixamorig:Spine2/mixamorig:RightShoulder/mixamorig:RightArm/mixamorig:RightForeArm/mixamorig:RightHand/Object002
+  materials: Boss_Body_02
+  mesh: Object002
+
+SkinnedMeshRenderer: boss/VisualRoot/BossVisual/Object012
+  materials: Boss_Body_03
+  mesh: Object012
+  subMeshes: 1
+
+SkinnedMeshRenderer: boss/VisualRoot/BossVisual/Plane009
+  materials: Boss_Body_03
+  mesh: Plane009
+  subMeshes: 1
+
+SkinnedMeshRenderer: boss/VisualRoot/BossVisual/Plane033
+  materials: Boss_Body_03
+  mesh: Plane033
+  subMeshes: 1
+

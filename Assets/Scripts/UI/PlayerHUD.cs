@@ -45,7 +45,7 @@ public class PlayerHUD : MonoBehaviour
     [Tooltip("보스 공격 대응 힌트 배경")]
     public Image combatTelegraphPanelImage;
     [Tooltip("HUD 중앙 기준 Y 오프셋")]
-    public float combatTelegraphYOffset = -110f;
+    public float combatTelegraphYOffset = -132f;
     [Tooltip("텔레그래프 표시 유지 시간")]
     public float combatTelegraphHoldTime = 0.42f;
     public Color combatTelegraphPanelColor = new Color(0.03f, 0.07f, 0.10f, 0.88f);
@@ -55,6 +55,10 @@ public class PlayerHUD : MonoBehaviour
     public Color combatTelegraphDodgeColor = new Color(1.00f, 0.40f, 0.40f, 1f);
     public Color combatTelegraphDangerColor = new Color(1.00f, 0.28f, 0.88f, 1f);
     public float combatTelegraphChainPunch = 0.10f;
+    [Tooltip("같은 텔레그래프가 연속 요청되면 HUD를 처음부터 다시 띄우지 않고 유지 시간을 연장")]
+    public bool mergeDuplicateCombatTelegraphs = true;
+    [Tooltip("중복 텔레그래프 병합 허용 시간")]
+    public float combatTelegraphDuplicateMergeWindow = 0.55f;
 
     [Header("Danger Telegraph Feedback")]
     [Tooltip("위험 공격 경고에 사용할 카메라 셰이크")]
@@ -74,6 +78,8 @@ public class PlayerHUD : MonoBehaviour
     [Range(0f, 1f)] public float dangerTelegraphVolume = 0.85f;
     public float dangerTelegraphToneFrequency = 920f;
     public float dangerTelegraphToneDuration = 0.12f;
+    [Tooltip("위험 텔레그래프 피드백 최소 간격")]
+    public float dangerTelegraphFeedbackCooldown = 0.18f;
 
     [Header("Parry Counter")]
     [Tooltip("패링 카운터 준비 텍스트")]
@@ -83,7 +89,7 @@ public class PlayerHUD : MonoBehaviour
     [Tooltip("패링 카운터 남은 시간 표시")]
     public Image parryCounterFillImage;
     [Tooltip("카운터 배지의 중앙 HUD Y 오프셋")]
-    public float parryCounterYOffset = -154f;
+    public float parryCounterYOffset = -182f;
     [Tooltip("카운터 배지 유지 알파")]
     public float parryCounterActiveAlpha = 0.96f;
     [Tooltip("카운터 배지 숨김 알파")]
@@ -92,11 +98,30 @@ public class PlayerHUD : MonoBehaviour
     public Color parryCounterFillColor = new Color(0.28f, 0.96f, 1.00f, 0.95f);
     public Color parryCounterTextColor = new Color(0.82f, 1.00f, 1.00f, 1.00f);
 
+    [Header("Punish Window")]
+    [Tooltip("보스 빈틈 타이머 텍스트")]
+    public Text punishWindowText;
+    [Tooltip("보스 빈틈 배경")]
+    public Image punishWindowPanelImage;
+    [Tooltip("보스 빈틈 남은 시간 표시")]
+    public Image punishWindowFillImage;
+    [Tooltip("빈틈 배지의 중앙 HUD Y 오프셋")]
+    public float punishWindowYOffset = -228f;
+    [Tooltip("빈틈 배지 유지 알파")]
+    public float punishWindowActiveAlpha = 0.96f;
+    [Tooltip("빈틈 배지 숨김 알파")]
+    public float punishWindowIdleAlpha = 0f;
+    public Color punishWindowPanelColor = new Color(0.03f, 0.10f, 0.09f, 0.92f);
+    public Color punishWindowFillColor = new Color(0.38f, 1.00f, 0.78f, 0.94f);
+    public Color punishWindowTextColor = new Color(0.88f, 1.00f, 0.95f, 1.00f);
+
     [Header("Performance HUD")]
     [Tooltip("좌상단 FPS 표시")]
     public bool showPerformanceHud = true;
+    [Tooltip("좌상단 성능 HUD 토글 키")]
+    public KeyCode performanceHudToggleKey = KeyCode.F11;
     [Tooltip("FPS 표시 위치")]
-    public Vector2 performanceHudAnchoredPosition = new Vector2(24f, -24f);
+    public Vector2 performanceHudAnchoredPosition = new Vector2(24f, -18f);
     [Tooltip("FPS 갱신 간격")]
     public float performanceHudRefreshInterval = 0.85f;
     [Tooltip("프레임 타임 평활화 강도")]
@@ -127,9 +152,16 @@ public class PlayerHUD : MonoBehaviour
     float _combatTelegraphPunchUntilTime;
     float _combatTelegraphPunchStrength;
     bool _combatTelegraphVisible;
+    int _combatTelegraphPriority;
+    string _combatTelegraphCurrentMessage;
+    Color _combatTelegraphCurrentTextColor;
+    Color _combatTelegraphCurrentPanelColor;
+    float _nextDangerTelegraphFeedbackAllowedTime;
     CanvasGroup _parryCounterCanvasGroup;
     RectTransform _parryCounterRoot;
     Tween _parryCounterTween;
+    CanvasGroup _punishWindowCanvasGroup;
+    RectTransform _punishWindowRoot;
     AudioClip _runtimeDangerTelegraphTone;
     Text _performanceHudText;
     RectTransform _performanceHudRoot;
@@ -144,6 +176,8 @@ public class PlayerHUD : MonoBehaviour
     float _guardBreakFlashUntilTime;
     float _parrySuccessFlashUntilTime;
     float _parryCounterFlashUntilTime;
+    float _punishWindowDuration;
+    float _punishWindowDamageMultiplier = 1f;
 
     const string RuntimeGuardRootName = "_RuntimeGuardStrainBar";
     const string RuntimeGuardTrackName = "_Track";
@@ -155,11 +189,23 @@ public class PlayerHUD : MonoBehaviour
     const string RuntimeParryCounterPanelName = "_Panel";
     const string RuntimeParryCounterFillName = "_Fill";
     const string RuntimeParryCounterTextName = "_Text";
+    const string RuntimePunishWindowRootName = "_RuntimePunishWindow";
+    const string RuntimePunishWindowPanelName = "_Panel";
+    const string RuntimePunishWindowFillName = "_Fill";
+    const string RuntimePunishWindowTextName = "_Text";
     const string RuntimePerformanceHudRootName = "_RuntimePerformanceHUD";
     const string RuntimePerformanceHudTextName = "_Text";
 
     void Update()
     {
+        if (Input.GetKeyDown(performanceHudToggleKey))
+        {
+            showPerformanceHud = !showPerformanceHud;
+            if (!showPerformanceHud && _performanceHudRoot != null)
+                _performanceHudRoot.gameObject.SetActive(false);
+        }
+
+        NormalizeRuntimeHudLayout();
         float now = Time.unscaledTime;
 
         if (ShouldTickStatusHud(now) && now >= _nextStatusHudRefreshTime)
@@ -167,6 +213,7 @@ public class PlayerHUD : MonoBehaviour
             _nextStatusHudRefreshTime = now + Mathf.Max(1f / 60f, statusHudRefreshInterval);
             UpdateGuardStrainVisual();
             UpdateParryCounterVisual();
+            UpdatePunishWindowVisual();
         }
 
         if (ShouldTickCombatTelegraph())
@@ -255,6 +302,32 @@ public class PlayerHUD : MonoBehaviour
         hpFillImage?.DOKill();
     }
 
+    public void ShowRuntimeTelegraphMessage(string message, AttackTelegraphType telegraphType = AttackTelegraphType.Auto, float holdTime = 0.72f, bool useDangerFeedback = false, int priority = 0)
+    {
+        EnsureCombatTelegraphVisuals();
+        if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
+            return;
+
+        Color textColor = ResolveCombatTelegraphColor(telegraphType);
+        Color panelColor = telegraphType == AttackTelegraphType.Danger
+            ? Color.Lerp(combatTelegraphPanelColor, combatTelegraphDangerColor, 0.16f)
+            : combatTelegraphPanelColor;
+        float punchStrength = telegraphType == AttackTelegraphType.Danger
+            ? dangerTelegraphHudPunch
+            : 0.08f;
+
+        PlayCombatTelegraphMessage(
+            string.IsNullOrWhiteSpace(message) ? "NOTICE" : message,
+            textColor,
+            panelColor,
+            Mathf.Max(0.18f, holdTime),
+            punchStrength,
+            priority);
+
+        if (useDangerFeedback || telegraphType == AttackTelegraphType.Danger)
+            PlayDangerTelegraphFeedback();
+    }
+
     void BindGuard(PlayerGuardController guard)
     {
         _boundGuard = guard;
@@ -310,6 +383,7 @@ public class PlayerHUD : MonoBehaviour
     {
         _boundBoss = boss;
         EnsureCombatTelegraphVisuals();
+        EnsurePunishWindowVisuals();
         EnsureDangerTelegraphFeedback();
 
         if (_boundBoss == null)
@@ -345,9 +419,20 @@ public class PlayerHUD : MonoBehaviour
         _combatTelegraphHideTime = 0f;
         _combatTelegraphPunchUntilTime = 0f;
         _combatTelegraphPunchStrength = 0f;
+        _combatTelegraphPriority = 0;
+        _combatTelegraphCurrentMessage = null;
+        _nextDangerTelegraphFeedbackAllowedTime = 0f;
+        _punishWindowDuration = 0f;
+        _punishWindowDamageMultiplier = 1f;
 
         if (_combatTelegraphCanvasGroup != null)
             _combatTelegraphCanvasGroup.alpha = 0f;
+
+        if (_punishWindowCanvasGroup != null)
+            _punishWindowCanvasGroup.alpha = punishWindowIdleAlpha;
+
+        if (_punishWindowRoot != null)
+            _punishWindowRoot.localScale = Vector3.one;
     }
 
     void UpdateGuardStrainVisual()
@@ -451,6 +536,48 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
+    void UpdatePunishWindowVisual()
+    {
+        if (_boundBoss == null || _punishWindowCanvasGroup == null || punishWindowFillImage == null || punishWindowText == null)
+            return;
+
+        bool active = _boundBoss.IsPunishWindowActive;
+        float remaining = active ? _boundBoss.PunishWindowRemaining : 0f;
+        float duration = Mathf.Max(0.05f, _punishWindowDuration > 0.01f ? _punishWindowDuration : remaining);
+        float normalized = active ? Mathf.Clamp01(remaining / duration) : 0f;
+        float targetAlpha = active ? punishWindowActiveAlpha : punishWindowIdleAlpha;
+
+        _punishWindowCanvasGroup.alpha = Mathf.MoveTowards(
+            _punishWindowCanvasGroup.alpha,
+            targetAlpha,
+            Time.unscaledDeltaTime * 12f);
+
+        punishWindowFillImage.fillAmount = normalized;
+
+        float pulse = active ? 0.65f + Mathf.Sin(Time.unscaledTime * 12f) * 0.35f : 0f;
+        punishWindowFillImage.color = active
+            ? Color.Lerp(punishWindowFillColor * 0.74f, Color.white, pulse * 0.24f)
+            : punishWindowFillColor;
+        punishWindowText.color = active
+            ? Color.Lerp(punishWindowTextColor, Color.white, pulse * 0.12f)
+            : punishWindowTextColor;
+        punishWindowText.text = _punishWindowDamageMultiplier > 1.01f
+            ? $"PUNISH x{_punishWindowDamageMultiplier:0.00}"
+            : "PUNISH";
+
+        if (punishWindowPanelImage != null)
+            punishWindowPanelImage.color = punishWindowPanelColor;
+
+        if (_punishWindowRoot != null)
+        {
+            float scale = 1f;
+            if (active)
+                scale += (1f - normalized) * 0.035f;
+
+            _punishWindowRoot.localScale = new Vector3(scale, scale, 1f);
+        }
+    }
+
     void HandleGuardBreak()
     {
         if (_guardRoot == null || guardStrainFillImage == null)
@@ -501,7 +628,8 @@ public class PlayerHUD : MonoBehaviour
             textColor,
             isChain ? combatTelegraphChainPanelColor : combatTelegraphPanelColor,
             holdTime,
-            punchStrength);
+            punchStrength,
+            0);
 
         if (telegraphType == AttackTelegraphType.Danger)
             PlayDangerTelegraphFeedback();
@@ -510,19 +638,24 @@ public class PlayerHUD : MonoBehaviour
     void HandlePunishWindowOpened(float duration, float damageMultiplier, string patternName)
     {
         EnsureCombatTelegraphVisuals();
+        EnsurePunishWindowVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
 
-        string message = damageMultiplier > 1.01f
-            ? $"OPENING x{damageMultiplier:0.00}"
-            : "OPENING";
+        _punishWindowDuration = Mathf.Max(0.05f, duration);
+        _punishWindowDamageMultiplier = Mathf.Max(1f, damageMultiplier);
+
+        string message = _punishWindowDamageMultiplier > 1.01f
+            ? $"PUNISH x{_punishWindowDamageMultiplier:0.00}"
+            : "PUNISH";
 
         PlayCombatTelegraphMessage(
             message,
             new Color(0.70f, 1.00f, 0.86f, 1f),
-            combatTelegraphPanelColor,
-            Mathf.Max(0.26f, duration),
-            0f);
+            Color.Lerp(combatTelegraphPanelColor, punishWindowFillColor, 0.16f),
+            Mathf.Max(0.26f, duration * 0.46f),
+            0f,
+            0);
     }
 
     void HandlePunishWindowClosed()
@@ -543,6 +676,8 @@ public class PlayerHUD : MonoBehaviour
         _combatTelegraphFadeOutStartTime = now;
         _combatTelegraphHideTime = now + 0.10f;
         _combatTelegraphVisible = true;
+        _punishWindowDuration = 0f;
+        _punishWindowDamageMultiplier = 1f;
     }
 
     void HandleBossPhaseChanged(int phase, float hpNormalized)
@@ -562,15 +697,22 @@ public class PlayerHUD : MonoBehaviour
             ? dangerTelegraphHudPunch
             : Mathf.Max(combatTelegraphChainPunch, 0.08f);
 
-        PlayCombatTelegraphMessage(message, textColor, panelColor, 0.72f, punchStrength);
+        PlayCombatTelegraphMessage(message, textColor, panelColor, 0.72f, punchStrength, 0);
 
         if (phase >= 3)
             PlayDangerTelegraphFeedback();
     }
 
-    void PlayCombatTelegraphMessage(string message, Color textColor, Color panelColor, float holdTime, float punchStrength)
+    void PlayCombatTelegraphMessage(string message, Color textColor, Color panelColor, float holdTime, float punchStrength, int priority = 0)
     {
-        combatTelegraphText.text = message;
+        string normalizedMessage = string.IsNullOrWhiteSpace(message) ? "NOTICE" : message;
+        if (_combatTelegraphVisible && priority < _combatTelegraphPriority)
+            return;
+
+        if (TryRefreshCombatTelegraph(normalizedMessage, textColor, panelColor, holdTime, punchStrength, priority))
+            return;
+
+        combatTelegraphText.text = normalizedMessage;
         combatTelegraphText.color = textColor;
         combatTelegraphPanelImage.color = panelColor;
 
@@ -591,6 +733,40 @@ public class PlayerHUD : MonoBehaviour
         _combatTelegraphPunchUntilTime = punchStrength > 0.001f ? now + 0.26f : now + 0.10f;
         _combatTelegraphPunchStrength = Mathf.Max(0f, punchStrength);
         _combatTelegraphVisible = true;
+        _combatTelegraphPriority = priority;
+        _combatTelegraphCurrentMessage = normalizedMessage;
+        _combatTelegraphCurrentTextColor = textColor;
+        _combatTelegraphCurrentPanelColor = panelColor;
+    }
+
+    bool TryRefreshCombatTelegraph(string message, Color textColor, Color panelColor, float holdTime, float punchStrength, int priority)
+    {
+        if (!mergeDuplicateCombatTelegraphs || !_combatTelegraphVisible)
+            return false;
+
+        if (priority != _combatTelegraphPriority)
+            return false;
+
+        if (!string.Equals(_combatTelegraphCurrentMessage, message, StringComparison.Ordinal))
+            return false;
+
+        if (!Approximately(_combatTelegraphCurrentTextColor, textColor) || !Approximately(_combatTelegraphCurrentPanelColor, panelColor))
+            return false;
+
+        float now = Time.unscaledTime;
+        if (now - _combatTelegraphShowStartTime > Mathf.Max(0.05f, combatTelegraphDuplicateMergeWindow))
+            return false;
+
+        _combatTelegraphFadeOutStartTime = Mathf.Max(_combatTelegraphFadeOutStartTime, now + Mathf.Max(0.06f, holdTime));
+        _combatTelegraphHideTime = _combatTelegraphFadeOutStartTime + 0.18f;
+
+        if (punchStrength > _combatTelegraphPunchStrength + 0.001f)
+        {
+            _combatTelegraphPunchStrength = punchStrength;
+            _combatTelegraphPunchUntilTime = now + (punchStrength > 0.001f ? 0.22f : 0.10f);
+        }
+
+        return true;
     }
 
     void UpdateCombatTelegraphVisual()
@@ -613,6 +789,7 @@ public class PlayerHUD : MonoBehaviour
         if (now >= _combatTelegraphHideTime)
         {
             _combatTelegraphVisible = false;
+            _combatTelegraphPriority = 0;
             _combatTelegraphCanvasGroup.alpha = 0f;
             _combatTelegraphRoot.localScale = Vector3.one;
             return;
@@ -637,15 +814,26 @@ public class PlayerHUD : MonoBehaviour
         _combatTelegraphRoot.localScale = new Vector3(scale, scale, 1f);
     }
 
+    void NormalizeRuntimeHudLayout()
+    {
+        combatTelegraphYOffset = -132f;
+        parryCounterYOffset = -182f;
+        punishWindowYOffset = -228f;
+        performanceHudAnchoredPosition = new Vector2(24f, -18f);
+    }
+
     bool ShouldTickStatusHud(float now)
     {
-        if (_boundGuard == null)
-            return false;
+        bool hasGuard = _boundGuard != null;
+        bool hasPunish = _boundBoss != null && _boundBoss.IsPunishWindowActive;
 
         if (now < _guardBreakFlashUntilTime || now < _parrySuccessFlashUntilTime || now < _parryCounterFlashUntilTime)
             return true;
 
-        if (_boundGuard.IsGuarding || _boundGuard.IsGuardBroken || _boundGuard.IsParryCounterReady)
+        if (hasGuard && (_boundGuard.IsGuarding || _boundGuard.IsGuardBroken || _boundGuard.IsParryCounterReady))
+            return true;
+
+        if (hasPunish)
             return true;
 
         if (_displayedGuardStrain > 0.001f)
@@ -655,6 +843,9 @@ public class PlayerHUD : MonoBehaviour
             return true;
 
         if (_parryCounterCanvasGroup != null && _parryCounterCanvasGroup.alpha > parryCounterIdleAlpha + 0.001f)
+            return true;
+
+        if (_punishWindowCanvasGroup != null && _punishWindowCanvasGroup.alpha > punishWindowIdleAlpha + 0.001f)
             return true;
 
         return false;
@@ -727,7 +918,7 @@ public class PlayerHUD : MonoBehaviour
         root.anchorMax = new Vector2(0.5f, 0.5f);
         root.pivot = new Vector2(0.5f, 0.5f);
         root.anchoredPosition = new Vector2(0f, combatTelegraphYOffset);
-        root.sizeDelta = new Vector2(220f, 42f);
+        root.sizeDelta = new Vector2(376f, 60f);
         root.localScale = Vector3.one;
 
         Image panel = FindOrCreateChildImage(root, RuntimeTelegraphPanelName);
@@ -753,7 +944,7 @@ public class PlayerHUD : MonoBehaviour
 
         text.alignment = TextAnchor.MiddleCenter;
         text.font = ResolveRuntimeFont();
-        text.fontSize = 20;
+        text.fontSize = 24;
         text.fontStyle = FontStyle.Bold;
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
         text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -794,7 +985,7 @@ public class PlayerHUD : MonoBehaviour
         root.anchorMax = new Vector2(0.5f, 0.5f);
         root.pivot = new Vector2(0.5f, 0.5f);
         root.anchoredPosition = new Vector2(0f, parryCounterYOffset);
-        root.sizeDelta = new Vector2(188f, 28f);
+        root.sizeDelta = new Vector2(276f, 38f);
         root.localScale = Vector3.one;
 
         Image panel = FindOrCreateChildImage(root, RuntimeParryCounterPanelName);
@@ -831,7 +1022,7 @@ public class PlayerHUD : MonoBehaviour
 
         text.alignment = TextAnchor.MiddleCenter;
         text.font = ResolveRuntimeFont();
-        text.fontSize = 14;
+        text.fontSize = 18;
         text.fontStyle = FontStyle.Bold;
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
         text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -846,6 +1037,84 @@ public class PlayerHUD : MonoBehaviour
 
         if (_parryCounterTween == null)
             _parryCounterCanvasGroup.alpha = parryCounterIdleAlpha;
+    }
+
+    void EnsurePunishWindowVisuals()
+    {
+        if (hpFillImage == null)
+            return;
+
+        RectTransform parent = hpFillImage.canvas != null
+            ? hpFillImage.canvas.transform as RectTransform
+            : hpFillImage.transform.root as RectTransform;
+
+        if (parent == null)
+            return;
+
+        RectTransform root = parent.Find(RuntimePunishWindowRootName) as RectTransform;
+        if (root == null)
+        {
+            GameObject rootGo = new GameObject(RuntimePunishWindowRootName, typeof(RectTransform), typeof(CanvasRenderer), typeof(CanvasGroup));
+            root = rootGo.GetComponent<RectTransform>();
+            root.SetParent(parent, false);
+        }
+
+        _punishWindowRoot = root;
+        root.anchorMin = new Vector2(0.5f, 0.5f);
+        root.anchorMax = new Vector2(0.5f, 0.5f);
+        root.pivot = new Vector2(0.5f, 0.5f);
+        root.anchoredPosition = new Vector2(0f, punishWindowYOffset);
+        root.sizeDelta = new Vector2(284f, 36f);
+        root.localScale = Vector3.one;
+
+        Image panel = FindOrCreateChildImage(root, RuntimePunishWindowPanelName);
+        StretchToParent(panel.rectTransform);
+        panel.sprite = ResolveRuntimeSprite();
+        panel.type = Image.Type.Sliced;
+        panel.color = punishWindowPanelColor;
+        panel.raycastTarget = false;
+        punishWindowPanelImage = panel;
+
+        Image fill = FindOrCreateChildImage(root, RuntimePunishWindowFillName);
+        StretchToParent(fill.rectTransform);
+        fill.sprite = ResolveRuntimeSprite();
+        fill.type = Image.Type.Filled;
+        fill.fillMethod = Image.FillMethod.Horizontal;
+        fill.fillOrigin = (int)Image.OriginHorizontal.Left;
+        fill.fillClockwise = true;
+        fill.color = punishWindowFillColor;
+        fill.raycastTarget = false;
+        punishWindowFillImage = fill;
+
+        RectTransform textRect = root.Find(RuntimePunishWindowTextName) as RectTransform;
+        if (textRect == null)
+        {
+            GameObject textGo = new GameObject(RuntimePunishWindowTextName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            textRect = textGo.GetComponent<RectTransform>();
+            textRect.SetParent(root, false);
+        }
+
+        StretchToParent(textRect);
+        Text text = textRect.GetComponent<Text>();
+        if (text == null)
+            text = textRect.gameObject.AddComponent<Text>();
+
+        text.alignment = TextAnchor.MiddleCenter;
+        text.font = ResolveRuntimeFont();
+        text.fontSize = 18;
+        text.fontStyle = FontStyle.Bold;
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Overflow;
+        text.raycastTarget = false;
+        text.text = "PUNISH";
+        text.color = punishWindowTextColor;
+        punishWindowText = text;
+
+        _punishWindowCanvasGroup = root.GetComponent<CanvasGroup>();
+        if (_punishWindowCanvasGroup == null)
+            _punishWindowCanvasGroup = root.gameObject.AddComponent<CanvasGroup>();
+
+        _punishWindowCanvasGroup.alpha = punishWindowIdleAlpha;
     }
 
     void UpdatePerformanceHud()
@@ -928,8 +1197,8 @@ public class PlayerHUD : MonoBehaviour
             root.pivot = new Vector2(0f, 1f);
         if (root.anchoredPosition != performanceHudAnchoredPosition)
             root.anchoredPosition = performanceHudAnchoredPosition;
-        if (root.sizeDelta != new Vector2(420f, 60f))
-            root.sizeDelta = new Vector2(420f, 60f);
+        if (root.sizeDelta != new Vector2(360f, 48f))
+            root.sizeDelta = new Vector2(360f, 48f);
         if (root.localScale != Vector3.one)
             root.localScale = Vector3.one;
         root.gameObject.SetActive(true);
@@ -957,7 +1226,7 @@ public class PlayerHUD : MonoBehaviour
         {
             text.alignment = TextAnchor.UpperLeft;
             text.font = ResolveRuntimeFont();
-            text.fontSize = 36;
+            text.fontSize = 26;
             text.fontStyle = FontStyle.Bold;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
@@ -1018,6 +1287,11 @@ public class PlayerHUD : MonoBehaviour
 
     void PlayDangerTelegraphFeedback()
     {
+        float now = Time.unscaledTime;
+        if (now < _nextDangerTelegraphFeedbackAllowedTime)
+            return;
+
+        _nextDangerTelegraphFeedbackAllowedTime = now + Mathf.Max(0.05f, dangerTelegraphFeedbackCooldown);
         EnsureDangerTelegraphFeedback();
 
         if (dangerTelegraphCameraShake != null)
@@ -1147,6 +1421,14 @@ public class PlayerHUD : MonoBehaviour
     static Font ResolveRuntimeFont()
     {
         return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+    }
+
+    static bool Approximately(Color a, Color b)
+    {
+        return Mathf.Abs(a.r - b.r) <= 0.001f
+            && Mathf.Abs(a.g - b.g) <= 0.001f
+            && Mathf.Abs(a.b - b.b) <= 0.001f
+            && Mathf.Abs(a.a - b.a) <= 0.001f;
     }
 
     Color ResolveCombatTelegraphColor(AttackTelegraphType telegraphType)

@@ -1,13 +1,19 @@
-// Assets/Scripts/Ultimate/UltimateScreenFX.cs
-using System.Collections;
 using UnityEngine;
 
 [ExecuteAlways]
 public class UltimateScreenFX : MonoBehaviour
 {
+    enum PlaybackMode
+    {
+        None,
+        Tween,
+        PulseUp,
+        PulseDown
+    }
+
     [Header("Assign the Quad's Renderer")]
     [SerializeField] private Renderer targetRenderer;
-    [SerializeField] private string propStrength = "_Strength"; // 셰이더 프로퍼티명
+    [SerializeField] private string propStrength = "_Strength";
 
     [Header("Curves & Timings")]
     [SerializeField] private AnimationCurve ease = AnimationCurve.EaseInOut(0, 0, 1, 1);
@@ -22,120 +28,168 @@ public class UltimateScreenFX : MonoBehaviour
     [SerializeField] private float chargeInTime = 0.35f;
     [SerializeField] private float chargeOutTime = 0.25f;
 
-    MaterialPropertyBlock mpb;
-    Coroutine running;          // 현재 실행 중인 트윈/펄스
-    float strength;             // 현재 강도(백킹 필드)
+    MaterialPropertyBlock _mpb;
+    int _propStrengthId = -1;
+    float _strength;
+    float _lastAppliedStrength = float.MinValue;
+
+    PlaybackMode _mode;
+    float _fromStrength;
+    float _targetStrength;
+    float _phaseElapsed;
+    float _phaseDuration;
+    float _pulsePeak;
+    float _pulseHalfDuration;
 
     void Awake()
     {
-        if (!targetRenderer) targetRenderer = GetComponentInChildren<Renderer>(true);
-        if (mpb == null) mpb = new MaterialPropertyBlock();
-        ApplyStrength(0f);
+        ResolveReferences();
+        ApplyStrengthImmediate(0f, force: true);
     }
 
-    // ---------------------------
-    // 외부 API (PlayerUltimateController가 호출)
-    // ---------------------------
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        ResolveReferences();
+        _propStrengthId = -1;
+    }
+#endif
+
+    void Update()
+    {
+        if (_mode == PlaybackMode.None)
+            return;
+
+        float deltaTime = Application.isPlaying ? Time.unscaledDeltaTime : (1f / 60f);
+        AdvancePlayback(deltaTime);
+    }
 
     public void PlayChargeIn()
     {
-        // 0 -> chargeMaxStrength로 부드럽게
-        StartRoutine(TweenStrength(chargeMaxStrength, chargeInTime));
+        BeginTween(chargeMaxStrength, chargeInTime);
     }
 
     public void PlayChargeOut()
     {
-        // 현재값 -> 0으로 부드럽게
-        StartRoutine(TweenStrength(0f, chargeOutTime));
+        BeginTween(0f, chargeOutTime);
     }
 
     public void PulseMinor()
     {
-        StartRoutine(Pulse(pulseMinorStrength, pulseDuration));
+        BeginPulse(pulseMinorStrength, pulseDuration);
     }
 
     public void PulseMajor()
     {
-        StartRoutine(Pulse(pulseMajorStrength, pulseDuration));
+        BeginPulse(pulseMajorStrength, pulseDuration);
     }
 
-    // ---------------------------
-    // 호환용(기존에 쓰던 코드 대응)
-    // ---------------------------
-
-    public void SetStrength(float v)        // 즉시 세기 설정
+    public void SetStrength(float value)
     {
-        ApplyStrength(Mathf.Clamp01(v));
+        CancelPlayback();
+        ApplyStrengthImmediate(Mathf.Clamp01(value), force: true);
     }
 
-    public void Flash(float strength = 1f, float duration = 0.15f)   // 짧게 번쩍
+    public void Flash(float strength = 1f, float duration = 0.15f)
     {
-        StartRoutine(Pulse(Mathf.Clamp01(strength), Mathf.Max(0.01f, duration)));
+        BeginPulse(Mathf.Clamp01(strength), Mathf.Max(0.01f, duration));
     }
 
-    // ---------------------------
-    // 내부 구현
-    // ---------------------------
-
-    void StartRoutine(IEnumerator co)
+    void ResolveReferences()
     {
-        if (running != null) StopCoroutine(running);
-        running = StartCoroutine(co);
+        if (!targetRenderer)
+            targetRenderer = GetComponentInChildren<Renderer>(true);
+        if (_mpb == null)
+            _mpb = new MaterialPropertyBlock();
     }
 
-    IEnumerator TweenStrength(float target, float time)
+    void BeginTween(float target, float duration)
     {
-        float from = strength;
-        float t = 0f;
-        float dur = Mathf.Max(0.01f, time);
+        _mode = PlaybackMode.Tween;
+        _fromStrength = _strength;
+        _targetStrength = Mathf.Clamp01(target);
+        _phaseElapsed = 0f;
+        _phaseDuration = Mathf.Max(0.01f, duration);
+    }
 
-        while (t < dur)
+    void BeginPulse(float peak, float duration)
+    {
+        _pulsePeak = Mathf.Clamp01(peak);
+        _pulseHalfDuration = Mathf.Max(0.01f, duration * 0.5f);
+        _fromStrength = _strength;
+        _phaseElapsed = 0f;
+        _phaseDuration = _pulseHalfDuration;
+        _mode = PlaybackMode.PulseUp;
+    }
+
+    void CancelPlayback()
+    {
+        _mode = PlaybackMode.None;
+        _phaseElapsed = 0f;
+        _phaseDuration = 0f;
+    }
+
+    void AdvancePlayback(float deltaTime)
+    {
+        _phaseElapsed += Mathf.Max(0f, deltaTime);
+        float normalized = Mathf.Clamp01(_phaseElapsed / Mathf.Max(0.0001f, _phaseDuration));
+        float eased = ease != null ? ease.Evaluate(normalized) : normalized;
+
+        switch (_mode)
         {
-            t += Time.unscaledDeltaTime;
-            float x = Mathf.Clamp01(t / dur);
-            ApplyStrength(Mathf.Lerp(from, target, ease.Evaluate(x)));
-            yield return null;
+            case PlaybackMode.Tween:
+                ApplyStrengthImmediate(Mathf.Lerp(_fromStrength, _targetStrength, eased));
+                if (_phaseElapsed >= _phaseDuration)
+                {
+                    ApplyStrengthImmediate(_targetStrength, force: true);
+                    CancelPlayback();
+                }
+                break;
+
+            case PlaybackMode.PulseUp:
+                ApplyStrengthImmediate(Mathf.Lerp(_fromStrength, _pulsePeak, eased));
+                if (_phaseElapsed >= _phaseDuration)
+                {
+                    _fromStrength = _pulsePeak;
+                    _targetStrength = 0f;
+                    _phaseElapsed = 0f;
+                    _phaseDuration = _pulseHalfDuration;
+                    _mode = PlaybackMode.PulseDown;
+                }
+                break;
+
+            case PlaybackMode.PulseDown:
+                ApplyStrengthImmediate(Mathf.Lerp(_fromStrength, 0f, eased));
+                if (_phaseElapsed >= _phaseDuration)
+                {
+                    ApplyStrengthImmediate(0f, force: true);
+                    CancelPlayback();
+                }
+                break;
         }
-        ApplyStrength(target);
-        running = null;
     }
 
-    IEnumerator Pulse(float peak, float dur)
+    void ApplyStrengthImmediate(float value, bool force = false)
     {
-        // up
-        float from = strength;
-        float half = Mathf.Max(0.01f, dur * 0.5f);
-        float t = 0f;
-        while (t < half)
-        {
-            t += Time.unscaledDeltaTime;
-            float x = Mathf.Clamp01(t / half);
-            ApplyStrength(Mathf.Lerp(from, peak, ease.Evaluate(x)));
-            yield return null;
-        }
+        _strength = Mathf.Clamp01(value);
 
-        // down (peak -> 0)
-        t = 0f;
-        while (t < half)
-        {
-            t += Time.unscaledDeltaTime;
-            float x = Mathf.Clamp01(t / half);
-            ApplyStrength(Mathf.Lerp(peak, 0f, ease.Evaluate(x)));
-            yield return null;
-        }
+        if (!targetRenderer)
+            return;
 
-        ApplyStrength(0f);
-        running = null;
+        if (!force && Mathf.Abs(_lastAppliedStrength - _strength) < 0.0001f)
+            return;
+
+        ResolvePropertyId();
+        _mpb.Clear();
+        if (_propStrengthId != -1)
+            _mpb.SetFloat(_propStrengthId, _strength);
+        targetRenderer.SetPropertyBlock(_mpb);
+        _lastAppliedStrength = _strength;
     }
 
-    void ApplyStrength(float v)
+    void ResolvePropertyId()
     {
-        strength = v;
-        if (!targetRenderer) return;
-
-        if (mpb == null) mpb = new MaterialPropertyBlock();
-        targetRenderer.GetPropertyBlock(mpb);
-        mpb.SetFloat(propStrength, strength);
-        targetRenderer.SetPropertyBlock(mpb);
+        if (_propStrengthId == -1 && !string.IsNullOrEmpty(propStrength))
+            _propStrengthId = Shader.PropertyToID(propStrength);
     }
 }

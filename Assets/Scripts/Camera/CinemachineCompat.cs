@@ -8,15 +8,27 @@ public static class CinemachineCompat
 {
     static readonly Type LegacyFreeLookType = Type.GetType("Unity.Cinemachine.CinemachineFreeLook, Unity.Cinemachine");
 
-    static readonly BindingFlags AnyInstance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+static readonly BindingFlags AnyInstance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     static readonly Dictionary<int, CinemachineComponentBase> BodyComponentCache = new Dictionary<int, CinemachineComponentBase>(16);
+    static readonly Dictionary<int, CinemachineComponentBase> AimComponentCache = new Dictionary<int, CinemachineComponentBase>(16);
     static readonly Dictionary<Type, BodyOffsetAccessor> BodyOffsetAccessorCache = new Dictionary<Type, BodyOffsetAccessor>(8);
+    static readonly Dictionary<Type, BodyDampingAccessor> BodyDampingAccessorCache = new Dictionary<Type, BodyDampingAccessor>(8);
     static readonly Dictionary<Type, LegacyFreeLookAccessor> LegacyFreeLookAccessorCache = new Dictionary<Type, LegacyFreeLookAccessor>(4);
 
     sealed class BodyOffsetAccessor
     {
         public PropertyInfo FollowOffsetProperty;
         public FieldInfo LegacyFollowOffsetField;
+    }
+
+    sealed class BodyDampingAccessor
+    {
+        public PropertyInfo XDampingProperty;
+        public PropertyInfo YDampingProperty;
+        public PropertyInfo ZDampingProperty;
+        public FieldInfo LegacyXDampingField;
+        public FieldInfo LegacyYDampingField;
+        public FieldInfo LegacyZDampingField;
     }
 
     sealed class AxisAccessor
@@ -102,6 +114,115 @@ public static class CinemachineCompat
         return false;
     }
 
+    public static bool TryGetBodyDamping(CinemachineVirtualCameraBase camera, out Vector3 damping)
+    {
+        damping = default;
+        CinemachineComponentBase body = ResolveBodyComponent(camera);
+        if (body == null)
+            return false;
+
+        BodyDampingAccessor accessor = ResolveBodyDampingAccessor(body.GetType());
+        if (!TryReadFloatComponent(body, accessor.XDampingProperty, accessor.LegacyXDampingField, out float x))
+            return false;
+        if (!TryReadFloatComponent(body, accessor.YDampingProperty, accessor.LegacyYDampingField, out float y))
+            return false;
+        if (!TryReadFloatComponent(body, accessor.ZDampingProperty, accessor.LegacyZDampingField, out float z))
+            return false;
+
+        damping = new Vector3(x, y, z);
+        return true;
+    }
+
+    public static bool TrySetBodyDamping(CinemachineVirtualCameraBase camera, Vector3 damping)
+    {
+        CinemachineComponentBase body = ResolveBodyComponent(camera);
+        if (body == null)
+            return false;
+
+        BodyDampingAccessor accessor = ResolveBodyDampingAccessor(body.GetType());
+        bool wroteX = TryWriteFloatComponent(body, accessor.XDampingProperty, accessor.LegacyXDampingField, damping.x);
+        bool wroteY = TryWriteFloatComponent(body, accessor.YDampingProperty, accessor.LegacyYDampingField, damping.y);
+        bool wroteZ = TryWriteFloatComponent(body, accessor.ZDampingProperty, accessor.LegacyZDampingField, damping.z);
+        return wroteX && wroteY && wroteZ;
+    }
+
+    public static bool TryGetBodyTrackedObjectOffset(CinemachineVirtualCameraBase camera, out Vector3 offset)
+    {
+        offset = default;
+        return TryGetStageVector3(ResolveBodyComponent(camera), "TrackedObjectOffset", "m_TrackedObjectOffset", out offset);
+    }
+
+    public static bool TrySetBodyTrackedObjectOffset(CinemachineVirtualCameraBase camera, Vector3 offset)
+    {
+        return TrySetStageVector3(ResolveBodyComponent(camera), "TrackedObjectOffset", "m_TrackedObjectOffset", offset);
+    }
+
+    public static bool TryGetBodyCameraDistance(CinemachineVirtualCameraBase camera, out float distance)
+    {
+        distance = 0f;
+        return TryGetStageFloat(ResolveBodyComponent(camera), "CameraDistance", "m_CameraDistance", out distance);
+    }
+
+    public static bool TrySetBodyCameraDistance(CinemachineVirtualCameraBase camera, float distance)
+    {
+        return TrySetStageFloat(ResolveBodyComponent(camera), "CameraDistance", "m_CameraDistance", distance);
+    }
+
+    public static bool TryGetBodyScreenPosition(CinemachineVirtualCameraBase camera, out Vector2 screenPosition)
+    {
+        screenPosition = default;
+        return TryGetStageFloatPair(ResolveBodyComponent(camera), "ScreenX", "ScreenY", "m_ScreenX", "m_ScreenY", out screenPosition);
+    }
+
+    public static bool TrySetBodyScreenPosition(CinemachineVirtualCameraBase camera, Vector2 screenPosition)
+    {
+        return TrySetStageFloatPair(ResolveBodyComponent(camera), "ScreenX", "ScreenY", "m_ScreenX", "m_ScreenY", screenPosition);
+    }
+
+    public static bool TryGetBodySoftZone(CinemachineVirtualCameraBase camera, out Vector2 softZone)
+    {
+        softZone = default;
+        return TryGetStageFloatPair(ResolveBodyComponent(camera), "SoftZoneWidth", "SoftZoneHeight", "m_SoftZoneWidth", "m_SoftZoneHeight", out softZone);
+    }
+
+    public static bool TrySetBodySoftZone(CinemachineVirtualCameraBase camera, Vector2 softZone)
+    {
+        return TrySetStageFloatPair(ResolveBodyComponent(camera), "SoftZoneWidth", "SoftZoneHeight", "m_SoftZoneWidth", "m_SoftZoneHeight", softZone);
+    }
+
+    public static bool TryGetAimScreenPosition(CinemachineVirtualCameraBase camera, out Vector2 screenPosition)
+    {
+        screenPosition = default;
+        return TryGetStageFloatPair(ResolveAimComponent(camera), "ScreenX", "ScreenY", "m_ScreenX", "m_ScreenY", out screenPosition);
+    }
+
+    public static bool TrySetAimScreenPosition(CinemachineVirtualCameraBase camera, Vector2 screenPosition)
+    {
+        return TrySetStageFloatPair(ResolveAimComponent(camera), "ScreenX", "ScreenY", "m_ScreenX", "m_ScreenY", screenPosition);
+    }
+
+    public static bool TryGetAimTrackedObjectOffset(CinemachineVirtualCameraBase camera, out Vector3 offset)
+    {
+        offset = default;
+        return TryGetStageVector3(ResolveAimComponent(camera), "TrackedObjectOffset", "m_TrackedObjectOffset", out offset);
+    }
+
+    public static bool TrySetAimTrackedObjectOffset(CinemachineVirtualCameraBase camera, Vector3 offset)
+    {
+        return TrySetStageVector3(ResolveAimComponent(camera), "TrackedObjectOffset", "m_TrackedObjectOffset", offset);
+    }
+
+    public static bool TryGetAimBias(CinemachineVirtualCameraBase camera, out Vector2 bias)
+    {
+        bias = default;
+        return TryGetStageFloatPair(ResolveAimComponent(camera), "BiasX", "BiasY", "m_BiasX", "m_BiasY", out bias);
+    }
+
+    public static bool TrySetAimBias(CinemachineVirtualCameraBase camera, Vector2 bias)
+    {
+        return TrySetStageFloatPair(ResolveAimComponent(camera), "BiasX", "BiasY", "m_BiasX", "m_BiasY", bias);
+    }
+
     public static bool TryCopyLensFromUnityCamera(CinemachineVirtualCameraBase camera, Camera sourceCamera)
     {
         if (camera == null || sourceCamera == null)
@@ -117,6 +238,54 @@ public static class CinemachineCompat
         if (legacyLensField != null && legacyLensField.FieldType == typeof(LensSettings))
         {
             LensSettings lens = LensSettings.FromCamera(sourceCamera);
+            legacyLensField.SetValue(camera, lens);
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryGetFieldOfView(CinemachineVirtualCameraBase camera, out float fieldOfView)
+    {
+        fieldOfView = 0f;
+        if (camera == null)
+            return false;
+
+        if (camera is CinemachineCamera cmCamera)
+        {
+            fieldOfView = cmCamera.Lens.FieldOfView;
+            return true;
+        }
+
+        FieldInfo legacyLensField = camera.GetType().GetField("m_Lens", AnyInstance);
+        if (legacyLensField != null && legacyLensField.FieldType == typeof(LensSettings))
+        {
+            LensSettings lens = (LensSettings)legacyLensField.GetValue(camera);
+            fieldOfView = lens.FieldOfView;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TrySetFieldOfView(CinemachineVirtualCameraBase camera, float fieldOfView)
+    {
+        if (camera == null)
+            return false;
+
+        if (camera is CinemachineCamera cmCamera)
+        {
+            LensSettings lens = cmCamera.Lens;
+            lens.FieldOfView = fieldOfView;
+            cmCamera.Lens = lens;
+            return true;
+        }
+
+        FieldInfo legacyLensField = camera.GetType().GetField("m_Lens", AnyInstance);
+        if (legacyLensField != null && legacyLensField.FieldType == typeof(LensSettings))
+        {
+            LensSettings lens = (LensSettings)legacyLensField.GetValue(camera);
+            lens.FieldOfView = fieldOfView;
             legacyLensField.SetValue(camera, lens);
             return true;
         }
@@ -214,6 +383,24 @@ public static class CinemachineCompat
         return body;
     }
 
+    static CinemachineComponentBase ResolveAimComponent(CinemachineVirtualCameraBase camera)
+    {
+        if (camera == null)
+            return null;
+
+        int instanceId = camera.GetInstanceID();
+        if (AimComponentCache.TryGetValue(instanceId, out CinemachineComponentBase cachedAim) && cachedAim != null)
+            return cachedAim;
+
+        CinemachineComponentBase aim = camera.GetCinemachineComponent(CinemachineCore.Stage.Aim);
+        if (aim != null)
+            AimComponentCache[instanceId] = aim;
+        else
+            AimComponentCache.Remove(instanceId);
+
+        return aim;
+    }
+
     static BodyOffsetAccessor ResolveBodyOffsetAccessor(Type bodyType)
     {
         if (bodyType == null)
@@ -238,6 +425,28 @@ public static class CinemachineCompat
             cachedAccessor.LegacyFollowOffsetField = legacyFollowOffsetField;
 
         BodyOffsetAccessorCache[bodyType] = cachedAccessor;
+        return cachedAccessor;
+    }
+
+    static BodyDampingAccessor ResolveBodyDampingAccessor(Type bodyType)
+    {
+        if (bodyType == null)
+            return null;
+
+        if (BodyDampingAccessorCache.TryGetValue(bodyType, out BodyDampingAccessor cachedAccessor))
+            return cachedAccessor;
+
+        cachedAccessor = new BodyDampingAccessor
+        {
+            XDampingProperty = ResolveFloatProperty(bodyType, "XDamping"),
+            YDampingProperty = ResolveFloatProperty(bodyType, "YDamping"),
+            ZDampingProperty = ResolveFloatProperty(bodyType, "ZDamping"),
+            LegacyXDampingField = ResolveFloatField(bodyType, "m_XDamping"),
+            LegacyYDampingField = ResolveFloatField(bodyType, "m_YDamping"),
+            LegacyZDampingField = ResolveFloatField(bodyType, "m_ZDamping")
+        };
+
+        BodyDampingAccessorCache[bodyType] = cachedAccessor;
         return cachedAccessor;
     }
 
@@ -306,6 +515,20 @@ public static class CinemachineCompat
         return orbitsField != null && orbitsField.FieldType.IsArray ? orbitsField : null;
     }
 
+    static PropertyInfo ResolveFloatProperty(Type targetType, string propertyName)
+    {
+        PropertyInfo property = targetType.GetProperty(propertyName, AnyInstance);
+        return property != null && property.PropertyType == typeof(float) && property.CanRead && property.CanWrite
+            ? property
+            : null;
+    }
+
+    static FieldInfo ResolveFloatField(Type targetType, string fieldName)
+    {
+        FieldInfo field = targetType.GetField(fieldName, AnyInstance);
+        return field != null && field.FieldType == typeof(float) ? field : null;
+    }
+
     static bool TryGetLegacyAxisValue(Component freeLook, AxisAccessor accessor, out float value)
     {
         value = 0f;
@@ -338,5 +561,155 @@ public static class CinemachineCompat
 
         accessor.AxisField.SetValue(freeLook, axisState);
         return true;
+    }
+
+    static bool TryReadFloatComponent(object target, PropertyInfo property, FieldInfo field, out float value)
+    {
+        value = 0f;
+        if (property != null)
+        {
+            value = (float)property.GetValue(target);
+            return true;
+        }
+
+        if (field != null)
+        {
+            value = (float)field.GetValue(target);
+            return true;
+        }
+
+        return false;
+    }
+
+    static bool TryWriteFloatComponent(object target, PropertyInfo property, FieldInfo field, float value)
+    {
+        if (property != null)
+        {
+            property.SetValue(target, value);
+            return true;
+        }
+
+        if (field != null)
+        {
+            field.SetValue(target, value);
+            return true;
+        }
+
+        return false;
+    }
+
+    static bool TryGetStageVector3(CinemachineComponentBase component, string propertyName, string fieldName, out Vector3 value)
+    {
+        value = default;
+        if (component == null)
+            return false;
+
+        PropertyInfo property = component.GetType().GetProperty(propertyName, AnyInstance);
+        if (property != null && property.PropertyType == typeof(Vector3) && property.CanRead)
+        {
+            value = (Vector3)property.GetValue(component);
+            return true;
+        }
+
+        FieldInfo field = component.GetType().GetField(fieldName, AnyInstance);
+        if (field != null && field.FieldType == typeof(Vector3))
+        {
+            value = (Vector3)field.GetValue(component);
+            return true;
+        }
+
+        return false;
+    }
+
+    static bool TrySetStageVector3(CinemachineComponentBase component, string propertyName, string fieldName, Vector3 value)
+    {
+        if (component == null)
+            return false;
+
+        PropertyInfo property = component.GetType().GetProperty(propertyName, AnyInstance);
+        if (property != null && property.PropertyType == typeof(Vector3) && property.CanWrite)
+        {
+            property.SetValue(component, value);
+            return true;
+        }
+
+        FieldInfo field = component.GetType().GetField(fieldName, AnyInstance);
+        if (field != null && field.FieldType == typeof(Vector3))
+        {
+            field.SetValue(component, value);
+            return true;
+        }
+
+        return false;
+    }
+
+    static bool TryGetStageFloat(CinemachineComponentBase component, string propertyName, string fieldName, out float value)
+    {
+        value = 0f;
+        if (component == null)
+            return false;
+
+        PropertyInfo property = component.GetType().GetProperty(propertyName, AnyInstance);
+        if (property != null && property.PropertyType == typeof(float) && property.CanRead)
+        {
+            value = (float)property.GetValue(component);
+            return true;
+        }
+
+        FieldInfo field = component.GetType().GetField(fieldName, AnyInstance);
+        if (field != null && field.FieldType == typeof(float))
+        {
+            value = (float)field.GetValue(component);
+            return true;
+        }
+
+        return false;
+    }
+
+    static bool TrySetStageFloat(CinemachineComponentBase component, string propertyName, string fieldName, float value)
+    {
+        if (component == null)
+            return false;
+
+        PropertyInfo property = component.GetType().GetProperty(propertyName, AnyInstance);
+        if (property != null && property.PropertyType == typeof(float) && property.CanWrite)
+        {
+            property.SetValue(component, value);
+            return true;
+        }
+
+        FieldInfo field = component.GetType().GetField(fieldName, AnyInstance);
+        if (field != null && field.FieldType == typeof(float))
+        {
+            field.SetValue(component, value);
+            return true;
+        }
+
+        return false;
+    }
+
+    static bool TryGetStageFloatPair(CinemachineComponentBase component, string xPropertyName, string yPropertyName, string xFieldName, string yFieldName, out Vector2 value)
+    {
+        value = default;
+        if (component == null)
+            return false;
+
+        bool readX = TryGetStageFloat(component, xPropertyName, xFieldName, out float x);
+        bool readY = TryGetStageFloat(component, yPropertyName, yFieldName, out float y);
+        if (!readX || !readY)
+            return false;
+
+        value = new Vector2(x, y);
+        return true;
+    }
+
+    static bool TrySetStageFloatPair(CinemachineComponentBase component, string xPropertyName, string yPropertyName, string xFieldName, string yFieldName, Vector2 value)
+    {
+        if (component == null)
+            return false;
+
+        bool wroteX = TrySetStageFloat(component, xPropertyName, xFieldName, value.x);
+        bool wroteY = TrySetStageFloat(component, yPropertyName, yFieldName, value.y);
+        return wroteX && wroteY;
     }
 }

@@ -5,6 +5,9 @@ using UnityEngine.UI;
 
 public class UI_BreakGauge : MonoBehaviour
 {
+    const float ResolveInterval = 0.5f;
+    const float VisibilityRefreshInterval = 0.15f;
+
     [Header("표시 대상 보스(브레이크 컨트롤러)")]
     public BossBreakController boss;
 
@@ -16,27 +19,99 @@ public class UI_BreakGauge : MonoBehaviour
     public bool alwaysOn = true;
     float _lastFill = -1f;
     float _nextRefreshAt;
-    const float RefreshInterval = 0.15f;
+    float _nextResolveAt;
+
+    void OnEnable()
+    {
+        TryResolveBoss(true);
+        BindIfNeeded();
+        SyncFillImmediate();
+        RefreshExecutionState();
+    }
+
+    void OnDisable()
+    {
+        Unbind();
+    }
 
     void Update()
     {
-        if (Time.unscaledTime < _nextRefreshAt)
-            return;
-
-        _nextRefreshAt = Time.unscaledTime + RefreshInterval;
-
-        if (!boss || !fill) return;
-
-        float nextFill = boss.Get01();
-        if (!Mathf.Approximately(_lastFill, nextFill))
+        if (!boss)
         {
-            _lastFill = nextFill;
-            fill.fillAmount = nextFill;
+            if (Time.unscaledTime >= _nextResolveAt)
+            {
+                _nextResolveAt = Time.unscaledTime + ResolveInterval;
+                TryResolveBoss();
+                BindIfNeeded();
+                SyncFillImmediate();
+            }
+
+            RefreshExecutionState();
+            return;
         }
 
         if (group && !alwaysOn)
         {
+            if (Time.unscaledTime < _nextRefreshAt)
+                return;
+
+            _nextRefreshAt = Time.unscaledTime + VisibilityRefreshInterval;
             group.alpha = (boss.gameObject.activeInHierarchy ? 1f : 0f);
         }
+
+        RefreshExecutionState();
+    }
+
+    void TryResolveBoss(bool force = false)
+    {
+        if (!force && boss)
+            return;
+
+        boss = GameplaySceneCache.ResolveBossBreakController();
+    }
+
+    void BindIfNeeded()
+    {
+        if (!boss)
+            return;
+
+        boss.OnBreakChanged -= HandleBreakChanged;
+        boss.OnBreakChanged += HandleBreakChanged;
+    }
+
+    void Unbind()
+    {
+        if (!boss)
+            return;
+
+        boss.OnBreakChanged -= HandleBreakChanged;
+    }
+
+    void SyncFillImmediate()
+    {
+        if (!boss || !fill)
+            return;
+
+        float nextFill = boss.Get01();
+        _lastFill = nextFill;
+        fill.fillAmount = nextFill;
+    }
+
+    void HandleBreakChanged(float normalized, float current)
+    {
+        if (!fill)
+            return;
+
+        _lastFill = normalized;
+        fill.fillAmount = normalized;
+        if (!enabled)
+            RefreshExecutionState();
+    }
+
+    void RefreshExecutionState()
+    {
+        bool shouldRun = !boss || (group && !alwaysOn);
+        if (enabled != shouldRun)
+            enabled = shouldRun;
     }
 }

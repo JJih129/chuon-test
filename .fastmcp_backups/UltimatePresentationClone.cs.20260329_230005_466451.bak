@@ -1,0 +1,276 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class UltimatePresentationClone : MonoBehaviour
+{
+    [SerializeField] Transform sourceRoot;
+    [SerializeField] Transform cloneRoot;
+    [SerializeField] Animator cloneAnimator;
+
+    Renderer[] _sourceRenderers;
+    bool[] _sourceRendererStates;
+
+    public Transform CloneRoot => cloneRoot != null ? cloneRoot : transform;
+    public Animator CloneAnimator => cloneAnimator;
+
+    public void BuildFromSource(Transform source, Transform anchor, string cloneName)
+    {
+        ClearClone();
+        if (source == null)
+            return;
+
+        sourceRoot = source;
+        name = cloneName;
+        transform.SetParent(anchor, false);
+        transform.localPosition = Vector3.zero;
+        transform.localRotation = Quaternion.identity;
+        transform.localScale = Vector3.one;
+
+        GameObject instance = Instantiate(source.gameObject, transform);
+        instance.name = $"{source.gameObject.name}_Presentation";
+        cloneRoot = instance.transform;
+        cloneRoot.localPosition = Vector3.zero;
+        cloneRoot.localRotation = Quaternion.identity;
+        cloneRoot.localScale = Vector3.one;
+
+        cloneAnimator = cloneRoot.GetComponent<Animator>() ?? cloneRoot.GetComponentInChildren<Animator>(true);
+        SanitizeCloneHierarchy();
+        CacheAndHideSourceRenderers();
+    }
+
+    public void ClearClone()
+    {
+        RestoreSourceVisibility();
+
+        if (cloneRoot != null)
+        {
+            if (Application.isPlaying)
+                Destroy(cloneRoot.gameObject);
+            else
+                DestroyImmediate(cloneRoot.gameObject);
+        }
+
+        cloneRoot = null;
+        cloneAnimator = null;
+        sourceRoot = null;
+    }
+
+    public void RestoreSourceVisibility()
+    {
+        if (_sourceRenderers == null || _sourceRendererStates == null)
+            return;
+
+        for (int i = 0; i < _sourceRenderers.Length; i++)
+        {
+            if (_sourceRenderers[i] == null)
+                continue;
+
+            _sourceRenderers[i].enabled = i < _sourceRendererStates.Length && _sourceRendererStates[i];
+        }
+
+        _sourceRenderers = null;
+        _sourceRendererStates = null;
+    }
+
+    public void SyncAnimatorFrom(Animator sourceAnimator)
+    {
+        if (cloneAnimator == null || sourceAnimator == null)
+            return;
+
+        AnimatorControllerParameter[] parameters = sourceAnimator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            AnimatorControllerParameter parameter = parameters[i];
+            if (!HasParameter(parameter.name, parameter.type))
+                continue;
+
+            switch (parameter.type)
+            {
+                case AnimatorControllerParameterType.Bool:
+                    cloneAnimator.SetBool(parameter.name, sourceAnimator.GetBool(parameter.name));
+                    break;
+                case AnimatorControllerParameterType.Float:
+                    cloneAnimator.SetFloat(parameter.name, sourceAnimator.GetFloat(parameter.name));
+                    break;
+                case AnimatorControllerParameterType.Int:
+                    cloneAnimator.SetInteger(parameter.name, sourceAnimator.GetInteger(parameter.name));
+                    break;
+            }
+        }
+
+        int layerCount = Mathf.Min(cloneAnimator.layerCount, sourceAnimator.layerCount);
+        for (int layer = 0; layer < layerCount; layer++)
+        {
+            AnimatorStateInfo state = sourceAnimator.GetCurrentAnimatorStateInfo(layer);
+            cloneAnimator.Play(state.fullPathHash, layer, Mathf.Repeat(state.normalizedTime, 1f));
+        }
+
+        cloneAnimator.Update(0f);
+    }
+
+    public void TrySetTrigger(string triggerName)
+    {
+        if (cloneAnimator == null || string.IsNullOrWhiteSpace(triggerName))
+            return;
+
+        if (!HasParameter(triggerName, AnimatorControllerParameterType.Trigger))
+            return;
+
+        cloneAnimator.ResetTrigger(triggerName);
+        cloneAnimator.SetTrigger(triggerName);
+    }
+
+    public bool TryCrossFadeState(string statePath, float duration)
+    {
+        if (cloneAnimator == null || string.IsNullOrWhiteSpace(statePath) || cloneAnimator.runtimeAnimatorController == null)
+            return false;
+
+        if (!TryResolveState(cloneAnimator, statePath, out int layerIndex, out int stateHash))
+            return false;
+
+        cloneAnimator.CrossFadeInFixedTime(stateHash, Mathf.Max(0.01f, duration), layerIndex, 0f);
+        return true;
+    }
+
+    public Transform ResolveMappedTransform(Transform sourceTransform)
+    {
+        if (cloneRoot == null || sourceRoot == null || sourceTransform == null)
+            return cloneRoot;
+
+        if (sourceTransform == sourceRoot)
+            return cloneRoot;
+
+        string relativePath = GetRelativePath(sourceRoot, sourceTransform);
+        if (string.IsNullOrEmpty(relativePath))
+            return cloneRoot;
+
+        Transform mapped = cloneRoot.Find(relativePath);
+        return mapped != null ? mapped : cloneRoot;
+    }
+
+    void CacheAndHideSourceRenderers()
+    {
+        if (sourceRoot == null)
+            return;
+
+        _sourceRenderers = sourceRoot.GetComponentsInChildren<Renderer>(true);
+        _sourceRendererStates = new bool[_sourceRenderers.Length];
+        for (int i = 0; i < _sourceRenderers.Length; i++)
+        {
+            Renderer renderer = _sourceRenderers[i];
+            if (renderer == null)
+                continue;
+
+            _sourceRendererStates[i] = renderer.enabled;
+            renderer.enabled = false;
+        }
+    }
+
+    void SanitizeCloneHierarchy()
+    {
+        if (cloneRoot == null)
+            return;
+
+        foreach (MonoBehaviour runtimeScript in cloneRoot.GetComponentsInChildren<MonoBehaviour>(true))
+        {
+            if (runtimeScript == null)
+                continue;
+
+            if (Application.isPlaying)
+                Destroy(runtimeScript);
+            else
+                DestroyImmediate(runtimeScript);
+        }
+
+        foreach (Behaviour behaviour in cloneRoot.GetComponentsInChildren<Behaviour>(true))
+        {
+            if (behaviour == null || behaviour is Animator)
+                continue;
+
+            if (Application.isPlaying)
+                Destroy(behaviour);
+            else
+                DestroyImmediate(behaviour);
+        }
+
+        foreach (Collider collider in cloneRoot.GetComponentsInChildren<Collider>(true))
+        {
+            if (collider == null)
+                continue;
+
+            if (Application.isPlaying)
+                Destroy(collider);
+            else
+                DestroyImmediate(collider);
+        }
+
+        foreach (CharacterController characterController in cloneRoot.GetComponentsInChildren<CharacterController>(true))
+        {
+            if (characterController == null)
+                continue;
+
+            if (Application.isPlaying)
+                Destroy(characterController);
+            else
+                DestroyImmediate(characterController);
+        }
+
+        foreach (Rigidbody rigidbody in cloneRoot.GetComponentsInChildren<Rigidbody>(true))
+        {
+            if (rigidbody == null)
+                continue;
+
+            if (Application.isPlaying)
+                Destroy(rigidbody);
+            else
+                DestroyImmediate(rigidbody);
+        }
+
+        if (cloneAnimator == null)
+            return;
+
+        cloneAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
+        cloneAnimator.applyRootMotion = false;
+        cloneAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+    }
+
+    bool HasParameter(string name, AnimatorControllerParameterType type)
+    {
+        if (cloneAnimator == null)
+            return false;
+
+        AnimatorControllerParameter[] parameters = cloneAnimator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            AnimatorControllerParameter parameter = parameters[i];
+            if (parameter.type == type && parameter.name == name)
+                return true;
+        }
+
+        return false;
+    }
+
+    static string GetRelativePath(Transform root, Transform target)
+    {
+        if (root == null || target == null)
+            return string.Empty;
+
+        if (root == target)
+            return string.Empty;
+
+        List<string> segments = new List<string>();
+        Transform current = target;
+        while (current != null && current != root)
+        {
+            segments.Add(current.name);
+            current = current.parent;
+        }
+
+        if (current != root)
+            return string.Empty;
+
+        segments.Reverse();
+        return string.Join("/", segments);
+    }
+}

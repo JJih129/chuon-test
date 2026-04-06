@@ -1,0 +1,167 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public static class BossVisualRigDiagnosticsUtility
+{
+    [InitializeOnLoadMethod]
+    private static void EmitStateOnEditorLoad()
+    {
+        EditorApplication.delayCall += () =>
+        {
+            Debug.Log("[BossVisualRigDiagnostics]\n" + DumpCurrentStateJson());
+        };
+    }
+
+    [Serializable]
+    private sealed class BossVisualState
+    {
+        public string scenePath;
+        public string bossPath;
+        public string visualRootPath;
+        public string visualInstancePath;
+        public string patternRendererPath;
+        public RendererState[] renderers;
+    }
+
+    [Serializable]
+    private sealed class RendererState
+    {
+        public string path;
+        public string rendererType;
+        public string gameObjectName;
+        public bool enabled;
+        public bool activeSelf;
+        public bool activeInHierarchy;
+        public int layer;
+        public bool updateWhenOffscreen;
+        public string rootBonePath;
+        public int boneCount;
+    }
+
+    public static string DumpCurrentStateJson()
+    {
+        Scene scene = SceneManager.GetActiveScene();
+        BossController bossController = FindSceneBoss(scene);
+        if (bossController == null)
+            return "{\"error\":\"BossController not found\"}";
+
+        BossReferences bossReferences = bossController.GetComponent<BossReferences>();
+        Transform visualRoot = bossReferences != null && bossReferences.VisualRoot != null
+            ? bossReferences.VisualRoot
+            : bossController.transform.Find("VisualRoot");
+        Transform visualInstance = visualRoot != null ? visualRoot.Find("BossVisual") : null;
+        PatternVisuals patternVisuals = bossReferences != null ? bossReferences.PatternVisuals : bossController.GetComponentInChildren<PatternVisuals>(true);
+        Renderer patternRenderer = patternVisuals != null ? patternVisuals.visualPartRenderer : null;
+
+        Renderer[] renderers = visualInstance != null
+            ? visualInstance.GetComponentsInChildren<Renderer>(true)
+            : Array.Empty<Renderer>();
+
+        BossVisualState state = new BossVisualState();
+        state.scenePath = scene.path;
+        state.bossPath = HierarchyPath(bossController.transform);
+        state.visualRootPath = HierarchyPath(visualRoot);
+        state.visualInstancePath = HierarchyPath(visualInstance);
+        state.patternRendererPath = HierarchyPath(patternRenderer != null ? patternRenderer.transform : null);
+        state.renderers = BuildRendererStates(visualInstance, renderers);
+        return JsonUtility.ToJson(state, true);
+    }
+
+    static RendererState[] BuildRendererStates(Transform visualInstance, Renderer[] renderers)
+    {
+        if (renderers == null || renderers.Length == 0)
+            return Array.Empty<RendererState>();
+
+        RendererState[] states = new RendererState[renderers.Length];
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            RendererState state = new RendererState();
+            state.path = RelativePath(visualInstance, renderer != null ? renderer.transform : null);
+            state.rendererType = renderer != null ? renderer.GetType().Name : string.Empty;
+            state.gameObjectName = renderer != null ? renderer.gameObject.name : string.Empty;
+            state.enabled = renderer != null && renderer.enabled;
+            state.activeSelf = renderer != null && renderer.gameObject.activeSelf;
+            state.activeInHierarchy = renderer != null && renderer.gameObject.activeInHierarchy;
+            state.layer = renderer != null ? renderer.gameObject.layer : -1;
+
+            SkinnedMeshRenderer skinnedMeshRenderer = renderer as SkinnedMeshRenderer;
+            if (skinnedMeshRenderer != null)
+            {
+                state.updateWhenOffscreen = skinnedMeshRenderer.updateWhenOffscreen;
+                state.rootBonePath = RelativePath(visualInstance, skinnedMeshRenderer.rootBone);
+                state.boneCount = skinnedMeshRenderer.bones != null ? skinnedMeshRenderer.bones.Length : 0;
+            }
+
+            states[i] = state;
+        }
+
+        return states;
+    }
+
+    static BossController FindSceneBoss(Scene scene)
+    {
+        if (!scene.IsValid())
+            return null;
+
+        GameObject[] roots = scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            BossController bossController = roots[i].GetComponentInChildren<BossController>(true);
+            if (bossController != null)
+                return bossController;
+        }
+
+        return null;
+    }
+
+    static string RelativePath(Transform root, Transform target)
+    {
+        if (target == null)
+            return string.Empty;
+
+        if (root == null)
+            return HierarchyPath(target);
+
+        if (target == root)
+            return root.name;
+
+        List<string> parts = new List<string>();
+        Transform current = target;
+        while (current != null && current != root)
+        {
+            parts.Add(current.name);
+            current = current.parent;
+        }
+
+        if (current != root)
+            return HierarchyPath(target);
+
+        parts.Add(root.name);
+        parts.Reverse();
+        return string.Join("/", parts);
+    }
+
+    static string HierarchyPath(Transform transform)
+    {
+        if (transform == null)
+            return string.Empty;
+
+        List<string> parts = new List<string>();
+        Transform current = transform;
+        while (current != null)
+        {
+            parts.Add(current.name);
+            current = current.parent;
+        }
+
+        parts.Reverse();
+        return string.Join("/", parts);
+    }
+}
+#endif

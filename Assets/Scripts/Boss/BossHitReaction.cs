@@ -78,8 +78,17 @@ public class BossHitReaction : MonoBehaviour
         if (!bossHealth)
             bossHealth = GetComponent<BossHealth>();
 
-        if (!bossAnimator && bossHealth)
-            bossAnimator = bossHealth.GetComponentInChildren<Animator>();
+        BossReferences bossReferences = GetComponent<BossReferences>();
+        if (!bossAnimator)
+        {
+            if (bossReferences != null && bossReferences.MainAnimator != null)
+                bossAnimator = bossReferences.MainAnimator;
+            if (!bossAnimator && bossHealth)
+                bossAnimator = bossHealth.GetComponent<Animator>() ?? bossHealth.GetComponentInChildren<Animator>();
+        }
+
+        if (!vfxPivot && bossReferences != null && bossReferences.VfxPivot != null)
+            vfxPivot = bossReferences.VfxPivot;
 
         if (!bossHealth)
         {

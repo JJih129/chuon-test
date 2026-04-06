@@ -680,7 +680,7 @@ public static class PauseOptionsChromeSyncUtility
 
     static Font GetBuiltinFont()
     {
-        return Resources.GetBuiltinResource<Font>("Arial.ttf");
+        return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
     }
 
     public readonly struct SyncSummary

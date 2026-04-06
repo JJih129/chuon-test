@@ -1,0 +1,246 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a55585d99ce30144c8ca42e36a21a75f, type: 3}
+  m_Name: UltimateSequence_Default
+  m_EditorClassIdentifier: 
+  activation:
+    maxDistance: 10
+    maxAngle: 85
+    requireTarget: 1
+    requireLockOnTarget: 0
+    blockInputDuringSequence: 1
+    grantInvulnerability: 1
+    freezeGameplayTime: 1
+    alignPlayerOnStart: 1
+    keepTargetRootedDuringSequence: 1
+    abortOnTargetLost: 1
+    allowGracefulFinishIfTargetDies: 1
+  timings:
+    preCastDuration: 0.1
+    introPoseDuration: 0.28
+    dashDuration: 0.18
+    dashImpactNormalizedTime: 0.72
+    defaultMultiSlashInterval: 0.08
+    crackHoldDuration: 0.2
+    finalExplosionHoldDuration: 0.32
+    walkoutDuration: 0.95
+    recoverDuration: 0.18
+  movement:
+    introDistance: 2.2
+    introSideOffset: -0.15
+    dashEndDistance: 1.15
+    dashSideOffset: 0
+    slashOrbitDistance: 1.45
+    walkoutDistance: 2.8
+    walkoutSideOffset: -0.85
+    faceAwayOnWalkout: 1
+  damage:
+    dashSlashDamage: 220
+    multiSlashBaseDamage: 90
+    finalExplosionDamage: 480
+    executionBonusDamage: 180
+    executionHealthThresholdNormalized: 0.2
+  timeFx:
+    useIntroSlow: 1
+    introTimeScale: 0.12
+    introSlowDuration: 0.04
+    useDashImpactSlow: 1
+    dashImpactTimeScale: 0.08
+    dashImpactSlowDuration: 0.03
+    useFinalExplosionSlow: 1
+    finalExplosionTimeScale: 0.06
+    finalExplosionSlowDuration: 0.05
+  impact:
+    dashShakeAmplitude: 0.11
+    dashShakeDuration: 0.08
+    slashShakeAmplitude: 0.035
+    slashShakeDuration: 0.045
+    crackShakeAmplitude: 0.06
+    crackShakeDuration: 0.08
+    finalShakeAmplitude: 0.18
+    finalShakeDuration: 0.16
+  vfx:
+    introPoseVfxPrefab: {fileID: 5210959345948210511, guid: b79c52e011006e3408e7d3090aacc51c, type: 3}
+    dashSlashVfxPrefab: {fileID: 5757494987360826802, guid: d29647f8db5fc204eb952e60b234896f, type: 3}
+    crackWorldVfxPrefab: {fileID: 6366026470070092117, guid: 8a8ba7e20e37d8544a78a859054126a3, type: 3}
+    crackScreenVfxPrefab: {fileID: 0}
+    explosionVfxPrefab: {fileID: 1381459172728124388, guid: 591d1bd705f6a8f4b820021876636083, type: 3}
+    shardVfxPrefab: {fileID: 7229793754096018441, guid: be87923a1d00334438f3d93701889602, type: 3}
+    walkoutVfxPrefab: {fileID: 8232990265197679967, guid: a615c46ec6f57fd4faebdb1e33dd9c9b, type: 3}
+    useScreenSpaceCrack: 0
+    useAfterImageStyleSlash: 1
+    shardSpawnCount: 6
+    introPoseLifetime: 0.7
+    dashSlashLifetime: 0.7
+    crackLifetime: 0.9
+    explosionLifetime: 1.15
+    walkoutLifetime: 0.8
+  useThreeStageCameraSplit: 1
+  introStageCamera:
+    cameraLocalOffset: {x: 0.95, y: 2.25, z: -3.1}
+    playerAnchorLocalOffset: {x: 0, y: 0.88, z: 0}
+    lookAtBlend: 0.68
+    lookHeightOffset: 0.16
+    targetBottomToCenterRatio: 0.78
+    targetVerticalOffset: 0
+    positionSmoothing: 18
+    rotationSmoothing: 20
+    fov: 42
+    snapOnEnter: 1
+  assaultStageCamera:
+    cameraLocalOffset: {x: 0.75, y: 2.45, z: -3.75}
+    playerAnchorLocalOffset: {x: 0, y: 0.78, z: 0}
+    lookAtBlend: 0.72
+    lookHeightOffset: 0.1
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 44
+    snapOnEnter: 1
+    holdStaticFraming: 1
+  finishStageCamera:
+    cameraLocalOffset: {x: 1.05, y: 2.05, z: -3.25}
+    playerAnchorLocalOffset: {x: 0, y: 0.82, z: 0}
+    lookAtBlend: 0.76
+    lookHeightOffset: 0.2
+    targetBottomToCenterRatio: 0.82
+    targetVerticalOffset: 0.04
+    positionSmoothing: 14
+    rotationSmoothing: 16
+    fov: 40
+    snapOnEnter: 1
+  preCastCamera:
+    cameraLocalOffset: {x: 0.85, y: 2.65, z: -4.35}
+    playerAnchorLocalOffset: {x: 0, y: 0.85, z: 0}
+    lookAtBlend: 0.7
+    lookHeightOffset: 0.12
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 45
+    snapOnEnter: 1
+  introCamera:
+    cameraLocalOffset: {x: 0.85, y: 2.65, z: -4.35}
+    playerAnchorLocalOffset: {x: 0, y: 0.85, z: 0}
+    lookAtBlend: 0.7
+    lookHeightOffset: 0.12
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 45
+    snapOnEnter: 1
+  dashCamera:
+    cameraLocalOffset: {x: 0.85, y: 2.65, z: -4.35}
+    playerAnchorLocalOffset: {x: 0, y: 0.85, z: 0}
+    lookAtBlend: 0.7
+    lookHeightOffset: 0.12
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 45
+    snapOnEnter: 1
+  multiSlashCamera:
+    cameraLocalOffset: {x: 0.85, y: 2.65, z: -4.35}
+    playerAnchorLocalOffset: {x: 0, y: 0.85, z: 0}
+    lookAtBlend: 0.7
+    lookHeightOffset: 0.12
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 45
+    snapOnEnter: 1
+  crackCamera:
+    cameraLocalOffset: {x: 0.85, y: 2.65, z: -4.35}
+    playerAnchorLocalOffset: {x: 0, y: 0.85, z: 0}
+    lookAtBlend: 0.7
+    lookHeightOffset: 0.12
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 45
+    snapOnEnter: 1
+  finalExplosionCamera:
+    cameraLocalOffset: {x: 0.85, y: 2.65, z: -4.35}
+    playerAnchorLocalOffset: {x: 0, y: 0.85, z: 0}
+    lookAtBlend: 0.7
+    lookHeightOffset: 0.12
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 45
+    snapOnEnter: 1
+  walkoutCamera:
+    cameraLocalOffset: {x: 0.85, y: 2.65, z: -4.35}
+    playerAnchorLocalOffset: {x: 0, y: 0.85, z: 0}
+    lookAtBlend: 0.7
+    lookHeightOffset: 0.12
+    targetBottomToCenterRatio: 0.8
+    targetVerticalOffset: 0
+    positionSmoothing: 16
+    rotationSmoothing: 18
+    fov: 45
+    snapOnEnter: 1
+  introTrigger: Ultimate_Start
+  dashTrigger: Ultimate_Dash
+  multiSlashTrigger: Ultimate_Slash
+  finalExplosionTrigger: Ultimate_Finish
+  walkoutTrigger: Ultimate_Walk
+  introFallbackState: 
+  dashFallbackState: Base Layer.H3_D
+  multiSlashFallbackState: Base Layer.H4_C
+  finalExplosionFallbackState: Base Layer.H5_B
+  walkoutFallbackState: Base Layer.Locomotion
+  animatorCrossFadeDuration: 0.08
+  slashSteps:
+  - delay: 0.11
+    damageMultiplier: 1
+    angle: -35
+    distance: 1.4
+    sideOffset: -0.2
+    heightOffset: 0
+    accentCrackPulse: 0
+  - delay: 0.12
+    damageMultiplier: 1
+    angle: 25
+    distance: 1.3
+    sideOffset: 0.24
+    heightOffset: 0
+    accentCrackPulse: 0
+  - delay: 0.13
+    damageMultiplier: 1.15
+    angle: -120
+    distance: 1.6
+    sideOffset: -0.45
+    heightOffset: 0
+    accentCrackPulse: 1
+  - delay: 0.14
+    damageMultiplier: 1.25
+    angle: 115
+    distance: 1.55
+    sideOffset: 0.45
+    heightOffset: 0
+    accentCrackPulse: 0
+  - delay: 0.15
+    damageMultiplier: 1.35
+    angle: 180
+    distance: 1.2
+    sideOffset: 0
+    heightOffset: 0
+    accentCrackPulse: 1
+  debugLog: 0

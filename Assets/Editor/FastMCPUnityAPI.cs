@@ -24,7 +24,9 @@ public static class FastMCPUnityAPI
     public static void SetInspectorValue(string objectName, string componentName, string fieldName, string value) { Execute("set_inspector_value", objectName, componentName, fieldName, value); }
     public static void RefreshAssets() { Execute("refresh_assets"); }
     public static void SyncPauseOptionsChrome() { PauseOptionsChromeSyncUtility.RunFromFastMcp(); }
+    public static void ScanMissingScripts() { MissingScriptScannerUtility.RunFromFastMcp(); }
     public static void SyncPlayerWiring() { PlayerWiringSyncUtility.RunFromFastMcp(); }
+    public static void SyncBossVisualRig() { BossVisualRigSyncUtility.RunFromFastMcp(); }
     public static void RunGameplayRegressionChecks() { GameplayRegressionValidator.RunFromFastMcp(); }
     public static void StartPlayModeSmokeTest() { PlayModeSmokeTestRunner.StartFromFastMcp(); }
     public static void GetPlayModeSmokeTestStatus() { Debug.Log(JsonUtility.ToJson(PlayModeSmokeTestRunner.GetStatus(), true)); }
@@ -38,9 +40,14 @@ public static class FastMCPUnityAPI
     public static void GetPauseUiScenarioTestStatus() { Debug.Log(JsonUtility.ToJson(PauseUiScenarioTestRunner.GetStatus(), true)); }
     public static void StartFullValidationSuite() { FullValidationSuiteRunner.StartFromFastMcp(); }
     public static void GetFullValidationSuiteStatus() { Debug.Log(JsonUtility.ToJson(FullValidationSuiteRunner.GetStatus(), true)); }
+    public static void DumpBossVisualRenderers() { ChuOn.Editor.BossTextureApplicator.DumpBossVisualRenderers(); }
+    public static void ApplyBossTexturesToMainScene() { ChuOn.Editor.BossTextureApplicator.ApplyBossTexturesToMainScene(); }
+    public static void GenerateAssetUsageAudit() { AssetUsageAuditUtility.RunFromFastMcp(); }
+    public static void EnsureRuntimeUltimateClips() { UltimateClipResourceBootstrap.EnsureRuntimeUltimateClipsFromMenu(); }
     public static void EnterPlayMode() { Execute("enter_playmode"); }
     public static void ExitPlayMode() { Execute("exit_playmode"); }
     public static void CreateBasic3DPlayerRig(string playerName) { Execute("create_basic_3d_player_rig", playerName); }
+    public static void BuildTemporaryUltimateVfx() { Execute("build_temporary_ultimate_vfx"); }
 
     private static void Execute(string command, params string[] args)
     {

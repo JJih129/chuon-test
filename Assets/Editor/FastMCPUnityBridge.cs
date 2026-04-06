@@ -260,6 +260,7 @@ public static class FastMCPUnityBridge
             case "search_assets": return SearchAssets(args);
             case "set_inspector_value": return SetInspectorValue(args);
             case "refresh_assets": return RefreshAssets();
+            case "scan_missing_scripts": return ScanMissingScripts();
             case "sync_pause_options_chrome": return SyncPauseOptionsChrome();
             case "sync_player_wiring": return SyncPlayerWiring();
             case "run_gameplay_regression_checks": return RunGameplayRegressionChecks();
@@ -275,9 +276,11 @@ public static class FastMCPUnityBridge
             case "get_pause_ui_scenario_test_status": return GetPauseUiScenarioTestStatus();
             case "start_full_validation_suite": return StartFullValidationSuite();
             case "get_full_validation_suite_status": return GetFullValidationSuiteStatus();
+            case "generate_asset_usage_audit": return GenerateAssetUsageAudit();
             case "enter_playmode": return EnterPlayMode();
             case "exit_playmode": return ExitPlayMode();
             case "create_basic_3d_player_rig": return CreateBasic3DPlayerRig(args);
+            case "build_temporary_ultimate_vfx": return BuildTemporaryUltimateVfx();
             default: return Fail("Unknown command: " + request.command);
         }
     }
@@ -577,6 +580,17 @@ public static class FastMCPUnityBridge
         return Ok("Assets refreshed");
     }
 
+    private static Response ScanMissingScripts()
+    {
+        MissingScriptScannerUtility.ScanSummary summary = MissingScriptScannerUtility.RunFromFastMcp();
+        if (summary.FindingCount > 0)
+        {
+            return Fail(summary.Details);
+        }
+
+        return Ok(summary.Details);
+    }
+
     private static Response SyncPlayerWiring()
     {
         PlayerWiringSyncUtility.SyncSummary summary = PlayerWiringSyncUtility.RunFromFastMcp();
@@ -742,6 +756,18 @@ public static class FastMCPUnityBridge
         Selection.activeGameObject = player;
         MarkDirty(player.scene);
         return Ok("Basic 3D player rig created: " + HierarchyPath(player.transform));
+    }
+
+    private static Response BuildTemporaryUltimateVfx()
+    {
+        UltimateTempVfxBuilder.BuildAndAssign();
+        return Ok("Temporary ultimate VFX built and assigned.");
+    }
+
+    private static Response GenerateAssetUsageAudit()
+    {
+        AssetUsageAuditUtility.AuditSummary summary = AssetUsageAuditUtility.RunFromFastMcp();
+        return Ok(summary.Details);
     }
 
     private static string FindScenePath(string sceneName)

@@ -1,0 +1,843 @@
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class BossReferences : MonoBehaviour
+{
+    const string VisualRootName = "VisualRoot";
+    const string VisualInstanceName = "BossVisual";
+    const string VfxPivotName = "VfxPivot";
+    const string AttackHitboxSocketName = "AttackHitboxSocket";
+    const string DefaultAttackHitboxProxyName = "AttackHitboxProxy";
+    const string DefaultAttackHitboxVisualName = "Object002";
+    const string PreferredPatternRendererName = "Body";
+    const float RuntimeVisibilityRefreshInterval = 0.35f;
+    const float RuntimeIdleHitboxPoseSyncInterval = 1f / 20f;
+
+    [Header("Root")]
+    [SerializeField] private Transform bossRoot;
+    [SerializeField] private Transform visualRoot;
+    [SerializeField] private BossVisualRig visualRig;
+    [SerializeField] private Transform vfxPivot;
+
+    [Header("Runtime")]
+    [SerializeField] private Animator mainAnimator;
+    [SerializeField] private AttackHitbox attackHitbox;
+    [SerializeField] private PatternVisuals patternVisuals;
+    [SerializeField] private Transform attackHitboxSocket;
+    [SerializeField] private Transform attackHitboxSourceVisual;
+    [SerializeField] private Renderer[] managedRenderers;
+
+    float _nextRuntimeVisibilityRefreshTime;
+    float _nextRuntimeHitboxPoseSyncTime;
+    Animator _selfAnimator;
+    BossController _bossController;
+    Transform _cachedVisualSearchRoot;
+    Renderer _cachedPreferredPatternRenderer;
+    Transform _cachedHitboxSourceParent;
+    Vector3 _cachedHitboxSourceLocalPosition;
+    Quaternion _cachedHitboxSourceLocalRotation;
+    Vector3 _cachedHitboxSourceLocalScale;
+    bool _hasCachedHitboxSourcePose;
+
+    public Transform BossRoot => bossRoot ? bossRoot : transform;
+    public Transform VisualRoot => visualRoot;
+    public BossVisualRig VisualRig => visualRig;
+    public Transform VfxPivot => vfxPivot;
+    public Animator MainAnimator => mainAnimator ? mainAnimator : _selfAnimator;
+    public AttackHitbox AttackHitbox => attackHitbox;
+    public PatternVisuals PatternVisuals => patternVisuals;
+    public Transform AttackHitboxSocket => attackHitboxSocket;
+    public Transform AttackHitboxSourceVisual => attackHitboxSourceVisual;
+
+    void Reset()
+    {
+        SyncSerializedReferences();
+    }
+
+    void Awake()
+    {
+        CacheCoreComponents();
+        SyncSerializedReferences();
+    }
+
+    void LateUpdate()
+    {
+        if (!Application.isPlaying)
+            return;
+
+        if (NeedsRuntimeAttackHitboxPoseSync() && ShouldSyncRuntimeAttackHitboxPoseNow())
+            SyncRuntimeAttackHitboxPose();
+
+        if (Time.unscaledTime < _nextRuntimeVisibilityRefreshTime)
+            return;
+
+        _nextRuntimeVisibilityRefreshTime = Time.unscaledTime + RuntimeVisibilityRefreshInterval;
+        CacheManagedRenderers(forceRefresh: false);
+        ApplyManagedRendererVisibility();
+    }
+
+    bool ShouldSyncRuntimeAttackHitboxPoseNow()
+    {
+        if (attackHitbox == null)
+            return true;
+
+        Collider hitboxCollider = attackHitbox.Collider;
+        if (hitboxCollider != null && hitboxCollider.enabled)
+            return true;
+
+        if (Time.unscaledTime < _nextRuntimeHitboxPoseSyncTime)
+            return false;
+
+        _nextRuntimeHitboxPoseSyncTime = Time.unscaledTime + RuntimeIdleHitboxPoseSyncInterval;
+        return true;
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+        {
+            SyncSerializedReferences();
+        }
+    }
+#endif
+
+    public void SyncSerializedReferences()
+    {
+        CacheCoreComponents();
+        InvalidateCachedLookups();
+        AutoWire();
+        ApplyVisualRigToAnimator();
+        CacheManagedRenderers(forceRefresh: true);
+        SyncGameplayBindings();
+    }
+
+    public void ApplyVisualRigToAnimator()
+    {
+        if (mainAnimator == null || visualRig == null)
+            return;
+
+        Avatar rigAvatar = visualRig.Avatar;
+        if (rigAvatar != null && mainAnimator.avatar != rigAvatar)
+            mainAnimator.avatar = rigAvatar;
+
+        if (mainAnimator.cullingMode != AnimatorCullingMode.AlwaysAnimate)
+            mainAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+        Animator rigAnimator = visualRig.SourceAnimator;
+        if (rigAnimator != null && rigAnimator != mainAnimator)
+        {
+            rigAnimator.applyRootMotion = false;
+            rigAnimator.enabled = false;
+        }
+    }
+
+    void SyncGameplayBindings()
+    {
+        EnsureAttackHitboxExists();
+        SyncAttackHitboxBinding();
+        TryWireBossController();
+        EnsurePatternVisualRenderer();
+        CacheManagedRenderers(forceRefresh: true);
+        ApplyManagedRendererVisibility();
+    }
+
+    void EnsurePatternVisualRenderer()
+    {
+        if (patternVisuals == null)
+            return;
+
+        Renderer preferredRenderer = ResolvePreferredPatternRenderer();
+        if (preferredRenderer == null || patternVisuals.visualPartRenderer == preferredRenderer)
+            return;
+
+        patternVisuals.visualPartRenderer = preferredRenderer;
+    }
+
+    Renderer ResolvePreferredPatternRenderer()
+    {
+        Transform searchRoot = ResolveVisualSearchRoot();
+        if (searchRoot == null)
+            return null;
+
+        if (_cachedPreferredPatternRenderer != null &&
+            _cachedPreferredPatternRenderer.transform != null &&
+            (_cachedPreferredPatternRenderer.transform == searchRoot || _cachedPreferredPatternRenderer.transform.IsChildOf(searchRoot)) &&
+            !IsHelperPlaneTransform(_cachedPreferredPatternRenderer.transform))
+        {
+            return _cachedPreferredPatternRenderer;
+        }
+
+        Renderer currentRenderer = patternVisuals != null ? patternVisuals.visualPartRenderer : null;
+        if (currentRenderer != null
+            && !IsHelperPlaneTransform(currentRenderer.transform)
+            && (currentRenderer.transform == searchRoot || currentRenderer.transform.IsChildOf(searchRoot)))
+        {
+            _cachedPreferredPatternRenderer = currentRenderer;
+            return currentRenderer;
+        }
+
+        Transform preferredRendererTransform = FindDescendantByName(searchRoot, PreferredPatternRendererName, attackHitbox != null ? attackHitbox.transform : null);
+        if (preferredRendererTransform != null)
+        {
+            Renderer namedRenderer = preferredRendererTransform.GetComponent<Renderer>();
+            if (namedRenderer != null)
+            {
+                _cachedPreferredPatternRenderer = namedRenderer;
+                return namedRenderer;
+            }
+        }
+
+        Renderer[] candidateRenderers = searchRoot.GetComponentsInChildren<Renderer>(true);
+        Renderer bestRenderer = null;
+        float bestBoundsScore = float.MinValue;
+        for (int i = 0; i < candidateRenderers.Length; i++)
+        {
+            Renderer candidate = candidateRenderers[i];
+            if (candidate == null)
+                continue;
+
+            if (attackHitbox != null && candidate.transform.IsChildOf(attackHitbox.transform))
+                continue;
+
+            if (IsHelperPlaneTransform(candidate.transform))
+                continue;
+
+            float boundsScore = candidate.bounds.size.sqrMagnitude;
+            if (boundsScore <= bestBoundsScore)
+                continue;
+
+            bestBoundsScore = boundsScore;
+            bestRenderer = candidate;
+        }
+
+        _cachedPreferredPatternRenderer = bestRenderer;
+        return bestRenderer;
+    }
+
+    void EnsureAttackHitboxExists()
+    {
+        if (attackHitbox != null)
+        {
+            EnsureAttackHitboxDefaults(attackHitbox);
+            return;
+        }
+
+        Transform sourceVisual = ResolveDefaultAttackHitboxVisual();
+        if (sourceVisual == null)
+            return;
+
+        GameObject proxyObject = FindExistingAttackHitboxProxyObject();
+        if (proxyObject == null)
+        {
+            proxyObject = new GameObject(DefaultAttackHitboxProxyName);
+            proxyObject.layer = BossRoot != null ? BossRoot.gameObject.layer : gameObject.layer;
+        }
+
+        Transform proxyTransform = proxyObject.transform;
+        if (BossRoot != null && proxyTransform.parent != BossRoot)
+            proxyTransform.SetParent(BossRoot, false);
+
+        proxyTransform.localPosition = Vector3.zero;
+        proxyTransform.localRotation = Quaternion.identity;
+        proxyTransform.localScale = Vector3.one;
+
+        Collider collider = EnsureAttackHitboxCollider(proxyObject, sourceVisual);
+        if (collider == null)
+            return;
+
+        attackHitbox = proxyObject.GetComponent<AttackHitbox>();
+        if (attackHitbox == null)
+            attackHitbox = proxyObject.AddComponent<AttackHitbox>();
+
+        EnsureAttackHitboxDefaults(attackHitbox);
+        attackHitbox.attackerRoot = BossRoot;
+        attackHitboxSourceVisual = sourceVisual;
+    }
+
+    GameObject FindExistingAttackHitboxProxyObject()
+    {
+        if (attackHitbox != null)
+            return attackHitbox.gameObject;
+
+        AttackHitbox existingHitbox = GetComponentInChildren<AttackHitbox>(true);
+        if (existingHitbox != null)
+            return existingHitbox.gameObject;
+
+        Transform proxy = transform.Find(DefaultAttackHitboxProxyName);
+        return proxy != null ? proxy.gameObject : null;
+    }
+
+    Collider EnsureAttackHitboxCollider(GameObject proxyObject, Transform sourceVisual)
+    {
+        if (proxyObject == null)
+            return null;
+
+        Mesh sharedMesh = ResolveAttackHitboxMesh(sourceVisual);
+        if (sharedMesh != null)
+        {
+            MeshCollider meshCollider = proxyObject.GetComponent<MeshCollider>();
+            if (meshCollider == null)
+                meshCollider = proxyObject.AddComponent<MeshCollider>();
+
+            meshCollider.sharedMesh = sharedMesh;
+            meshCollider.convex = true;
+            meshCollider.isTrigger = true;
+            meshCollider.enabled = false;
+            return meshCollider;
+        }
+
+        SphereCollider sphereCollider = proxyObject.GetComponent<SphereCollider>();
+        if (sphereCollider == null)
+            sphereCollider = proxyObject.AddComponent<SphereCollider>();
+
+        sphereCollider.radius = 0.45f;
+        sphereCollider.center = Vector3.zero;
+        sphereCollider.isTrigger = true;
+        sphereCollider.enabled = false;
+        return sphereCollider;
+    }
+
+    static Mesh ResolveAttackHitboxMesh(Transform sourceVisual)
+    {
+        if (sourceVisual == null)
+            return null;
+
+        MeshFilter meshFilter = sourceVisual.GetComponent<MeshFilter>();
+        if (meshFilter != null && meshFilter.sharedMesh != null)
+            return meshFilter.sharedMesh;
+
+        SkinnedMeshRenderer skinnedMeshRenderer = sourceVisual.GetComponent<SkinnedMeshRenderer>();
+        if (skinnedMeshRenderer != null && skinnedMeshRenderer.sharedMesh != null)
+            return skinnedMeshRenderer.sharedMesh;
+
+        return null;
+    }
+
+    void EnsureAttackHitboxDefaults(AttackHitbox hitbox)
+    {
+        if (hitbox == null)
+            return;
+
+        hitbox.baseDamage = Mathf.Max(10f, hitbox.baseDamage);
+        hitbox.hitType = hitbox.hitType == 0 ? HitType.Heavy : hitbox.hitType;
+        hitbox.canParry = true;
+        hitbox.canPerfectDodge = true;
+        hitbox.unblockable = false;
+        hitbox.attackerRoot = BossRoot;
+        hitbox.hitLayers = ~0;
+        hitbox.ignoreTriggerColliders = true;
+        hitbox.useOneShotWindow = true;
+        hitbox.oneShotWindow = Mathf.Max(0.2f, hitbox.oneShotWindow);
+        hitbox.hitEachReceiverOncePerActivation = true;
+        hitbox.maxUniqueTargetsPerActivation = Mathf.Max(1, hitbox.maxUniqueTargetsPerActivation);
+        hitbox.useExpandedHitDetection = true;
+        hitbox.expandedPadding = Mathf.Max(0.48f, hitbox.expandedPadding);
+        hitbox.expandedHitBufferSize = Mathf.Max(24, hitbox.expandedHitBufferSize);
+        hitbox.meshExpandedPaddingScale = Mathf.Max(0.6f, hitbox.meshExpandedPaddingScale);
+        hitbox.expandedScanInterval = Mathf.Max(0.12f, hitbox.expandedScanInterval);
+        hitbox.showRuntimeHitboxPreview = false;
+        hitbox.previewUseExpandedShape = true;
+        hitbox.previewLineWidth = Mathf.Max(0.06f, hitbox.previewLineWidth);
+        hitbox.previewCircleSegments = Mathf.Max(18, hitbox.previewCircleSegments);
+        hitbox.previewPersistSeconds = Mathf.Max(0.2f, hitbox.previewPersistSeconds);
+        hitbox.previewShellAlpha = Mathf.Max(0.16f, hitbox.previewShellAlpha);
+        hitbox.enableLogs = false;
+
+        Collider collider = hitbox.Collider != null ? hitbox.Collider : hitbox.GetComponent<Collider>();
+        if (collider != null)
+        {
+            collider.isTrigger = true;
+            collider.enabled = false;
+
+            if (collider is MeshCollider meshCollider)
+                meshCollider.convex = true;
+        }
+    }
+
+    void TryWireBossController()
+    {
+        if (_bossController == null)
+            _bossController = GetComponent<BossController>();
+
+        if (_bossController != null && _bossController.attackHitbox != attackHitbox)
+            _bossController.attackHitbox = attackHitbox;
+    }
+
+    void SyncAttackHitboxBinding()
+    {
+        if (attackHitbox == null)
+            return;
+
+        if (attackHitbox.attackerRoot != BossRoot)
+            attackHitbox.attackerRoot = BossRoot;
+
+        if (!TryResolveAttackHitboxAnchor(
+                out Transform desiredParent,
+                out Vector3 desiredLocalPosition,
+                out Quaternion desiredLocalRotation,
+                out Vector3 desiredLocalScale,
+                out Transform sourceVisual))
+            return;
+
+        attackHitboxSourceVisual = sourceVisual;
+        Transform socket = EnsureAttackHitboxSocket(desiredParent);
+        if (socket == null)
+            return;
+
+        ApplySocketLocalPose(socket, desiredLocalPosition, desiredLocalRotation, desiredLocalScale);
+        AttachHitboxProxyToSocket(socket);
+    }
+
+    void SyncRuntimeAttackHitboxPose()
+    {
+        if (attackHitbox == null)
+        {
+            EnsureAttackHitboxExists();
+            TryWireBossController();
+        }
+
+        if (attackHitbox == null)
+            return;
+
+        if (attackHitboxSocket == null)
+        {
+            SyncAttackHitboxBinding();
+            return;
+        }
+
+        if (attackHitboxSourceVisual != null)
+        {
+            Transform desiredParent = attackHitboxSourceVisual.parent;
+            if (desiredParent != null && attackHitboxSocket.parent != desiredParent)
+                attackHitboxSocket.SetParent(desiredParent, false);
+
+            ApplySocketLocalPose(
+                attackHitboxSocket,
+                attackHitboxSourceVisual.localPosition,
+                attackHitboxSourceVisual.localRotation,
+                attackHitboxSourceVisual.localScale);
+
+            CacheHitboxSourcePose();
+        }
+
+        AttachHitboxProxyToSocket(attackHitboxSocket);
+    }
+
+    void AttachHitboxProxyToSocket(Transform socket)
+    {
+        if (socket == null || attackHitbox == null)
+            return;
+
+        Transform hitboxTransform = attackHitbox.transform;
+        if (hitboxTransform.parent != socket)
+            hitboxTransform.SetParent(socket, false);
+
+        if (hitboxTransform.localPosition != Vector3.zero)
+            hitboxTransform.localPosition = Vector3.zero;
+        if (hitboxTransform.localRotation != Quaternion.identity)
+            hitboxTransform.localRotation = Quaternion.identity;
+        if (hitboxTransform.localScale != Vector3.one)
+            hitboxTransform.localScale = Vector3.one;
+
+        HideRendererHierarchy(hitboxTransform);
+    }
+
+    static void ApplySocketLocalPose(Transform socket, Vector3 localPosition, Quaternion localRotation, Vector3 localScale)
+    {
+        if (socket == null)
+            return;
+
+        if (socket.localPosition != localPosition)
+            socket.localPosition = localPosition;
+        if (socket.localRotation != localRotation)
+            socket.localRotation = localRotation;
+        if (socket.localScale != localScale)
+            socket.localScale = localScale;
+    }
+
+    bool TryResolveAttackHitboxAnchor(
+        out Transform desiredParent,
+        out Vector3 desiredLocalPosition,
+        out Quaternion desiredLocalRotation,
+        out Vector3 desiredLocalScale,
+        out Transform sourceVisual)
+    {
+        desiredParent = null;
+        desiredLocalPosition = Vector3.zero;
+        desiredLocalRotation = Quaternion.identity;
+        desiredLocalScale = Vector3.one;
+        sourceVisual = ResolveDefaultAttackHitboxVisual();
+
+        if (sourceVisual != null && sourceVisual.parent != null)
+        {
+            desiredParent = sourceVisual.parent;
+            desiredLocalPosition = sourceVisual.localPosition;
+            desiredLocalRotation = sourceVisual.localRotation;
+            desiredLocalScale = sourceVisual.localScale;
+            return true;
+        }
+
+        if (mainAnimator != null && mainAnimator.avatar != null && mainAnimator.isHuman)
+        {
+            Transform rightHand = mainAnimator.GetBoneTransform(HumanBodyBones.RightHand);
+            if (rightHand == null)
+                rightHand = mainAnimator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+            if (rightHand == null)
+                rightHand = mainAnimator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+
+            if (rightHand != null)
+            {
+                desiredParent = rightHand;
+                return true;
+            }
+        }
+
+        desiredParent = visualRoot ? visualRoot : BossRoot;
+        return desiredParent != null;
+    }
+
+    Transform ResolveDefaultAttackHitboxVisual()
+    {
+        if (attackHitboxSourceVisual != null)
+            return attackHitboxSourceVisual;
+
+        Transform searchRoot = ResolveVisualSearchRoot();
+        if (searchRoot == null)
+            return null;
+
+        attackHitboxSourceVisual = FindDescendantByName(searchRoot, DefaultAttackHitboxVisualName, attackHitbox != null ? attackHitbox.transform : null);
+        return attackHitboxSourceVisual;
+    }
+
+    Transform ResolveVisualSearchRoot()
+    {
+        if (_cachedVisualSearchRoot != null)
+            return _cachedVisualSearchRoot;
+
+        if (visualRoot != null)
+        {
+            Transform visualInstance = visualRoot.Find(VisualInstanceName);
+            if (visualInstance != null)
+            {
+                _cachedVisualSearchRoot = visualInstance;
+                return _cachedVisualSearchRoot;
+            }
+        }
+
+        if (visualRig != null)
+        {
+            _cachedVisualSearchRoot = visualRig.VisualRoot;
+            return _cachedVisualSearchRoot;
+        }
+
+        _cachedVisualSearchRoot = visualRoot;
+        return _cachedVisualSearchRoot;
+    }
+
+    Transform EnsureAttackHitboxSocket(Transform desiredParent)
+    {
+        if (desiredParent == null)
+            return null;
+
+        if (attackHitboxSocket == null)
+            attackHitboxSocket = FindDescendantByName(desiredParent, AttackHitboxSocketName, attackHitbox != null ? attackHitbox.transform : null);
+
+        if (attackHitboxSocket == null)
+        {
+            GameObject socketObject = new GameObject(AttackHitboxSocketName);
+            attackHitboxSocket = socketObject.transform;
+        }
+
+        if (attackHitboxSocket.parent != desiredParent)
+            attackHitboxSocket.SetParent(desiredParent, false);
+
+        if (attackHitboxSocket.name != AttackHitboxSocketName)
+            attackHitboxSocket.name = AttackHitboxSocketName;
+
+        return attackHitboxSocket;
+    }
+
+    void CacheManagedRenderers(bool forceRefresh)
+    {
+        if (!forceRefresh && HasValidObjects(managedRenderers))
+            return;
+
+        managedRenderers = FilterValidObjects(GetComponentsInChildren<Renderer>(true));
+    }
+
+    void ApplyManagedRendererVisibility()
+    {
+        Renderer patternRenderer = patternVisuals != null ? patternVisuals.visualPartRenderer : null;
+        if (managedRenderers == null || managedRenderers.Length == 0)
+            return;
+
+        for (int i = 0; i < managedRenderers.Length; i++)
+            ApplyRendererVisibility(managedRenderers[i], patternRenderer);
+    }
+
+    void ApplyRendererVisibility(Renderer renderer, Renderer patternRenderer)
+    {
+        if (renderer == null)
+            return;
+
+        if (attackHitbox != null && renderer.transform.IsChildOf(attackHitbox.transform))
+        {
+            if (renderer.enabled)
+                renderer.enabled = false;
+            return;
+        }
+
+        if (IsUnusedHelperPlane(renderer))
+        {
+            if (renderer.enabled)
+                renderer.enabled = false;
+            return;
+        }
+
+        if (patternRenderer != null && renderer == patternRenderer)
+        {
+            EnsureActiveHierarchy(renderer.transform);
+            if (!renderer.enabled)
+                renderer.enabled = true;
+            return;
+        }
+
+        if (visualRoot != null && renderer.transform.IsChildOf(visualRoot))
+        {
+            EnsureActiveHierarchy(renderer.transform);
+            if (!renderer.enabled)
+                renderer.enabled = true;
+            return;
+        }
+
+        if (renderer.enabled)
+            renderer.enabled = false;
+    }
+
+    bool IsUnusedHelperPlane(Renderer renderer)
+    {
+        if (renderer == null)
+            return false;
+
+        return IsHelperPlaneTransform(renderer.transform);
+    }
+
+    bool IsHelperPlaneTransform(Transform rendererTransform)
+    {
+        if (rendererTransform == null)
+            return false;
+
+        return ShouldTreatPlaneNamedMeshesAsHelpers()
+            && rendererTransform.name.StartsWith("Plane", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    void EnsureActiveHierarchy(Transform leaf)
+    {
+        Transform current = leaf;
+        while (current != null)
+        {
+            if (IsHelperPlaneTransform(current))
+                break;
+
+            if (!current.gameObject.activeSelf)
+                current.gameObject.SetActive(true);
+
+            current = current.parent;
+        }
+    }
+
+    static void HideRendererHierarchy(Transform root)
+    {
+        if (root == null)
+            return;
+
+        MeshRenderer[] meshRenderers = root.GetComponentsInChildren<MeshRenderer>(true);
+        for (int i = 0; i < meshRenderers.Length; i++)
+        {
+            if (meshRenderers[i] != null && meshRenderers[i].enabled)
+                meshRenderers[i].enabled = false;
+        }
+
+        SkinnedMeshRenderer[] skinnedMeshRenderers = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (int i = 0; i < skinnedMeshRenderers.Length; i++)
+        {
+            if (skinnedMeshRenderers[i] != null && skinnedMeshRenderers[i].enabled)
+                skinnedMeshRenderers[i].enabled = false;
+        }
+    }
+
+    void AutoWire()
+    {
+        if (!bossRoot)
+            bossRoot = transform;
+
+        if (!visualRoot)
+            visualRoot = transform.Find(VisualRootName);
+
+        if (!visualRig)
+        {
+            if (visualRoot)
+            {
+                Transform visualInstance = visualRoot.Find(VisualInstanceName);
+                if (visualInstance != null)
+                    visualRig = visualInstance.GetComponent<BossVisualRig>() ?? visualInstance.GetComponentInChildren<BossVisualRig>(true);
+
+                if (!visualRig)
+                    visualRig = visualRoot.GetComponentInChildren<BossVisualRig>(true);
+            }
+
+            if (!visualRig)
+                visualRig = GetComponentInChildren<BossVisualRig>(true);
+        }
+
+        if (!mainAnimator)
+            mainAnimator = _selfAnimator ?? (visualRig ? visualRig.SourceAnimator : null) ?? GetComponentInChildren<Animator>(true);
+
+        if (!attackHitbox)
+            attackHitbox = GetComponentInChildren<AttackHitbox>(true);
+
+        if (!vfxPivot)
+            vfxPivot = transform.Find(VfxPivotName) ?? transform.Find("VFXPivot");
+
+        if (!patternVisuals)
+            patternVisuals = GetComponentInChildren<PatternVisuals>(true);
+
+        if (!attackHitboxSocket && attackHitbox != null && attackHitbox.transform.parent != null && attackHitbox.transform.parent.name == AttackHitboxSocketName)
+            attackHitboxSocket = attackHitbox.transform.parent;
+
+        EnsurePatternVisualRenderer();
+    }
+
+    void CacheCoreComponents()
+    {
+        if (_selfAnimator == null)
+            _selfAnimator = GetComponent<Animator>();
+        if (_bossController == null)
+            _bossController = GetComponent<BossController>();
+    }
+
+    void InvalidateCachedLookups()
+    {
+        _cachedVisualSearchRoot = null;
+        _cachedPreferredPatternRenderer = null;
+        _hasCachedHitboxSourcePose = false;
+    }
+
+    bool NeedsRuntimeAttackHitboxPoseSync()
+    {
+        if (attackHitbox == null || attackHitboxSocket == null || attackHitboxSourceVisual == null)
+            return true;
+
+        if (attackHitbox.transform.parent != attackHitboxSocket)
+            return true;
+
+        Transform sourceParent = attackHitboxSourceVisual.parent;
+        if (sourceParent == null || attackHitboxSocket.parent != sourceParent)
+            return true;
+
+        if (!_hasCachedHitboxSourcePose)
+            return true;
+
+        return _cachedHitboxSourceParent != sourceParent
+            || _cachedHitboxSourceLocalPosition != attackHitboxSourceVisual.localPosition
+            || _cachedHitboxSourceLocalRotation != attackHitboxSourceVisual.localRotation
+            || _cachedHitboxSourceLocalScale != attackHitboxSourceVisual.localScale;
+    }
+
+    void CacheHitboxSourcePose()
+    {
+        if (attackHitboxSourceVisual == null)
+        {
+            _hasCachedHitboxSourcePose = false;
+            return;
+        }
+
+        _cachedHitboxSourceParent = attackHitboxSourceVisual.parent;
+        _cachedHitboxSourceLocalPosition = attackHitboxSourceVisual.localPosition;
+        _cachedHitboxSourceLocalRotation = attackHitboxSourceVisual.localRotation;
+        _cachedHitboxSourceLocalScale = attackHitboxSourceVisual.localScale;
+        _hasCachedHitboxSourcePose = true;
+    }
+
+    bool ShouldTreatPlaneNamedMeshesAsHelpers()
+    {
+        if (visualRig != null)
+            return visualRig.TreatPlaneNamedMeshesAsHelpers;
+
+        return true;
+    }
+
+    static Transform FindDescendantByName(Transform root, string targetName, Transform excludedRoot)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(targetName))
+            return null;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child == null)
+                continue;
+
+            if (excludedRoot != null && child == excludedRoot)
+                continue;
+
+            if (excludedRoot != null && child.IsChildOf(excludedRoot))
+                continue;
+
+            if (child.name == targetName)
+                return child;
+
+            Transform nested = FindDescendantByName(child, targetName, excludedRoot);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    static bool HasValidObjects<T>(T[] objects) where T : UnityEngine.Object
+    {
+        if (objects == null || objects.Length == 0)
+            return false;
+
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (objects[i] != null)
+                return true;
+        }
+
+        return false;
+    }
+
+    static T[] FilterValidObjects<T>(T[] objects) where T : UnityEngine.Object
+    {
+        if (objects == null || objects.Length == 0)
+            return null;
+
+        int validCount = 0;
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (objects[i] != null)
+                validCount++;
+        }
+
+        if (validCount == 0)
+            return null;
+
+        if (validCount == objects.Length)
+            return objects;
+
+        T[] filtered = new T[validCount];
+        int index = 0;
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (objects[i] == null)
+                continue;
+
+            filtered[index++] = objects[i];
+        }
+
+        return filtered;
+    }
+}

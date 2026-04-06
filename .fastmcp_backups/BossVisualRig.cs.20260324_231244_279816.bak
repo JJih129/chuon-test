@@ -1,0 +1,159 @@
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class BossVisualRig : MonoBehaviour
+{
+    [SerializeField] private Transform visualRoot;
+    [SerializeField] private Animator sourceAnimator;
+    [SerializeField] private Avatar avatar;
+    [SerializeField] private Renderer[] renderers;
+
+    public Transform VisualRoot => visualRoot ? visualRoot : transform;
+    public Animator SourceAnimator => sourceAnimator;
+    public Avatar Avatar => avatar != null ? avatar : ResolveFallbackAvatar();
+    public Renderer[] Renderers => FilterValidObjects(renderers);
+
+    void Reset()
+    {
+        AutoWire();
+        ApplyRendererRuntimeSettings();
+    }
+
+    void Awake()
+    {
+        AutoWire();
+        ApplyRendererRuntimeSettings();
+    }
+
+    void OnEnable()
+    {
+        ApplyRendererRuntimeSettings();
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+        {
+            AutoWire();
+            ApplyRendererRuntimeSettings();
+        }
+    }
+#endif
+
+    public void SyncSerializedReferences()
+    {
+        AutoWire();
+        ApplyRendererRuntimeSettings();
+    }
+
+    public void SetAvatarForSync(Avatar syncedAvatar)
+    {
+        avatar = syncedAvatar;
+    }
+
+    public void SetSourceAnimatorForSync(Animator syncedAnimator)
+    {
+        sourceAnimator = syncedAnimator;
+    }
+
+    public void SetRenderersForSync(Renderer[] syncedRenderers)
+    {
+        renderers = FilterValidObjects(syncedRenderers);
+        ApplyRendererRuntimeSettings();
+    }
+
+    void AutoWire()
+    {
+        if (!visualRoot)
+            visualRoot = transform;
+
+        if (!sourceAnimator)
+            sourceAnimator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>(true);
+
+        if (!avatar && sourceAnimator != null)
+            avatar = sourceAnimator.avatar;
+
+        if (!HasValidObjects(renderers))
+            renderers = GetComponentsInChildren<Renderer>(true);
+
+        renderers = FilterValidObjects(renderers);
+    }
+
+    Avatar ResolveFallbackAvatar()
+    {
+        if (sourceAnimator != null && sourceAnimator.avatar != null)
+            return sourceAnimator.avatar;
+
+        Animator parentAnimator = GetComponentInParent<Animator>();
+        if (parentAnimator != null)
+            return parentAnimator.avatar;
+
+        return null;
+    }
+
+    void ApplyRendererRuntimeSettings()
+    {
+        Renderer[] currentRenderers = Renderers;
+        if (currentRenderers == null)
+            return;
+
+        for (int i = 0; i < currentRenderers.Length; i++)
+        {
+            Renderer renderer = currentRenderers[i];
+            if (renderer == null)
+                continue;
+
+            SkinnedMeshRenderer skinnedMeshRenderer = renderer as SkinnedMeshRenderer;
+            if (skinnedMeshRenderer == null)
+                continue;
+
+            skinnedMeshRenderer.updateWhenOffscreen = true;
+        }
+    }
+
+    static bool HasValidObjects<T>(T[] objects) where T : Object
+    {
+        if (objects == null || objects.Length == 0)
+            return false;
+
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (objects[i])
+                return true;
+        }
+
+        return false;
+    }
+
+    static T[] FilterValidObjects<T>(T[] objects) where T : Object
+    {
+        if (objects == null || objects.Length == 0)
+            return null;
+
+        int validCount = 0;
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (objects[i])
+                validCount++;
+        }
+
+        if (validCount == 0)
+            return null;
+
+        if (validCount == objects.Length)
+            return objects;
+
+        T[] filtered = new T[validCount];
+        int index = 0;
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (!objects[i])
+                continue;
+
+            filtered[index++] = objects[i];
+        }
+
+        return filtered;
+    }
+}

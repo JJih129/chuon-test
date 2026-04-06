@@ -1,0 +1,384 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public sealed class UltimateSequencePlayer : MonoBehaviour
+{
+    [Header("참조")]
+    [SerializeField] private UltimateTargetBinder targetBinder;
+    [SerializeField] private UltimateCameraDirector cameraDirector;
+    [SerializeField] private UltimateHitProcessor hitProcessor;
+    [SerializeField] private UltimateVFXPresenter vfxPresenter;
+
+    [Header("디버그")]
+    [SerializeField] private bool debugLog;
+
+    readonly HashSet<int> _animatorTriggerHashes = new HashSet<int>();
+
+    PlayerUltimateController _owner;
+    UltimateSequenceData _data;
+    UltimateTargetBinder.BoundTarget _boundTarget;
+    Coroutine _hitStopCoroutine;
+    float _lastHitStopRealtime;
+    int _introTriggerHash;
+    int _dashTriggerHash;
+    int _multiSlashTriggerHash;
+    int _finalTriggerHash;
+    int _walkoutTriggerHash;
+    int _slashIndex;
+    float _stepTimer;
+    float _phaseElapsed;
+    Vector3 _phaseStartPosition;
+    Vector3 _phaseEndPosition;
+    bool _sequenceActive;
+    bool _dashHitApplied;
+    bool _finalExplosionApplied;
+
+    public UltimateSequencePhase CurrentPhase { get; private set; } = UltimateSequencePhase.None;
+    public bool IsSequenceActive => _sequenceActive;
+
+    void Awake()
+    {
+        ResolveReferences(true);
+        enabled = false;
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (Application.isPlaying)
+            return;
+
+        ResolveReferences(false);
+    }
+#endif
+
+    void OnDisable()
+    {
+        if (_sequenceActive)
+            CleanupSequence(true);
+    }
+
+    public bool TryPlay(PlayerUltimateController owner, UltimateSequenceData data)
+    {
+        if (_sequenceActive)
+            return false;
+
+        ResolveReferences(true);
+        _owner = owner;
+        _data = data != null ? data : UltimateSequenceData.CreateRuntimeDefaultInstance();
+
+        if (!targetBinder.TryBind(owner, _data, out _boundTarget, out string failureReason))
+        {
+            if (ShouldLog)
+                Debug.Log($"[UltimateSequence] Start blocked: {failureReason}", this);
+            return false;
+        }
+
+        if (!_owner.TryBeginExternalCinematicSession(
+                _data.Activation.blockInputDuringSequence,
+                _data.Activation.grantInvulnerability,
+                _data.Activation.freezeGameplayTime,
+                true))
+        {
+            return false;
+        }
+
+        CacheAnimatorTriggers();
+        targetBinder.BeginSequence(_owner, _data, _boundTarget);
+        cameraDirector.BeginSequence(_owner, targetBinder, _data);
+        hitProcessor.BeginSequence(_boundTarget, _data);
+        vfxPresenter.BeginSequence(_data, targetBinder, cameraDirector);
+
+        if (_data.Activation.alignPlayerOnStart)
+        {
+            Vector3 introPosition = targetBinder.GetIntroPosition(_data.Movement.introDistance, _data.Movement.introSideOffset);
+            Vector3 introLookTarget = GetAimPointForPhase(UltimateSequencePhase.IntroPose);
+            targetBinder.SnapPlayerTo(introPosition, introLookTarget);
+        }
+
+        _sequenceActive = true;
+        enabled = true;
+        ChangePhase(UltimateSequencePhase.PreCast);
+        return true;
+    }
+
+    void Update()
+    {
+        if (!_sequenceActive || _data == null)
+        {
+            enabled = false;
+            return;
+        }
+
+        if (_data.Activation.abortOnTargetLost && !targetBinder.HasActiveTarget && CurrentPhase < UltimateSequencePhase.Walkout)
+        {
+            ChangePhase(UltimateSequencePhase.Failed);
+        }
+
+        if (!_data.Activation.allowGracefulFinishIfTargetDies && !targetBinder.IsTargetAlive && CurrentPhase < UltimateSequencePhase.Walkout)
+        {
+            ChangePhase(UltimateSequencePhase.Failed);
+        }
+
+        float dt = Time.unscaledDeltaTime;
+        _phaseElapsed += dt;
+        targetBinder.RefreshVictimAnchor(targetBinder.PlayerRoot.position);
+        cameraDirector.Tick(dt);
+
+        switch (CurrentPhase)
+        {
+            case UltimateSequencePhase.PreCast:
+                if (_phaseElapsed >= _data.Timings.preCastDuration)
+                    ChangePhase(UltimateSequencePhase.IntroPose);
+                break;
+
+            case UltimateSequencePhase.IntroPose:
+                if (_phaseElapsed >= _data.Timings.introPoseDuration)
+                    ChangePhase(UltimateSequencePhase.DashSlash);
+                break;
+
+            case UltimateSequencePhase.DashSlash:
+                TickDashSlash();
+                break;
+
+            case UltimateSequencePhase.MultiSlash:
+                TickMultiSlash(dt);
+                break;
+
+            case UltimateSequencePhase.CrackBurst:
+                if (_phaseElapsed >= _data.Timings.crackHoldDuration)
+                    ChangePhase(UltimateSequencePhase.FinalExplosion);
+                break;
+
+            case UltimateSequencePhase.FinalExplosion:
+                if (_phaseElapsed >= _data.Timings.finalExplosionHoldDuration)
+                    ChangePhase(UltimateSequencePhase.Walkout);
+                break;
+
+            case UltimateSequencePhase.Walkout:
+                TickWalkout();
+                break;
+
+            case UltimateSequencePhase.Recover:
+                if (_phaseElapsed >= _data.Timings.recoverDuration)
+                    CleanupSequence(false);
+                break;
+
+            case UltimateSequencePhase.Failed:
+                if (_phaseElapsed >= Mathf.Max(0.05f, _data.Timings.recoverDuration))
+                    CleanupSequence(false);
+                break;
+        }
+    }
+
+    void TickDashSlash()
+    {
+        float duration = Mathf.Max(0.01f, _data.Timings.dashDuration);
+        float normalized = Mathf.Clamp01(_phaseElapsed / duration);
+        Vector3 lookTarget = GetAimPointForPhase(UltimateSequencePhase.DashSlash);
+        targetBinder.MovePlayerLinear(_phaseStartPosition, _phaseEndPosition, lookTarget, normalized);
+
+        if (!_dashHitApplied && normalized >= _data.Timings.dashImpactNormalizedTime)
+        {
+            _dashHitApplied = true;
+            hitProcessor.ApplyDashSlashHit();
+            vfxPresenter.PlayDashSlash(targetBinder.PlayerRoot.position, lookTarget);
+            TryApplyHitStop(_data.TimeFx.useDashImpactSlow, _data.TimeFx.dashImpactTimeScale, _data.TimeFx.dashImpactSlowDuration);
+        }
+
+        if (_phaseElapsed >= duration)
+            ChangePhase(UltimateSequencePhase.MultiSlash);
+    }
+
+    void TickMultiSlash(float dt)
+    {
+        int slashCount = Mathf.Max(1, _data.SlashCount);
+        _stepTimer -= dt;
+
+        if (_slashIndex >= slashCount)
+        {
+            if (_stepTimer <= 0f)
+                ChangePhase(UltimateSequencePhase.CrackBurst);
+            return;
+        }
+
+        if (_stepTimer > 0f)
+            return;
+
+        UltimateSequenceData.SlashStepData step = _data.GetSlashStep(_slashIndex);
+        Vector3 lookTarget = GetAimPointForPhase(UltimateSequencePhase.MultiSlash);
+        Vector3 slashPosition = targetBinder.GetSlashPosition(step);
+        targetBinder.SnapPlayerTo(slashPosition, lookTarget);
+        hitProcessor.ApplyMultiSlashHit(step, _slashIndex);
+        vfxPresenter.PlayMultiSlash(_slashIndex, slashCount, step, slashPosition, lookTarget);
+        _stepTimer = Mathf.Max(0.01f, step.delay > 0f ? step.delay : _data.Timings.defaultMultiSlashInterval);
+        _slashIndex++;
+    }
+
+    void TickWalkout()
+    {
+        float duration = Mathf.Max(0.01f, _data.Timings.walkoutDuration);
+        float normalized = Mathf.Clamp01(_phaseElapsed / duration);
+        Vector3 lookTarget = targetBinder.GetWalkoutLookTarget(_phaseEndPosition);
+        targetBinder.MovePlayerLinear(_phaseStartPosition, _phaseEndPosition, lookTarget, normalized);
+
+        if (_phaseElapsed >= duration)
+            ChangePhase(UltimateSequencePhase.Recover);
+    }
+
+    void ChangePhase(UltimateSequencePhase nextPhase)
+    {
+        CurrentPhase = nextPhase;
+        _phaseElapsed = 0f;
+
+        if (ShouldLog)
+            Debug.Log($"[UltimateSequence] Phase -> {nextPhase}", this);
+
+        cameraDirector.SetPhase(nextPhase, _data);
+
+        switch (nextPhase)
+        {
+            case UltimateSequencePhase.PreCast:
+                break;
+
+            case UltimateSequencePhase.IntroPose:
+                vfxPresenter.PlayIntroPose();
+                TryPlayAnimationCue(_data.IntroTrigger, _data.IntroFallbackState, _introTriggerHash);
+                TryApplyHitStop(_data.TimeFx.useIntroSlow, _data.TimeFx.introTimeScale, _data.TimeFx.introSlowDuration);
+                break;
+
+            case UltimateSequencePhase.DashSlash:
+                _phaseStartPosition = targetBinder.PlayerRoot.position;
+                _phaseEndPosition = targetBinder.GetDashDestination(_data.Movement.dashEndDistance, _data.Movement.dashSideOffset);
+                _dashHitApplied = false;
+                TryPlayAnimationCue(_data.DashTrigger, _data.DashFallbackState, _dashTriggerHash);
+                break;
+
+            case UltimateSequencePhase.MultiSlash:
+                _slashIndex = 0;
+                _stepTimer = 0f;
+                TryPlayAnimationCue(_data.MultiSlashTrigger, _data.MultiSlashFallbackState, _multiSlashTriggerHash);
+                break;
+
+            case UltimateSequencePhase.CrackBurst:
+                vfxPresenter.PlayCrackBurst(GetAimPointForPhase(UltimateSequencePhase.CrackBurst));
+                break;
+
+            case UltimateSequencePhase.FinalExplosion:
+                if (!_finalExplosionApplied)
+                {
+                    _finalExplosionApplied = true;
+                    hitProcessor.ApplyFinalExplosionHit();
+                    vfxPresenter.PlayFinalExplosion(GetAimPointForPhase(UltimateSequencePhase.FinalExplosion));
+                    TryApplyHitStop(_data.TimeFx.useFinalExplosionSlow, _data.TimeFx.finalExplosionTimeScale, _data.TimeFx.finalExplosionSlowDuration);
+                }
+                TryPlayAnimationCue(_data.FinalExplosionTrigger, _data.FinalExplosionFallbackState, _finalTriggerHash);
+                break;
+
+            case UltimateSequencePhase.Walkout:
+                _phaseStartPosition = targetBinder.PlayerRoot.position;
+                _phaseEndPosition = targetBinder.GetWalkoutPosition(_data.Movement.walkoutDistance, _data.Movement.walkoutSideOffset);
+                vfxPresenter.PlayWalkout(_phaseStartPosition, _phaseEndPosition - _phaseStartPosition);
+                TryPlayAnimationCue(_data.WalkoutTrigger, _data.WalkoutFallbackState, _walkoutTriggerHash);
+                break;
+
+            case UltimateSequencePhase.Recover:
+                break;
+
+            case UltimateSequencePhase.Failed:
+                break;
+        }
+    }
+
+    void CleanupSequence(bool force)
+    {
+        CombatFeelRuntimeUtility.ForceRestoreActiveHitStop(this, ref _hitStopCoroutine);
+        vfxPresenter.EndSequence();
+        cameraDirector.EndSequence();
+        hitProcessor.EndSequence();
+        targetBinder.EndSequence();
+
+        if (_owner != null)
+            _owner.EndExternalCinematicSession();
+
+        _owner = null;
+        _data = null;
+        _boundTarget = null;
+        _sequenceActive = false;
+        _dashHitApplied = false;
+        _finalExplosionApplied = false;
+        _slashIndex = 0;
+        _stepTimer = 0f;
+        CurrentPhase = force ? UltimateSequencePhase.Failed : UltimateSequencePhase.None;
+        enabled = false;
+    }
+
+    void TryApplyHitStop(bool enabledHitStop, float timeScale, float duration)
+    {
+        if (!enabledHitStop || _owner == null || _owner.DidFreezeWorldTimeThisCinematic)
+            return;
+
+        CombatFeelRuntimeUtility.StartHitStop(
+            this,
+            ref _hitStopCoroutine,
+            timeScale,
+            duration,
+            true,
+            0f,
+            ref _lastHitStopRealtime);
+    }
+
+    void CacheAnimatorTriggers()
+    {
+        _animatorTriggerHashes.Clear();
+        Animator animator = targetBinder.PlayerAnimator;
+        if (animator == null)
+            return;
+
+        AnimatorControllerParameter[] parameters = animator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (parameters[i].type == AnimatorControllerParameterType.Trigger)
+                _animatorTriggerHashes.Add(Animator.StringToHash(parameters[i].name));
+        }
+
+        _introTriggerHash = Animator.StringToHash(_data.IntroTrigger);
+        _dashTriggerHash = Animator.StringToHash(_data.DashTrigger);
+        _multiSlashTriggerHash = Animator.StringToHash(_data.MultiSlashTrigger);
+        _finalTriggerHash = Animator.StringToHash(_data.FinalExplosionTrigger);
+        _walkoutTriggerHash = Animator.StringToHash(_data.WalkoutTrigger);
+    }
+
+    void TrySetTrigger(int triggerHash)
+    {
+        Animator animator = targetBinder.PlayerAnimator;
+        if (animator == null || triggerHash == 0 || !_animatorTriggerHashes.Contains(triggerHash))
+            return;
+
+        animator.ResetTrigger(triggerHash);
+        animator.SetTrigger(triggerHash);
+    }
+
+    Vector3 GetAimPointForPhase(UltimateSequencePhase phase)
+    {
+        UltimateSequenceData.CameraShotSettings shot = _data != null ? _data.ResolveCameraShot(phase) : null;
+        float bottomToCenterRatio = shot != null ? shot.targetBottomToCenterRatio : 0.8f;
+        float verticalOffset = shot != null ? shot.targetVerticalOffset : 0f;
+        return targetBinder.GetTargetAimPoint(bottomToCenterRatio, verticalOffset);
+    }
+
+    bool ShouldLog => debugLog || (_data != null && _data.DebugLog);
+
+    void ResolveReferences(bool allowCreate)
+    {
+        if (targetBinder == null)
+            targetBinder = GetComponent<UltimateTargetBinder>() ?? (allowCreate ? gameObject.AddComponent<UltimateTargetBinder>() : null);
+        if (cameraDirector == null)
+            cameraDirector = GetComponent<UltimateCameraDirector>() ?? (allowCreate ? gameObject.AddComponent<UltimateCameraDirector>() : null);
+        if (hitProcessor == null)
+            hitProcessor = GetComponent<UltimateHitProcessor>() ?? (allowCreate ? gameObject.AddComponent<UltimateHitProcessor>() : null);
+        if (vfxPresenter == null)
+            vfxPresenter = GetComponent<UltimateVFXPresenter>() ?? (allowCreate ? gameObject.AddComponent<UltimateVFXPresenter>() : null);
+    }
+}

@@ -25,11 +25,15 @@ public class PlayerHealth : MonoBehaviour, IHealth
     [Header("② 무적/리액션 공통")]
     [Tooltip("피격 후 자동 무적 시간(초). 0이면 비활성")]
     [SerializeField] private float invincibleDuration = 0.8f;
+    [SerializeField] private bool grantInvincibilityOnStandardDamage = false;
     [Tooltip("피격 이펙트(선택)")]
     [SerializeField] private GameObject hitEffectPrefab;
     [Tooltip("카메라 셰이크(선택)")]
     [SerializeField] private CameraShake cameraShake;
     [SerializeField] private bool useCombatFeelPolicy = true;
+    [SerializeField] private bool useHitStopOnDamage = true;
+    [SerializeField, Min(0f)] private float minCameraShakeIntervalRealtime = 0.04f;
+    [SerializeField, Min(0f)] private float minHitStopIntervalRealtime = 0.05f;
     [Tooltip("리액션 재생 모드 선택")]
     [SerializeField] private ReactionMode reactionMode = ReactionMode.CombatController;
 
@@ -58,6 +62,9 @@ public class PlayerHealth : MonoBehaviour, IHealth
     private float _invTimer;
     private float _realtimeInvincibleUntil;
     private bool _isStaggered;
+    private float _lastDamageShakeRealtime = float.NegativeInfinity;
+    private float _lastDamageHitStopRealtime = float.NegativeInfinity;
+    private Coroutine _damageHitStopCo;
     // Animator 캐시
     private int _hitHash, _hurtHash;
     private bool _hitExists, _hurtExists, _hitIsTrigger, _hurtIsTrigger;
@@ -140,9 +147,14 @@ public class PlayerHealth : MonoBehaviour, IHealth
     }
 
     // ── Damage: 일반(리액션 포함) ──────────────────────────────
-    public void ApplyDamage(float damage) => ApplyDamage(Mathf.RoundToInt(damage));
+    public void ApplyDamage(float damage) => TakeDamage(Mathf.RoundToInt(damage), HitType.Normal, transform.position);
 
     public void ApplyDamage(int amount)
+    {
+        TakeDamage(amount, HitType.Normal, transform.position);
+    }
+
+    public void TakeDamage(int amount, HitType type, Vector3 point)
     {
         if (amount <= 0) { if (debugLog) Debug.Log("[Health] Skip(amount<=0)", this); return; }
         if (_isInvincible || Time.realtimeSinceStartup < _realtimeInvincibleUntil)
@@ -155,26 +167,22 @@ public class PlayerHealth : MonoBehaviour, IHealth
         int before = currentHP;
         currentHP = Mathf.Max(0, currentHP - amount);
 
-        if (hitEffectPrefab) TransientVfxPool.Spawn(hitEffectPrefab, transform.position, Quaternion.identity);
-        if (cameraShake)
-        {
-            CombatFeelPreset preset = useCombatFeelPolicy
-                ? CombatFeelPolicy.GetPlayerHitPreset(amount, heavyDamageThreshold)
-                : new CombatFeelPreset(1f, 0f, 0f, 0.25f, 0.15f, 1f, 1f, 1f);
-            cameraShake.Shake(preset.CameraShakeAmplitude, preset.CameraShakeDuration);
-        }
+        if (hitEffectPrefab) TransientVfxPool.Spawn(hitEffectPrefab, point, Quaternion.identity);
+
+        ApplyDamageFeel(amount, type);
 
         // 리액션: 일반 히트만 재생
-        PlayReaction(amount);
+        PlayReaction(amount, type);
 
-        if (debugLog) Debug.Log($"[Health] Damage {amount} | {before}->{currentHP}", this);
+        if (debugLog) Debug.Log($"[Health] Damage {amount} ({type}) | {before}->{currentHP}", this);
 
         RaiseHpEvents();
         OnDamaged?.Invoke(amount);
-        OnDamagedWithType?.Invoke(amount, HitType.Normal);
+        OnDamagedWithType?.Invoke(amount, type);
 
         if (currentHP <= 0) OnDied?.Invoke();
-        if (invincibleDuration > 0f) SetInvincible(invincibleDuration);
+        if (grantInvincibilityOnStandardDamage && currentHP > 0 && invincibleDuration > 0f)
+            SetInvincible(invincibleDuration);
     }
 
     // ── Damage: 칩 대미지(리액션 없음) ─────────────────────────
@@ -193,9 +201,6 @@ public class PlayerHealth : MonoBehaviour, IHealth
 
         if (currentHP <= 0) OnDied?.Invoke();
     }
-
-    public void TakeDamage(int amount, HitType type, Vector3 point) => ApplyDamage(amount);
-
     public void Heal(int amount)
     {
         if (amount <= 0 || IsDead) return;
@@ -221,7 +226,7 @@ public class PlayerHealth : MonoBehaviour, IHealth
     }
 
     // ── Reaction ───────────────────────────────────────────────
-    void PlayReaction(int amount)
+    void PlayReaction(int amount, HitType hitType)
     {
         if (reactionMode == ReactionMode.CombatController)
         {
@@ -231,7 +236,7 @@ public class PlayerHealth : MonoBehaviour, IHealth
                 return;
             }
 
-            bool heavy = amount >= heavyDamageThreshold;
+            bool heavy = amount >= heavyDamageThreshold || hitType == HitType.Heavy || hitType == HitType.Strong;
             if (combatController) combatController.ApplyHit(heavy);
             return;
         }
@@ -254,6 +259,42 @@ public class PlayerHealth : MonoBehaviour, IHealth
 
         var ctrl = (animator && animator.runtimeAnimatorController) ? animator.runtimeAnimatorController.name : "NULL";
         Debug.LogWarning("[Health] No param '" + hitParamName + "' or '" + hurtParamName + "' in controller '" + ctrl + "'", this);
+    }
+
+    void ApplyDamageFeel(int amount, HitType hitType)
+    {
+        CombatFeelPreset preset = useCombatFeelPolicy
+            ? CombatFeelPolicy.GetPlayerHitPreset(amount, heavyDamageThreshold, hitType)
+            : ResolveFallbackPlayerHitPreset(amount, hitType);
+
+        CombatFeelRuntimeUtility.TryApplyCameraShake(
+            ref cameraShake,
+            preset,
+            minCameraShakeIntervalRealtime,
+            ref _lastDamageShakeRealtime);
+
+        if (!useHitStopOnDamage)
+            return;
+
+        CombatFeelRuntimeUtility.StartHitStop(
+            this,
+            ref _damageHitStopCo,
+            preset,
+            true,
+            minHitStopIntervalRealtime,
+            ref _lastDamageHitStopRealtime);
+    }
+
+    CombatFeelPreset ResolveFallbackPlayerHitPreset(int amount, HitType hitType)
+    {
+        bool heavy = amount >= heavyDamageThreshold
+            || hitType == HitType.Heavy
+            || hitType == HitType.Strong
+            || hitType == HitType.Force;
+
+        return heavy
+            ? new CombatFeelPreset(0.10f, 0.060f, 0f, 0.25f, 0.15f, 1f, 1f, 1f)
+            : new CombatFeelPreset(0.20f, 0.038f, 0f, 0.18f, 0.11f, 1f, 1f, 1f);
     }
 
     // ── Wiring / Animator cache ────────────────────────────────

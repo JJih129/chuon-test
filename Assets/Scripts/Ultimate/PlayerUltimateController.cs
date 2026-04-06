@@ -84,6 +84,10 @@ public class PlayerUltimateController : MonoBehaviour
     public Transform finisherImpactPoint;
     [Tooltip("Optional override for the sword focus point. Falls back to PlayerReferences.UltimateSpawnRoot.")]
     public Transform swordFocusOverride;
+    [Tooltip("Optional override for the intro close-up camera pivot. If empty a runtime pivot is created near the player's right shoulder.")]
+    public Transform introSwordCameraPivotOverride;
+    [Tooltip("Optional override for the intro close-up look target. If empty the sword focus point is used.")]
+    public Transform introSwordLookTargetOverride;
     [Tooltip("Animator trigger played at the beginning of the scripted sequence.")]
     public string scriptedStartTrigger = "Ultimate_Start";
     [Tooltip("Animator trigger played during the walk-out section.")]
@@ -144,9 +148,11 @@ public class PlayerUltimateController : MonoBehaviour
     [Header("Events")]
     public Action OnUltimateStarted;
     public Action OnUltimateEnded;
+    public Action<float, float, bool> OnGaugeChanged;
 
     public float Gauge { get; private set; }
     public bool IsCinematic => _isCinematic;
+    public bool IsGaugeReady => gaugeMax > 0f && Gauge >= gaugeMax - 0.0001f;
     public bool DidApplyInputBlockThisCinematic { get; private set; }
     public bool DidFreezeWorldTimeThisCinematic { get; private set; }
 
@@ -156,18 +162,31 @@ public class PlayerUltimateController : MonoBehaviour
     DirectorUpdateMode _cachedDirectorTimeUpdateMode = DirectorUpdateMode.GameTime;
     IInputBlocker _input;
     ILockOnController _lockOn;
+    ICombatStateReader _combatStateReader;
     PlayerLockOn _playerLockOn;
+    UltimateSkillController _ultimateSkillController;
     IInvulnerabilityToggle _invul;
-    ICombatStateReader _combat;
+    PlayerCombatController _combatController;
+    PlayerGuardController _guardController;
+    PlayerDodgeController _dodgeController;
+    PlayerHealth _playerHealth;
     PlayerReferences _playerReferences;
     CharacterController _characterController;
     FreeLookCamera _freeLookCamera;
     CinemachineVirtualCameraBase _cinemachineFreeLook;
+    LockOnCameraManager _lockOnCameraManager;
+    FinisherStaticCam _finisherStaticCam;
+    CinemachineBrain _cachedCinemachineBrain;
+    Camera _cachedMainCamera;
+    BossBreakController _fallbackBreakController;
+    CinemachineVirtualCameraBase _fallbackSequenceCamera;
     CameraShake _sequenceCameraShake;
     CinemachineCamera _runtimeSequenceCamera;
     UltimateStageRuntime _resolvedRuntimeStage;
     UltimatePresentationClone _playerPresentationClone;
     UltimatePresentationClone _victimPresentationClone;
+    public UltimatePresentationClone PlayerPresentationClone => _playerPresentationClone;
+    public UltimatePresentationClone VictimPresentationClone => _victimPresentationClone;
     AnimatorUpdateMode _cachedAnimatorUpdateMode = AnimatorUpdateMode.Normal;
     bool _cachedAnimatorApplyRootMotion;
     bool _cachedAnimatorStateValid;
@@ -179,18 +198,33 @@ public class PlayerUltimateController : MonoBehaviour
     float _cachedCinemachineFreeLookYAxis;
     bool _cachedCinemachineFreeLookStateValid;
     bool _wasLockedOnBeforeCinematic;
+    Transform _cachedLockOnTargetBeforeCinematic;
+    LockOnCameraManager.RuntimeStateSnapshot _cachedLockOnCameraRuntimeState;
+    bool _cachedLockOnCameraRuntimeStateValid;
+    BossBreakController _externalPreservedBreakController;
+    float _externalPreservedBreakValue;
+    float _externalPreservedBreakTimer;
+    bool _externalPreservedBreakWasActive;
+    bool _externalSessionLockInput;
+    bool _externalSessionInvulnerable;
+    bool _externalSessionFreezeTime;
+    bool _externalSessionRestoreCamera;
 
     void Awake()
     {
         _input = GetComponent<IInputBlocker>();
         _playerLockOn = GetComponent<PlayerLockOn>();
+        _ultimateSkillController = GetComponent<UltimateSkillController>();
+        _combatStateReader = CombatStateReaderResolver.ResolveOrAttach(this);
         _lockOn = _playerLockOn as ILockOnController ?? GetComponent<ILockOnController>();
         _invul = GetComponent<IInvulnerabilityToggle>();
-        _combat = GetComponent<ICombatStateReader>();
+        _combatController = GetComponent<PlayerCombatController>();
+        _guardController = GetComponent<PlayerGuardController>();
+        _dodgeController = GetComponent<PlayerDodgeController>();
+        _playerHealth = GetComponent<PlayerHealth>();
         _playerReferences = GetComponent<PlayerReferences>();
         _characterController = GetComponent<CharacterController>();
-        _freeLookCamera = FindAnyObjectByType<FreeLookCamera>();
-        _cinemachineFreeLook = CinemachineCompat.FindLegacyFreeLookCamera();
+        ResolveSceneObjectCaches();
         if (scriptedAnimator == null && _playerReferences != null)
             scriptedAnimator = _playerReferences.MainAnimator;
         if (slashBurstSpawner == null)
@@ -201,6 +235,7 @@ public class PlayerUltimateController : MonoBehaviour
 
     void OnEnable()
     {
+        ResolveSceneObjectCaches();
         if (activateAction?.action != null)
             activateAction.action.Enable();
     }
@@ -262,46 +297,104 @@ public class PlayerUltimateController : MonoBehaviour
             return false;
         }
 
-        if (_combat != null)
+        if (blockWhenStaggered && IsPlayerStaggered())
         {
-            if (blockWhenStaggered && _combat.IsStaggered())
-            {
-                reason = "Player is staggered.";
-                return false;
-            }
+            reason = "Player is staggered.";
+            return false;
+        }
 
-            if (!allowInAir && _combat.IsInAir())
-            {
-                reason = "Player is airborne.";
-                return false;
-            }
+        if (!allowInAir && IsPlayerInAir())
+        {
+            reason = "Player is airborne.";
+            return false;
+        }
 
-            if (blockWhenAttacking && _combat.IsAttacking())
-            {
-                reason = "Player is attacking.";
-                return false;
-            }
+        if (blockWhenAttacking && IsPlayerAttacking())
+        {
+            reason = "Player is attacking.";
+            return false;
+        }
 
-            if (blockWhenGuarding && _combat.IsGuarding())
-            {
-                reason = "Player is guarding.";
-                return false;
-            }
+        if (blockWhenGuarding && IsPlayerGuarding())
+        {
+            reason = "Player is guarding.";
+            return false;
+        }
 
-            if (blockWhenDodging && _combat.IsDodging())
-            {
-                reason = "Player is dodging.";
-                return false;
-            }
+        if (blockWhenDodging && IsPlayerDodging())
+        {
+            reason = "Player is dodging.";
+            return false;
         }
 
         return true;
+    }
+
+    bool IsPlayerInAir()
+    {
+        if (_combatStateReader != null)
+            return _combatStateReader.IsInAir();
+
+        return _characterController != null && _characterController.enabled && !_characterController.isGrounded;
+    }
+
+    bool IsPlayerStaggered()
+    {
+        if (_combatStateReader != null)
+            return _combatStateReader.IsStaggered();
+
+        if (_combatController != null && _combatController.IsInHit)
+            return true;
+
+        if (_guardController != null && _guardController.IsGuardBroken)
+            return true;
+
+        if (_playerHealth != null && (_playerHealth.IsDead || _playerHealth.IsStaggered))
+            return true;
+
+        return false;
+    }
+
+    bool IsPlayerAttacking()
+    {
+        if (_combatStateReader != null)
+            return _combatStateReader.IsAttacking();
+
+        if (_combatController != null && _combatController.IsAttacking)
+            return true;
+
+        if (_guardController != null && _guardController.IsAttacking)
+            return true;
+
+        return false;
+    }
+
+    bool IsPlayerGuarding()
+    {
+        if (_combatStateReader != null)
+            return _combatStateReader.IsGuarding();
+
+        return _guardController != null && _guardController.IsGuarding;
+    }
+
+    bool IsPlayerDodging()
+    {
+        if (_combatStateReader != null)
+            return _combatStateReader.IsDodging();
+
+        return _dodgeController != null && _dodgeController.IsDodging;
     }
 
     public bool TryActivate()
     {
         if (!CanActivate(out _))
             return false;
+
+        if (_ultimateSkillController == null)
+            _ultimateSkillController = GetComponent<UltimateSkillController>();
+
+        if (_ultimateSkillController != null && _ultimateSkillController.UseModernSequence)
+            return _ultimateSkillController.TryPlayModernUltimate(this);
 
         if (useScriptedSequence && !allowDirectorFallbackWhenScriptedUnavailable &&
             !TryResolveUltimateTarget(out _, out _))
@@ -311,6 +404,220 @@ public class PlayerUltimateController : MonoBehaviour
 
         StartCoroutine(Co_Cinematic());
         return true;
+    }
+
+    public bool TryBeginExternalCinematicSession(
+        bool lockInputOverride,
+        bool invulnerableOverride,
+        bool freezeTimeOverride,
+        bool restoreCameraOverride)
+    {
+        if (_isCinematic)
+            return false;
+
+        _isCinematic = true;
+        DidApplyInputBlockThisCinematic = false;
+        DidFreezeWorldTimeThisCinematic = false;
+        _externalSessionLockInput = lockInputOverride;
+        _externalSessionInvulnerable = invulnerableOverride;
+        _externalSessionFreezeTime = freezeTimeOverride;
+        _externalSessionRestoreCamera = restoreCameraOverride;
+        Gauge = 0f;
+        SyncGaugeUi();
+
+        CacheExternalBreakPresentationState();
+
+        if (_cameraRestoreCoroutine != null)
+        {
+            StopCoroutine(_cameraRestoreCoroutine);
+            _cameraRestoreCoroutine = null;
+        }
+
+        if (_externalSessionLockInput)
+        {
+            _input?.BlockAll(true);
+            DidApplyInputBlockThisCinematic = _input != null;
+        }
+
+        if (_externalSessionInvulnerable)
+            _invul?.SetInvulnerable(true);
+
+        CacheFreeLookCameraState();
+        _wasLockedOnBeforeCinematic = _lockOn != null && _lockOn.IsLockedOn();
+        _cachedLockOnTargetBeforeCinematic = _playerLockOn != null ? _playerLockOn.GetCurrentTarget() : null;
+        CacheLockOnCameraRuntimeStateIfNeeded();
+        _lockOn?.GiveCameraControlToTimeline(true);
+        OnUltimateStarted?.Invoke();
+
+        if (_externalSessionFreezeTime)
+        {
+            _cachedTimeScale = Time.timeScale;
+            _cachedFixedDeltaTime = Time.fixedDeltaTime;
+            Time.timeScale = 0f;
+            Time.fixedDeltaTime = 0f;
+            DidFreezeWorldTimeThisCinematic = true;
+        }
+
+        return true;
+    }
+
+    public void EndExternalCinematicSession()
+    {
+        if (!_isCinematic)
+            return;
+
+        ForceCleanupScriptedPresentation();
+        RestoreScriptedAnimator();
+
+        if (_externalSessionFreezeTime)
+        {
+            Time.timeScale = _cachedTimeScale;
+            Time.fixedDeltaTime = _cachedFixedDeltaTime;
+        }
+
+        if (_externalPreservedBreakController != null)
+        {
+            _externalPreservedBreakController.RestoreStateAfterPresentation(
+                _externalPreservedBreakValue,
+                _externalPreservedBreakWasActive,
+                _externalPreservedBreakTimer);
+        }
+
+        if (_cameraRestoreCoroutine != null)
+        {
+            StopCoroutine(_cameraRestoreCoroutine);
+            _cameraRestoreCoroutine = null;
+        }
+
+        if (_externalSessionRestoreCamera)
+            QueueGameplayCameraRestore();
+
+        if (_externalSessionInvulnerable)
+            _invul?.SetInvulnerable(false);
+
+        if (_externalSessionLockInput)
+            _input?.BlockAll(false);
+
+        _externalPreservedBreakController = null;
+        _externalPreservedBreakValue = 0f;
+        _externalPreservedBreakTimer = 0f;
+        _externalPreservedBreakWasActive = false;
+        _externalSessionLockInput = false;
+        _externalSessionInvulnerable = false;
+        _externalSessionFreezeTime = false;
+        _externalSessionRestoreCamera = false;
+
+        OnUltimateEnded?.Invoke();
+        _isCinematic = false;
+    }
+
+    public void PrepareModernPresentationActor()
+    {
+        Transform playerRoot = ResolvePlayerRoot();
+        if (playerRoot == null)
+            return;
+
+        Transform playerPresentationSource = ResolvePlayerPresentationSource(playerRoot);
+        if (playerPresentationSource == null)
+            return;
+
+        ResolveSwordFocus(playerRoot);
+        ResolveIntroSwordCameraPivot(playerRoot);
+        ResolveIntroSwordLookTarget(playerRoot);
+
+        Animator presentationSourceAnimator = ResolvePresentationAnimator(playerPresentationSource);
+        if (presentationSourceAnimator == null)
+            presentationSourceAnimator = scriptedAnimator != null ? scriptedAnimator : _playerReferences != null ? _playerReferences.MainAnimator : null;
+
+        _playerPresentationClone = EnsurePresentationClone(
+            ref _playerPresentationClone,
+            "__UltimatePlayerPresentation",
+            playerPresentationSource,
+            playerRoot,
+            true);
+
+        _playerPresentationClone?.SyncAnimatorFrom(presentationSourceAnimator);
+        _victimPresentationClone?.ClearClone();
+    }
+
+    public void PrepareModernIntroStagePresentation(UltimateStageRuntime activeStage, Transform targetTransform, UltimateTargetBinder binder)
+    {
+        if (activeStage == null || binder == null)
+        {
+            PrepareModernPresentationActor();
+            binder?.ClearPresentationAnchorOverrides();
+            return;
+        }
+
+        Transform playerRoot = ResolvePlayerRoot();
+        if (playerRoot == null)
+            return;
+
+        Vector3 targetFocus = GetTargetFocusPoint(targetTransform);
+        activeStage.PositionStageFixed(playerRoot.position);
+
+        Transform playerPresentationSource = ResolvePlayerPresentationSource(playerRoot);
+        Transform victimPresentationSource = ResolveVictimPresentationSource(targetTransform);
+
+        ResolveSwordFocus(playerRoot);
+        ResolveIntroSwordCameraPivot(playerRoot);
+        ResolveIntroSwordLookTarget(playerRoot);
+
+        Animator playerPresentationAnimator = ResolvePresentationAnimator(playerPresentationSource);
+        if (playerPresentationAnimator == null)
+            playerPresentationAnimator = scriptedAnimator != null ? scriptedAnimator : _playerReferences != null ? _playerReferences.MainAnimator : null;
+
+        Animator victimPresentationAnimator = ResolvePresentationAnimator(victimPresentationSource != null ? victimPresentationSource : targetTransform);
+
+        _playerPresentationClone = EnsurePresentationClone(
+            ref _playerPresentationClone,
+            "__UltimatePlayerPresentation",
+            playerPresentationSource,
+            activeStage.PlayerAnchor,
+            false);
+        _victimPresentationClone = EnsurePresentationClone(
+            ref _victimPresentationClone,
+            "__UltimateVictimPresentation",
+            victimPresentationSource,
+            activeStage.VictimAnchor,
+            false);
+
+        _playerPresentationClone?.SyncAnimatorFrom(playerPresentationAnimator);
+        _victimPresentationClone?.SyncAnimatorFrom(victimPresentationAnimator);
+
+        Vector3 stageVictimPosition = ResolveStageVictimPosition(activeStage);
+        Vector3 stageTargetFocus = stageVictimPosition + Vector3.up * 1.05f;
+        Vector3 stagePlayerPosition = ResolveStagePlayerOrigin(activeStage);
+        UpdatePresentationActors(activeStage, stagePlayerPosition, stageTargetFocus, stageVictimPosition, stagePlayerPosition, stagePlayerPosition);
+
+        Transform playerOverride = _playerPresentationClone != null && _playerPresentationClone.CloneRoot != null
+            ? _playerPresentationClone.CloneRoot
+            : activeStage.PlayerAnchor;
+        Transform victimOverride = _victimPresentationClone != null && _victimPresentationClone.CloneRoot != null
+            ? _victimPresentationClone.CloneRoot
+            : activeStage.VictimAnchor;
+        binder.SetPresentationAnchorOverrides(playerOverride, victimOverride);
+    }
+
+    void CacheExternalBreakPresentationState()
+    {
+        _externalPreservedBreakController = null;
+        _externalPreservedBreakValue = 0f;
+        _externalPreservedBreakTimer = 0f;
+        _externalPreservedBreakWasActive = false;
+
+        if (TryResolveUltimateTarget(out _, out Transform preservedBreakTargetTransform))
+            _externalPreservedBreakController = ResolveUltimateBreakController(preservedBreakTargetTransform);
+
+        if (_externalPreservedBreakController == null)
+            _externalPreservedBreakController = ResolveFallbackBreakController();
+
+        if (_externalPreservedBreakController == null)
+            return;
+
+        _externalPreservedBreakValue = _externalPreservedBreakController.CurrentBreak;
+        _externalPreservedBreakTimer = _externalPreservedBreakController.RemainingBreakTime;
+        _externalPreservedBreakWasActive = _externalPreservedBreakController.IsInBreak;
     }
 
     bool ShouldConsumeActivationInput()
@@ -334,8 +641,25 @@ public class PlayerUltimateController : MonoBehaviour
         DidFreezeWorldTimeThisCinematic = false;
         bool shouldTouchLegacyDirector = !useScriptedSequence || allowDirectorFallbackWhenScriptedUnavailable;
         bool cachedDirectorMode = false;
+        BossBreakController preservedBreakController = null;
+        float preservedBreakValue = 0f;
+        float preservedBreakTimer = 0f;
+        bool preservedBreakWasActive = false;
         Gauge = 0f;
         SyncGaugeUi();
+
+        if (TryResolveUltimateTarget(out _, out Transform preservedBreakTargetTransform))
+            preservedBreakController = ResolveUltimateBreakController(preservedBreakTargetTransform);
+
+        if (preservedBreakController == null)
+            preservedBreakController = ResolveFallbackBreakController();
+
+        if (preservedBreakController != null)
+        {
+            preservedBreakValue = preservedBreakController.CurrentBreak;
+            preservedBreakTimer = preservedBreakController.RemainingBreakTime;
+            preservedBreakWasActive = preservedBreakController.IsInBreak;
+        }
 
         if (lockInputDuringCinematic)
         {
@@ -345,6 +669,8 @@ public class PlayerUltimateController : MonoBehaviour
         if (invulnerableDuringCinematic) _invul?.SetInvulnerable(true);
         CacheFreeLookCameraState();
         _wasLockedOnBeforeCinematic = _lockOn != null && _lockOn.IsLockedOn();
+        _cachedLockOnTargetBeforeCinematic = _playerLockOn != null ? _playerLockOn.GetCurrentTarget() : null;
+        CacheLockOnCameraRuntimeStateIfNeeded();
         _lockOn?.GiveCameraControlToTimeline(true);
 
         OnUltimateStarted?.Invoke();
@@ -405,13 +731,15 @@ public class PlayerUltimateController : MonoBehaviour
                 Time.timeScale = _cachedTimeScale;
                 Time.fixedDeltaTime = _cachedFixedDeltaTime;
             }
+            if (preservedBreakController != null)
+                preservedBreakController.RestoreStateAfterPresentation(preservedBreakValue, preservedBreakWasActive, preservedBreakTimer);
             if (_cameraRestoreCoroutine != null)
             {
                 StopCoroutine(_cameraRestoreCoroutine);
                 _cameraRestoreCoroutine = null;
             }
             if (restoreCameraAndLockOn)
-                _cameraRestoreCoroutine = StartCoroutine(Co_RestoreGameplayCameraNextFrame());
+                QueueGameplayCameraRestore();
             if (invulnerableDuringCinematic) _invul?.SetInvulnerable(false);
             if (lockInputDuringCinematic) _input?.BlockAll(false);
 
@@ -423,8 +751,13 @@ public class PlayerUltimateController : MonoBehaviour
     void SyncGaugeUi()
     {
         float normalized = gaugeMax > 0f ? Mathf.Clamp01(Gauge / gaugeMax) : 0f;
+        bool ready = normalized >= 1f - 0.0001f;
+
         UI_UltimateGauge.UpdateValue(normalized);
-        UI_UltimateGauge.SetReady(normalized >= 1f - 0.0001f);
+        UI_UltimateGauge.SetReady(ready);
+
+        // UI sync already happens here, so broadcasting from this point keeps every consumer event-driven.
+        OnGaugeChanged?.Invoke(Gauge, normalized, ready);
     }
 
     public void OnMultiHit()
@@ -490,7 +823,7 @@ public class PlayerUltimateController : MonoBehaviour
         {
             if (activeStage != null)
             {
-                activeStage.PositionStage(playerRoot.position, approachDirection);
+                activeStage.PositionStageFixed(playerRoot.position);
                 activeStage.BeginPresentationCapture(Camera.main);
                 stageCaptureActive = true;
                 ReleasePresentationClones();
@@ -598,7 +931,7 @@ public class PlayerUltimateController : MonoBehaviour
                 stagePlayerPosition = ResolveStageStrikePosition(activeStage, stageVictimPosition, radialDir, scriptedStageStrikeDistance);
                 UpdatePresentationActors(activeStage, stagePlayerPosition, stageTargetFocus, stageVictimPosition, stagePlayerPosition, stagePlayerPosition);
             }
-            slashBurstSpawner?.EmitOneSlash(i, totalHits, seed, life: Mathf.Max(0.45f, scriptedHitInterval * 4f));
+            slashBurstSpawner?.EmitOneSlash(i, totalHits, seed, strikePos, targetFocus + Vector3.up * 0.95f, Mathf.Max(0.45f, scriptedHitInterval * 4f));
             ApplyBurstDamage(target, multihitFixedDamage);
             TriggerVictimPresentationHit(false);
             screenFX?.PulseMinor();
@@ -760,6 +1093,24 @@ public class PlayerUltimateController : MonoBehaviour
         return null;
     }
 
+    BossBreakController ResolveUltimateBreakController(Transform target)
+    {
+        if (target == null)
+            return null;
+
+        if (target.TryGetComponent<BossBreakController>(out var direct))
+            return direct;
+
+        BossBreakController parentBreak = target.GetComponentInParent<BossBreakController>();
+        if (parentBreak != null)
+            return parentBreak;
+
+        if (target.root != null && target.root.TryGetComponent<BossBreakController>(out var rootBreak))
+            return rootBreak;
+
+        return null;
+    }
+
     float EstimateScriptedSequenceDuration()
     {
         int totalHits = Mathf.Max(1, scriptedMultiHitCount);
@@ -820,6 +1171,41 @@ public class PlayerUltimateController : MonoBehaviour
         return false;
     }
 
+    public bool TryGetUltimateTarget(out IUltimateTarget target, out Transform targetTransform)
+    {
+        return TryResolveUltimateTarget(out target, out targetTransform);
+    }
+
+    public IUltimateVictimState GetUltimateVictimState(Transform target)
+    {
+        return ResolveUltimateVictimState(target);
+    }
+
+    public BossBreakController GetUltimateBreakController(Transform target)
+    {
+        return ResolveUltimateBreakController(target);
+    }
+
+    public Transform GetUltimateSwordFocusTransform()
+    {
+        return ResolveSwordFocus(ResolvePlayerRoot());
+    }
+
+    public Transform GetUltimateIntroSwordCameraPivotTransform()
+    {
+        return ResolveIntroSwordCameraPivot(ResolvePlayerRoot());
+    }
+
+    public Transform GetUltimateIntroSwordLookTargetTransform()
+    {
+        return ResolveIntroSwordLookTarget(ResolvePlayerRoot());
+    }
+
+    public Transform GetUltimatePlayerRoot()
+    {
+        return ResolvePlayerRoot();
+    }
+
     void SpawnFinisherImpact(Vector3? fallbackPosition)
     {
         GameObject impactPrefab = finisherImpactPrefab != null ? finisherImpactPrefab : glassCrackPrefab;
@@ -850,20 +1236,173 @@ public class PlayerUltimateController : MonoBehaviour
         if (swordFocusOverride != null)
             return swordFocusOverride;
 
+        Transform swordVisualFocus = ResolveSwordVisualFocus(playerRoot);
+        if (swordVisualFocus != null)
+            return swordVisualFocus;
+
         if (_playerReferences != null && _playerReferences.UltimateSpawnRoot != null)
             return _playerReferences.UltimateSpawnRoot;
 
         return playerRoot;
     }
 
+    Transform ResolveIntroSwordCameraPivot(Transform playerRoot)
+    {
+        if (introSwordCameraPivotOverride != null)
+            return introSwordCameraPivotOverride;
+        return null;
+    }
+
+    Transform ResolveIntroSwordLookTarget(Transform playerRoot)
+    {
+        if (introSwordLookTargetOverride != null)
+            return introSwordLookTargetOverride;
+
+        Transform swordTransform = ResolveSwordVisualTransform(playerRoot);
+        if (swordTransform == null)
+            return ResolveSwordFocus(playerRoot);
+
+        const string anchorName = "RuntimeUltimateSwordLookTarget";
+        Transform existing = swordTransform.Find(anchorName);
+        if (existing != null)
+            return existing;
+
+        GameObject anchorObject = new GameObject(anchorName);
+        Transform anchor = anchorObject.transform;
+        anchor.SetParent(swordTransform, false);
+        if (TryGetLocalMeshBounds(swordTransform, out Bounds localBounds))
+        {
+            Vector3 localPosition = localBounds.center;
+            localPosition.x = Mathf.Lerp(localBounds.min.x, localBounds.max.x, 0.38f);
+            localPosition.y = Mathf.Lerp(localBounds.min.y, localBounds.max.y, 0.56f);
+            localPosition.z = Mathf.Lerp(localBounds.min.z, localBounds.max.z, 0.5f);
+            anchor.localPosition = localPosition;
+        }
+        else
+        {
+            anchor.localPosition = Vector3.zero;
+        }
+
+        anchor.localRotation = Quaternion.identity;
+        anchor.localScale = Vector3.one;
+        return anchor;
+    }
+
+    Transform ResolveSwordVisualFocus(Transform playerRoot)
+    {
+        Transform swordTransform = ResolveSwordVisualTransform(playerRoot);
+
+        if (swordTransform == null)
+            return null;
+
+        const string anchorName = "RuntimeUltimateSwordFocusAnchor";
+        Transform existing = swordTransform.Find(anchorName);
+        if (existing != null)
+            return existing;
+
+        if (!TryGetLocalMeshBounds(swordTransform, out Bounds localBounds))
+            return swordTransform;
+
+        Vector3 size = localBounds.size;
+        int axis = 0;
+        if (size.y > size.x && size.y >= size.z)
+            axis = 1;
+        else if (size.z > size.x && size.z >= size.y)
+            axis = 2;
+
+        Vector3 localPosition = localBounds.center;
+        switch (axis)
+        {
+            case 1:
+                localPosition.y = Mathf.Lerp(localBounds.min.y, localBounds.max.y, 0.5f);
+                break;
+            case 2:
+                localPosition.z = Mathf.Lerp(localBounds.min.z, localBounds.max.z, 0.5f);
+                break;
+            default:
+                localPosition.x = Mathf.Lerp(localBounds.min.x, localBounds.max.x, 0.5f);
+                break;
+        }
+
+        GameObject anchorObject = new GameObject(anchorName);
+        Transform anchor = anchorObject.transform;
+        anchor.SetParent(swordTransform, false);
+        anchor.localPosition = localPosition;
+        anchor.localRotation = Quaternion.identity;
+        anchor.localScale = Vector3.one;
+        return anchor;
+    }
+
+    Transform ResolveSwordVisualTransform(Transform playerRoot)
+    {
+        Transform searchRoot = _playerReferences != null && _playerReferences.VisualRoot != null
+            ? _playerReferences.VisualRoot
+            : playerRoot;
+        if (searchRoot == null)
+            return null;
+
+        Transform swordTransform = FindChildRecursive(searchRoot, "Object002");
+        if (swordTransform == null)
+        {
+            string[] preferredNames =
+            {
+                "sword",
+                "weapon_r",
+                "sword_holder",
+                "9CG_Sword(Clone)"
+            };
+
+            for (int i = 0; i < preferredNames.Length; i++)
+            {
+                swordTransform = FindChildRecursive(searchRoot, preferredNames[i]);
+                if (swordTransform != null)
+                    break;
+            }
+        }
+
+        return swordTransform;
+    }
+
+    static bool TryGetLocalMeshBounds(Transform target, out Bounds bounds)
+    {
+        MeshFilter meshFilter = target.GetComponent<MeshFilter>();
+        if (meshFilter != null && meshFilter.sharedMesh != null)
+        {
+            bounds = meshFilter.sharedMesh.bounds;
+            return true;
+        }
+
+        SkinnedMeshRenderer skinned = target.GetComponent<SkinnedMeshRenderer>();
+        if (skinned != null && skinned.sharedMesh != null)
+        {
+            bounds = skinned.sharedMesh.bounds;
+            return true;
+        }
+
+        bounds = default;
+        return false;
+    }
+
+    static Transform FindChildRecursive(Transform root, string name)
+    {
+        if (root == null || string.IsNullOrEmpty(name))
+            return null;
+
+        if (string.Equals(root.name, name, StringComparison.OrdinalIgnoreCase))
+            return root;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform found = FindChildRecursive(root.GetChild(i), name);
+            if (found != null)
+                return found;
+        }
+
+        return null;
+    }
+
     Transform ResolvePlayerPresentationSource(Transform playerRoot)
     {
-        if (_playerReferences != null && _playerReferences.VisualRoot != null)
-            return _playerReferences.VisualRoot;
-
-        if (scriptedAnimator != null)
-            return scriptedAnimator.transform.root;
-
         return playerRoot;
     }
 
@@ -877,6 +1416,16 @@ public class PlayerUltimateController : MonoBehaviour
             ?? targetTransform.root.GetComponent<BossController>();
         if (bossController != null)
         {
+            BossReferences bossReferences = bossController.GetComponent<BossReferences>();
+            if (bossReferences != null)
+            {
+                if (bossReferences.VisualRig != null && bossReferences.VisualRig.VisualRoot != null)
+                    return bossReferences.VisualRig.VisualRoot;
+
+                if (bossReferences.VisualRoot != null)
+                    return bossReferences.VisualRoot;
+            }
+
             if (bossController.bossAnimator != null)
                 return bossController.bossAnimator.transform.root;
 
@@ -897,17 +1446,42 @@ public class PlayerUltimateController : MonoBehaviour
             return null;
 
         Animator directAnimator = sourceTransform.GetComponent<Animator>();
-        if (directAnimator != null)
+        if (IsUsablePresentationAnimator(directAnimator))
             return directAnimator;
 
-        Animator childAnimator = sourceTransform.GetComponentInChildren<Animator>(true);
-        if (childAnimator != null)
-            return childAnimator;
+        Animator[] childAnimators = sourceTransform.GetComponentsInChildren<Animator>(true);
+        if (childAnimators != null)
+        {
+            Animator fallbackAnimator = directAnimator;
+            for (int i = 0; i < childAnimators.Length; i++)
+            {
+                Animator childAnimator = childAnimators[i];
+                if (childAnimator == null)
+                    continue;
+
+                if (IsUsablePresentationAnimator(childAnimator))
+                    return childAnimator;
+
+                if (fallbackAnimator == null)
+                    fallbackAnimator = childAnimator;
+            }
+
+            if (fallbackAnimator != null)
+                return fallbackAnimator;
+        }
 
         return sourceTransform.root != null ? sourceTransform.root.GetComponentInChildren<Animator>(true) : null;
     }
 
-    UltimatePresentationClone EnsurePresentationClone(ref UltimatePresentationClone clone, string cloneName, Transform sourceRoot, Transform anchor)
+    static bool IsUsablePresentationAnimator(Animator animator)
+    {
+        return animator != null
+            && animator.avatar != null
+            && animator.runtimeAnimatorController != null
+            && animator.gameObject.activeInHierarchy;
+    }
+
+    UltimatePresentationClone EnsurePresentationClone(ref UltimatePresentationClone clone, string cloneName, Transform sourceRoot, Transform anchor, bool preserveSourceLocalPose = false)
     {
         if (sourceRoot == null || anchor == null)
             return null;
@@ -918,7 +1492,7 @@ public class PlayerUltimateController : MonoBehaviour
             clone = cloneObject.AddComponent<UltimatePresentationClone>();
         }
 
-        clone.BuildFromSource(sourceRoot, anchor, cloneName);
+        clone.BuildFromSource(sourceRoot, anchor, cloneName, preserveSourceLocalPose);
         return clone;
     }
 
@@ -1056,11 +1630,11 @@ public class PlayerUltimateController : MonoBehaviour
             }
         }
 
-        var finisherCam = FindAnyObjectByType<FinisherStaticCam>();
+        FinisherStaticCam finisherCam = ResolveFinisherStaticCam();
         if (finisherCam != null && finisherCam.vCam != null)
             return finisherCam.vCam;
 
-        return FindAnyObjectByType<CinemachineCamera>() ?? FindAnyObjectByType<CinemachineVirtualCameraBase>();
+        return ResolveFallbackSequenceCamera();
     }
 
     CinemachineCamera ResolveOrCreateRuntimeSequenceCamera()
@@ -1101,27 +1675,7 @@ public class PlayerUltimateController : MonoBehaviour
         if (targetTransform == null)
             return transform.position;
 
-        Bounds combinedBounds = default;
-        bool hasBounds = false;
-        Collider[] colliders = targetTransform.GetComponentsInChildren<Collider>(true);
-        for (int i = 0; i < colliders.Length; i++)
-        {
-            Collider col = colliders[i];
-            if (col == null || !col.enabled || col.isTrigger)
-                continue;
-
-            if (!hasBounds)
-            {
-                combinedBounds = col.bounds;
-                hasBounds = true;
-            }
-            else
-            {
-                combinedBounds.Encapsulate(col.bounds);
-            }
-        }
-
-        if (hasBounds)
+        if (CombatTargetBoundsUtility.TryGetCombinedBounds(targetTransform, out Bounds combinedBounds))
             return combinedBounds.center;
 
         return targetTransform.position;
@@ -1369,9 +1923,9 @@ public class PlayerUltimateController : MonoBehaviour
         LogUltimateCameraState("restore-enter");
         yield return null;
         LogUltimateCameraState("restore+1-pre-route");
-        if (_wasLockedOnBeforeCinematic)
+        if (_wasLockedOnBeforeCinematic && _playerLockOn != null)
         {
-            _lockOn?.GiveCameraControlToTimeline(false);
+            RestoreLockOnTargetIfNeeded();
         }
         else if (_playerLockOn != null)
         {
@@ -1388,18 +1942,52 @@ public class PlayerUltimateController : MonoBehaviour
         LogUltimateCameraState("restore+2-post-final");
         yield return null;
         LogUltimateCameraState("restore+3");
+        if (enableUltimateCameraDebugLogs)
+        {
+            for (int i = 4; i <= 8; i++)
+            {
+                yield return null;
+                LogUltimateCameraState($"restore+{i}");
+            }
+        }
+        _cameraRestoreCoroutine = null;
+    }
+
+    void QueueGameplayCameraRestore()
+    {
+        if (isActiveAndEnabled && gameObject.activeInHierarchy)
+        {
+            _cameraRestoreCoroutine = StartCoroutine(Co_RestoreGameplayCameraNextFrame());
+            return;
+        }
+
+        RestoreGameplayCameraImmediately();
+    }
+
+    void RestoreGameplayCameraImmediately()
+    {
+        if (_wasLockedOnBeforeCinematic && _playerLockOn != null)
+        {
+            RestoreLockOnTargetIfNeeded();
+        }
+        else if (_playerLockOn != null)
+        {
+            _playerLockOn.RestoreFreeLookAfterTimeline();
+        }
+        else
+        {
+            _lockOn?.GiveCameraControlToTimeline(false);
+        }
+
+        RestoreFreeLookCameraStateIfNeeded();
         _cameraRestoreCoroutine = null;
     }
 
     void CacheFreeLookCameraState()
     {
-        if (_freeLookCamera == null)
-            _freeLookCamera = FindAnyObjectByType<FreeLookCamera>();
+        ResolveSceneObjectCaches();
 
-        if (_cinemachineFreeLook == null)
-            _cinemachineFreeLook = CinemachineCompat.FindLegacyFreeLookCamera();
-
-        if (_freeLookCamera == null)
+        if (_freeLookCamera == null || !_freeLookCamera)
         {
             _cachedFreeLookStateValid = false;
         }
@@ -1426,23 +2014,18 @@ public class PlayerUltimateController : MonoBehaviour
         if (!_cachedFreeLookStateValid && !_cachedCinemachineFreeLookStateValid)
             return;
 
-        if (_freeLookCamera == null)
-            _freeLookCamera = FindAnyObjectByType<FreeLookCamera>();
-
-        if (_cinemachineFreeLook == null)
-            _cinemachineFreeLook = CinemachineCompat.FindLegacyFreeLookCamera();
+        ResolveSceneObjectCaches();
 
         if (_lockOn != null && _lockOn.IsLockedOn())
             return;
 
-        LockOnCameraManager cameraManager = FindAnyObjectByType<LockOnCameraManager>();
-        cameraManager?.ForceRestoreGameplayFreeLook();
+        _lockOnCameraManager?.ForceRestoreGameplayFreeLook();
         SuppressLegacyUltimateCameras();
 
-        if (_freeLookCamera != null)
+        if (_freeLookCamera != null && _freeLookCamera)
             _freeLookCamera.RestoreManualControl(false);
 
-        if (_freeLookCamera != null && _cachedFreeLookStateValid)
+        if (_freeLookCamera != null && _freeLookCamera && _cachedFreeLookStateValid)
             _freeLookCamera.RestoreOrbitState(_cachedFreeLookYaw, _cachedFreeLookPitch);
 
         if (_cinemachineFreeLook != null && _cachedCinemachineFreeLookStateValid)
@@ -1455,6 +2038,60 @@ public class PlayerUltimateController : MonoBehaviour
         Cursor.visible = false;
         _cachedFreeLookStateValid = false;
         _cachedCinemachineFreeLookStateValid = false;
+    }
+
+    void RestoreLockOnTargetIfNeeded()
+    {
+        ResolveSceneObjectCaches();
+        if (_playerLockOn == null)
+            return;
+
+        Transform cachedTarget = _cachedLockOnTargetBeforeCinematic;
+        _cachedLockOnTargetBeforeCinematic = null;
+        if (cachedTarget == null || !cachedTarget.gameObject.activeInHierarchy)
+        {
+            _cachedLockOnCameraRuntimeStateValid = false;
+            return;
+        }
+
+        AlignPlayerTowardsTargetForLockOnRestore(cachedTarget);
+        _playerLockOn.RestoreLockOnAfterTimeline(cachedTarget);
+
+        if (_lockOnCameraManager != null && _playerLockOn.IsLockedOn())
+        {
+            Transform target = _playerLockOn.GetCurrentTarget();
+            if (_playerReferences != null && _playerReferences.LockPivot != null)
+                _lockOnCameraManager.SetPlayerPivot(_playerReferences.LockPivot);
+
+            _lockOnCameraManager.RefreshLockOnTarget(target);
+            _lockOnCameraManager.StartLockOn(target);
+        }
+
+        _cachedLockOnCameraRuntimeStateValid = false;
+    }
+
+    void AlignPlayerTowardsTargetForLockOnRestore(Transform target)
+    {
+        Transform playerRoot = ResolvePlayerRoot();
+        if (playerRoot == null || target == null)
+            return;
+
+        Vector3 lookDirection = target.position - playerRoot.position;
+        lookDirection.y = 0f;
+        if (lookDirection.sqrMagnitude <= 0.0001f)
+            return;
+
+        Quaternion targetRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
+        SetPlayerPose(playerRoot, playerRoot.position, targetRotation);
+    }
+
+    void CacheLockOnCameraRuntimeStateIfNeeded()
+    {
+        _cachedLockOnCameraRuntimeStateValid = false;
+        if (!_wasLockedOnBeforeCinematic || _lockOnCameraManager == null)
+            return;
+
+        _cachedLockOnCameraRuntimeStateValid = _lockOnCameraManager.TryCaptureCurrentRuntimeState(out _cachedLockOnCameraRuntimeState);
     }
 
     void SuppressLegacyUltimateCameras()
@@ -1486,7 +2123,7 @@ public class PlayerUltimateController : MonoBehaviour
             }
         }
 
-        FinisherStaticCam finisherCam = FindAnyObjectByType<FinisherStaticCam>();
+        FinisherStaticCam finisherCam = ResolveFinisherStaticCam();
         if (finisherCam != null && finisherCam.vCam != null)
         {
             finisherCam.vCam.Priority = -100;
@@ -1500,16 +2137,10 @@ public class PlayerUltimateController : MonoBehaviour
         if (!enableUltimateCameraDebugLogs)
             return;
 
-        if (_freeLookCamera == null)
-            _freeLookCamera = FindAnyObjectByType<FreeLookCamera>();
-
-        if (_cinemachineFreeLook == null)
-            _cinemachineFreeLook = CinemachineCompat.FindLegacyFreeLookCamera();
-
-        LockOnCameraManager cameraManager = FindAnyObjectByType<LockOnCameraManager>();
-        Camera mainCamera = Camera.main;
-        CinemachineBrain brain = mainCamera != null ? mainCamera.GetComponent<CinemachineBrain>() : FindAnyObjectByType<CinemachineBrain>();
-        UltimateStageRuntime activeStage = _resolvedRuntimeStage != null ? _resolvedRuntimeStage : FindAnyObjectByType<UltimateStageRuntime>();
+        ResolveSceneObjectCaches();
+        Camera mainCamera = ResolveMainCamera();
+        CinemachineBrain brain = ResolveCinemachineBrain();
+        UltimateStageRuntime activeStage = _resolvedRuntimeStage != null ? _resolvedRuntimeStage : ResolveUltimateStageRuntime();
 
         string activeVcamName = brain != null && brain.ActiveVirtualCamera != null
             ? brain.ActiveVirtualCamera.Name
@@ -1532,10 +2163,26 @@ public class PlayerUltimateController : MonoBehaviour
                 $"{_cinemachineFreeLook.name}(enabled={_cinemachineFreeLook.enabled},active={_cinemachineFreeLook.gameObject.activeInHierarchy},priority={_cinemachineFreeLook.Priority},{axisState})";
         }
         string lockOnState = _lockOn != null ? _lockOn.IsLockedOn().ToString() : "<null>";
-        string cameraManagerState = cameraManager != null ? cameraManager.BuildDebugSummary() : "<null>";
+        string playerLockOnState = _playerLockOn != null ? _playerLockOn.BuildDebugSummary() : "<null>";
+        string cameraManagerState = _lockOnCameraManager != null ? _lockOnCameraManager.BuildDebugSummary() : "<null>";
         string stageSequenceState = activeStage != null && activeStage.SequenceCamera != null
             ? $"{activeStage.SequenceCamera.name}(enabled={activeStage.SequenceCamera.enabled},priority={activeStage.SequenceCamera.Priority})"
             : "<null>";
+        Transform playerRoot = ResolvePlayerRoot();
+        Transform lockOnTarget = _playerLockOn != null ? _playerLockOn.GetCurrentTarget() : null;
+        string facingState = "<null>";
+        if (playerRoot != null && lockOnTarget != null)
+        {
+            Vector3 playerForward = playerRoot.forward;
+            playerForward.y = 0f;
+            Vector3 targetDirection = lockOnTarget.position - playerRoot.position;
+            targetDirection.y = 0f;
+            if (playerForward.sqrMagnitude > 0.0001f && targetDirection.sqrMagnitude > 0.0001f)
+            {
+                float facingDot = Vector3.Dot(playerForward.normalized, targetDirection.normalized);
+                facingState = $"dot={facingDot:0.###} playerYaw={playerRoot.eulerAngles.y:0.##} targetYaw={Quaternion.LookRotation(targetDirection.normalized, Vector3.up).eulerAngles.y:0.##}";
+            }
+        }
 
         Debug.Log(
             $"[ULT CAM] phase={phase} frame={Time.frameCount} " +
@@ -1543,8 +2190,74 @@ public class PlayerUltimateController : MonoBehaviour
             $"freeDriver={freeLookDriverState} cineFree={cineFreeLookState} " +
             $"lockOn={lockOnState} wasLockedBefore={_wasLockedOnBeforeCinematic} " +
             $"cursor={Cursor.lockState}/{Cursor.visible} timeScale={Time.timeScale:0.###} " +
-            $"cameraMgr={cameraManagerState}",
+            $"playerLockOn={playerLockOnState} facing={facingState} cameraMgr={cameraManagerState}",
             this);
+    }
+
+    void ResolveSceneObjectCaches()
+    {
+        if (_freeLookCamera == null || !_freeLookCamera)
+            _freeLookCamera = FindAnyObjectByType<FreeLookCamera>();
+
+        if (_cinemachineFreeLook == null || !_cinemachineFreeLook)
+            _cinemachineFreeLook = CinemachineCompat.FindLegacyFreeLookCamera();
+
+        if (_lockOnCameraManager == null || !_lockOnCameraManager)
+            _lockOnCameraManager = FindAnyObjectByType<LockOnCameraManager>();
+
+        if (_finisherStaticCam == null || !_finisherStaticCam)
+            _finisherStaticCam = FindAnyObjectByType<FinisherStaticCam>();
+
+        if (_cachedMainCamera == null || !_cachedMainCamera)
+            _cachedMainCamera = Camera.main;
+
+        if ((_cachedCinemachineBrain == null || !_cachedCinemachineBrain) && _cachedMainCamera != null)
+            _cachedCinemachineBrain = _cachedMainCamera.GetComponent<CinemachineBrain>();
+
+        if ((_cachedCinemachineBrain == null || !_cachedCinemachineBrain) && _cachedMainCamera == null)
+            _cachedCinemachineBrain = FindAnyObjectByType<CinemachineBrain>();
+
+        if (_resolvedRuntimeStage == null && runtimeStage != null)
+            _resolvedRuntimeStage = runtimeStage;
+    }
+
+    Camera ResolveMainCamera()
+    {
+        if (_cachedMainCamera == null || !_cachedMainCamera)
+            _cachedMainCamera = Camera.main;
+
+        return _cachedMainCamera;
+    }
+
+    CinemachineBrain ResolveCinemachineBrain()
+    {
+        ResolveSceneObjectCaches();
+        return _cachedCinemachineBrain;
+    }
+
+    FinisherStaticCam ResolveFinisherStaticCam()
+    {
+        if (_finisherStaticCam == null)
+            _finisherStaticCam = FindAnyObjectByType<FinisherStaticCam>();
+
+        return _finisherStaticCam;
+    }
+
+    CinemachineVirtualCameraBase ResolveFallbackSequenceCamera()
+    {
+        if (_fallbackSequenceCamera != null)
+            return _fallbackSequenceCamera;
+
+        _fallbackSequenceCamera = FindAnyObjectByType<CinemachineCamera>() ?? FindAnyObjectByType<CinemachineVirtualCameraBase>();
+        return _fallbackSequenceCamera;
+    }
+
+    BossBreakController ResolveFallbackBreakController()
+    {
+        if (_fallbackBreakController == null)
+            _fallbackBreakController = FindObjectOfType<BossBreakController>(true);
+
+        return _fallbackBreakController;
     }
 
     struct SequenceCameraState

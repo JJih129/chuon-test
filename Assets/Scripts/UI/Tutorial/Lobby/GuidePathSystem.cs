@@ -14,13 +14,14 @@ public class GuidePathSystem : MonoBehaviour
     [Min(0.02f)] public float pathRefreshInterval = 0.12f;
     [Min(0.01f)] public float repathDistanceThreshold = 0.35f;
 
-    private readonly List<LineRenderer> activeLines = new();
-    private readonly List<Transform> currentTargets = new();
-    private readonly List<Vector3> lastTargetPositions = new();
-    private readonly List<Material> lineMaterials = new();
-    private NavMeshPath navMeshPath;
-    private float nextRefreshTime;
-    private Vector3 lastPlayerPosition;
+    readonly List<LineRenderer> activeLines = new();
+    readonly List<Transform> currentTargets = new();
+    readonly List<Vector3> lastTargetPositions = new();
+    readonly List<Material> lineMaterials = new();
+    NavMeshPath navMeshPath;
+    float nextRefreshTime;
+    Vector3 lastPlayerPosition;
+    int activeLineCount;
 
     void Awake()
     {
@@ -51,7 +52,7 @@ public class GuidePathSystem : MonoBehaviour
         }
 
         float offset = Time.time * -textureScrollSpeed;
-        for (int i = 0; i < lineMaterials.Count; i++)
+        for (int i = 0; i < activeLineCount; i++)
         {
             Material material = lineMaterials[i];
             if (material == null)
@@ -86,7 +87,7 @@ public class GuidePathSystem : MonoBehaviour
 
         for (int i = 0; i < currentTargets.Count; i++)
         {
-            if (i >= activeLines.Count)
+            if (i >= activeLineCount)
                 break;
 
             Transform target = currentTargets[i];
@@ -143,24 +144,28 @@ public class GuidePathSystem : MonoBehaviour
             lastTargetPositions.Add(target.position);
         }
 
+        int preparedLineCount = 0;
         for (int i = 0; i < currentTargets.Count; i++)
         {
-            GameObject lineObj = Instantiate(linePrefab, transform);
-            LineRenderer lr = lineObj.GetComponent<LineRenderer>();
-            if (lr == null)
-            {
-                Destroy(lineObj);
-                continue;
-            }
+            LineRenderer lineRenderer = GetOrCreateLineRenderer(i);
+            if (lineRenderer == null)
+                break;
 
-            lr.enabled = true;
-            activeLines.Add(lr);
-            lineMaterials.Add(lr.material);
+            lineRenderer.gameObject.SetActive(true);
+            lineRenderer.enabled = true;
+            preparedLineCount++;
         }
 
+        if (preparedLineCount < currentTargets.Count)
+        {
+            currentTargets.RemoveRange(preparedLineCount, currentTargets.Count - preparedLineCount);
+            lastTargetPositions.RemoveRange(preparedLineCount, lastTargetPositions.Count - preparedLineCount);
+        }
+
+        activeLineCount = preparedLineCount;
         lastPlayerPosition = player != null ? player.position : Vector3.zero;
         nextRefreshTime = 0f;
-        enabled = currentTargets.Count > 0;
+        enabled = activeLineCount > 0;
         RefreshPaths();
     }
 
@@ -169,19 +174,47 @@ public class GuidePathSystem : MonoBehaviour
         for (int i = 0; i < activeLines.Count; i++)
         {
             if (activeLines[i] != null)
-                Destroy(activeLines[i].gameObject);
+            {
+                activeLines[i].enabled = false;
+                activeLines[i].gameObject.SetActive(false);
+            }
         }
 
+        activeLineCount = 0;
+        currentTargets.Clear();
+        lastTargetPositions.Clear();
+        enabled = false;
+    }
+
+    void OnDestroy()
+    {
         for (int i = 0; i < lineMaterials.Count; i++)
         {
             if (lineMaterials[i] != null)
                 Destroy(lineMaterials[i]);
         }
+    }
 
-        activeLines.Clear();
-        currentTargets.Clear();
-        lastTargetPositions.Clear();
-        lineMaterials.Clear();
-        enabled = false;
+    LineRenderer GetOrCreateLineRenderer(int index)
+    {
+        if (index < activeLines.Count)
+            return activeLines[index];
+
+        // Reuse line renderers across objectives to avoid repeated instantiate/destroy churn.
+        GameObject lineObject = Instantiate(linePrefab, transform);
+        if (lineObject == null)
+            return null;
+
+        LineRenderer lineRenderer = lineObject.GetComponent<LineRenderer>();
+        if (lineRenderer == null)
+        {
+            Destroy(lineObject);
+            return null;
+        }
+
+        lineObject.SetActive(false);
+        activeLines.Add(lineRenderer);
+        lineMaterials.Add(lineRenderer.material);
+        return lineRenderer;
     }
 }

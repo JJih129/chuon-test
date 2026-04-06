@@ -17,8 +17,7 @@ public class AutoTeamSplash : MonoBehaviour
 
     void Awake()
     {
-        if (Time.timeScale != 1f)
-            Time.timeScale = 1f;
+        RuntimeMenuSceneStateUtility.PrepareForMenuScene(false);
 
         if (logoCanvasGroup == null)
             logoCanvasGroup = GetComponentInChildren<CanvasGroup>(true);
@@ -87,7 +86,11 @@ public class AutoTeamSplash : MonoBehaviour
         {
             try
             {
-                SceneManager.LoadScene(titleSceneName, LoadSceneMode.Single);
+                SceneFader sceneFader = RuntimeSceneFaderUtility.EnsureSceneFader();
+                if (sceneFader != null)
+                    sceneFader.FadeOutAndLoadScene(titleSceneName);
+                else
+                    SceneManager.LoadScene(titleSceneName, LoadSceneMode.Single);
                 return;
             }
             catch

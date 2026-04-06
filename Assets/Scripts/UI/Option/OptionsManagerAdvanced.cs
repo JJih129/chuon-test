@@ -72,6 +72,25 @@ public class OptionsManagerAdvanced : MonoBehaviour
     public bool IsWaitingForRebind => _waitingForKey;
     public Button CurrentRebindButton => _currentRebindButton;
 
+    public void CancelRebind()
+    {
+        if (!_waitingForKey)
+            return;
+
+        if (_currentRebindButton != null)
+        {
+            string keyName = GetPrefKeyForButton(_currentRebindButton);
+            string saved = PlayerPrefs.GetString(keyName, string.Empty);
+            var label = _currentRebindButton.GetComponentInChildren<Text>();
+            if (label != null)
+                label.text = string.IsNullOrEmpty(saved) ? keyName.Replace("Key_", string.Empty) : saved;
+        }
+
+        _waitingForKey = false;
+        _currentRebindButton = null;
+        enabled = false;
+    }
+
     void Awake()
     {
         AudioOptionsRuntime.RefreshFromPrefs();
@@ -310,8 +329,26 @@ public class OptionsManagerAdvanced : MonoBehaviour
 
     void EnsureRuntimeOptionRows()
     {
+        if (subtitleSizeSlider == null)
+            subtitleSizeSlider = CreateGeneratedSliderRow(
+                brightnessSlider != null ? brightnessSlider : masterSlider,
+                "SubtitleSize_Row",
+                "Subtitle Size",
+                "Slider_SubtitleSize");
+
+        if (subtitleBackgroundToggle == null)
+            subtitleBackgroundToggle = CreateGeneratedToggleRow(
+                motionBlurToggle != null ? motionBlurToggle : fullscreenToggle,
+                "SubtitleBackground_Row",
+                "Subtitle Background",
+                "Toggle_SubtitleBackground");
+
         if (cameraShakeSlider == null)
-            cameraShakeSlider = CreateGeneratedSliderRow(masterSlider != null ? masterSlider : sfxSlider, "CameraShake_Row", "Camera Shake", "Slider_CameraShake");
+            cameraShakeSlider = CreateGeneratedSliderRow(
+                masterSlider != null ? masterSlider : sfxSlider,
+                "CameraShake_Row",
+                "Camera Shake",
+                "Slider_CameraShake");
     }
 
     Slider CreateGeneratedSliderRow(Slider templateSlider, string rowName, string labelText, string sliderName)
@@ -345,6 +382,39 @@ public class OptionsManagerAdvanced : MonoBehaviour
         slider.gameObject.name = sliderName;
         slider.onValueChanged.RemoveAllListeners();
         return slider;
+    }
+
+    Toggle CreateGeneratedToggleRow(Toggle templateToggle, string rowName, string labelText, string toggleName)
+    {
+        if (templateToggle == null)
+            return null;
+
+        var templateRow = templateToggle.transform.parent as RectTransform;
+        var parent = templateRow != null ? templateRow.parent as RectTransform : null;
+        if (templateRow == null || parent == null)
+            return null;
+
+        var generatedRowObject = Instantiate(templateRow.gameObject, parent, false);
+        generatedRowObject.name = rowName;
+
+        var generatedRow = generatedRowObject.GetComponent<RectTransform>();
+        if (generatedRow != null)
+        {
+            generatedRow.SetAsLastSibling();
+            generatedRow.anchoredPosition = new Vector2(templateRow.anchoredPosition.x, CalculateGeneratedRowY(parent));
+        }
+
+        var label = generatedRowObject.GetComponentInChildren<Text>(true);
+        if (label != null)
+            label.text = labelText;
+
+        var toggle = generatedRowObject.GetComponentInChildren<Toggle>(true);
+        if (toggle == null)
+            return null;
+
+        toggle.gameObject.name = toggleName;
+        toggle.onValueChanged.RemoveAllListeners();
+        return toggle;
     }
 
     float CalculateGeneratedRowY(RectTransform parent)

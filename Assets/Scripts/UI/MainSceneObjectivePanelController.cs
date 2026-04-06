@@ -1,0 +1,1099 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
+
+[DisallowMultipleComponent]
+public class MainSceneObjectivePanelController : MonoBehaviour
+{
+    enum EncounterObjectiveStage
+    {
+        Read = 0,
+        Punish = 1,
+        Break = 2,
+        Finish = 3
+    }
+
+    [SerializeField] private BossUIController bossUiController;
+    [SerializeField] private BossController bossController;
+    [SerializeField] private BossHealth bossHealth;
+    [SerializeField] private BossBreakController bossBreakController;
+    [SerializeField] private PlayerUltimateController playerUltimateController;
+
+    [Header("Layout")]
+    [SerializeField] private Vector2 panelAnchoredPosition = new Vector2(-28f, -104f);
+    [SerializeField] private Vector2 panelSize = new Vector2(448f, 188f);
+    [SerializeField] private Vector2 iconAnchoredPosition = new Vector2(20f, -16f);
+    [SerializeField] private Vector2 iconSize = new Vector2(32f, 32f);
+    [SerializeField] private Vector2 badgeAnchoredPosition = new Vector2(60f, -16f);
+    [SerializeField] private Vector2 badgeSize = new Vector2(112f, 24f);
+    [SerializeField] private Vector2 titleAnchoredPosition = new Vector2(20f, -52f);
+    [SerializeField] private Vector2 titleSize = new Vector2(284f, 28f);
+    [SerializeField] private Vector2 counterAnchoredPosition = new Vector2(-20f, -16f);
+    [SerializeField] private Vector2 counterSize = new Vector2(84f, 24f);
+    [SerializeField] private Vector2 statusAnchoredPosition = new Vector2(20f, -88f);
+    [SerializeField] private Vector2 statusSize = new Vector2(408f, 44f);
+    [SerializeField] private Vector2 progressAnchoredMin = new Vector2(20f, 14f);
+    [SerializeField] private Vector2 progressAnchoredMax = new Vector2(-20f, 28f);
+    [SerializeField] private float accentHeight = 5f;
+    [SerializeField] private float nodeSize = 12f;
+    [SerializeField] private float currentNodeScale = 1.22f;
+    [SerializeField] private float completedNodeScale = 1.06f;
+    [SerializeField] private float linkThickness = 3f;
+    [SerializeField] private int badgeFontSize = 14;
+    [SerializeField] private int titleFontSize = 18;
+    [SerializeField] private int counterFontSize = 15;
+    [SerializeField] private int statusFontSize = 15;
+
+    [Header("Colors")]
+    [SerializeField] private Color panelColor = new Color(0.03f, 0.07f, 0.10f, 0.84f);
+    [SerializeField] private Color phaseOneColor = new Color(0.24f, 0.84f, 1f, 0.96f);
+    [SerializeField] private Color phaseTwoColor = new Color(1f, 0.74f, 0.30f, 0.98f);
+    [SerializeField] private Color phaseThreeColor = new Color(1f, 0.34f, 0.34f, 0.98f);
+    [SerializeField] private Color breakColor = new Color(0.86f, 1f, 0.42f, 0.98f);
+    [SerializeField] private Color finishColor = new Color(0.92f, 0.48f, 1f, 0.98f);
+    [SerializeField] private Color clearColor = new Color(0.74f, 1f, 0.84f, 0.98f);
+    [SerializeField] private Color bodyTextColor = new Color(0.90f, 0.97f, 1f, 0.96f);
+    [SerializeField] private Color pendingNodeColor = new Color(0.26f, 0.34f, 0.42f, 0.58f);
+    [SerializeField] private Color pendingLinkColor = new Color(0.18f, 0.26f, 0.34f, 0.24f);
+
+    [Header("Pulse")]
+    [SerializeField, Min(0.05f)] private float pulseDuration = 0.22f;
+    [SerializeField, Min(0.05f)] private float sweepDuration = 0.24f;
+    [SerializeField, Min(0.05f)] private float iconPulseDuration = 0.18f;
+    [SerializeField, Range(0.05f, 0.40f)] private float finishPressureThresholdNormalized = 0.18f;
+
+    RectTransform _root;
+    Image _panelImage;
+    Image _accentImage;
+    Image _sweepImage;
+    RectTransform _iconRoot;
+    Image _iconBackplate;
+    Image _iconPrimary;
+    Image _iconSecondary;
+    Image _iconTertiary;
+    Image _badgeImage;
+    Text _badgeText;
+    Text _titleText;
+    Text _counterText;
+    Text _statusText;
+    RectTransform _progressRoot;
+    Image[] _progressNodes;
+    Image[] _progressLinks;
+    Coroutine _pulseRoutine;
+    Coroutine _sweepRoutine;
+    Coroutine _iconPulseRoutine;
+
+    bool _subscribed;
+    bool _punishSeen;
+    bool _breakSeen;
+    bool _breakActive;
+    bool _ultimateReady;
+    bool _ultimateActive;
+    bool _finishPressureSeen;
+    bool _clearOverrideActive;
+    int _currentPhase = 1;
+    EncounterObjectiveStage _currentStage;
+
+    public void ConfigureRuntime(
+        BossUIController runtimeBossUiController,
+        BossController runtimeBossController,
+        BossBreakController runtimeBossBreakController,
+        PlayerUltimateController runtimePlayerUltimateController)
+    {
+        bossUiController = runtimeBossUiController;
+        bossController = runtimeBossController;
+        bossHealth = runtimeBossController != null ? runtimeBossController.bossHealth : null;
+        bossBreakController = runtimeBossBreakController;
+        playerUltimateController = runtimePlayerUltimateController;
+
+        NormalizeCompactLayout();
+        CacheInitialState();
+        EnsureVisuals();
+        RefreshSubscriptions();
+        ApplyState(false);
+    }
+
+    void OnEnable()
+    {
+        NormalizeCompactLayout();
+        CacheInitialState();
+        EnsureVisuals();
+        RefreshSubscriptions();
+        ApplyState(false);
+    }
+
+    void OnDisable()
+    {
+        ReleaseSubscriptions();
+        StopPulse();
+        StopSweep();
+        StopIconPulse();
+    }
+
+    void OnDestroy()
+    {
+        ReleaseSubscriptions();
+        StopPulse();
+        StopSweep();
+        StopIconPulse();
+    }
+
+    void CacheInitialState()
+    {
+        if (bossController == null)
+            bossController = GameplaySceneCache.ResolveBossController();
+        if (bossHealth == null && bossController != null)
+            bossHealth = bossController.bossHealth;
+        if (bossHealth == null)
+            bossHealth = GameplaySceneCache.ResolveBossHealth();
+
+        if (bossBreakController == null && bossController != null)
+            bossBreakController = bossController.GetComponent<BossBreakController>();
+        if (bossBreakController == null)
+            bossBreakController = GameplaySceneCache.ResolveBossBreakController();
+
+        if (playerUltimateController == null)
+            playerUltimateController = GameplaySceneCache.ResolvePlayerUltimateController();
+
+        _currentPhase = bossController != null ? bossController.CurrentPhase : Mathf.Max(1, _currentPhase);
+        _breakActive = bossBreakController != null && bossBreakController.IsInBreak;
+        if (_breakActive)
+            _breakSeen = true;
+
+        _ultimateActive = playerUltimateController != null && playerUltimateController.IsCinematic;
+        _ultimateReady = playerUltimateController != null
+            && playerUltimateController.IsGaugeReady
+            && !playerUltimateController.IsCinematic;
+        _finishPressureSeen = IsBossInFinishPressure();
+
+        _currentStage = ResolveStage();
+    }
+
+    void RefreshSubscriptions()
+    {
+        ReleaseSubscriptions();
+
+        if (bossUiController == null)
+            bossUiController = GameplaySceneCache.ResolveBossUIController();
+        if (bossController == null)
+            bossController = GameplaySceneCache.ResolveBossController();
+        if (bossHealth == null && bossController != null)
+            bossHealth = bossController.bossHealth;
+        if (bossHealth == null)
+            bossHealth = GameplaySceneCache.ResolveBossHealth();
+        if (bossBreakController == null && bossController != null)
+            bossBreakController = bossController.GetComponent<BossBreakController>();
+        if (bossBreakController == null)
+            bossBreakController = GameplaySceneCache.ResolveBossBreakController();
+        if (playerUltimateController == null)
+            playerUltimateController = GameplaySceneCache.ResolvePlayerUltimateController();
+
+        if (bossController == null && bossBreakController == null && playerUltimateController == null)
+            return;
+
+        if (bossController != null)
+        {
+            bossController.OnBossPhaseChanged += HandleBossPhaseChanged;
+            bossController.OnPunishWindowOpened += HandlePunishWindowOpened;
+            _subscribed = true;
+        }
+
+        if (bossHealth != null)
+        {
+            bossHealth.OnHPChanged += HandleBossHpChanged;
+            _subscribed = true;
+        }
+
+        if (bossBreakController != null)
+        {
+            bossBreakController.OnBreakEnter.AddListener(HandleBreakEnter);
+            bossBreakController.OnBreakExit.AddListener(HandleBreakExit);
+            _subscribed = true;
+        }
+
+        if (playerUltimateController != null)
+        {
+            playerUltimateController.OnGaugeChanged += HandleUltimateGaugeChanged;
+            playerUltimateController.OnUltimateStarted += HandleUltimateStarted;
+            playerUltimateController.OnUltimateEnded += HandleUltimateEnded;
+            HandleUltimateGaugeChanged(
+                playerUltimateController.Gauge,
+                playerUltimateController.gaugeMax > 0f ? Mathf.Clamp01(playerUltimateController.Gauge / playerUltimateController.gaugeMax) : 0f,
+                playerUltimateController.IsGaugeReady);
+            _subscribed = true;
+        }
+    }
+
+    void ReleaseSubscriptions()
+    {
+        if (!_subscribed)
+            return;
+
+        if (bossController != null)
+        {
+            bossController.OnBossPhaseChanged -= HandleBossPhaseChanged;
+            bossController.OnPunishWindowOpened -= HandlePunishWindowOpened;
+        }
+
+        if (bossHealth != null)
+            bossHealth.OnHPChanged -= HandleBossHpChanged;
+
+        if (bossBreakController != null)
+        {
+            bossBreakController.OnBreakEnter.RemoveListener(HandleBreakEnter);
+            bossBreakController.OnBreakExit.RemoveListener(HandleBreakExit);
+        }
+
+        if (playerUltimateController != null)
+        {
+            playerUltimateController.OnGaugeChanged -= HandleUltimateGaugeChanged;
+            playerUltimateController.OnUltimateStarted -= HandleUltimateStarted;
+            playerUltimateController.OnUltimateEnded -= HandleUltimateEnded;
+        }
+
+        _subscribed = false;
+    }
+
+    void HandleBossPhaseChanged(int phase, float hpNormalized)
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _currentPhase = Mathf.Max(1, phase);
+        ApplyState(true);
+    }
+
+    void HandlePunishWindowOpened(float duration, float damageMultiplier, string patternName)
+    {
+        if (_clearOverrideActive)
+            return;
+
+        if (_punishSeen)
+            return;
+
+        _punishSeen = true;
+        ApplyState(true);
+    }
+
+    void HandleBossHpChanged(int current, int max)
+    {
+        if (_clearOverrideActive)
+            return;
+
+        bool nextFinishPressure = max > 0 && (float)current / max <= finishPressureThresholdNormalized;
+        if (_finishPressureSeen == nextFinishPressure)
+            return;
+
+        _finishPressureSeen = nextFinishPressure;
+        ApplyState(true);
+    }
+
+    void HandleBreakEnter()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _breakSeen = true;
+        _breakActive = true;
+        ApplyState(true);
+    }
+
+    void HandleBreakExit()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _breakActive = false;
+        ApplyState(false);
+    }
+
+    void HandleUltimateStarted()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _ultimateActive = true;
+        _ultimateReady = false;
+        ApplyState(true);
+    }
+
+    void HandleUltimateEnded()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _ultimateActive = false;
+        ApplyState(false);
+    }
+
+    void HandleUltimateGaugeChanged(float gauge, float normalized, bool ready)
+    {
+        if (_clearOverrideActive)
+            return;
+
+        bool nextReady = ready && !_ultimateActive;
+        if (_ultimateReady == nextReady)
+            return;
+
+        _ultimateReady = nextReady;
+        ApplyState(nextReady);
+    }
+
+    void NormalizeCompactLayout()
+    {
+        panelAnchoredPosition = new Vector2(-28f, -104f);
+        panelSize = new Vector2(448f, 188f);
+        iconAnchoredPosition = new Vector2(20f, -16f);
+        iconSize = new Vector2(32f, 32f);
+        badgeAnchoredPosition = new Vector2(60f, -16f);
+        badgeSize = new Vector2(112f, 24f);
+        titleAnchoredPosition = new Vector2(20f, -52f);
+        titleSize = new Vector2(284f, 28f);
+        counterAnchoredPosition = new Vector2(-20f, -16f);
+        counterSize = new Vector2(84f, 24f);
+        statusAnchoredPosition = new Vector2(20f, -88f);
+        statusSize = new Vector2(408f, 44f);
+        progressAnchoredMin = new Vector2(20f, 14f);
+        progressAnchoredMax = new Vector2(-20f, 28f);
+        accentHeight = 5f;
+        nodeSize = 12f;
+        currentNodeScale = 1.22f;
+        completedNodeScale = 1.06f;
+        linkThickness = 3f;
+        badgeFontSize = 14;
+        titleFontSize = 18;
+        counterFontSize = 15;
+        statusFontSize = 15;
+    }
+
+    void EnsureVisuals()
+    {
+        if (bossUiController == null)
+            bossUiController = GameplaySceneCache.ResolveBossUIController();
+
+        if (bossUiController == null || bossUiController.topHudRoot == null)
+            return;
+
+        RectTransform parent = bossUiController.topHudRoot.transform as RectTransform;
+        if (parent == null)
+            return;
+
+        if (_root == null)
+        {
+            Transform existing = parent.Find("RuntimeBossObjective");
+            if (existing != null)
+                _root = existing as RectTransform;
+
+            if (_root == null)
+            {
+                GameObject rootObject = new GameObject("RuntimeBossObjective", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                _root = rootObject.GetComponent<RectTransform>();
+                _root.SetParent(parent, false);
+            }
+        }
+
+        _root.anchorMin = new Vector2(1f, 1f);
+        _root.anchorMax = new Vector2(1f, 1f);
+        _root.pivot = new Vector2(1f, 1f);
+        _root.anchoredPosition = panelAnchoredPosition;
+        _root.sizeDelta = panelSize;
+        _root.localScale = Vector3.one;
+        _root.SetAsLastSibling();
+
+        _panelImage = _root.GetComponent<Image>();
+        if (_panelImage != null)
+        {
+            _panelImage.color = panelColor;
+            _panelImage.raycastTarget = false;
+        }
+
+        _accentImage = EnsureImage(_root, "Accent", out RectTransform accentRect);
+        accentRect.anchorMin = new Vector2(0f, 1f);
+        accentRect.anchorMax = new Vector2(1f, 1f);
+        accentRect.pivot = new Vector2(0.5f, 1f);
+        accentRect.anchoredPosition = Vector2.zero;
+        accentRect.sizeDelta = new Vector2(0f, accentHeight);
+
+        _sweepImage = EnsureImage(_root, "Sweep", out RectTransform sweepRect);
+        StretchToParent(sweepRect);
+        _sweepImage.color = new Color(1f, 1f, 1f, 0f);
+
+        EnsureIconVisuals();
+
+        _badgeImage = EnsureImage(_root, "Badge", out RectTransform badgeRect);
+        badgeRect.anchorMin = new Vector2(0f, 1f);
+        badgeRect.anchorMax = new Vector2(0f, 1f);
+        badgeRect.pivot = new Vector2(0f, 1f);
+        badgeRect.anchoredPosition = badgeAnchoredPosition;
+        badgeRect.sizeDelta = badgeSize;
+
+        _badgeText = EnsureText(_badgeImage.rectTransform, "BadgeText");
+        StretchToParent(_badgeText.rectTransform);
+        _badgeText.fontSize = badgeFontSize;
+        _badgeText.alignment = TextAnchor.MiddleCenter;
+        _badgeText.fontStyle = FontStyle.Bold;
+        _badgeText.raycastTarget = false;
+
+        _titleText = EnsureText(_root, "Title");
+        RectTransform titleRect = _titleText.rectTransform;
+        titleRect.anchorMin = new Vector2(0f, 1f);
+        titleRect.anchorMax = new Vector2(0f, 1f);
+        titleRect.pivot = new Vector2(0f, 1f);
+        titleRect.anchoredPosition = titleAnchoredPosition;
+        titleRect.sizeDelta = titleSize;
+        _titleText.fontSize = titleFontSize;
+        _titleText.alignment = TextAnchor.MiddleLeft;
+        _titleText.fontStyle = FontStyle.Bold;
+        _titleText.color = bodyTextColor;
+        _titleText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _titleText.verticalOverflow = VerticalWrapMode.Overflow;
+        _titleText.raycastTarget = false;
+
+        _counterText = EnsureText(_root, "Counter");
+        RectTransform counterRect = _counterText.rectTransform;
+        counterRect.anchorMin = new Vector2(1f, 1f);
+        counterRect.anchorMax = new Vector2(1f, 1f);
+        counterRect.pivot = new Vector2(1f, 1f);
+        counterRect.anchoredPosition = counterAnchoredPosition;
+        counterRect.sizeDelta = counterSize;
+        _counterText.fontSize = counterFontSize;
+        _counterText.alignment = TextAnchor.MiddleRight;
+        _counterText.fontStyle = FontStyle.Bold;
+        _counterText.color = bodyTextColor;
+        _counterText.raycastTarget = false;
+
+        _statusText = EnsureText(_root, "Status");
+        RectTransform statusRect = _statusText.rectTransform;
+        statusRect.anchorMin = new Vector2(0f, 1f);
+        statusRect.anchorMax = new Vector2(0f, 1f);
+        statusRect.pivot = new Vector2(0f, 1f);
+        statusRect.anchoredPosition = statusAnchoredPosition;
+        statusRect.sizeDelta = statusSize;
+        _statusText.fontSize = statusFontSize;
+        _statusText.alignment = TextAnchor.UpperLeft;
+        _statusText.fontStyle = FontStyle.Normal;
+        _statusText.color = bodyTextColor;
+        _statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _statusText.verticalOverflow = VerticalWrapMode.Overflow;
+        _statusText.raycastTarget = false;
+
+        EnsureProgressVisuals();
+    }
+
+    void EnsureIconVisuals()
+    {
+        if (_root == null)
+            return;
+
+        if (_iconRoot == null)
+        {
+            Transform existing = _root.Find("Icon");
+            if (existing != null)
+                _iconRoot = existing as RectTransform;
+
+            if (_iconRoot == null)
+            {
+                GameObject rootObject = new GameObject("Icon", typeof(RectTransform));
+                _iconRoot = rootObject.GetComponent<RectTransform>();
+                _iconRoot.SetParent(_root, false);
+            }
+        }
+
+        _iconRoot.anchorMin = new Vector2(0f, 1f);
+        _iconRoot.anchorMax = new Vector2(0f, 1f);
+        _iconRoot.pivot = new Vector2(0f, 1f);
+        _iconRoot.anchoredPosition = iconAnchoredPosition;
+        _iconRoot.sizeDelta = iconSize;
+        _iconRoot.localScale = Vector3.one;
+
+        _iconBackplate = EnsureImage(_iconRoot, "Backplate", out RectTransform backplateRect);
+        StretchToParent(backplateRect);
+
+        _iconPrimary = EnsureImage(_iconRoot, "Primary", out _);
+        _iconSecondary = EnsureImage(_iconRoot, "Secondary", out _);
+        _iconTertiary = EnsureImage(_iconRoot, "Tertiary", out _);
+    }
+
+    void EnsureProgressVisuals()
+    {
+        if (_root == null)
+            return;
+
+        if (_progressRoot == null)
+        {
+            Transform existing = _root.Find("Progress");
+            if (existing != null)
+                _progressRoot = existing as RectTransform;
+
+            if (_progressRoot == null)
+            {
+                GameObject rootObject = new GameObject("Progress", typeof(RectTransform));
+                _progressRoot = rootObject.GetComponent<RectTransform>();
+                _progressRoot.SetParent(_root, false);
+            }
+        }
+
+        _progressRoot.anchorMin = new Vector2(0f, 0f);
+        _progressRoot.anchorMax = new Vector2(1f, 0f);
+        _progressRoot.pivot = new Vector2(0.5f, 0f);
+        _progressRoot.offsetMin = progressAnchoredMin;
+        _progressRoot.offsetMax = progressAnchoredMax;
+        _progressRoot.localScale = Vector3.one;
+
+        const int nodeCount = 4;
+        if (_progressNodes != null && _progressNodes.Length == nodeCount && _progressLinks != null && _progressLinks.Length == nodeCount - 1)
+            return;
+
+        for (int i = _progressRoot.childCount - 1; i >= 0; i--)
+        {
+            Transform child = _progressRoot.GetChild(i);
+            if (child != null)
+                Destroy(child.gameObject);
+        }
+
+        _progressNodes = new Image[nodeCount];
+        _progressLinks = new Image[nodeCount - 1];
+
+        for (int i = 0; i < nodeCount; i++)
+        {
+            Image node = EnsureStandaloneImage("Node_" + i);
+            _progressNodes[i] = node;
+            RectTransform nodeRect = node.rectTransform;
+            nodeRect.SetParent(_progressRoot, false);
+            nodeRect.anchorMin = new Vector2((float)i / (nodeCount - 1), 0.5f);
+            nodeRect.anchorMax = nodeRect.anchorMin;
+            nodeRect.pivot = new Vector2(0.5f, 0.5f);
+            nodeRect.anchoredPosition = Vector2.zero;
+            nodeRect.sizeDelta = new Vector2(nodeSize, nodeSize);
+        }
+
+        for (int i = 0; i < _progressLinks.Length; i++)
+        {
+            Image link = EnsureStandaloneImage("Link_" + i);
+            _progressLinks[i] = link;
+            RectTransform linkRect = link.rectTransform;
+            linkRect.SetParent(_progressRoot, false);
+            linkRect.anchorMin = new Vector2((float)i / (nodeCount - 1), 0.5f);
+            linkRect.anchorMax = new Vector2((float)(i + 1) / (nodeCount - 1), 0.5f);
+            linkRect.pivot = new Vector2(0.5f, 0.5f);
+            float padding = nodeSize * 0.55f;
+            linkRect.offsetMin = new Vector2(padding, -linkThickness * 0.5f);
+            linkRect.offsetMax = new Vector2(-padding, linkThickness * 0.5f);
+        }
+    }
+
+    void ApplyState(bool animated)
+    {
+        EnsureVisuals();
+        if (_badgeImage == null || _badgeText == null || _titleText == null || _counterText == null || _statusText == null)
+            return;
+
+        if (_clearOverrideActive)
+        {
+            ApplyClearState(animated);
+            return;
+        }
+
+        EncounterObjectiveStage nextStage = ResolveStage();
+        Color activeColor = ResolveActiveColor(nextStage);
+        bool stageChanged = nextStage != _currentStage;
+        _currentStage = nextStage;
+
+        if (_accentImage != null)
+            _accentImage.color = activeColor;
+
+        ApplyIconStyle(nextStage, activeColor, false);
+
+        _badgeImage.color = Color.Lerp(activeColor, Color.black, 0.50f);
+        _badgeText.text = ResolveStageBadge(nextStage);
+        _badgeText.color = activeColor;
+
+        _titleText.text = ResolveStageTitle(nextStage);
+        _titleText.color = activeColor;
+
+        _counterText.text = ((int)nextStage + 1).ToString("00") + " / 04";
+        _counterText.color = activeColor;
+
+        _statusText.text = ResolveStatusText(nextStage);
+        _statusText.color = Color.Lerp(bodyTextColor, activeColor, 0.28f);
+
+        UpdateProgressVisuals((int)nextStage, activeColor);
+
+        if (animated || stageChanged)
+        {
+            PlaySweep(activeColor, 0.14f);
+            PlayIconPulse();
+            PlayPulse(activeColor);
+        }
+    }
+
+    public void ShowClearState()
+    {
+        _clearOverrideActive = true;
+        _ultimateActive = false;
+        _ultimateReady = false;
+        _breakActive = false;
+        ReleaseSubscriptions();
+        ApplyClearState(true);
+    }
+
+    void ApplyClearState(bool animated)
+    {
+        EnsureVisuals();
+        if (_badgeImage == null || _badgeText == null || _titleText == null || _counterText == null || _statusText == null)
+            return;
+
+        if (_accentImage != null)
+            _accentImage.color = clearColor;
+
+        ApplyClearIconStyle(clearColor);
+
+        _badgeImage.color = Color.Lerp(clearColor, Color.black, 0.46f);
+        _badgeText.text = "CLEAR";
+        _badgeText.color = clearColor;
+        _titleText.text = "\uc804\ud22c \uacb0\uacfc / CLEAR";
+        _titleText.color = clearColor;
+        _counterText.text = "DONE";
+        _counterText.color = clearColor;
+        _statusText.text = "\uc704\ud611 \uc81c\uac70 \uc644\ub8cc. \ub2e4\uc74c \uad6c\uac04 \uc5f0\ub3d9 \ub300\uae30";
+        _statusText.color = Color.Lerp(bodyTextColor, clearColor, 0.24f);
+
+        if (_progressNodes != null)
+        {
+            for (int i = 0; i < _progressNodes.Length; i++)
+            {
+                Image node = _progressNodes[i];
+                if (node == null)
+                    continue;
+
+                node.color = clearColor;
+                node.rectTransform.localScale = new Vector3(completedNodeScale, completedNodeScale, 1f);
+            }
+        }
+
+        if (_progressLinks != null)
+        {
+            for (int i = 0; i < _progressLinks.Length; i++)
+            {
+                Image link = _progressLinks[i];
+                if (link != null)
+                    link.color = new Color(clearColor.r, clearColor.g, clearColor.b, clearColor.a * 0.72f);
+            }
+        }
+
+        if (animated)
+        {
+            PlaySweep(clearColor, 0.16f);
+            PlayIconPulse();
+            PlayPulse(clearColor);
+        }
+    }
+
+    void UpdateProgressVisuals(int activeIndex, Color activeColor)
+    {
+        if (_progressNodes == null || _progressLinks == null)
+            return;
+
+        int clampedIndex = Mathf.Clamp(activeIndex, 0, _progressNodes.Length - 1);
+        for (int i = 0; i < _progressNodes.Length; i++)
+        {
+            Image node = _progressNodes[i];
+            if (node == null)
+                continue;
+
+            bool isCompleted = i < clampedIndex;
+            bool isCurrent = i == clampedIndex;
+            node.color = isCompleted || isCurrent ? activeColor : pendingNodeColor;
+            float scale = isCurrent ? currentNodeScale : (isCompleted ? completedNodeScale : 1f);
+            node.rectTransform.localScale = new Vector3(scale, scale, 1f);
+        }
+
+        for (int i = 0; i < _progressLinks.Length; i++)
+        {
+            Image link = _progressLinks[i];
+            if (link == null)
+                continue;
+
+            link.color = i < clampedIndex
+                ? new Color(activeColor.r, activeColor.g, activeColor.b, activeColor.a * 0.72f)
+                : pendingLinkColor;
+        }
+    }
+
+    EncounterObjectiveStage ResolveStage()
+    {
+        if (_ultimateActive || _ultimateReady)
+            return EncounterObjectiveStage.Finish;
+        if (_finishPressureSeen)
+            return EncounterObjectiveStage.Finish;
+        if (_breakSeen || _breakActive)
+            return EncounterObjectiveStage.Break;
+        if (_punishSeen)
+            return EncounterObjectiveStage.Punish;
+        return EncounterObjectiveStage.Read;
+    }
+
+    Color ResolveActiveColor(EncounterObjectiveStage stage)
+    {
+        switch (stage)
+        {
+            case EncounterObjectiveStage.Break:
+                return breakColor;
+
+            case EncounterObjectiveStage.Finish:
+                return finishColor;
+
+            case EncounterObjectiveStage.Punish:
+            case EncounterObjectiveStage.Read:
+            default:
+                return ResolvePhaseColor(_currentPhase);
+        }
+    }
+
+    Color ResolvePhaseColor(int phase)
+    {
+        switch (phase)
+        {
+            case 2:
+                return phaseTwoColor;
+            case 3:
+                return phaseThreeColor;
+            default:
+                return phaseOneColor;
+        }
+    }
+
+    string ResolveStageBadge(EncounterObjectiveStage stage)
+    {
+        switch (stage)
+        {
+            case EncounterObjectiveStage.Punish:
+                return "PUNISH";
+            case EncounterObjectiveStage.Break:
+                return "BREAK";
+            case EncounterObjectiveStage.Finish:
+                return _ultimateActive ? "EXECUTE" : "FINISH";
+            case EncounterObjectiveStage.Read:
+            default:
+                return "READ";
+        }
+    }
+
+    string ResolveStageTitle(EncounterObjectiveStage stage)
+    {
+        switch (stage)
+        {
+            case EncounterObjectiveStage.Punish:
+                return "\uc555\ubc15 \uad50\ud658 / PUNISH";
+            case EncounterObjectiveStage.Break:
+                return "\ube0c\ub808\uc774\ud06c \uc9d1\uc911 / BREAK";
+            case EncounterObjectiveStage.Finish:
+                return "\uacb0\uc815\ud0c0 \uc6b4\uc6a9 / FINISH";
+            case EncounterObjectiveStage.Read:
+            default:
+                return "\uc804\ud669 \ubd84\uc11d / READ";
+        }
+    }
+
+    string ResolveStatusText(EncounterObjectiveStage stage)
+    {
+        if (_ultimateActive)
+            return "\uad81\uadf9\uae30 \uc9d1\ud589 \uc911. \uc5f0\ucd9c \ud6c4 \ubc14\ub85c \ubcf5\uadc0";
+
+        if (_ultimateReady)
+            return "\uad81\uadf9\uae30 \uc900\ube44 \uc644\ub8cc. \ube0c\ub808\uc774\ud06c\uc640 \uacb9\uccd0";
+
+        if (_finishPressureSeen)
+            return "\ub9c8\ubb34\ub9ac \uad6c\uac04. \ud328\ud134 \ub05d\uc744 \ubcf4\uace0 \uc548\uc804\ud558\uac8c \uc555\ubc15";
+
+        if (_breakActive)
+            return "\ube0c\ub808\uc774\ud06c \uc720\uc9c0. \uc9e7\uac8c \ubab0\uc544\uce58\uace0 \ube60\uc838";
+
+        switch (stage)
+        {
+            case EncounterObjectiveStage.Break:
+                return "\ube0c\ub808\uc774\ud06c \uc720\ub3c4 \uc644\ub8cc. \ub2e4\uc74c \ube48\ud2c8\ub97c \ub300\uae30";
+
+            case EncounterObjectiveStage.Punish:
+                if (_currentPhase >= 3)
+                    return "\ud68c\ud53c \uc6b0\uc120. \uc9e7\uac8c \ub123\uace0 \uc989\uc2dc \uc774\ud0c8";
+                if (_currentPhase == 2)
+                    return "\uc751\uc218 \ud6c4 \uc0ac\uac70\ub9ac \uc7ac\uc815\ube44. \uacf5\uc138\uc5d0 \ub04c\ub9ac\uc9c0 \ub9c8";
+                return "\ube48\ud2c8\uc5d0 \uc9e7\uac8c \ub123\uace0 \ube60\uc838. \ub9ac\ub4ec\uc744 \uc720\uc9c0";
+
+            case EncounterObjectiveStage.Read:
+            default:
+                if (_currentPhase >= 3)
+                    return "\ubc84\uc11c\ud06c \uad6c\uac04. \ubb34\ub9ac\ud55c \uc555\ubc15 \uae08\uc9c0";
+                if (_currentPhase == 2)
+                    return "\uacf5\uc138 \uc18d\ub3c4 \uc0c1\uc2b9. \uc815\uba74 \uc751\uc218 \ud6c4 \uc774\ub3d9";
+                return "\uccab \uad50\ud658\uc740 \ubc29\uc5b4 \uc6b0\uc120. \ud328\ud134\uc744 \uba3c\uc800 \uc77d\uc5b4";
+        }
+    }
+
+    void ApplyIconStyle(EncounterObjectiveStage stage, Color color, bool pulse)
+    {
+        EnsureIconVisuals();
+        if (_iconBackplate == null || _iconPrimary == null || _iconSecondary == null || _iconTertiary == null)
+            return;
+
+        _iconBackplate.color = new Color(color.r, color.g, color.b, 0.12f);
+        ConfigureIconPart(_iconPrimary, color, Vector2.zero, Vector2.one, 0f, true);
+        ConfigureIconPart(_iconSecondary, color, Vector2.zero, Vector2.one, 0f, true);
+        ConfigureIconPart(_iconTertiary, color, Vector2.zero, Vector2.one, 0f, true);
+
+        switch (stage)
+        {
+            case EncounterObjectiveStage.Punish:
+                ConfigureIconPart(_iconPrimary, color, new Vector2(12f, 12f), new Vector2(15f, 4f), 28f, true);
+                ConfigureIconPart(_iconSecondary, color, new Vector2(12f, 12f), new Vector2(15f, 4f), -28f, true);
+                ConfigureIconPart(_iconTertiary, color, new Vector2(12f, 12f), new Vector2(4f, 4f), 0f, true);
+                break;
+
+            case EncounterObjectiveStage.Break:
+                ConfigureIconPart(_iconPrimary, color, new Vector2(12f, 6f), new Vector2(5f, 16f), 0f, true);
+                ConfigureIconPart(_iconSecondary, color, new Vector2(12f, 18f), new Vector2(16f, 4f), 0f, true);
+                ConfigureIconPart(_iconTertiary, color, new Vector2(12f, 12f), new Vector2(14f, 4f), -38f, true);
+                break;
+
+            case EncounterObjectiveStage.Finish:
+                ConfigureIconPart(_iconPrimary, color, new Vector2(11f, 12f), new Vector2(4f, 16f), 0f, true);
+                ConfigureIconPart(_iconSecondary, color, new Vector2(17f, 12f), new Vector2(16f, 4f), 0f, true);
+                ConfigureIconPart(_iconTertiary, color, new Vector2(11f, 12f), new Vector2(8f, 8f), 45f, true);
+                break;
+
+            case EncounterObjectiveStage.Read:
+            default:
+                ConfigureIconPart(_iconPrimary, color, new Vector2(12f, 12f), new Vector2(12f, 12f), 45f, true);
+                ConfigureIconPart(_iconSecondary, color, new Vector2(12f, 12f), new Vector2(4f, 4f), 0f, true);
+                ConfigureIconPart(_iconTertiary, color, new Vector2(12f, 3f), new Vector2(14f, 2f), 0f, true);
+                break;
+        }
+
+        if (pulse)
+            PlayIconPulse();
+    }
+
+    void ApplyClearIconStyle(Color color)
+    {
+        EnsureIconVisuals();
+        if (_iconBackplate == null || _iconPrimary == null || _iconSecondary == null || _iconTertiary == null)
+            return;
+
+        _iconBackplate.color = new Color(color.r, color.g, color.b, 0.14f);
+        ConfigureIconPart(_iconPrimary, color, new Vector2(11f, 12f), new Vector2(4f, 16f), 0f, true);
+        ConfigureIconPart(_iconSecondary, color, new Vector2(17f, 12f), new Vector2(16f, 4f), 0f, true);
+        ConfigureIconPart(_iconTertiary, color, new Vector2(12f, 12f), new Vector2(8f, 8f), 45f, true);
+    }
+
+    void ConfigureIconPart(Image image, Color color, Vector2 position, Vector2 size, float rotationZ, bool visible)
+    {
+        if (image == null)
+            return;
+
+        image.enabled = visible;
+        if (!visible)
+            return;
+
+        image.color = color;
+        RectTransform rectTransform = image.rectTransform;
+        rectTransform.anchorMin = new Vector2(0f, 1f);
+        rectTransform.anchorMax = new Vector2(0f, 1f);
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.anchoredPosition = new Vector2(position.x, -position.y);
+        rectTransform.sizeDelta = size;
+        rectTransform.localRotation = Quaternion.Euler(0f, 0f, rotationZ);
+        rectTransform.localScale = Vector3.one;
+    }
+
+    bool IsBossInFinishPressure()
+    {
+        return bossHealth != null
+            && bossHealth.MaxHP > 0
+            && (float)bossHealth.CurrentHP / bossHealth.MaxHP <= finishPressureThresholdNormalized;
+    }
+
+    void PlaySweep(Color color, float maxAlpha)
+    {
+        if (_sweepImage == null)
+            return;
+
+        StopSweep();
+        _sweepRoutine = StartCoroutine(CoPlaySweep(color, maxAlpha));
+    }
+
+    IEnumerator CoPlaySweep(Color color, float maxAlpha)
+    {
+        float duration = Mathf.Max(0.05f, sweepDuration);
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float fade = 1f - EaseOutCubic(t);
+            Color sweepColor = color;
+            sweepColor.a = maxAlpha * fade;
+            _sweepImage.color = sweepColor;
+            yield return null;
+        }
+
+        _sweepImage.color = new Color(color.r, color.g, color.b, 0f);
+        _sweepRoutine = null;
+    }
+
+    void StopSweep()
+    {
+        if (_sweepRoutine == null)
+            return;
+
+        StopCoroutine(_sweepRoutine);
+        _sweepRoutine = null;
+
+        if (_sweepImage != null)
+            _sweepImage.color = new Color(1f, 1f, 1f, 0f);
+    }
+
+    void PlayIconPulse()
+    {
+        if (_iconRoot == null)
+            return;
+
+        StopIconPulse();
+        _iconPulseRoutine = StartCoroutine(CoPulseIcon());
+    }
+
+    IEnumerator CoPulseIcon()
+    {
+        float duration = Mathf.Max(0.05f, iconPulseDuration);
+        float elapsed = 0f;
+        Vector3 startScale = new Vector3(0.88f, 0.88f, 1f);
+        Vector3 endScale = Vector3.one;
+        _iconRoot.localScale = startScale;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            _iconRoot.localScale = Vector3.LerpUnclamped(startScale, endScale, EaseOutCubic(t));
+            yield return null;
+        }
+
+        _iconRoot.localScale = endScale;
+        _iconPulseRoutine = null;
+    }
+
+    void StopIconPulse()
+    {
+        if (_iconPulseRoutine == null)
+            return;
+
+        StopCoroutine(_iconPulseRoutine);
+        _iconPulseRoutine = null;
+
+        if (_iconRoot != null)
+            _iconRoot.localScale = Vector3.one;
+    }
+
+    void PlayPulse(Color activeColor)
+    {
+        StopPulse();
+        _pulseRoutine = StartCoroutine(CoPulse(activeColor));
+    }
+
+    IEnumerator CoPulse(Color activeColor)
+    {
+        float duration = Mathf.Max(0.05f, pulseDuration);
+        float elapsed = 0f;
+        Vector3 startScale = new Vector3(0.96f, 0.96f, 1f);
+        Vector3 endScale = Vector3.one;
+        _root.localScale = startScale;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = 1f - Mathf.Pow(1f - t, 3f);
+            _root.localScale = Vector3.LerpUnclamped(startScale, endScale, eased);
+            if (_panelImage != null)
+                _panelImage.color = Color.Lerp(panelColor, Color.Lerp(activeColor, Color.black, 0.44f), 1f - eased);
+            yield return null;
+        }
+
+        _root.localScale = endScale;
+        if (_panelImage != null)
+            _panelImage.color = panelColor;
+        _pulseRoutine = null;
+    }
+
+    void StopPulse()
+    {
+        if (_pulseRoutine == null)
+            return;
+
+        StopCoroutine(_pulseRoutine);
+        _pulseRoutine = null;
+
+        if (_root != null)
+            _root.localScale = Vector3.one;
+        if (_panelImage != null)
+            _panelImage.color = panelColor;
+    }
+
+    static Image EnsureImage(Transform parent, string objectName, out RectTransform rectTransform)
+    {
+        Transform existing = parent.Find(objectName);
+        Image image = existing != null ? existing.GetComponent<Image>() : null;
+        if (image == null)
+        {
+            GameObject imageObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            imageObject.transform.SetParent(parent, false);
+            image = imageObject.GetComponent<Image>();
+        }
+
+        rectTransform = image.rectTransform;
+        image.raycastTarget = false;
+        return image;
+    }
+
+    static Image EnsureStandaloneImage(string objectName)
+    {
+        GameObject imageObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        Image image = imageObject.GetComponent<Image>();
+        image.raycastTarget = false;
+        return image;
+    }
+
+    static Text EnsureText(Transform parent, string objectName)
+    {
+        Transform existing = parent.Find(objectName);
+        Text text = existing != null ? existing.GetComponent<Text>() : null;
+        if (text == null)
+        {
+            GameObject textObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            textObject.transform.SetParent(parent, false);
+            text = textObject.GetComponent<Text>();
+        }
+
+        text.font = RuntimeBuiltInFontUtility.GetDefaultFont();
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+        text.raycastTarget = false;
+        return text;
+    }
+
+    static void StretchToParent(RectTransform rectTransform)
+    {
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+        rectTransform.localScale = Vector3.one;
+    }
+
+    static float EaseOutCubic(float t)
+    {
+        t = Mathf.Clamp01(t);
+        t -= 1f;
+        return t * t * t + 1f;
+    }
+}

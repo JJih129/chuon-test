@@ -4,6 +4,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class BossUIController : MonoBehaviour
 {
+    const float AutoResolveInterval = 0.5f;
+
     [Header("References")]
     [Tooltip("Player transform used for distance checks.")]
     public Transform player;
@@ -23,6 +25,13 @@ public class BossUIController : MonoBehaviour
     [Tooltip("Boss break controller.")]
     public BossBreakController breakController;
 
+    [Header("Presentation")]
+    [Tooltip("Optional ultimate controller. Auto-resolved when empty.")]
+    public PlayerUltimateController playerUltimateController;
+
+    [Tooltip("Keep the boss HUD visible while the player's ultimate cinematic is active.")]
+    public bool keepVisibleDuringUltimate = true;
+
     [Header("Distance / Timing")]
     [Tooltip("Maximum distance to show the boss HUD.")]
     public float showDistance = 18f;
@@ -39,6 +48,9 @@ public class BossUIController : MonoBehaviour
     [Tooltip("Delay before hiding after leaving range.")]
     public float hideDelay = 0.12f;
 
+    [Tooltip("Keep the boss HUD visible for the whole fight instead of hiding by distance.")]
+    public bool alwaysVisibleWhileBossAlive = true;
+
     IHealth boundHealth;
     float showSqr;
     float hideSqr;
@@ -46,10 +58,12 @@ public class BossUIController : MonoBehaviour
     Coroutine pollRoutine;
     Coroutine pendingShowRoutine;
     Coroutine pendingHideRoutine;
+    bool _presentationSubscribed;
+    float _nextAutoResolveAt;
 
     void Awake()
     {
-        AutoResolveReferences();
+        TryAutoResolveReferences(true);
         NormalizeTopHudRootScale();
 
         showSqr = showDistance * showDistance;
@@ -84,6 +98,8 @@ public class BossUIController : MonoBehaviour
 
     void OnEnable()
     {
+        TryAutoResolveReferences(true);
+        RefreshPresentationSubscriptions();
         if (pollRoutine != null)
             StopCoroutine(pollRoutine);
         pollRoutine = StartCoroutine(Poll());
@@ -95,6 +111,7 @@ public class BossUIController : MonoBehaviour
             StopCoroutine(pollRoutine);
         pollRoutine = null;
 
+        ReleasePresentationSubscriptions();
         CancelPendingShow();
         CancelPendingHide();
         ForceHideImmediate();
@@ -115,7 +132,13 @@ public class BossUIController : MonoBehaviour
 
     float ResolvePollInterval()
     {
-        float baseInterval = Mathf.Max(0.5f, pollInterval);
+        if (IsUltimateHudOverrideActive())
+            return 0f;
+
+        if (alwaysVisibleWhileBossAlive && IsBossAlive())
+            return Mathf.Max(0.05f, pollInterval);
+
+        float baseInterval = Mathf.Max(0.05f, pollInterval);
         if (player == null)
             return Mathf.Max(baseInterval, 1f);
 
@@ -128,9 +151,31 @@ public class BossUIController : MonoBehaviour
 
     void Evaluate()
     {
+        if (keepVisibleDuringUltimate && playerUltimateController == null)
+        {
+            TryAutoResolveReferences();
+            RefreshPresentationSubscriptions();
+        }
+
+        if (IsUltimateHudOverrideActive())
+        {
+            CancelPendingShow();
+            CancelPendingHide();
+            ShowHUD();
+            return;
+        }
+
+        if (alwaysVisibleWhileBossAlive && IsBossAlive())
+        {
+            CancelPendingShow();
+            CancelPendingHide();
+            ShowHUD();
+            return;
+        }
+
         if (player == null)
         {
-            AutoResolveReferences();
+            TryAutoResolveReferences();
             if (player == null)
                 return;
         }
@@ -168,6 +213,12 @@ public class BossUIController : MonoBehaviour
         yield return new WaitForSeconds(delay);
         pendingShowRoutine = null;
 
+        if (IsUltimateHudOverrideActive())
+        {
+            ShowHUD();
+            yield break;
+        }
+
         if (player == null)
             yield break;
 
@@ -179,6 +230,12 @@ public class BossUIController : MonoBehaviour
     {
         yield return new WaitForSeconds(delay);
         pendingHideRoutine = null;
+
+        if (IsUltimateHudOverrideActive())
+        {
+            ShowHUD();
+            yield break;
+        }
 
         if (player == null)
         {
@@ -192,9 +249,6 @@ public class BossUIController : MonoBehaviour
 
     void ShowHUD()
     {
-        if (isVisible)
-            return;
-
         NormalizeTopHudRootScale();
         if (hpHud == null || topHudRoot == null)
             return;
@@ -204,6 +258,8 @@ public class BossUIController : MonoBehaviour
 
         if (boundHealth != null)
             hpHud.Bind(boundHealth);
+        else if (!hpHud.gameObject.activeSelf)
+            hpHud.gameObject.SetActive(true);
 
         if (breakHud != null && breakHud.hudRoot != null && !breakHud.hudRoot.activeSelf)
             breakHud.hudRoot.SetActive(true);
@@ -211,7 +267,7 @@ public class BossUIController : MonoBehaviour
         if (!topHudRoot.activeSelf)
             topHudRoot.SetActive(true);
 
-        isVisible = true;
+        isVisible = topHudRoot.activeSelf;
     }
 
     void HideHUD()
@@ -240,16 +296,35 @@ public class BossUIController : MonoBehaviour
         isVisible = false;
     }
 
+    bool NeedsAutoResolve()
+    {
+        return player == null
+            || (topHudRoot == null && hpHud != null)
+            || playerUltimateController == null;
+    }
+
+    void TryAutoResolveReferences(bool force = false)
+    {
+        if (!force && !NeedsAutoResolve())
+            return;
+
+        if (!force && Time.unscaledTime < _nextAutoResolveAt)
+            return;
+
+        AutoResolveReferences();
+        _nextAutoResolveAt = Time.unscaledTime + AutoResolveInterval;
+    }
+
     void AutoResolveReferences()
     {
         if (player == null)
         {
-            PlayerLockOn playerLockOn = FindFirstObjectByType<PlayerLockOn>();
+            PlayerLockOn playerLockOn = GameplaySceneCache.ResolvePlayerLockOn();
             if (playerLockOn != null)
                 player = playerLockOn.transform;
             else
             {
-                PlayerReferences playerReferences = FindFirstObjectByType<PlayerReferences>();
+                PlayerReferences playerReferences = GameplaySceneCache.ResolvePlayerReferences();
                 if (playerReferences != null)
                     player = playerReferences.transform;
             }
@@ -257,6 +332,9 @@ public class BossUIController : MonoBehaviour
 
         if (topHudRoot == null && hpHud != null)
             topHudRoot = hpHud.transform.root.gameObject;
+
+        if (playerUltimateController == null)
+            playerUltimateController = GameplaySceneCache.ResolvePlayerUltimateController();
     }
 
     void NormalizeTopHudRootScale()
@@ -285,5 +363,68 @@ public class BossUIController : MonoBehaviour
 
         StopCoroutine(pendingHideRoutine);
         pendingHideRoutine = null;
+    }
+
+    void RefreshPresentationSubscriptions()
+    {
+        ReleasePresentationSubscriptions();
+
+        if (!keepVisibleDuringUltimate)
+            return;
+
+        if (playerUltimateController == null)
+            TryAutoResolveReferences();
+
+        if (playerUltimateController == null)
+            return;
+
+        playerUltimateController.OnUltimateStarted += HandleUltimateStarted;
+        playerUltimateController.OnUltimateEnded += HandleUltimateEnded;
+        _presentationSubscribed = true;
+    }
+
+    void ReleasePresentationSubscriptions()
+    {
+        if (!_presentationSubscribed || playerUltimateController == null)
+            return;
+
+        playerUltimateController.OnUltimateStarted -= HandleUltimateStarted;
+        playerUltimateController.OnUltimateEnded -= HandleUltimateEnded;
+        _presentationSubscribed = false;
+    }
+
+    void HandleUltimateStarted()
+    {
+        if (!keepVisibleDuringUltimate)
+            return;
+
+        CancelPendingShow();
+        CancelPendingHide();
+        ShowHUD();
+    }
+
+    void HandleUltimateEnded()
+    {
+        if (!keepVisibleDuringUltimate)
+            return;
+
+        CancelPendingShow();
+        CancelPendingHide();
+        Evaluate();
+    }
+
+    bool IsUltimateHudOverrideActive()
+    {
+        return keepVisibleDuringUltimate
+            && playerUltimateController != null
+            && playerUltimateController.IsCinematic;
+    }
+
+    bool IsBossAlive()
+    {
+        if (boundHealth == null)
+            boundHealth = healthBehaviour as IHealth;
+
+        return boundHealth == null || boundHealth.CurrentHP > 0;
     }
 }

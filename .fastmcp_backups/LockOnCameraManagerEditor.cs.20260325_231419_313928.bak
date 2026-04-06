@@ -1,0 +1,250 @@
+using UnityEditor;
+using UnityEngine;
+
+[CustomEditor(typeof(LockOnCameraManager))]
+[CanEditMultipleObjects]
+public class LockOnCameraManagerEditor : Editor
+{
+    SerializedProperty _lockOnCam;
+    SerializedProperty _freeLookCam;
+    SerializedProperty _freeLookDriver;
+    SerializedProperty _targetGroup;
+    SerializedProperty _playerPivot;
+    SerializedProperty _playerCameraAnchorLocalOffset;
+    SerializedProperty _useKhazanStyleLockOnPreset;
+    SerializedProperty _useSolverDrivenLockOnFraming;
+    SerializedProperty _disableCollisionExtensionWhileLocked;
+    SerializedProperty _solverCloseDistance;
+    SerializedProperty _solverFarDistance;
+    SerializedProperty _closeRangeFraming;
+    SerializedProperty _farRangeFraming;
+
+    SerializedProperty _lockOnFollowHeightOffset;
+    SerializedProperty _restoreFollowOffsetOnEnd;
+    SerializedProperty _useDedicatedLockOnFollowOffset;
+    SerializedProperty _dedicatedLockOnFollowOffset;
+    SerializedProperty _useDedicatedLockOnFieldOfView;
+    SerializedProperty _dedicatedLockOnFieldOfView;
+    SerializedProperty _useDedicatedLockOnTrackedObjectOffset;
+    SerializedProperty _dedicatedLockOnTrackedObjectOffset;
+    SerializedProperty _useDedicatedLockOnCameraDistance;
+    SerializedProperty _dedicatedLockOnCameraDistance;
+    SerializedProperty _useDedicatedLockOnBodyScreenPosition;
+    SerializedProperty _dedicatedLockOnBodyScreenPosition;
+    SerializedProperty _useDedicatedLockOnBodySoftZone;
+    SerializedProperty _dedicatedLockOnBodySoftZone;
+    SerializedProperty _useDedicatedLockOnAimScreenPosition;
+    SerializedProperty _dedicatedLockOnAimScreenPosition;
+    SerializedProperty _useDedicatedLockOnAimBias;
+    SerializedProperty _dedicatedLockOnAimBias;
+
+    SerializedProperty _lockOnAnchorOffset;
+    SerializedProperty _followAnchorResponsiveness;
+    SerializedProperty _playerVelocityLookaheadTime;
+    SerializedProperty _maxVelocityLookaheadDistance;
+    SerializedProperty _reduceBodyDampingWhileLocked;
+    SerializedProperty _lockedBodyDamping;
+
+    SerializedProperty _lookAnchorDistance;
+    SerializedProperty _lookAnchorDistanceRatio;
+    SerializedProperty _lookAnchorMinDistance;
+    SerializedProperty _lookAnchorHeightOffset;
+    SerializedProperty _lookAnchorResponsiveness;
+
+    SerializedProperty _useCloseRangeCompensation;
+    SerializedProperty _closeRangeCompensationStartDistance;
+    SerializedProperty _closeRangeCompensationFullDistance;
+    SerializedProperty _closeRangeExtraHeight;
+    SerializedProperty _closeRangeExtraDistance;
+    SerializedProperty _closeRangeBodyScreenYOffset;
+    SerializedProperty _closeRangeAimScreenYOffset;
+    SerializedProperty _closeRangeLookHeightReduction;
+
+    SerializedProperty _useCustomTransformLockOnRig;
+    SerializedProperty _customRigPositionResponsiveness;
+    SerializedProperty _customRigRotationResponsiveness;
+    SerializedProperty _enemyAimBottomToCenterRatio;
+    SerializedProperty _enemyAimVerticalOffset;
+    SerializedProperty _playerLookHeightOffset;
+
+    SerializedProperty _isLockOnActive;
+
+    void OnEnable()
+    {
+        _lockOnCam = serializedObject.FindProperty("lockOnCam");
+        _freeLookCam = serializedObject.FindProperty("freeLookCam");
+        _freeLookDriver = serializedObject.FindProperty("freeLookDriver");
+        _targetGroup = serializedObject.FindProperty("targetGroup");
+        _playerPivot = serializedObject.FindProperty("playerPivot");
+        _playerCameraAnchorLocalOffset = serializedObject.FindProperty("playerCameraAnchorLocalOffset");
+        _useKhazanStyleLockOnPreset = serializedObject.FindProperty("useKhazanStyleLockOnPreset");
+        _useSolverDrivenLockOnFraming = serializedObject.FindProperty("useSolverDrivenLockOnFraming");
+        _disableCollisionExtensionWhileLocked = serializedObject.FindProperty("disableCollisionExtensionWhileLocked");
+        _solverCloseDistance = serializedObject.FindProperty("solverCloseDistance");
+        _solverFarDistance = serializedObject.FindProperty("solverFarDistance");
+        _closeRangeFraming = serializedObject.FindProperty("closeRangeFraming");
+        _farRangeFraming = serializedObject.FindProperty("farRangeFraming");
+
+        _lockOnFollowHeightOffset = serializedObject.FindProperty("lockOnFollowHeightOffset");
+        _restoreFollowOffsetOnEnd = serializedObject.FindProperty("restoreFollowOffsetOnEnd");
+        _useDedicatedLockOnFollowOffset = serializedObject.FindProperty("useDedicatedLockOnFollowOffset");
+        _dedicatedLockOnFollowOffset = serializedObject.FindProperty("dedicatedLockOnFollowOffset");
+        _useDedicatedLockOnFieldOfView = serializedObject.FindProperty("useDedicatedLockOnFieldOfView");
+        _dedicatedLockOnFieldOfView = serializedObject.FindProperty("dedicatedLockOnFieldOfView");
+        _useDedicatedLockOnTrackedObjectOffset = serializedObject.FindProperty("useDedicatedLockOnTrackedObjectOffset");
+        _dedicatedLockOnTrackedObjectOffset = serializedObject.FindProperty("dedicatedLockOnTrackedObjectOffset");
+        _useDedicatedLockOnCameraDistance = serializedObject.FindProperty("useDedicatedLockOnCameraDistance");
+        _dedicatedLockOnCameraDistance = serializedObject.FindProperty("dedicatedLockOnCameraDistance");
+        _useDedicatedLockOnBodyScreenPosition = serializedObject.FindProperty("useDedicatedLockOnBodyScreenPosition");
+        _dedicatedLockOnBodyScreenPosition = serializedObject.FindProperty("dedicatedLockOnBodyScreenPosition");
+        _useDedicatedLockOnBodySoftZone = serializedObject.FindProperty("useDedicatedLockOnBodySoftZone");
+        _dedicatedLockOnBodySoftZone = serializedObject.FindProperty("dedicatedLockOnBodySoftZone");
+        _useDedicatedLockOnAimScreenPosition = serializedObject.FindProperty("useDedicatedLockOnAimScreenPosition");
+        _dedicatedLockOnAimScreenPosition = serializedObject.FindProperty("dedicatedLockOnAimScreenPosition");
+        _useDedicatedLockOnAimBias = serializedObject.FindProperty("useDedicatedLockOnAimBias");
+        _dedicatedLockOnAimBias = serializedObject.FindProperty("dedicatedLockOnAimBias");
+
+        _lockOnAnchorOffset = serializedObject.FindProperty("lockOnAnchorOffset");
+        _followAnchorResponsiveness = serializedObject.FindProperty("followAnchorResponsiveness");
+        _playerVelocityLookaheadTime = serializedObject.FindProperty("playerVelocityLookaheadTime");
+        _maxVelocityLookaheadDistance = serializedObject.FindProperty("maxVelocityLookaheadDistance");
+        _reduceBodyDampingWhileLocked = serializedObject.FindProperty("reduceBodyDampingWhileLocked");
+        _lockedBodyDamping = serializedObject.FindProperty("lockedBodyDamping");
+
+        _lookAnchorDistance = serializedObject.FindProperty("lookAnchorDistance");
+        _lookAnchorDistanceRatio = serializedObject.FindProperty("lookAnchorDistanceRatio");
+        _lookAnchorMinDistance = serializedObject.FindProperty("lookAnchorMinDistance");
+        _lookAnchorHeightOffset = serializedObject.FindProperty("lookAnchorHeightOffset");
+        _lookAnchorResponsiveness = serializedObject.FindProperty("lookAnchorResponsiveness");
+
+        _useCloseRangeCompensation = serializedObject.FindProperty("useCloseRangeCompensation");
+        _closeRangeCompensationStartDistance = serializedObject.FindProperty("closeRangeCompensationStartDistance");
+        _closeRangeCompensationFullDistance = serializedObject.FindProperty("closeRangeCompensationFullDistance");
+        _closeRangeExtraHeight = serializedObject.FindProperty("closeRangeExtraHeight");
+        _closeRangeExtraDistance = serializedObject.FindProperty("closeRangeExtraDistance");
+        _closeRangeBodyScreenYOffset = serializedObject.FindProperty("closeRangeBodyScreenYOffset");
+        _closeRangeAimScreenYOffset = serializedObject.FindProperty("closeRangeAimScreenYOffset");
+        _closeRangeLookHeightReduction = serializedObject.FindProperty("closeRangeLookHeightReduction");
+
+        _useCustomTransformLockOnRig = serializedObject.FindProperty("useCustomTransformLockOnRig");
+        _customRigPositionResponsiveness = serializedObject.FindProperty("customRigPositionResponsiveness");
+        _customRigRotationResponsiveness = serializedObject.FindProperty("customRigRotationResponsiveness");
+        _enemyAimBottomToCenterRatio = serializedObject.FindProperty("enemyAimBottomToCenterRatio");
+        _enemyAimVerticalOffset = serializedObject.FindProperty("enemyAimVerticalOffset");
+        _playerLookHeightOffset = serializedObject.FindProperty("playerLookHeightOffset");
+
+        _isLockOnActive = serializedObject.FindProperty("isLockOnActive");
+    }
+
+    public override void OnInspectorGUI()
+    {
+        serializedObject.Update();
+
+        DrawScriptField();
+
+        DrawSection("프리셋");
+        Draw(_useKhazanStyleLockOnPreset, "카잔 스타일 프리셋 강제 적용", "활성화하면 플레이 시 카잔 스타일 락온 구도를 강제로 적용합니다. 수동 튜닝을 하려면 끄면 됩니다.");
+
+        DrawSection("시네머신 참조");
+        Draw(_lockOnCam, "락온 카메라", "락온 전용 가상 카메라입니다.");
+        Draw(_freeLookCam, "기본 자유 시점 카메라", "평상시 사용하는 기본 가상 카메라입니다.");
+        Draw(_freeLookDriver, "자유 시점 드라이버", "기본 카메라 회전과 입력을 담당하는 스크립트입니다.");
+
+        DrawSection("타겟 그룹");
+        Draw(_targetGroup, "타겟 그룹", "락온 중 플레이어와 적의 구도를 계산하는 그룹입니다.");
+
+        DrawSection("플레이어 기준점");
+        Draw(_playerPivot, "플레이어 피벗", "락온 시 플레이어 위치 기준점입니다.");
+        Draw(_playerCameraAnchorLocalOffset, "카메라 전용 플레이어 기준점 오프셋", "카메라가 실제로 따라가는 플레이어 기준점을 아래로 내립니다.");
+
+        DrawSection("전투 카메라 솔버");
+        Draw(_useSolverDrivenLockOnFraming, "솔버 기반 프레이밍 사용", "원거리/근거리 프로필을 거리 기반으로 블렌딩합니다.");
+        Draw(_disableCollisionExtensionWhileLocked, "락온 중 카메라 충돌 확장 비활성화", "락온 중 CinemachineCollider를 꺼서 저각 붕괴를 막습니다.");
+        Draw(_solverCloseDistance, "근접 기준 거리", "이 거리 이하에서는 근접 프로필을 100% 사용합니다.");
+        Draw(_solverFarDistance, "원거리 기준 거리", "이 거리 이상에서는 원거리 프로필을 100% 사용합니다.");
+        Draw(_closeRangeFraming, "근접 프레이밍 프로필", "보스와 붙었을 때의 전투 구도입니다.");
+        Draw(_farRangeFraming, "원거리 프레이밍 프로필", "보스와 거리가 있을 때의 기본 전투 구도입니다.");
+
+        if (!_useSolverDrivenLockOnFraming.boolValue)
+        {
+            DrawSection("레거시 락온 프레이밍");
+            Draw(_lockOnFollowHeightOffset, "락온 높이 추가 보정", "기본 락온 높이에 더하는 보정값입니다.");
+            Draw(_restoreFollowOffsetOnEnd, "락온 종료 시 오프셋 복원", "락온 해제 시 원래 카메라 값으로 복원합니다.");
+            Draw(_useDedicatedLockOnFollowOffset, "전용 락온 오프셋 사용", "락온 중 전용 카메라 위치 오프셋을 사용합니다.");
+            Draw(_dedicatedLockOnFollowOffset, "락온 카메라 위치 오프셋", "Y는 카메라 높이, Z는 카메라 거리 방향입니다.");
+            Draw(_useDedicatedLockOnFieldOfView, "전용 락온 시야각 사용", "락온 중 전용 FOV를 사용합니다.");
+            Draw(_dedicatedLockOnFieldOfView, "락온 시야각", "작을수록 더 크게, 더 근접하게 보입니다.");
+            Draw(_useDedicatedLockOnTrackedObjectOffset, "전용 추적 기준점 사용", "플레이어 추적 기준점을 락온 전용으로 사용합니다.");
+            Draw(_dedicatedLockOnTrackedObjectOffset, "추적 기준점 오프셋", "플레이어 몸통 기준 추적 위치입니다.");
+            Draw(_useDedicatedLockOnCameraDistance, "전용 카메라 거리 사용", "FramingTransposer 거리값을 락온 전용으로 사용합니다.");
+            Draw(_dedicatedLockOnCameraDistance, "락온 카메라 거리", "작을수록 더 가깝게 보입니다.");
+            Draw(_useDedicatedLockOnBodyScreenPosition, "전용 플레이어 화면 위치 사용", "플레이어 화면 위치를 락온 전용으로 사용합니다.");
+            Draw(_dedicatedLockOnBodyScreenPosition, "플레이어 화면 위치", "Y를 낮추면 플레이어가 화면 아래로 내려갑니다.");
+            Draw(_useDedicatedLockOnBodySoftZone, "전용 소프트존 사용", "락온 중 바디 소프트존을 별도로 사용합니다.");
+            Draw(_dedicatedLockOnBodySoftZone, "바디 소프트존", "작을수록 카메라 흔들림과 유동 폭이 줄어듭니다.");
+            Draw(_useDedicatedLockOnAimScreenPosition, "전용 적 화면 위치 사용", "적 화면 위치를 락온 전용으로 사용합니다.");
+            Draw(_dedicatedLockOnAimScreenPosition, "적 화면 위치", "Y를 높이면 적이 화면 상단 쪽으로 올라갑니다.");
+            Draw(_useDedicatedLockOnAimBias, "전용 조준 바이어스 사용", "조준 바이어스를 락온 전용으로 사용합니다.");
+            Draw(_dedicatedLockOnAimBias, "조준 바이어스", "프레임 내 플레이어와 적의 균형을 세밀하게 조정합니다.");
+        }
+
+        DrawSection("락온 안정화");
+        Draw(_lockOnAnchorOffset, "락온 앵커 오프셋", "동적 추적 앵커에 추가하는 오프셋입니다.");
+        Draw(_followAnchorResponsiveness, "추적 반응 속도", "클수록 플레이어를 더 빠르게 따라갑니다.");
+        Draw(_playerVelocityLookaheadTime, "속도 예측 시간", "대쉬 시 플레이어 이동을 미리 반영하는 시간입니다.");
+        Draw(_maxVelocityLookaheadDistance, "최대 속도 예측 거리", "속도 예측 보정이 과해지지 않도록 제한합니다.");
+        Draw(_reduceBodyDampingWhileLocked, "락온 중 댐핑 감소", "락온 중 카메라 지연을 줄입니다.");
+        Draw(_lockedBodyDamping, "락온 바디 댐핑", "락온 시 사용하는 댐핑 값입니다.");
+
+        DrawSection("락온 시선 보정");
+        Draw(_lookAnchorDistance, "시선 앵커 거리", "적 방향으로 시선 앵커를 얼마나 앞에 둘지 설정합니다.");
+        Draw(_lookAnchorDistanceRatio, "시선 거리 비율", "플레이어-적 거리 대비 시선 앵커 거리 비율입니다.");
+        Draw(_lookAnchorMinDistance, "시선 최소 거리", "락온 중 시선 앵커 최소 거리입니다.");
+        Draw(_lookAnchorHeightOffset, "시선 높이 오프셋", "작을수록 카메라가 더 아래를 내려다봅니다.");
+        Draw(_lookAnchorResponsiveness, "시선 반응 속도", "클수록 적 방향으로 더 빠르게 정렬됩니다.");
+
+        if (!_useSolverDrivenLockOnFraming.boolValue)
+        {
+            DrawSection("근접 락온 보정");
+            Draw(_useCloseRangeCompensation, "근접 보정 사용", "보스와 너무 가까울 때 저각 카메라를 자동 보정합니다.");
+            Draw(_closeRangeCompensationStartDistance, "근접 보정 시작 거리", "이 거리 안으로 들어오면 근접 보정이 시작됩니다.");
+            Draw(_closeRangeCompensationFullDistance, "근접 보정 최대 거리", "이 거리 이하에서는 근접 보정이 최대로 적용됩니다.");
+            Draw(_closeRangeExtraHeight, "근접 추가 높이", "붙었을 때 카메라를 위로 더 올립니다.");
+            Draw(_closeRangeExtraDistance, "근접 추가 거리", "붙었을 때 카메라를 뒤로 더 뺍니다.");
+            Draw(_closeRangeBodyScreenYOffset, "근접 플레이어 화면 보정", "붙었을 때 플레이어를 화면에서 조금 더 위로 올립니다.");
+            Draw(_closeRangeAimScreenYOffset, "근접 적 화면 보정", "붙었을 때 적을 화면에서 조금 더 아래로 내립니다.");
+            Draw(_closeRangeLookHeightReduction, "근접 시선 낮춤", "붙었을 때 시선 기준점을 더 낮춰 아래를 내려다보게 합니다.");
+        }
+
+        DrawSection("디버그");
+        using (new EditorGUI.DisabledScope(true))
+        {
+            EditorGUILayout.PropertyField(_isLockOnActive, new GUIContent("현재 락온 활성 상태"));
+        }
+
+        serializedObject.ApplyModifiedProperties();
+    }
+
+    void DrawSection(string title)
+    {
+        EditorGUILayout.Space(6f);
+        EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
+    }
+
+    void Draw(SerializedProperty property, string label, string tooltip)
+    {
+        if (property == null)
+            return;
+
+        EditorGUILayout.PropertyField(property, new GUIContent(label, tooltip), true);
+    }
+
+    void DrawScriptField()
+    {
+        using (new EditorGUI.DisabledScope(true))
+        {
+            MonoScript script = MonoScript.FromMonoBehaviour((LockOnCameraManager)target);
+            EditorGUILayout.ObjectField("스크립트", script, typeof(MonoScript), false);
+        }
+    }
+}

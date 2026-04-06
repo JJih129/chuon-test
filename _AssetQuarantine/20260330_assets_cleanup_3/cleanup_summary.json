@@ -1,0 +1,45 @@
+{
+  "quarantine_root": "D:\\GitHub\\Project-ChuOn\\_AssetQuarantine\\20260330_assets_cleanup_3",
+  "moved": [
+    {
+      "src": "Assets/AnimeAsset/GhostSamurai_Animset/Animation/katana/APose/Movement/Inplace/GhostSamurai_APose_Strafe_Run_F_Sprint_Inplace.FBX",
+      "dst": "Assets/AnimationKeep/GhostSamurai/GhostSamurai_APose_Strafe_Run_F_Sprint_Inplace.FBX"
+    },
+    {
+      "src": "Assets/AnimeAsset/GhostSamurai_Animset/Model/Material/Mat_UnityModelBody2.mat",
+      "dst": "Assets/MaterialsKeep/GhostSamurai/Mat_UnityModelBody2.mat"
+    },
+    {
+      "src": "Assets/AnimeAsset/GhostSamurai_Animset",
+      "dst": "QUARANTINE/Assets/AnimeAsset/GhostSamurai_Animset"
+    },
+    {
+      "src": "Assets/Materials/Boss/Boss_Body_02.mat",
+      "dst": "QUARANTINE/Assets/Materials/Boss/Boss_Body_02.mat"
+    },
+    {
+      "src": "Assets/Texture/Boss/boss1.preview.png",
+      "dst": "QUARANTINE/Assets/Texture/Boss/boss1.preview.png"
+    },
+    {
+      "src": "Assets/Texture/Boss/boss2.preview.png",
+      "dst": "QUARANTINE/Assets/Texture/Boss/boss2.preview.png"
+    },
+    {
+      "src": "Assets/Texture/Boss/boss2.psd",
+      "dst": "QUARANTINE/Assets/Texture/Boss/boss2.psd"
+    },
+    {
+      "src": "Assets/Texture/Boss/boss3.preview.png",
+      "dst": "QUARANTINE/Assets/Texture/Boss/boss3.preview.png"
+    },
+    {
+      "src": "Assets/Texture/Boss/bosshair.preview.png",
+      "dst": "QUARANTINE/Assets/Texture/Boss/bosshair.preview.png"
+    },
+    {
+      "src": "Assets/Texture/Boss/bosshair.psd",
+      "dst": "QUARANTINE/Assets/Texture/Boss/bosshair.psd"
+    }
+  ]
+}

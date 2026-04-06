@@ -1,48 +1,416 @@
-﻿using Unity.Cinemachine;
-using UnityEngine;
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
+using System;
+using Unity.Cinemachine;
+using UnityEngine;
 
 #pragma warning disable CS0618
 
+[System.Serializable]
+public struct LockOnCameraFramingProfile
+{
+    [InspectorName("카메라 위치 오프셋")]
+    public Vector3 followOffset;
+    [InspectorName("추적 기준점 오프셋")]
+    public Vector3 trackedObjectOffset;
+    [InspectorName("카메라 거리")]
+    public float cameraDistance;
+    [InspectorName("시야각")]
+    public float fieldOfView;
+    [InspectorName("플레이어 화면 위치")]
+    public Vector2 bodyScreenPosition;
+    [InspectorName("바디 소프트존")]
+    public Vector2 bodySoftZone;
+    [InspectorName("적 화면 위치")]
+    public Vector2 aimScreenPosition;
+    [InspectorName("적 추적 기준점 오프셋")]
+    public Vector3 aimTrackedObjectOffset;
+    [InspectorName("조준 바이어스")]
+    public Vector2 aimBias;
+    [InspectorName("시선 높이 오프셋")]
+    public float lookHeightOffset;
+
+    public static LockOnCameraFramingProfile Lerp(in LockOnCameraFramingProfile close, in LockOnCameraFramingProfile far, float t)
+    {
+        t = Mathf.Clamp01(t);
+        return new LockOnCameraFramingProfile
+        {
+            followOffset = Vector3.Lerp(close.followOffset, far.followOffset, t),
+            trackedObjectOffset = Vector3.Lerp(close.trackedObjectOffset, far.trackedObjectOffset, t),
+            cameraDistance = Mathf.Lerp(close.cameraDistance, far.cameraDistance, t),
+            fieldOfView = Mathf.Lerp(close.fieldOfView, far.fieldOfView, t),
+            bodyScreenPosition = Vector2.Lerp(close.bodyScreenPosition, far.bodyScreenPosition, t),
+            bodySoftZone = Vector2.Lerp(close.bodySoftZone, far.bodySoftZone, t),
+            aimScreenPosition = Vector2.Lerp(close.aimScreenPosition, far.aimScreenPosition, t),
+            aimTrackedObjectOffset = Vector3.Lerp(close.aimTrackedObjectOffset, far.aimTrackedObjectOffset, t),
+            aimBias = Vector2.Lerp(close.aimBias, far.aimBias, t),
+            lookHeightOffset = Mathf.Lerp(close.lookHeightOffset, far.lookHeightOffset, t)
+        };
+    }
+}
+
 public class LockOnCameraManager : MonoBehaviour
 {
-    [Header("Cinemachine Refs")]
-    [Tooltip("Lock-on virtual camera.")]
+    public struct RuntimeStateSnapshot
+    {
+        public bool isValid;
+        public bool wasLockOnActive;
+        public int lockOnPriority;
+        public bool lockOnEnabled;
+        public bool lockOnCameraActive;
+        public float lockOnFieldOfView;
+        public int freeLookPriority;
+        public bool freeLookEnabled;
+        public bool freeLookCameraActive;
+        public bool freeLookDriverEnabled;
+    }
+
+    [Header("프리셋")]
+    [Tooltip("활성화하면 플레이 시 카잔 스타일 락온 프레이밍 값을 강제로 적용합니다.")]
+    [InspectorName("카잔 스타일 프리셋 강제 적용")]
+    public bool useKhazanStyleLockOnPreset = true;
+
+    [Header("시네머신 참조")]
+    [Tooltip("락온 전용 가상 카메라.")]
+    [InspectorName("락온 카메라")]
     public CinemachineVirtualCameraBase lockOnCam;
 
-    [Tooltip("Default free-look virtual camera.")]
+    [Tooltip("기본 자유 시점 가상 카메라.")]
+    [InspectorName("기본 자유 시점 카메라")]
     public CinemachineVirtualCameraBase freeLookCam;
 
-    [Tooltip("Driver script that controls the free-look orbit. If a wrong component is assigned, it is fixed at runtime.")]
+    [Tooltip("기본 자유 시점 카메라를 제어하는 드라이버 스크립트.")]
+    [InspectorName("자유 시점 드라이버")]
     public MonoBehaviour freeLookDriver;
 
-    [Header("Target Group")]
-    [Tooltip("Target group used while lock-on is active.")]
+    [Header("타겟 그룹")]
+    [Tooltip("락온 중 플레이어/적 구도를 계산하는 타겟 그룹.")]
+    [InspectorName("타겟 그룹")]
     public CinemachineTargetGroup targetGroup;
 
-    [Header("Player Pivot")]
-    [Tooltip("Player lock pivot.")]
+    [Header("플레이어 기준점")]
+    [Tooltip("락온 시 플레이어를 바라보는 기준 피벗.")]
+    [InspectorName("플레이어 피벗")]
     public Transform playerPivot;
+    [Tooltip("Lock-on camera follows a lower player anchor so the full body stays visible.")]
+    [InspectorName("카메라 전용 플레이어 기준점 오프셋")]
+    public Vector3 playerCameraAnchorLocalOffset = new Vector3(0f, -0.45f, 0f);
 
-    [Header("Lock-On Framing")]
-    [Tooltip("Additional Y offset applied to the lock-on camera transposer.")]
+    [Header("전투 카메라 솔버")]
+    [Tooltip("활성화하면 원거리/근거리 프레이밍 프로필을 거리 기반으로 블렌딩합니다.")]
+    [InspectorName("솔버 기반 프레이밍 사용")]
+    public bool useSolverDrivenLockOnFraming = true;
+
+    [Tooltip("락온 중 CinemachineCollider를 꺼서 플레이어/적 근접 시 저각 붕괴를 막습니다.")]
+    [InspectorName("락온 중 카메라 충돌 확장 비활성화")]
+    public bool disableCollisionExtensionWhileLocked = true;
+
+    [Tooltip("이 거리 이하면 근접 프레이밍을 100% 적용합니다.")]
+    [InspectorName("근접 기준 거리")]
+    [Min(0.1f)] public float solverCloseDistance = 2.25f;
+
+    [Tooltip("이 거리 이상이면 원거리 프레이밍을 100% 적용합니다.")]
+    [InspectorName("원거리 기준 거리")]
+    [Min(0.1f)] public float solverFarDistance = 6.5f;
+
+    [Tooltip("보스와 붙었을 때 사용하는 상단 시점 프로필입니다.")]
+    [InspectorName("근접 프레이밍 프로필")]
+    public LockOnCameraFramingProfile closeRangeFraming = new LockOnCameraFramingProfile
+    {
+        followOffset = new Vector3(0f, 4.22f, -4.9f),
+        trackedObjectOffset = new Vector3(0f, -0.1f, 0f),
+        cameraDistance = 2.72f,
+        fieldOfView = 38f,
+        bodyScreenPosition = new Vector2(0.5f, 0.55f),
+        bodySoftZone = new Vector2(0.72f, 0.22f),
+        aimScreenPosition = new Vector2(0.5f, 0.64f),
+        aimTrackedObjectOffset = new Vector3(0f, -0.15f, 0f),
+        aimBias = new Vector2(0f, 0f),
+        lookHeightOffset = 0.22f
+    };
+
+    [Tooltip("보스와 거리가 있을 때 사용하는 기본 전투 프레이밍입니다.")]
+    [InspectorName("원거리 프레이밍 프로필")]
+    public LockOnCameraFramingProfile farRangeFraming = new LockOnCameraFramingProfile
+    {
+        followOffset = new Vector3(0f, 4.35f, -5.55f),
+        trackedObjectOffset = new Vector3(0f, -0.2f, 0f),
+        cameraDistance = 3.35f,
+        fieldOfView = 39.5f,
+        bodyScreenPosition = new Vector2(0.5f, 0.58f),
+        bodySoftZone = new Vector2(0.78f, 0.28f),
+        aimScreenPosition = new Vector2(0.5f, 0.67f),
+        aimTrackedObjectOffset = new Vector3(0f, -0.2f, 0f),
+        aimBias = new Vector2(0f, 0f),
+        lookHeightOffset = 0.14f
+    };
+
+    [Header("락온 기본 프레이밍")]
+    [Tooltip("락온 카메라에 추가로 적용하는 높이 보정값.")]
+    [InspectorName("락온 높이 추가 보정")]
     public float lockOnFollowHeightOffset = -0.5f;
 
-    [Tooltip("Restore the original follow offset when lock-on ends.")]
+    [Tooltip("락온 종료 시 원래 카메라 오프셋으로 복원합니다.")]
+    [InspectorName("락온 종료 시 오프셋 복원")]
     public bool restoreFollowOffsetOnEnd = true;
 
-    [Header("Debug")]
-    [SerializeField] bool isLockOnActive = false;
+    [Tooltip("씬 기본값 대신 락온 전용 근접 오프셋을 사용합니다.")]
+    [InspectorName("전용 락온 오프셋 사용")]
+    public bool useDedicatedLockOnFollowOffset = true;
+
+    [Tooltip("플레이어 중심 소울라이크 락온 구도를 위한 카메라 위치 오프셋.")]
+    [InspectorName("락온 카메라 위치 오프셋")]
+    public Vector3 dedicatedLockOnFollowOffset = new Vector3(0f, 5.8f, -5.55f);
+
+    [Tooltip("락온 중 전용 시야각(FOV)을 적용합니다.")]
+    [InspectorName("전용 락온 시야각 사용")]
+    public bool useDedicatedLockOnFieldOfView = true;
+
+    [Tooltip("값이 작을수록 더 가깝고 강한 전투 구도가 됩니다.")]
+    [InspectorName("락온 시야각")]
+    [Range(30f, 80f)] public float dedicatedLockOnFieldOfView = 49f;
+
+    [Tooltip("FramingTransposer 계열 락온 카메라에 전용 추적 기준점을 적용합니다.")]
+    [InspectorName("전용 추적 기준점 사용")]
+    public bool useDedicatedLockOnTrackedObjectOffset = true;
+
+    [Tooltip("락온 중 플레이어 몸통을 추적하는 기준 오프셋입니다.")]
+    [InspectorName("추적 기준점 오프셋")]
+    public Vector3 dedicatedLockOnTrackedObjectOffset = new Vector3(0f, 1.25f, 0f);
+
+    [Tooltip("FramingTransposer 계열 락온 카메라에 전용 거리값을 적용합니다.")]
+    [InspectorName("전용 카메라 거리 사용")]
+    public bool useDedicatedLockOnCameraDistance = true;
+
+    [Tooltip("값이 작을수록 플레이어와 적을 더 크게, 더 가깝게 보여줍니다.")]
+    [InspectorName("락온 카메라 거리")]
+    [Range(2.5f, 8f)] public float dedicatedLockOnCameraDistance = 6.9f;
+
+    [Tooltip("락온 중 바디 프레이밍 전용 화면 위치를 사용합니다.")]
+    [InspectorName("전용 플레이어 화면 위치 사용")]
+    public bool useDedicatedLockOnBodyScreenPosition = true;
+
+    [Tooltip("플레이어를 화면 아래쪽에 두어 더 위에서 내려다보는 느낌을 만듭니다.")]
+    [InspectorName("플레이어 화면 위치")]
+    public Vector2 dedicatedLockOnBodyScreenPosition = new Vector2(0.5f, 0.34f);
+
+    [Tooltip("락온 중 소프트존을 더 타이트하게 사용합니다.")]
+    [InspectorName("전용 소프트존 사용")]
+    public bool useDedicatedLockOnBodySoftZone = true;
+
+    [Tooltip("값이 작을수록 대쉬/회피 때 카메라가 덜 흐릅니다.")]
+    [InspectorName("바디 소프트존")]
+    public Vector2 dedicatedLockOnBodySoftZone = new Vector2(0.72f, 0.26f);
+
+    [Tooltip("락온 중 적을 바라보는 화면 위치를 별도로 사용합니다.")]
+    [InspectorName("전용 적 화면 위치 사용")]
+    public bool useDedicatedLockOnAimScreenPosition = true;
+
+    [Tooltip("적을 화면 상단 쪽에 배치해 소울라이크 전투 구도를 만듭니다.")]
+    [InspectorName("적 화면 위치")]
+    public Vector2 dedicatedLockOnAimScreenPosition = new Vector2(0.5f, 0.44f);
+
+    [Tooltip("락온 중 조준 바이어스를 별도로 적용합니다.")]
+    [InspectorName("전용 조준 바이어스 사용")]
+    public bool useDedicatedLockOnAimBias = true;
+
+    [Tooltip("플레이어 몸이 프레임 안에 더 남도록 조준을 약간 아래로 보정합니다.")]
+    [InspectorName("조준 바이어스")]
+    public Vector2 dedicatedLockOnAimBias = new Vector2(0f, -0.05f);
+
+    [Header("락온 안정화")]
+    [Tooltip("동적 추적 앵커에 추가로 적용하는 월드 오프셋입니다.")]
+    [InspectorName("락온 앵커 오프셋")]
+    public Vector3 lockOnAnchorOffset = new Vector3(0f, 0.15f, 0f);
+
+    [Tooltip("값이 클수록 락온 중 플레이어를 더 빠르게 따라갑니다.")]
+    [InspectorName("추적 반응 속도")]
+    [Min(0.1f)] public float followAnchorResponsiveness = 22f;
+
+    [Tooltip("플레이어의 빠른 이동을 미리 반영해 대쉬 중에도 중심을 유지합니다.")]
+    [InspectorName("속도 예측 시간")]
+    [Min(0f)] public float playerVelocityLookaheadTime = 0.04f;
+
+    [Tooltip("속도 예측 보정이 과해지지 않도록 제한합니다.")]
+    [InspectorName("최대 속도 예측 거리")]
+    [Min(0f)] public float maxVelocityLookaheadDistance = 0.45f;
+
+    [Tooltip("락온 중 카메라 지연을 줄이기 위해 바디 댐핑을 낮춥니다.")]
+    [InspectorName("락온 중 댐핑 감소")]
+    public bool reduceBodyDampingWhileLocked = true;
+
+    [Tooltip("락온 중 사용하는 바디 댐핑 값입니다.")]
+    [InspectorName("락온 바디 댐핑")]
+    public Vector3 lockedBodyDamping = new Vector3(0.08f, 0.1f, 0.08f);
+
+    [Header("락온 시선 보정")]
+    [Tooltip("플레이어에서 적 방향으로 시선 앵커를 얼마나 앞에 둘지 설정합니다.")]
+    [InspectorName("시선 앵커 거리")]
+    [Min(0.1f)] public float lookAnchorDistance = 5.2f;
+
+    [Tooltip("플레이어-적 거리 대비 시선 앵커 거리 비율입니다.")]
+    [InspectorName("시선 거리 비율")]
+    [Range(0.1f, 1f)] public float lookAnchorDistanceRatio = 0.5f;
+
+    [Tooltip("락온 중 시선 앵커 최소 거리입니다.")]
+    [InspectorName("시선 최소 거리")]
+    [Min(0.1f)] public float lookAnchorMinDistance = 1.5f;
+
+    [Tooltip("값이 작을수록 카메라가 더 아래를 내려다봅니다.")]
+    [InspectorName("시선 높이 오프셋")]
+    [Min(-1f)] public float lookAnchorHeightOffset = 0.45f;
+
+    [Tooltip("값이 클수록 시선 앵커가 적 방향으로 더 빠르게 정렬됩니다.")]
+    [InspectorName("시선 반응 속도")]
+    [Min(0.1f)] public float lookAnchorResponsiveness = 18f;
+
+    [Header("근접 락온 보정")]
+    [Tooltip("보스와 너무 가까울 때 카메라 저각 문제를 자동 보정합니다.")]
+    [InspectorName("근접 보정 사용")]
+    public bool useCloseRangeCompensation = true;
+
+    [Tooltip("이 거리 안으로 들어오면 근접 보정이 시작됩니다.")]
+    [InspectorName("근접 보정 시작 거리")]
+    [Min(0.1f)] public float closeRangeCompensationStartDistance = 4.1f;
+
+    [Tooltip("이 거리 이하에서는 근접 보정이 최대로 적용됩니다.")]
+    [InspectorName("근접 보정 최대 거리")]
+    [Min(0.1f)] public float closeRangeCompensationFullDistance = 2.0f;
+
+    [Tooltip("근접 시 카메라를 추가로 위로 올리는 값입니다.")]
+    [InspectorName("근접 추가 높이")]
+    public float closeRangeExtraHeight = 1.6f;
+
+    [Tooltip("근접 시 카메라를 추가로 뒤로 빼는 값입니다.")]
+    [InspectorName("근접 추가 거리")]
+    public float closeRangeExtraDistance = 1.15f;
+
+    [Tooltip("근접 시 플레이어를 화면에서 조금 더 위로 올려 전신이 보이게 합니다.")]
+    [InspectorName("근접 플레이어 화면 보정")]
+    public float closeRangeBodyScreenYOffset = 0.08f;
+
+    [Tooltip("근접 시 적을 화면에서 조금 더 아래로 내려 저각을 줄입니다.")]
+    [InspectorName("근접 적 화면 보정")]
+    public float closeRangeAimScreenYOffset = 0.06f;
+
+    [Tooltip("근접 시 시선 기준점을 더 낮춰 아래를 보게 만듭니다.")]
+    [InspectorName("근접 시선 낮춤")]
+    public float closeRangeLookHeightReduction = 0.1f;
+
+    [Header("커스텀 전투 카메라")]
+    [Tooltip("활성화하면 락온 중 시네머신 바디/에임 파이프라인을 끄고, 전투 솔버가 카메라 Transform을 직접 계산합니다.")]
+    [InspectorName("커스텀 전투 카메라 솔버 사용")]
+    public bool useCustomTransformLockOnRig = true;
+
+    [Tooltip("커스텀 락온 카메라 위치가 목표 위치로 따라가는 속도입니다.")]
+    [InspectorName("카메라 위치 반응 속도")]
+    [Min(0.1f)] public float customRigPositionResponsiveness = 14f;
+
+    [Tooltip("커스텀 락온 카메라 회전이 목표 회전을 따라가는 속도입니다.")]
+    [InspectorName("카메라 회전 반응 속도")]
+    [Min(0.1f)] public float customRigRotationResponsiveness = 18f;
+
+    [Tooltip("적 렌더러의 바닥과 중심 사이에서 어느 높이를 시선 기준으로 쓸지 정합니다.")]
+    [InspectorName("적 시선 기준 비율")]
+    [Range(0f, 1f)] public float enemyAimBottomToCenterRatio = 0.78f;
+
+    [Tooltip("적 시선 기준점에 추가로 적용하는 월드 Y 오프셋입니다.")]
+    [InspectorName("적 시선 높이 보정")]
+    public float enemyAimVerticalOffset = 0f;
+
+    [Tooltip("플레이어 쪽 시선 기준을 약간 들어 올려 전신이 안정적으로 보이게 합니다.")]
+    [InspectorName("플레이어 시선 높이 보정")]
+    public float playerLookHeightOffset = 0.15f;
+
+    [Header("?쎌삩 ?깆뒫")]
+    [Tooltip("而ㅼ뒪? ?쎌삩 移대찓??solve瑜?다시 계산하는 최소 간격입니다.")]
+    [InspectorName("而ㅼ뒪? 由ш렇 媛깆떊 媛꾧꺽")]
+    [Min(1f / 120f)] public float customRigSolveInterval = 1f / 45f;
+    [Tooltip("?뚮젅?댁뼱 移대찓??湲곗????먯씠 ?대굹 媛깆떊?섎룄濡?허용하는 최소 이동 거리입니다.")]
+    [InspectorName("?뚮젅?댁뼱 湲곗????먯젏 媛깆떊 ?꾩쓬")]
+    [Min(0f)] public float customRigPlayerAnchorThreshold = 0.03f;
+    [Tooltip("?쎌삩 ????꾩튂媛 ??媛깆떊?섎룄濡?허용하는 최소 이동 거리입니다.")]
+    [InspectorName("???湲곗????먯젏 媛깆떊 ?꾩쓬")]
+    [Min(0f)] public float customRigEnemyAnchorThreshold = 0.04f;
+    [Tooltip("?뚮젅?댁뼱 ?뺣㈃ ???뚯쟾??이 각도 이상 바뀔 때만 즉시 solve를 다시 계산합니다.")]
+    [InspectorName("?뺣㈃ 媛곷룄 媛깆떊 ?꾩쓬")]
+    [Range(0f, 5f)] public float customRigYawAngleThreshold = 0.75f;
+
+    [Header("디버그")]
+    [SerializeField] bool isLockOnActive;
     public bool IsLockOnActive => isLockOnActive;
 
+    Transform _currentEnemyPivot;
+    Transform _lockOnComponentOwner;
+    Renderer _currentEnemyRenderer;
+    Vector3 _customRigPosition;
+    Quaternion _customRigRotation;
+    bool _customRigInitialized;
+    bool _restoreComponentOwnerActive;
     Vector3 _originalFollowOffset;
     bool _hasOriginalOffset;
+    Vector3 _originalBodyDamping;
+    bool _hasOriginalBodyDamping;
+    float _originalFieldOfView;
+    bool _hasOriginalFieldOfView;
+    Vector3 _originalTrackedObjectOffset;
+    bool _hasOriginalTrackedObjectOffset;
+    float _originalCameraDistance;
+    bool _hasOriginalCameraDistance;
+    Vector2 _originalBodyScreenPosition;
+    bool _hasOriginalBodyScreenPosition;
+    Vector2 _originalBodySoftZone;
+    bool _hasOriginalBodySoftZone;
+    Vector2 _originalAimScreenPosition;
+    bool _hasOriginalAimScreenPosition;
+    Vector3 _originalAimTrackedObjectOffset;
+    bool _hasOriginalAimTrackedObjectOffset;
+    Vector2 _originalAimBias;
+    bool _hasOriginalAimBias;
+    Transform _lockOnFollowAnchor;
+    Transform _lockOnLookAnchor;
+    VCamTransposerProxy _lockOnTransposerProxy;
+    bool _restoreTransposerProxyEnabled;
+    Behaviour _lockOnColliderExtension;
+    bool _restoreColliderExtensionEnabled;
+    LockOnCameraFramingProfile _activeFramingProfile;
+    Vector3 _lastPlayerPivotPosition;
+    Vector3 _smoothedPlayerVelocity;
+    bool _followAnchorInitialized;
+    bool _lookAnchorInitialized;
+    FreeLookCamera _cachedResolvedFreeLookCamera;
+    bool _hasAttemptedSceneFreeLookDriverResolve;
+    LockOnCameraFramingProfile _lastAppliedFramingProfile;
+    bool _hasAppliedFramingProfile;
+    float _lastAppliedLegacyCloseRangeT = float.NaN;
+    readonly List<CinemachineTargetGroup.Target> _targetBuffer = new List<CinemachineTargetGroup.Target>(2);
+    Vector3 _cachedCustomRigDesiredPosition;
+    Quaternion _cachedCustomRigDesiredRotation;
+    float _cachedCustomRigFieldOfView;
+    bool _hasCustomRigDesiredPose;
+    float _nextCustomRigSolveAt;
+    Vector3 _lastCustomRigPlayerAnchor;
+    Vector3 _lastCustomRigEnemyAnchor;
+    Vector3 _lastCustomRigYawForward;
 
     void Awake()
     {
+        ApplyKhazanStyleLockOnPresetIfEnabled();
         ResolveFreeLookDriver();
-        CacheOriginalFollowOffset();
+        ResolveLockOnTransposerProxy();
+        ResolveLockOnColliderExtension();
+        ResolveLockOnComponentOwner();
+        CacheOriginalLockOnCameraState();
+        EnsureFollowAnchor();
+        EnsureLookAnchor();
+        InvalidateRuntimeFramingCache();
+    }
+
+    void Reset()
+    {
+        ApplyKhazanStyleLockOnPresetIfEnabled();
+        InvalidateFreeLookDriverCache();
+        InvalidateRuntimeFramingCache();
     }
 
     IEnumerator Start()
@@ -53,10 +421,123 @@ public class LockOnCameraManager : MonoBehaviour
             ForceRestoreGameplayFreeLook();
     }
 
+    void LateUpdate()
+    {
+        if (!isLockOnActive)
+            return;
+
+        if (playerPivot == null || lockOnCam == null)
+            return;
+
+        UpdatePlayerMotionState();
+
+        if (useCustomTransformLockOnRig)
+        {
+            ApplyCustomTransformLockOnRig(false);
+            return;
+        }
+
+        ApplyDynamicLockOnFraming();
+        UpdateFollowAnchor(false);
+        UpdateLookAnchor(false);
+
+        Transform followTarget = GetLockOnFollowTarget();
+        if (lockOnCam.Follow != followTarget)
+            lockOnCam.Follow = followTarget;
+
+        if (targetGroup != null)
+        {
+            Transform lookTarget = GetLockOnLookTarget();
+            if (lockOnCam.LookAt != lookTarget)
+                lockOnCam.LookAt = lookTarget;
+
+            bool playerMissing = _targetBuffer.Count == 0 || _targetBuffer[0].Object != playerPivot;
+            bool enemyMismatch = _currentEnemyPivot != null &&
+                                 (_targetBuffer.Count < 2 || _targetBuffer[1].Object != _currentEnemyPivot);
+            if (playerMissing || enemyMismatch)
+                RebuildTargetGroup(_currentEnemyPivot);
+        }
+    }
+
     void OnValidate()
     {
+        ApplyKhazanStyleLockOnPresetIfEnabled();
+        InvalidateFreeLookDriverCache();
+        InvalidateRuntimeFramingCache();
         ResolveFreeLookDriver();
+        CacheOriginalLockOnCameraState();
+    }
+
+    void ApplyKhazanStyleLockOnPresetIfEnabled()
+    {
+        if (!useKhazanStyleLockOnPreset)
+            return;
+
+        playerCameraAnchorLocalOffset = new Vector3(0f, -0.48f, 0f);
+        solverCloseDistance = 2.5f;
+        solverFarDistance = 7.25f;
+        closeRangeFraming = new LockOnCameraFramingProfile
+        {
+            followOffset = new Vector3(0.92f, 1.94f, -3.95f),
+            trackedObjectOffset = new Vector3(0f, -0.1f, 0f),
+            cameraDistance = 2.72f,
+            fieldOfView = 38f,
+            bodyScreenPosition = new Vector2(0.5f, 0.55f),
+            bodySoftZone = new Vector2(0.72f, 0.22f),
+            aimScreenPosition = new Vector2(0.5f, 0.64f),
+            aimTrackedObjectOffset = new Vector3(0f, -0.15f, 0f),
+            aimBias = new Vector2(0f, 0f),
+            lookHeightOffset = 0.54f
+        };
+        farRangeFraming = new LockOnCameraFramingProfile
+        {
+            followOffset = new Vector3(0.82f, 2.62f, -4.45f),
+            trackedObjectOffset = new Vector3(0f, -0.2f, 0f),
+            cameraDistance = 3.35f,
+            fieldOfView = 39.5f,
+            bodyScreenPosition = new Vector2(0.5f, 0.58f),
+            bodySoftZone = new Vector2(0.78f, 0.28f),
+            aimScreenPosition = new Vector2(0.5f, 0.67f),
+            aimTrackedObjectOffset = new Vector3(0f, -0.2f, 0f),
+            aimBias = new Vector2(0f, 0f),
+            lookHeightOffset = 0.36f
+        };
+
+        dedicatedLockOnFollowOffset = farRangeFraming.followOffset;
+        dedicatedLockOnFieldOfView = farRangeFraming.fieldOfView;
+        dedicatedLockOnTrackedObjectOffset = farRangeFraming.trackedObjectOffset;
+        dedicatedLockOnCameraDistance = farRangeFraming.cameraDistance;
+        dedicatedLockOnBodyScreenPosition = farRangeFraming.bodyScreenPosition;
+        dedicatedLockOnBodySoftZone = farRangeFraming.bodySoftZone;
+        dedicatedLockOnAimScreenPosition = farRangeFraming.aimScreenPosition;
+        dedicatedLockOnAimBias = new Vector2(0f, -0.05f);
+        lookAnchorDistance = 5.2f;
+        lookAnchorDistanceRatio = 0.5f;
+        lookAnchorMinDistance = 1.5f;
+        lookAnchorHeightOffset = farRangeFraming.lookHeightOffset;
+        closeRangeCompensationStartDistance = 4.1f;
+        closeRangeCompensationFullDistance = 2.0f;
+        closeRangeExtraHeight = 1.6f;
+        closeRangeExtraDistance = 1.15f;
+        closeRangeBodyScreenYOffset = 0.08f;
+        closeRangeAimScreenYOffset = 0.06f;
+        closeRangeLookHeightReduction = 0.1f;
+        playerLookHeightOffset = 0.22f;
+        enemyAimBottomToCenterRatio = 0.82f;
+    }
+
+    void CacheOriginalLockOnCameraState()
+    {
         CacheOriginalFollowOffset();
+        CacheOriginalBodyDamping();
+        CacheOriginalFieldOfView();
+        CacheOriginalTrackedObjectOffset();
+        CacheOriginalCameraDistance();
+        CacheOriginalBodyScreenPosition();
+        CacheOriginalBodySoftZone();
+        CacheOriginalAimScreenPosition();
+        CacheOriginalAimTrackedObjectOffset();
+        CacheOriginalAimBias();
     }
 
     void CacheOriginalFollowOffset()
@@ -66,34 +547,171 @@ public class LockOnCameraManager : MonoBehaviour
 
         if (!CinemachineCompat.TryGetBodyFollowOffset(lockOnCam, out _originalFollowOffset))
             return;
+
         _hasOriginalOffset = true;
+    }
+
+    void CacheOriginalBodyDamping()
+    {
+        if (lockOnCam == null || _hasOriginalBodyDamping)
+            return;
+
+        if (!CinemachineCompat.TryGetBodyDamping(lockOnCam, out _originalBodyDamping))
+            return;
+
+        _hasOriginalBodyDamping = true;
+    }
+
+    void CacheOriginalFieldOfView()
+    {
+        if (lockOnCam == null || _hasOriginalFieldOfView)
+            return;
+
+        if (!CinemachineCompat.TryGetFieldOfView(lockOnCam, out _originalFieldOfView))
+            return;
+
+        _hasOriginalFieldOfView = true;
+    }
+
+    void CacheOriginalTrackedObjectOffset()
+    {
+        if (lockOnCam == null || _hasOriginalTrackedObjectOffset)
+            return;
+
+        if (!CinemachineCompat.TryGetBodyTrackedObjectOffset(lockOnCam, out _originalTrackedObjectOffset))
+            return;
+
+        _hasOriginalTrackedObjectOffset = true;
+    }
+
+    void CacheOriginalCameraDistance()
+    {
+        if (lockOnCam == null || _hasOriginalCameraDistance)
+            return;
+
+        if (!CinemachineCompat.TryGetBodyCameraDistance(lockOnCam, out _originalCameraDistance))
+            return;
+
+        _hasOriginalCameraDistance = true;
+    }
+
+    void CacheOriginalBodyScreenPosition()
+    {
+        if (lockOnCam == null || _hasOriginalBodyScreenPosition)
+            return;
+
+        if (!CinemachineCompat.TryGetBodyScreenPosition(lockOnCam, out _originalBodyScreenPosition))
+            return;
+
+        _hasOriginalBodyScreenPosition = true;
+    }
+
+    void CacheOriginalBodySoftZone()
+    {
+        if (lockOnCam == null || _hasOriginalBodySoftZone)
+            return;
+
+        if (!CinemachineCompat.TryGetBodySoftZone(lockOnCam, out _originalBodySoftZone))
+            return;
+
+        _hasOriginalBodySoftZone = true;
+    }
+
+    void CacheOriginalAimScreenPosition()
+    {
+        if (lockOnCam == null || _hasOriginalAimScreenPosition)
+            return;
+
+        if (!CinemachineCompat.TryGetAimScreenPosition(lockOnCam, out _originalAimScreenPosition))
+            return;
+
+        _hasOriginalAimScreenPosition = true;
+    }
+
+    void CacheOriginalAimTrackedObjectOffset()
+    {
+        if (lockOnCam == null || _hasOriginalAimTrackedObjectOffset)
+            return;
+
+        if (!CinemachineCompat.TryGetAimTrackedObjectOffset(lockOnCam, out _originalAimTrackedObjectOffset))
+            return;
+
+        _hasOriginalAimTrackedObjectOffset = true;
+    }
+
+    void CacheOriginalAimBias()
+    {
+        if (lockOnCam == null || _hasOriginalAimBias)
+            return;
+
+        if (!CinemachineCompat.TryGetAimBias(lockOnCam, out _originalAimBias))
+            return;
+
+        _hasOriginalAimBias = true;
     }
 
     MonoBehaviour ResolveFreeLookDriver()
     {
+        if (freeLookDriver == null || !freeLookDriver)
+            freeLookDriver = null;
+
+        if (_cachedResolvedFreeLookCamera == null || !_cachedResolvedFreeLookCamera)
+            _cachedResolvedFreeLookCamera = null;
+
         if (freeLookDriver is FreeLookCamera assignedDriver)
         {
+            if (assignedDriver == null || !assignedDriver)
+            {
+                freeLookDriver = null;
+            }
+            else
+            {
             assignedDriver.AutoResolveReferences();
             if (assignedDriver.HasValidReferences)
+            {
+                _cachedResolvedFreeLookCamera = assignedDriver;
+                _hasAttemptedSceneFreeLookDriverResolve = true;
                 return freeLookDriver;
+            }
+            }
         }
 
-        if (freeLookCam != null)
+        if (freeLookCam != null && freeLookCam)
         {
-            var attachedDriver = freeLookCam.GetComponent<FreeLookCamera>();
-            if (attachedDriver != null)
+            FreeLookCamera attachedDriver = freeLookCam.GetComponent<FreeLookCamera>();
+            if (attachedDriver != null && attachedDriver)
             {
                 attachedDriver.AutoResolveReferences();
                 freeLookDriver = attachedDriver;
                 if (attachedDriver.HasValidReferences)
+                {
+                    _cachedResolvedFreeLookCamera = attachedDriver;
+                    _hasAttemptedSceneFreeLookDriverResolve = true;
                     return freeLookDriver;
+                }
             }
         }
 
-        var foundDrivers = FindObjectsByType<FreeLookCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        if (_cachedResolvedFreeLookCamera != null && _cachedResolvedFreeLookCamera)
+        {
+            _cachedResolvedFreeLookCamera.AutoResolveReferences();
+            if (_cachedResolvedFreeLookCamera.HasValidReferences)
+            {
+                freeLookDriver = _cachedResolvedFreeLookCamera;
+                return freeLookDriver;
+            }
+
+            _cachedResolvedFreeLookCamera = null;
+        }
+
+        if (_hasAttemptedSceneFreeLookDriverResolve)
+            return freeLookDriver;
+
+        _hasAttemptedSceneFreeLookDriverResolve = true;
+        FreeLookCamera[] foundDrivers = FindObjectsByType<FreeLookCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         for (int i = 0; i < foundDrivers.Length; i++)
         {
-            var foundDriver = foundDrivers[i];
+            FreeLookCamera foundDriver = foundDrivers[i];
             if (foundDriver == null)
                 continue;
 
@@ -101,6 +719,7 @@ public class LockOnCameraManager : MonoBehaviour
             if (!foundDriver.HasValidReferences)
                 continue;
 
+            _cachedResolvedFreeLookCamera = foundDriver;
             freeLookDriver = foundDriver;
             return freeLookDriver;
         }
@@ -108,23 +727,37 @@ public class LockOnCameraManager : MonoBehaviour
         return freeLookDriver;
     }
 
+    void InvalidateFreeLookDriverCache()
+    {
+        _cachedResolvedFreeLookCamera = freeLookDriver as FreeLookCamera;
+        _hasAttemptedSceneFreeLookDriverResolve = false;
+    }
+
+    void InvalidateRuntimeFramingCache()
+    {
+        _hasAppliedFramingProfile = false;
+        _lastAppliedLegacyCloseRangeT = float.NaN;
+        _hasCustomRigDesiredPose = false;
+        _nextCustomRigSolveAt = 0f;
+    }
+
     public void SetFreeLookDriverEnabled(bool enabled)
     {
-        var driver = ResolveFreeLookDriver();
+        MonoBehaviour driver = ResolveFreeLookDriver();
         if (driver != null)
             driver.enabled = enabled;
     }
 
     public void RestoreFreeLookManualControl()
     {
-        var driver = ResolveFreeLookDriver();
-        if (driver is FreeLookCamera freeLookCamera)
+        MonoBehaviour driver = ResolveFreeLookDriver();
+        if (driver is FreeLookCamera freeLookCamera && freeLookCamera != null && freeLookCamera)
         {
             freeLookCamera.RestoreManualControl();
             return;
         }
 
-        if (driver != null)
+        if (driver != null && driver)
             driver.enabled = true;
 
         Cursor.lockState = CursorLockMode.Locked;
@@ -134,15 +767,18 @@ public class LockOnCameraManager : MonoBehaviour
     public void ForceRestoreGameplayFreeLook()
     {
         ResolveFreeLookDriver();
+        RestoreBuiltInLockOnPipeline();
+        RestoreExternalLockOnOffsetProxy();
+        RestoreCollisionExtension();
 
-        if (freeLookCam != null)
+        if (freeLookCam != null && freeLookCam)
         {
             freeLookCam.gameObject.SetActive(true);
             freeLookCam.enabled = true;
             freeLookCam.Priority = 100;
         }
 
-        if (lockOnCam != null)
+        if (lockOnCam != null && lockOnCam)
         {
             lockOnCam.gameObject.SetActive(true);
             lockOnCam.enabled = true;
@@ -155,7 +791,7 @@ public class LockOnCameraManager : MonoBehaviour
 
     public string BuildDebugSummary()
     {
-        var driver = ResolveFreeLookDriver();
+        MonoBehaviour driver = ResolveFreeLookDriver();
         string driverType = driver != null ? driver.GetType().Name : "<null>";
         string driverEnabled = driver != null ? driver.enabled.ToString() : "<null>";
         string driverActive = driver != null ? driver.gameObject.activeInHierarchy.ToString() : "<null>";
@@ -177,27 +813,152 @@ public class LockOnCameraManager : MonoBehaviour
     public void SetPlayerPivot(Transform pivot)
     {
         playerPivot = pivot;
-
-        if (targetGroup != null && playerPivot != null)
-        {
-            targetGroup.Targets = new List<CinemachineTargetGroup.Target>
-            {
-                new() { Object = playerPivot, Weight = 1.2f, Radius = 2f }
-            };
-        }
-
-        if (lockOnCam != null)
-        {
-            if (lockOnCam.Follow == null)
-                lockOnCam.Follow = playerPivot;
-
-            if (lockOnCam.LookAt == null && targetGroup != null)
-                lockOnCam.LookAt = targetGroup.transform;
-        }
-
-        SetPriority(freeLookHigh: true);
+        _lastPlayerPivotPosition = GetPlayerCameraAnchorPosition();
+        _smoothedPlayerVelocity = Vector3.zero;
+        _customRigInitialized = false;
+        _followAnchorInitialized = false;
+        _lookAnchorInitialized = false;
+        RebuildTargetGroup(_currentEnemyPivot);
+        EnsureLockOnCameraBindings();
+        SetPriority(true);
         isLockOnActive = false;
-        CacheOriginalFollowOffset();
+        InvalidateRuntimeFramingCache();
+        CacheOriginalLockOnCameraState();
+    }
+
+    public void RefreshLockOnTarget(Transform enemyPivot)
+    {
+        _currentEnemyPivot = enemyPivot;
+        _currentEnemyRenderer = ResolveEnemyRenderer(enemyPivot);
+        RebuildTargetGroup(enemyPivot);
+        InvalidateRuntimeFramingCache();
+
+        if (useCustomTransformLockOnRig)
+        {
+            _customRigInitialized = false;
+            ApplyCustomTransformLockOnRig(true);
+            return;
+        }
+
+        UpdateFollowAnchor(true);
+        UpdateLookAnchor(true);
+        EnsureLockOnCameraBindings();
+    }
+
+    public bool TryCaptureCurrentRuntimeState(out RuntimeStateSnapshot snapshot)
+    {
+        snapshot = default;
+        if (lockOnCam == null)
+            return false;
+        MonoBehaviour driver = ResolveFreeLookDriver();
+
+        snapshot.isValid = true;
+        snapshot.wasLockOnActive = isLockOnActive;
+        snapshot.lockOnPriority = lockOnCam.Priority;
+        snapshot.lockOnEnabled = lockOnCam.enabled;
+        snapshot.lockOnCameraActive = lockOnCam.gameObject.activeSelf;
+        snapshot.lockOnFieldOfView = CinemachineCompat.TryGetFieldOfView(lockOnCam, out float currentFov)
+            ? currentFov
+            : 0f;
+        snapshot.freeLookPriority = freeLookCam != null ? freeLookCam.Priority : 0;
+        snapshot.freeLookEnabled = freeLookCam != null && freeLookCam.enabled;
+        snapshot.freeLookCameraActive = freeLookCam != null && freeLookCam.gameObject.activeSelf;
+        snapshot.freeLookDriverEnabled = driver != null && driver.enabled;
+        return true;
+    }
+
+    public void RestoreCapturedLockOnState(Transform enemyPivot, in RuntimeStateSnapshot snapshot)
+    {
+        if (!snapshot.isValid || playerPivot == null || targetGroup == null || lockOnCam == null || enemyPivot == null)
+            return;
+
+        SuspendExternalLockOnOffsetProxy();
+        SuspendCollisionExtension();
+        SuspendBuiltInLockOnPipeline();
+
+        _currentEnemyPivot = enemyPivot;
+        _currentEnemyRenderer = ResolveEnemyRenderer(enemyPivot);
+        _lastPlayerPivotPosition = GetPlayerCameraAnchorPosition();
+        _smoothedPlayerVelocity = Vector3.zero;
+        InvalidateRuntimeFramingCache();
+        RebuildTargetGroup(enemyPivot);
+        _followAnchorInitialized = false;
+        _lookAnchorInitialized = false;
+        _customRigInitialized = false;
+        _hasCustomRigDesiredPose = false;
+
+        if (freeLookCam != null)
+        {
+            freeLookCam.gameObject.SetActive(snapshot.freeLookCameraActive);
+            freeLookCam.enabled = snapshot.freeLookEnabled;
+            freeLookCam.Priority = snapshot.freeLookPriority;
+        }
+
+        MonoBehaviour driver = ResolveFreeLookDriver();
+        if (driver != null)
+            driver.enabled = snapshot.freeLookDriverEnabled;
+
+        lockOnCam.gameObject.SetActive(true);
+        lockOnCam.enabled = snapshot.lockOnEnabled;
+        lockOnCam.Priority = snapshot.lockOnPriority;
+        if (snapshot.lockOnFieldOfView > 0f && !useSolverDrivenLockOnFraming)
+            CinemachineCompat.TrySetFieldOfView(lockOnCam, snapshot.lockOnFieldOfView);
+
+        ForceRebuildCurrentLockOn(enemyPivot);
+
+        isLockOnActive = snapshot.wasLockOnActive;
+    }
+
+    public void ForceRebuildCurrentLockOn(Transform enemyPivot)
+    {
+        if (playerPivot == null || targetGroup == null || lockOnCam == null || enemyPivot == null)
+            return;
+
+        SuspendExternalLockOnOffsetProxy();
+        SuspendCollisionExtension();
+        SuspendBuiltInLockOnPipeline();
+
+        _currentEnemyPivot = enemyPivot;
+        _currentEnemyRenderer = ResolveEnemyRenderer(enemyPivot);
+        _lastPlayerPivotPosition = GetPlayerCameraAnchorPosition();
+        _smoothedPlayerVelocity = Vector3.zero;
+        _customRigInitialized = false;
+        _followAnchorInitialized = false;
+        _lookAnchorInitialized = false;
+        InvalidateRuntimeFramingCache();
+        RebuildTargetGroup(enemyPivot);
+
+        if (useCustomTransformLockOnRig)
+        {
+            ApplyCustomTransformLockOnRig(true);
+        }
+        else
+        {
+            ApplyDynamicLockOnFraming(true);
+            UpdateFollowAnchor(true);
+            UpdateLookAnchor(true);
+            EnsureLockOnCameraBindings();
+
+            if (useDedicatedLockOnFieldOfView && !useSolverDrivenLockOnFraming)
+                CinemachineCompat.TrySetFieldOfView(lockOnCam, dedicatedLockOnFieldOfView);
+
+            if (reduceBodyDampingWhileLocked)
+                CinemachineCompat.TrySetBodyDamping(lockOnCam, lockedBodyDamping);
+        }
+
+        EnsureLockOnCameraBindings();
+
+        if (freeLookCam != null)
+        {
+            freeLookCam.gameObject.SetActive(true);
+            freeLookCam.enabled = true;
+        }
+
+        lockOnCam.gameObject.SetActive(true);
+        lockOnCam.enabled = true;
+        SetFreeLookDriverEnabled(false);
+        SetPriority(false);
+        isLockOnActive = true;
     }
 
     public void StartLockOn(Transform enemyPivot)
@@ -205,28 +966,39 @@ public class LockOnCameraManager : MonoBehaviour
         if (playerPivot == null || targetGroup == null || lockOnCam == null || enemyPivot == null)
             return;
 
-        targetGroup.Targets = new List<CinemachineTargetGroup.Target>
-        {
-            new() { Object = playerPivot, Weight = 1.3f, Radius = 2f },
-            new() { Object = enemyPivot, Weight = 1.0f, Radius = 2f }
-        };
+        SuspendExternalLockOnOffsetProxy();
+        SuspendCollisionExtension();
+        SuspendBuiltInLockOnPipeline();
+        _currentEnemyPivot = enemyPivot;
+        _currentEnemyRenderer = ResolveEnemyRenderer(enemyPivot);
+        RebuildTargetGroup(enemyPivot);
+        _lastPlayerPivotPosition = GetPlayerCameraAnchorPosition();
+        _smoothedPlayerVelocity = Vector3.zero;
+        _customRigInitialized = false;
+        InvalidateRuntimeFramingCache();
 
-        if (lockOnCam.LookAt == null)
-            lockOnCam.LookAt = targetGroup.transform;
-        if (lockOnCam.Follow == null)
-            lockOnCam.Follow = playerPivot;
+        CacheOriginalLockOnCameraState();
 
-        CacheOriginalFollowOffset();
-        if (_hasOriginalOffset)
+        if (useCustomTransformLockOnRig)
         {
-            var offset = _originalFollowOffset;
-            offset.y += lockOnFollowHeightOffset;
-            CinemachineCompat.TrySetBodyFollowOffset(lockOnCam, offset);
+            ApplyCustomTransformLockOnRig(true);
+        }
+        else
+        {
+            ApplyDynamicLockOnFraming(true);
+            UpdateFollowAnchor(true);
+            UpdateLookAnchor(true);
+            EnsureLockOnCameraBindings();
+
+            if (useDedicatedLockOnFieldOfView && !useSolverDrivenLockOnFraming)
+                CinemachineCompat.TrySetFieldOfView(lockOnCam, dedicatedLockOnFieldOfView);
+
+            if (reduceBodyDampingWhileLocked)
+                CinemachineCompat.TrySetBodyDamping(lockOnCam, lockedBodyDamping);
         }
 
         SetFreeLookDriverEnabled(false);
-
-        SetPriority(freeLookHigh: false);
+        SetPriority(false);
         isLockOnActive = true;
     }
 
@@ -237,27 +1009,655 @@ public class LockOnCameraManager : MonoBehaviour
 
     public void EndLockOn(bool snapFreeLookCamera)
     {
-        if (targetGroup != null && playerPivot != null)
-        {
-            targetGroup.Targets = new List<CinemachineTargetGroup.Target>
-            {
-                new() { Object = playerPivot, Weight = 1.2f, Radius = 2f }
-            };
-        }
+        _currentEnemyPivot = null;
+        _currentEnemyRenderer = null;
+        _customRigInitialized = false;
+        InvalidateRuntimeFramingCache();
+        RebuildTargetGroup(null);
 
         if (restoreFollowOffsetOnEnd && lockOnCam != null && _hasOriginalOffset)
-        {
             CinemachineCompat.TrySetBodyFollowOffset(lockOnCam, _originalFollowOffset);
-        }
 
-        var driver = ResolveFreeLookDriver();
+        if (useDedicatedLockOnTrackedObjectOffset && lockOnCam != null && _hasOriginalTrackedObjectOffset)
+            CinemachineCompat.TrySetBodyTrackedObjectOffset(lockOnCam, _originalTrackedObjectOffset);
+
+        if (useDedicatedLockOnCameraDistance && lockOnCam != null && _hasOriginalCameraDistance)
+            CinemachineCompat.TrySetBodyCameraDistance(lockOnCam, _originalCameraDistance);
+
+        if (useDedicatedLockOnBodyScreenPosition && lockOnCam != null && _hasOriginalBodyScreenPosition)
+            CinemachineCompat.TrySetBodyScreenPosition(lockOnCam, _originalBodyScreenPosition);
+
+        if (useDedicatedLockOnBodySoftZone && lockOnCam != null && _hasOriginalBodySoftZone)
+            CinemachineCompat.TrySetBodySoftZone(lockOnCam, _originalBodySoftZone);
+
+        if (useDedicatedLockOnAimScreenPosition && lockOnCam != null && _hasOriginalAimScreenPosition)
+            CinemachineCompat.TrySetAimScreenPosition(lockOnCam, _originalAimScreenPosition);
+
+        if (lockOnCam != null && _hasOriginalAimTrackedObjectOffset)
+            CinemachineCompat.TrySetAimTrackedObjectOffset(lockOnCam, _originalAimTrackedObjectOffset);
+
+        if (useDedicatedLockOnAimBias && lockOnCam != null && _hasOriginalAimBias)
+            CinemachineCompat.TrySetAimBias(lockOnCam, _originalAimBias);
+
+        if (useDedicatedLockOnFieldOfView && lockOnCam != null && _hasOriginalFieldOfView)
+            CinemachineCompat.TrySetFieldOfView(lockOnCam, _originalFieldOfView);
+
+        if (reduceBodyDampingWhileLocked && lockOnCam != null && _hasOriginalBodyDamping)
+            CinemachineCompat.TrySetBodyDamping(lockOnCam, _originalBodyDamping);
+
+        MonoBehaviour driver = ResolveFreeLookDriver();
         SetFreeLookDriverEnabled(true);
+        SetPriority(true);
 
-        SetPriority(freeLookHigh: true);
         if (snapFreeLookCamera && driver is FreeLookCamera freeLookCamera)
             freeLookCamera.SnapBehindPlayer();
 
+        RestoreBuiltInLockOnPipeline();
+        RestoreExternalLockOnOffsetProxy();
+        RestoreCollisionExtension();
         isLockOnActive = false;
+    }
+
+    void ResolveLockOnTransposerProxy()
+    {
+        if (lockOnCam == null)
+        {
+            _lockOnTransposerProxy = null;
+            return;
+        }
+
+        _lockOnTransposerProxy = lockOnCam.GetComponent<VCamTransposerProxy>();
+    }
+
+    void ResolveLockOnColliderExtension()
+    {
+        if (lockOnCam == null)
+        {
+            _lockOnColliderExtension = null;
+            return;
+        }
+
+        Type colliderType = Type.GetType("Unity.Cinemachine.CinemachineCollider, Unity.Cinemachine");
+        if (colliderType == null)
+        {
+            _lockOnColliderExtension = null;
+            return;
+        }
+
+        _lockOnColliderExtension = lockOnCam.GetComponent(colliderType) as Behaviour;
+    }
+
+    void ResolveLockOnComponentOwner()
+    {
+        if (lockOnCam == null)
+        {
+            _lockOnComponentOwner = null;
+            return;
+        }
+
+        Transform owner = lockOnCam.transform.Find("cm");
+        if (owner == null && lockOnCam.transform.childCount > 0)
+            owner = lockOnCam.transform.GetChild(0);
+
+        _lockOnComponentOwner = owner;
+    }
+
+    void SuspendExternalLockOnOffsetProxy()
+    {
+        ResolveLockOnTransposerProxy();
+        if (_lockOnTransposerProxy == null)
+            return;
+
+        _restoreTransposerProxyEnabled = _lockOnTransposerProxy.enabled;
+        if (_lockOnTransposerProxy.enabled)
+            _lockOnTransposerProxy.enabled = false;
+    }
+
+    void RestoreExternalLockOnOffsetProxy()
+    {
+        if (_lockOnTransposerProxy == null)
+            return;
+
+        _lockOnTransposerProxy.enabled = _restoreTransposerProxyEnabled;
+        _restoreTransposerProxyEnabled = false;
+    }
+
+    void SuspendCollisionExtension()
+    {
+        if (!disableCollisionExtensionWhileLocked)
+            return;
+
+        ResolveLockOnColliderExtension();
+        if (_lockOnColliderExtension == null)
+            return;
+
+        _restoreColliderExtensionEnabled = _lockOnColliderExtension.enabled;
+        if (_lockOnColliderExtension.enabled)
+            _lockOnColliderExtension.enabled = false;
+    }
+
+    void RestoreCollisionExtension()
+    {
+        if (_lockOnColliderExtension == null)
+            return;
+
+        _lockOnColliderExtension.enabled = _restoreColliderExtensionEnabled;
+        _restoreColliderExtensionEnabled = false;
+    }
+
+    void SuspendBuiltInLockOnPipeline()
+    {
+        if (!useCustomTransformLockOnRig)
+            return;
+
+        ResolveLockOnComponentOwner();
+        if (_lockOnComponentOwner == null)
+            return;
+
+        _restoreComponentOwnerActive = _lockOnComponentOwner.gameObject.activeSelf;
+        if (_lockOnComponentOwner.gameObject.activeSelf)
+            _lockOnComponentOwner.gameObject.SetActive(false);
+    }
+
+    void RestoreBuiltInLockOnPipeline()
+    {
+        if (_lockOnComponentOwner == null)
+            return;
+
+        _lockOnComponentOwner.gameObject.SetActive(_restoreComponentOwnerActive);
+        _restoreComponentOwnerActive = false;
+    }
+
+    void EnsureLockOnCameraBindings()
+    {
+        if (lockOnCam == null)
+            return;
+
+        if (useCustomTransformLockOnRig)
+        {
+            if (lockOnCam.Follow != null)
+                lockOnCam.Follow = null;
+            if (lockOnCam.LookAt != null)
+                lockOnCam.LookAt = null;
+            return;
+        }
+
+        Transform followTarget = GetLockOnFollowTarget();
+        if (followTarget != null && lockOnCam.Follow != followTarget)
+            lockOnCam.Follow = followTarget;
+
+        Transform lookTarget = GetLockOnLookTarget();
+        if (lookTarget != null && lockOnCam.LookAt != lookTarget)
+            lockOnCam.LookAt = lookTarget;
+    }
+
+    void RebuildTargetGroup(Transform enemyPivot)
+    {
+        if (targetGroup == null || playerPivot == null)
+            return;
+
+        _targetBuffer.Clear();
+        _targetBuffer.Add(new CinemachineTargetGroup.Target
+        {
+            Object = playerPivot,
+            Weight = enemyPivot != null ? 1.3f : 1.2f,
+            Radius = 2f
+        });
+
+        if (enemyPivot != null)
+        {
+            _targetBuffer.Add(new CinemachineTargetGroup.Target
+            {
+                Object = enemyPivot,
+                Weight = 1.0f,
+                Radius = 2f
+            });
+        }
+
+        targetGroup.Targets = _targetBuffer;
+    }
+
+    Transform GetLockOnFollowTarget()
+    {
+        EnsureFollowAnchor();
+        return _lockOnFollowAnchor != null ? _lockOnFollowAnchor : playerPivot;
+    }
+
+    Transform GetLockOnLookTarget()
+    {
+        EnsureLookAnchor();
+        return _lockOnLookAnchor != null ? _lockOnLookAnchor : playerPivot;
+    }
+
+    void EnsureFollowAnchor()
+    {
+        if (_lockOnFollowAnchor != null)
+            return;
+
+        GameObject anchor = new GameObject("LockOnFollowAnchor");
+        anchor.hideFlags = HideFlags.HideInHierarchy;
+        _lockOnFollowAnchor = anchor.transform;
+    }
+
+    void EnsureLookAnchor()
+    {
+        if (_lockOnLookAnchor != null)
+            return;
+
+        GameObject anchor = new GameObject("LockOnLookAnchor");
+        anchor.hideFlags = HideFlags.HideInHierarchy;
+        _lockOnLookAnchor = anchor.transform;
+    }
+
+    void UpdatePlayerMotionState()
+    {
+        if (playerPivot == null)
+            return;
+
+        float dt = Mathf.Max(0.0001f, Time.unscaledDeltaTime);
+        Vector3 currentPosition = GetPlayerCameraAnchorPosition();
+        Vector3 rawVelocity = (currentPosition - _lastPlayerPivotPosition) / dt;
+        float smoothing = 1f - Mathf.Exp(-12f * dt);
+        _smoothedPlayerVelocity = Vector3.Lerp(_smoothedPlayerVelocity, rawVelocity, smoothing);
+        _lastPlayerPivotPosition = currentPosition;
+    }
+
+    void UpdateFollowAnchor(bool snap)
+    {
+        Transform followAnchor = GetLockOnFollowTarget();
+        if (followAnchor == null || playerPivot == null)
+            return;
+
+        Vector3 desired = ComputeFollowAnchorPosition();
+        if (snap || !_followAnchorInitialized)
+        {
+            followAnchor.position = desired;
+            _followAnchorInitialized = true;
+            return;
+        }
+
+        float dt = Mathf.Max(0.0001f, Time.unscaledDeltaTime);
+        float lerpT = 1f - Mathf.Exp(-Mathf.Max(0.1f, followAnchorResponsiveness) * dt);
+        followAnchor.position = Vector3.Lerp(followAnchor.position, desired, lerpT);
+    }
+
+    Vector3 ComputeFollowAnchorPosition()
+    {
+        Vector3 playerPosition = GetPlayerCameraAnchorPosition();
+        Vector3 lookahead = Vector3.ClampMagnitude(_smoothedPlayerVelocity * playerVelocityLookaheadTime, maxVelocityLookaheadDistance);
+        lookahead.y = 0f;
+
+        return playerPosition + lockOnAnchorOffset + lookahead;
+    }
+
+    void UpdateLookAnchor(bool snap)
+    {
+        Transform lookAnchor = GetLockOnLookTarget();
+        if (lookAnchor == null || playerPivot == null)
+            return;
+
+        Vector3 desired = ComputeLookAnchorPosition();
+        if (snap || !_lookAnchorInitialized)
+        {
+            lookAnchor.position = desired;
+            _lookAnchorInitialized = true;
+            return;
+        }
+
+        float dt = Mathf.Max(0.0001f, Time.unscaledDeltaTime);
+        float lerpT = 1f - Mathf.Exp(-Mathf.Max(0.1f, lookAnchorResponsiveness) * dt);
+        lookAnchor.position = Vector3.Lerp(lookAnchor.position, desired, lerpT);
+    }
+
+    Vector3 ComputeLookAnchorPosition()
+    {
+        Vector3 playerPosition = GetPlayerCameraAnchorPosition();
+        Vector3 enemyPosition = _currentEnemyPivot != null ? _currentEnemyPivot.position : playerPosition + GetPlayerYawRotation() * Vector3.forward * lookAnchorDistance;
+
+        if (useSolverDrivenLockOnFraming)
+        {
+            float farDistance = Mathf.Max(solverFarDistance, solverCloseDistance + 0.01f);
+            float distance = Vector3.Distance(playerPosition, enemyPosition);
+            float distanceT = Mathf.InverseLerp(solverCloseDistance, farDistance, distance);
+
+            float horizontalBias = Mathf.Lerp(0.54f, 0.62f, distanceT);
+            float verticalBias = Mathf.Lerp(0.28f, 0.36f, distanceT);
+
+            Vector3 lookPoint = Vector3.Lerp(playerPosition, enemyPosition, horizontalBias);
+            lookPoint.y = Mathf.Lerp(playerPosition.y, enemyPosition.y, verticalBias) + GetEffectiveLookAnchorHeightOffset();
+            return lookPoint;
+        }
+
+        Vector3 direction = enemyPosition - playerPosition;
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude <= 0.0001f)
+            direction = GetPlayerYawRotation() * Vector3.forward;
+
+        direction.Normalize();
+        float projectedDistance = lookAnchorDistance;
+        if (_currentEnemyPivot != null)
+        {
+            Vector3 planarEnemyDelta = enemyPosition - playerPosition;
+            planarEnemyDelta.y = 0f;
+            float planarDistance = planarEnemyDelta.magnitude;
+            projectedDistance = Mathf.Clamp(planarDistance * lookAnchorDistanceRatio, lookAnchorMinDistance, lookAnchorDistance);
+        }
+
+        return playerPosition + Vector3.up * GetEffectiveLookAnchorHeightOffset() + direction * projectedDistance;
+    }
+
+    void ApplyDynamicLockOnFraming(bool snap = false)
+    {
+        if (lockOnCam == null)
+            return;
+
+        if (useSolverDrivenLockOnFraming)
+        {
+            ApplySolverDrivenLockOnFraming();
+            return;
+        }
+
+        float closeRangeT = GetCloseRangeCompensation01();
+        if (!snap && Mathf.Abs(closeRangeT - _lastAppliedLegacyCloseRangeT) <= 0.0005f)
+            return;
+
+        _lastAppliedLegacyCloseRangeT = closeRangeT;
+
+        if (_hasOriginalOffset)
+        {
+            Vector3 offset = useDedicatedLockOnFollowOffset
+                ? dedicatedLockOnFollowOffset
+                : new Vector3(_originalFollowOffset.x, _originalFollowOffset.y + lockOnFollowHeightOffset, _originalFollowOffset.z);
+
+            offset.y += closeRangeExtraHeight * closeRangeT;
+            offset.z -= closeRangeExtraDistance * closeRangeT;
+            CinemachineCompat.TrySetBodyFollowOffset(lockOnCam, offset);
+        }
+
+        if (useDedicatedLockOnTrackedObjectOffset)
+            CinemachineCompat.TrySetBodyTrackedObjectOffset(lockOnCam, dedicatedLockOnTrackedObjectOffset);
+
+        if (useDedicatedLockOnCameraDistance)
+            CinemachineCompat.TrySetBodyCameraDistance(lockOnCam, dedicatedLockOnCameraDistance + closeRangeExtraDistance * closeRangeT);
+
+        if (useDedicatedLockOnBodyScreenPosition)
+        {
+            Vector2 bodyScreen = dedicatedLockOnBodyScreenPosition;
+            bodyScreen.y += closeRangeBodyScreenYOffset * closeRangeT;
+            CinemachineCompat.TrySetBodyScreenPosition(lockOnCam, bodyScreen);
+        }
+
+        if (useDedicatedLockOnBodySoftZone)
+            CinemachineCompat.TrySetBodySoftZone(lockOnCam, dedicatedLockOnBodySoftZone);
+
+        if (useDedicatedLockOnAimScreenPosition)
+        {
+            Vector2 aimScreen = dedicatedLockOnAimScreenPosition;
+            aimScreen.y += closeRangeAimScreenYOffset * closeRangeT;
+            CinemachineCompat.TrySetAimScreenPosition(lockOnCam, aimScreen);
+        }
+
+        if (useDedicatedLockOnAimBias)
+            CinemachineCompat.TrySetAimBias(lockOnCam, dedicatedLockOnAimBias);
+
+        if (!snap)
+            return;
+    }
+
+    void ApplySolverDrivenLockOnFraming()
+    {
+        LockOnCameraFramingProfile framing = EvaluateCurrentFramingProfile();
+        _activeFramingProfile = framing;
+
+        if (_hasAppliedFramingProfile && !HasMeaningfulFramingDelta(_lastAppliedFramingProfile, framing))
+            return;
+
+        _lastAppliedFramingProfile = framing;
+        _hasAppliedFramingProfile = true;
+
+        if (_hasOriginalOffset)
+            CinemachineCompat.TrySetBodyFollowOffset(lockOnCam, framing.followOffset);
+
+        if (useDedicatedLockOnTrackedObjectOffset)
+            CinemachineCompat.TrySetBodyTrackedObjectOffset(lockOnCam, framing.trackedObjectOffset);
+
+        if (useDedicatedLockOnCameraDistance)
+            CinemachineCompat.TrySetBodyCameraDistance(lockOnCam, framing.cameraDistance);
+
+        if (useDedicatedLockOnBodyScreenPosition)
+            CinemachineCompat.TrySetBodyScreenPosition(lockOnCam, framing.bodyScreenPosition);
+
+        if (useDedicatedLockOnBodySoftZone)
+            CinemachineCompat.TrySetBodySoftZone(lockOnCam, framing.bodySoftZone);
+
+        if (useDedicatedLockOnAimScreenPosition)
+            CinemachineCompat.TrySetAimScreenPosition(lockOnCam, framing.aimScreenPosition);
+
+        CinemachineCompat.TrySetAimTrackedObjectOffset(lockOnCam, framing.aimTrackedObjectOffset);
+
+        if (useDedicatedLockOnAimBias)
+            CinemachineCompat.TrySetAimBias(lockOnCam, framing.aimBias);
+
+        if (useDedicatedLockOnFieldOfView)
+            CinemachineCompat.TrySetFieldOfView(lockOnCam, framing.fieldOfView);
+    }
+
+    static bool HasMeaningfulFramingDelta(in LockOnCameraFramingProfile a, in LockOnCameraFramingProfile b)
+    {
+        return !Approximately(a.followOffset, b.followOffset)
+            || !Approximately(a.trackedObjectOffset, b.trackedObjectOffset)
+            || !Approximately(a.cameraDistance, b.cameraDistance)
+            || !Approximately(a.fieldOfView, b.fieldOfView)
+            || !Approximately(a.bodyScreenPosition, b.bodyScreenPosition)
+            || !Approximately(a.bodySoftZone, b.bodySoftZone)
+            || !Approximately(a.aimScreenPosition, b.aimScreenPosition)
+            || !Approximately(a.aimTrackedObjectOffset, b.aimTrackedObjectOffset)
+            || !Approximately(a.aimBias, b.aimBias)
+            || !Approximately(a.lookHeightOffset, b.lookHeightOffset);
+    }
+
+    static bool Approximately(float a, float b, float epsilon = 0.0005f)
+    {
+        return Mathf.Abs(a - b) <= epsilon;
+    }
+
+    static bool Approximately(Vector2 a, Vector2 b, float epsilon = 0.0005f)
+    {
+        return (a - b).sqrMagnitude <= epsilon * epsilon;
+    }
+
+    static bool Approximately(Vector3 a, Vector3 b, float epsilon = 0.0005f)
+    {
+        return (a - b).sqrMagnitude <= epsilon * epsilon;
+    }
+
+    LockOnCameraFramingProfile EvaluateCurrentFramingProfile()
+    {
+        if (!useSolverDrivenLockOnFraming || playerPivot == null || _currentEnemyPivot == null)
+        {
+            return farRangeFraming;
+        }
+
+        float farDistance = Mathf.Max(solverFarDistance, solverCloseDistance + 0.01f);
+        float closeDistance = Mathf.Min(solverCloseDistance, farDistance - 0.01f);
+
+        Vector3 delta = _currentEnemyPivot.position - GetPlayerCameraAnchorPosition();
+        delta.y = 0f;
+        float planarDistance = delta.magnitude;
+        float t = Mathf.InverseLerp(closeDistance, farDistance, planarDistance);
+        return LockOnCameraFramingProfile.Lerp(closeRangeFraming, farRangeFraming, t);
+    }
+
+    void ApplyCustomTransformLockOnRig(bool snap)
+    {
+        if (!useCustomTransformLockOnRig || lockOnCam == null || playerPivot == null)
+            return;
+
+        Vector3 playerAnchor = GetPlayerCameraAnchorPosition();
+        Quaternion yawRotation = GetPlayerYawRotation();
+        Vector3 enemyAnchor = _currentEnemyPivot != null ? _currentEnemyPivot.position : playerAnchor;
+        Vector3 yawForward = yawRotation * Vector3.forward;
+
+        if (snap || ShouldResolveCustomRig(playerAnchor, enemyAnchor, yawForward))
+            ResolveCustomRigPose(playerAnchor, yawRotation, enemyAnchor);
+
+        if (snap || !_customRigInitialized)
+        {
+            _customRigPosition = _cachedCustomRigDesiredPosition;
+            _customRigRotation = _cachedCustomRigDesiredRotation;
+            _customRigInitialized = true;
+        }
+        else
+        {
+            float dt = Mathf.Max(0.0001f, Time.unscaledDeltaTime);
+            float positionT = 1f - Mathf.Exp(-Mathf.Max(0.1f, customRigPositionResponsiveness) * dt);
+            float rotationT = 1f - Mathf.Exp(-Mathf.Max(0.1f, customRigRotationResponsiveness) * dt);
+            _customRigPosition = Vector3.Lerp(_customRigPosition, _cachedCustomRigDesiredPosition, positionT);
+            _customRigRotation = Quaternion.Slerp(_customRigRotation, _cachedCustomRigDesiredRotation, rotationT);
+        }
+
+        Transform cameraTransform = lockOnCam.transform;
+        cameraTransform.position = _customRigPosition;
+        cameraTransform.rotation = _customRigRotation;
+        CinemachineCompat.TrySetFieldOfView(lockOnCam, _cachedCustomRigFieldOfView);
+    }
+
+    bool ShouldResolveCustomRig(Vector3 playerAnchor, Vector3 enemyAnchor, Vector3 yawForward)
+    {
+        if (!_hasCustomRigDesiredPose)
+            return true;
+
+        float playerThreshold = Mathf.Max(0f, customRigPlayerAnchorThreshold);
+        if ((playerAnchor - _lastCustomRigPlayerAnchor).sqrMagnitude >= playerThreshold * playerThreshold)
+            return true;
+
+        float enemyThreshold = Mathf.Max(0f, customRigEnemyAnchorThreshold);
+        if ((enemyAnchor - _lastCustomRigEnemyAnchor).sqrMagnitude >= enemyThreshold * enemyThreshold)
+            return true;
+
+        if (_lastCustomRigYawForward.sqrMagnitude <= 0.0001f)
+            return true;
+
+        float yawThreshold = Mathf.Max(0f, customRigYawAngleThreshold);
+        if (Vector3.Angle(_lastCustomRigYawForward, yawForward) >= yawThreshold)
+            return true;
+
+        return Time.unscaledTime >= _nextCustomRigSolveAt;
+    }
+
+    void ResolveCustomRigPose(Vector3 playerAnchor, Quaternion yawRotation, Vector3 enemyAnchor)
+    {
+        LockOnCameraFramingProfile framing = EvaluateCurrentFramingProfile();
+        _activeFramingProfile = framing;
+
+        Vector3 localFollow = framing.followOffset;
+        Vector3 planarFollow = new Vector3(localFollow.x, 0f, localFollow.z);
+        if (planarFollow.sqrMagnitude <= 0.0001f)
+            planarFollow = new Vector3(0f, 0f, -1f);
+
+        float targetPlanarDistance = Mathf.Max(0.1f, framing.cameraDistance);
+        planarFollow = planarFollow.normalized * targetPlanarDistance;
+        Vector3 solvedLocalFollow = new Vector3(planarFollow.x, localFollow.y, planarFollow.z);
+        _cachedCustomRigDesiredPosition = playerAnchor + yawRotation * solvedLocalFollow;
+
+        Vector3 enemyAimPoint = GetEnemyCameraAimPoint();
+        float farDistance = Mathf.Max(solverFarDistance, solverCloseDistance + 0.01f);
+        float distanceT = Mathf.InverseLerp(solverCloseDistance, farDistance, Vector3.Distance(playerAnchor, enemyAimPoint));
+        float focusBlend = Mathf.Lerp(0.58f, 0.68f, distanceT);
+        Vector3 playerLookPoint = playerAnchor + Vector3.up * playerLookHeightOffset;
+        Vector3 lookTarget = Vector3.Lerp(playerLookPoint, enemyAimPoint, focusBlend);
+        lookTarget.y += framing.lookHeightOffset;
+
+        Vector3 lookDirection = lookTarget - _cachedCustomRigDesiredPosition;
+        if (lookDirection.sqrMagnitude <= 0.0001f)
+            lookDirection = yawRotation * Vector3.forward;
+
+        _cachedCustomRigDesiredRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
+        _cachedCustomRigFieldOfView = framing.fieldOfView;
+        _lastCustomRigPlayerAnchor = playerAnchor;
+        _lastCustomRigEnemyAnchor = enemyAnchor;
+        _lastCustomRigYawForward = yawRotation * Vector3.forward;
+        _nextCustomRigSolveAt = Time.unscaledTime + Mathf.Max(1f / 120f, customRigSolveInterval);
+        _hasCustomRigDesiredPose = true;
+    }
+
+    Renderer ResolveEnemyRenderer(Transform enemyPivot)
+    {
+        Transform targetRoot = enemyPivot != null ? enemyPivot.root : null;
+        if (targetRoot == null)
+            return null;
+
+        LockPivotFollower pivotFollower = enemyPivot != null ? enemyPivot.GetComponent<LockPivotFollower>() : null;
+        if (pivotFollower != null && pivotFollower.sourceRenderer != null)
+            return pivotFollower.sourceRenderer;
+
+        return targetRoot.GetComponentInChildren<Renderer>();
+    }
+
+    Vector3 GetEnemyCameraAimPoint()
+    {
+        if (_currentEnemyRenderer != null)
+        {
+            Bounds bounds = _currentEnemyRenderer.bounds;
+            float aimY = Mathf.Lerp(bounds.min.y, bounds.center.y, enemyAimBottomToCenterRatio) + enemyAimVerticalOffset;
+            return new Vector3(bounds.center.x, aimY, bounds.center.z);
+        }
+
+        if (_currentEnemyPivot != null)
+            return _currentEnemyPivot.position + Vector3.up * enemyAimVerticalOffset;
+
+        Vector3 playerAnchor = GetPlayerCameraAnchorPosition();
+        return playerAnchor + GetPlayerYawRotation() * Vector3.forward * lookAnchorDistance;
+    }
+
+    float GetCloseRangeCompensation01()
+    {
+        if (!useCloseRangeCompensation || playerPivot == null || _currentEnemyPivot == null)
+            return 0f;
+
+        Vector3 delta = _currentEnemyPivot.position - GetPlayerCameraAnchorPosition();
+        delta.y = 0f;
+        float planarDistance = delta.magnitude;
+        float startDistance = Mathf.Max(closeRangeCompensationStartDistance, closeRangeCompensationFullDistance + 0.01f);
+        float fullDistance = Mathf.Min(closeRangeCompensationFullDistance, startDistance - 0.01f);
+
+        if (planarDistance >= startDistance)
+            return 0f;
+
+        if (planarDistance <= fullDistance)
+            return 1f;
+
+        return 1f - Mathf.InverseLerp(fullDistance, startDistance, planarDistance);
+    }
+
+    float GetEffectiveLookAnchorHeightOffset()
+    {
+        if (useSolverDrivenLockOnFraming)
+            return _activeFramingProfile.lookHeightOffset;
+
+        float closeRangeT = GetCloseRangeCompensation01();
+        return lookAnchorHeightOffset - closeRangeLookHeightReduction * closeRangeT;
+    }
+
+    Vector3 GetPlayerCameraAnchorPosition()
+    {
+        if (playerPivot == null)
+            return Vector3.zero;
+
+        return playerPivot.position + GetPlayerYawRotation() * playerCameraAnchorLocalOffset;
+    }
+
+    Quaternion GetPlayerYawRotation()
+    {
+        if (playerPivot == null)
+            return Quaternion.identity;
+
+        Vector3 planarForward = Vector3.ProjectOnPlane(playerPivot.forward, Vector3.up);
+        if (planarForward.sqrMagnitude <= 0.0001f)
+            planarForward = Vector3.forward;
+
+        return Quaternion.LookRotation(planarForward.normalized, Vector3.up);
     }
 
     void SetPriority(bool freeLookHigh)

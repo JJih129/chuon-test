@@ -41,8 +41,9 @@ public class BossBreakHUD : MonoBehaviour
 
     // 내부
     float currentFill = 0f;
-    float nextRefreshAt;
-    const float RefreshInterval = 1f / 12f;
+    float targetFill = 0f;
+    float _nextResolveAt;
+    const float ResolveInterval = 0.5f;
     Color _baseFillColor;
     bool _flashActive;
     float _flashTimeRemaining;
@@ -86,17 +87,46 @@ public class BossBreakHUD : MonoBehaviour
             return;
         }
 
-        if (Time.unscaledTime < nextRefreshAt)
+        if (breakController == null)
+        {
+            if (Time.unscaledTime >= _nextResolveAt)
+            {
+                _nextResolveAt = Time.unscaledTime + ResolveInterval;
+                EnsureBoundBreakController();
+            }
+            RefreshExecutionState();
             return;
+        }
 
-        nextRefreshAt = Time.unscaledTime + RefreshInterval;
+        if (breakFillImage == null)
+        {
+            RefreshExecutionState();
+            return;
+        }
 
-        if (breakController == null || breakFillImage == null) return;
+        if (!Mathf.Approximately(currentFill, targetFill))
+        {
+            currentFill = Mathf.Lerp(currentFill, targetFill, Mathf.Clamp01(Time.unscaledDeltaTime * followSpeed));
+            if (Mathf.Abs(currentFill - targetFill) <= 0.001f)
+                currentFill = targetFill;
 
-        float target = breakController.Get01();
-        currentFill = Mathf.Lerp(currentFill, target, Mathf.Clamp01(Time.unscaledDeltaTime * followSpeed));
-        if (!Mathf.Approximately(breakFillImage.fillAmount, currentFill))
-            breakFillImage.fillAmount = currentFill;
+            if (!Mathf.Approximately(breakFillImage.fillAmount, currentFill))
+                breakFillImage.fillAmount = currentFill;
+        }
+
+        RefreshExecutionState();
+    }
+
+    void EnsureBoundBreakController()
+    {
+        BossBreakController resolved = breakController;
+        if (resolved == null)
+            resolved = GetComponentInParent<BossBreakController>();
+        if (resolved == null)
+            resolved = GameplaySceneCache.ResolveBossBreakController();
+
+        if (resolved != breakController)
+            BindBreakController(resolved);
     }
 
     public void BindBreakController(BossBreakController controller)
@@ -109,6 +139,7 @@ public class BossBreakHUD : MonoBehaviour
 
         breakController.OnBreakEnter.AddListener(OnBreakEnter);
         breakController.OnBreakExit.AddListener(OnBreakExit);
+        breakController.OnBreakChanged += HandleBreakChanged;
         SyncFillImmediate();
     }
 
@@ -119,6 +150,7 @@ public class BossBreakHUD : MonoBehaviour
 
         breakController.OnBreakEnter.RemoveListener(OnBreakEnter);
         breakController.OnBreakExit.RemoveListener(OnBreakExit);
+        breakController.OnBreakChanged -= HandleBreakChanged;
     }
 
     void SyncFillImmediate()
@@ -127,7 +159,18 @@ public class BossBreakHUD : MonoBehaviour
             return;
 
         currentFill = breakController.Get01();
+        targetFill = currentFill;
         breakFillImage.fillAmount = currentFill;
+    }
+
+    void HandleBreakChanged(float normalized, float current)
+    {
+        if (breakFillImage == null)
+            return;
+
+        targetFill = normalized;
+        if (!enabled)
+            RefreshExecutionState();
     }
 
     void OnBreakEnter()
@@ -206,6 +249,7 @@ public class BossBreakHUD : MonoBehaviour
         _flashHalfPeriod = Mathf.Max(0.01f, hitFlashDuration / Mathf.Max(1, hitFlashCount * 2));
         _flashToggleCount = 0;
         breakFillImage.color = Color.white;
+        RefreshExecutionState();
     }
 
     void UpdateFlash()
@@ -234,6 +278,8 @@ public class BossBreakHUD : MonoBehaviour
     {
         bool shouldRun = _fadeActive
             || _flashActive
+            || !Mathf.Approximately(currentFill, targetFill)
+            || breakController == null
             || hudRoot == null
             || hudRoot.activeInHierarchy;
 
@@ -241,4 +287,3 @@ public class BossBreakHUD : MonoBehaviour
             enabled = shouldRun;
     }
 }
-

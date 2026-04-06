@@ -5,49 +5,54 @@ public class PauseManager : MonoBehaviour
 {
     public static PauseManager Instance;
 
-    [Header("■ 뷰(View) 연결")]
+    [Header("UI View")]
     public PauseMenuView uiView;
 
-    [Header("■ 설정")]
+    [Header("Settings")]
     public string titleSceneName = "TitleScene";
 
-    private bool isPaused = false;
-    private bool isSettingsOpen = false;
+    bool isPaused;
+    bool isSettingsOpen;
 
-    private void Awake()
+    void Awake()
     {
-        if (Instance == null) Instance = this;
+        if (Instance == null)
+            Instance = this;
     }
 
     void Start()
     {
-        // 시작 시 초기화
         ResumeGame();
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            if (isSettingsOpen) CloseSettings();
-            else TogglePause();
-        }
+        if (!Input.GetKeyDown(KeyCode.Escape))
+            return;
+
+        if (isSettingsOpen)
+            CloseSettings();
+        else
+            TogglePause();
     }
 
     public void TogglePause()
     {
-        if (isPaused) ResumeGame();
-        else PauseGame();
+        if (isPaused)
+            ResumeGame();
+        else
+            PauseGame();
     }
 
     public void PauseGame()
     {
         isPaused = true;
-        Time.timeScale = 0f; // 시간 정지
-        
-        uiView.ShowMenu(); // 메뉴 보이기
+        Time.timeScale = 0f;
+        SetSupplementalOverlayVisibility(false);
 
-        // ★ [핵심] 커서를 보이게 하고, 잠금을 풉니다.
+        if (uiView != null)
+            uiView.ShowMenu();
+
         Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
     }
@@ -55,46 +60,90 @@ public class PauseManager : MonoBehaviour
     public void ResumeGame()
     {
         isPaused = false;
-        
-        // 메뉴 숨기기 연출 후 실행
-        uiView.HideMenu(() => 
+
+        if (uiView == null)
         {
-            Time.timeScale = 1f; // 시간 재개
-            
-            // ★ [핵심] 게임으로 돌아가면 커서를 다시 중앙에 고정하고 숨깁니다.
-            Cursor.visible = false;
-            Cursor.lockState = CursorLockMode.Locked;
+            RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
+            SetSupplementalOverlayVisibility(true);
+            return;
+        }
+
+        uiView.HideMenu(() =>
+        {
+            RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
+            SetSupplementalOverlayVisibility(true);
         });
     }
 
-    // ──────────────────────────────────────────────
-    // 버튼 연결 함수
-    // ──────────────────────────────────────────────
-    public void OnClick_Resume() => ResumeGame();
+    public void OnClick_Resume()
+    {
+        ResumeGame();
+    }
 
     public void OnClick_Restart()
     {
-        Time.timeScale = 1f;
-        if (SceneFader.Instance) SceneFader.Instance.FadeOutAndLoadScene(SceneManager.GetActiveScene().name);
-        else SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
+
+        if (SceneFader.Instance != null)
+            SceneFader.Instance.FadeOutAndLoadScene(SceneManager.GetActiveScene().name);
+        else
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
-    public void OnClick_Settings() { isSettingsOpen = true; uiView.ToggleSettings(true); }
-    public void CloseSettings() { isSettingsOpen = false; uiView.ToggleSettings(false); }
+    public void OnClick_Settings()
+    {
+        isSettingsOpen = true;
+        if (uiView != null)
+            uiView.ToggleSettings(true);
+    }
+
+    public void CloseSettings()
+    {
+        isSettingsOpen = false;
+        if (uiView != null)
+            uiView.ToggleSettings(false);
+    }
 
     public void OnClick_ToTitle()
     {
-        Time.timeScale = 1f;
-        if (SceneFader.Instance) SceneFader.Instance.FadeOutAndLoadScene(titleSceneName);
-        else SceneManager.LoadScene(titleSceneName);
+        RuntimeMenuSceneStateUtility.PrepareForMenuScene();
+
+        if (SceneFader.Instance != null)
+            SceneFader.Instance.FadeOutAndLoadScene(titleSceneName);
+        else
+            SceneManager.LoadScene(titleSceneName);
     }
 
-    public void OnClick_Quit() 
+    public void OnClick_Quit()
     {
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else
         Application.Quit();
 #endif
+    }
+
+    void SetSupplementalOverlayVisibility(bool visible)
+    {
+        TutorialHintUIBridge hintBridge = FindObjectOfType<TutorialHintUIBridge>(true);
+        if (hintBridge != null)
+            hintBridge.SetOverlayVisible(visible);
+
+        SetOverlayRootActive("TutorialPresentationRuntime", visible);
+        SetOverlayRootActive("TutorialDefenseFeedbackRuntime", visible);
+        SetOverlayRootActive("TutorialSupportFeedbackRuntime", visible);
+    }
+
+    static void SetOverlayRootActive(string objectName, bool active)
+    {
+        Transform[] transforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Transform current = transforms[i];
+            if (current == null || current.name != objectName)
+                continue;
+
+            current.gameObject.SetActive(active);
+        }
     }
 }

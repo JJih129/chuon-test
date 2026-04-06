@@ -97,17 +97,23 @@ public class HomingProjectile : MonoBehaviour
             return;
         }
 
-        IHitReceiver hitReceiver = other.GetComponentInParent<IHitReceiver>();
-        if (hitReceiver != null)
+        HitPayload payload = new HitPayload
         {
-            HitData hitData = new HitData
-            {
-                attacker = owner ?? gameObject,
-                damage = damage,
-                hitPoint = transform.position,
-                hitDirection = transform.forward
-            };
-            hitReceiver.ReceiveHit(hitData);
+            attacker = owner != null ? owner.transform : transform,
+            damage = damage,
+            hitPoint = transform.position,
+            hitDirection = transform.forward,
+            hitType = HitType.Normal,
+            canParry = false,
+            canPerfectDodge = true,
+            canGuard = true,
+            unblockable = false
+        };
+
+        IDamageReceiver damageReceiver = other.GetComponentInParent<IDamageReceiver>();
+        if (damageReceiver != null)
+        {
+            damageReceiver.ReceiveHit(payload);
         }
         else
         {
@@ -116,7 +122,7 @@ public class HomingProjectile : MonoBehaviour
             {
                 try
                 {
-                    health.ApplyDamage(damage);
+                    CombatHealthApplicationUtility.ApplyHitPayload(health, payload);
                 }
                 catch
                 {

@@ -14,6 +14,8 @@ public class TutorialDummy : MonoBehaviour, IDamageReceiver
     // 공격 쿨타임 (너무 빠르게 다단히트 되는 것 방지용)
     private float lastHitTime;
     private float hitCooldown = 0.1f;
+    private int lastAttackSequenceId;
+    private int lastAttackerInstanceId;
 
     /// <summary>
     /// AttackHitbox.cs에서 호출하는 함수입니다.
@@ -21,10 +23,27 @@ public class TutorialDummy : MonoBehaviour, IDamageReceiver
     /// <param name="payload">공격 정보(데미지, 위치 등)</param>
     public void ReceiveHit(HitPayload payload)
     {
-        // 1. 쿨타임 체크 (짧은 시간에 너무 많이 호출되는 것 방지)
-        if (Time.time - lastHitTime < hitCooldown) return;
+        // 1. 같은 공격 판정은 1회만 카운트한다.
+        int attackerInstanceId = payload.attacker != null ? payload.attacker.root.GetInstanceID() : 0;
+        bool hasAttackSequence = payload.attackSequenceId > 0;
+        if (hasAttackSequence &&
+            payload.attackSequenceId == lastAttackSequenceId &&
+            attackerInstanceId == lastAttackerInstanceId)
+        {
+            return;
+        }
+
+        // 시퀀스 식별자가 없는 오래된 경로는 시간 쿨다운으로만 막는다.
+        if (!hasAttackSequence && Time.time - lastHitTime < hitCooldown) return;
+
         lastHitTime = Time.time;
-        TryGrantBasicAttackGauge(payload.attacker);
+        if (hasAttackSequence)
+        {
+            lastAttackSequenceId = payload.attackSequenceId;
+            lastAttackerInstanceId = attackerInstanceId;
+        }
+
+        CombatRewardUtility.TryGrantBasicAttackGauge(payload.attacker);
 
         // 2. 타격감 연출 (DOTween Shake)
         // 기존 트윈이 있으면 멈추고 새로 시작 (부자연스러운 떨림 방지)
@@ -46,16 +65,4 @@ public class TutorialDummy : MonoBehaviour, IDamageReceiver
         }
     }
 
-    void TryGrantBasicAttackGauge(Transform attacker)
-    {
-        if (attacker == null)
-            return;
-
-        var ultimate = attacker.GetComponent<PlayerUltimateController>();
-        if (ultimate == null)
-            ultimate = attacker.GetComponentInParent<PlayerUltimateController>();
-
-        if (ultimate != null && ultimate.gaugePerH > 0f)
-            ultimate.AddGauge(ultimate.gaugePerH);
-    }
 }

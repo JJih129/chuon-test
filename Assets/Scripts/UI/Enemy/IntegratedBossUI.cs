@@ -47,7 +47,7 @@ public class IntegratedBossUI : MonoBehaviour
         _instance = this;
 
         if (mainCamera == null)
-            mainCamera = Camera.main;
+            mainCamera = GameplaySceneCache.ResolveMainCamera();
         ResolveLockOnController();
 
         showSqr = showDistance * showDistance;
@@ -205,7 +205,7 @@ public class IntegratedBossUI : MonoBehaviour
                 return;
         }
 
-        PlayerLockOn fallbackPlayerLockOn = FindFirstObjectByType<PlayerLockOn>();
+        PlayerLockOn fallbackPlayerLockOn = GameplaySceneCache.ResolvePlayerLockOn();
         lockOnController = fallbackPlayerLockOn;
     }
 

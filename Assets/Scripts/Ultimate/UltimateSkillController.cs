@@ -2,89 +2,99 @@ using UnityEngine;
 using UnityEngine.Playables;
 
 [DisallowMultipleComponent]
-[RequireComponent(typeof(PlayableDirector))]
 public sealed class UltimateSkillController : MonoBehaviour
 {
-    [Header("Compatibility")]
+    const string DefaultSequenceResourcePath = "Ultimate/UltimateSequence_Default";
+    const string IntroPoseClipResourcePath = "Ultimate/Clips/Sp_Idle_IntroPose";
+    const string DashSlashClipResourcePath = "Ultimate/Clips/Sp_Skill3_Ultimate";
+
+    [Header("기본 참조")]
     [SerializeField] private PlayerUltimateController primaryController;
 
-    [Header("Timeline")]
+    [Header("코드 주도 궁극기")]
+    [SerializeField] private bool useCodeDrivenSequence = true;
+    [SerializeField] private UltimateSequenceData sequenceData;
+    [SerializeField] private UltimateSequencePlayer sequencePlayer;
+    [SerializeField] private UltimateTargetBinder targetBinder;
+    [SerializeField] private UltimateCameraDirector cameraDirector;
+    [SerializeField] private UltimateHitProcessor hitProcessor;
+    [SerializeField] private UltimateVFXPresenter vfxPresenter;
+
+    [Header("레거시 Timeline 폴백")]
     [SerializeField] private PlayableDirector director;
     [SerializeField] private PlayableAsset ultimateTimelineAsset;
     [SerializeField] private bool useUnscaledDirectorTime = true;
+    [SerializeField] private bool allowLegacyDirectorFallback = true;
 
-    [Header("Input Blocking")]
+    [Header("입력 / 무적")]
     [SerializeField] private MonoBehaviour inputBlockerBehaviour;
     [SerializeField] private bool blockAllInputsDuringCutscene = true;
-
-    [Header("Invulnerability")]
     [SerializeField] private MonoBehaviour invulnerabilityToggleBehaviour;
     [SerializeField] private bool setInvulnerableDuringCutscene = true;
-
-    [Header("Time Scale")]
     [SerializeField] private bool freezeTimeScaleDuringCutscene = false;
 
-    [Header("Debug")]
+    [Header("디버그")]
     [SerializeField] private bool enableDebugHotkey = false;
     [SerializeField] private KeyCode debugHotkey = KeyCode.R;
     [SerializeField] private bool debugLog = false;
 
-    private IInputBlocker inputBlocker;
-    private IInvulnerabilityToggle invulnerabilityToggle;
-    private bool isCutscenePlaying;
-    private float cachedPrevTimeScale = 1f;
+    IInputBlocker _inputBlocker;
+    IInvulnerabilityToggle _invulnerabilityToggle;
+    bool _isStandaloneCutscenePlaying;
+    float _cachedPrevTimeScale = 1f;
+    UltimateSequenceData _runtimeFallbackData;
+    UltimateSequenceData _runtimeFallbackSource;
 
-    private bool HasPrimaryController => primaryController != null;
-    public bool IsCutscenePlaying => HasPrimaryController ? primaryController.IsCinematic : isCutscenePlaying;
+    bool HasPrimaryController => primaryController != null;
+    public bool UseModernSequence => useCodeDrivenSequence;
+    public bool IsCutscenePlaying => HasPrimaryController ? primaryController.IsCinematic : _isStandaloneCutscenePlaying;
 
-    private void Reset()
+    void Reset()
     {
-        ResolveReferences();
+        ResolveReferences(true);
         SyncPrimaryControllerBindings();
         ConfigureStandaloneDirector();
     }
 
-    private void Awake()
+    void Awake()
     {
-        ResolveReferences();
-
-        inputBlocker = inputBlockerBehaviour as IInputBlocker;
-        invulnerabilityToggle = invulnerabilityToggleBehaviour as IInvulnerabilityToggle;
-
+        ResolveReferences(true);
+        _inputBlocker = inputBlockerBehaviour as IInputBlocker;
+        _invulnerabilityToggle = invulnerabilityToggleBehaviour as IInvulnerabilityToggle;
         SyncPrimaryControllerBindings();
         ConfigureStandaloneDirector();
         RefreshDebugTickState();
     }
 
 #if UNITY_EDITOR
-    private void OnValidate()
+    void OnValidate()
     {
         if (Application.isPlaying)
             return;
 
-        ResolveReferences();
+        ResolveReferences(false);
         SyncPrimaryControllerBindings();
         ConfigureStandaloneDirector();
     }
 #endif
 
-    private void OnEnable()
+    void OnEnable()
     {
         RefreshDebugTickState();
         if (!HasPrimaryController && director != null)
             director.stopped += HandleDirectorStopped;
     }
 
-    private void OnDisable()
+    void OnDisable()
     {
         if (director != null)
             director.stopped -= HandleDirectorStopped;
 
-        if (!HasPrimaryController && isCutscenePlaying)
-            EndCutscene(force: true);
+        if (!HasPrimaryController && _isStandaloneCutscenePlaying)
+            EndStandaloneCutscene(true);
     }
 
-    private void Update()
+    void Update()
     {
         if (!enableDebugHotkey)
             return;
@@ -95,12 +105,38 @@ public sealed class UltimateSkillController : MonoBehaviour
 
     public bool TryPlayUltimate()
     {
-        ResolveReferences();
+        ResolveReferences(true);
         SyncPrimaryControllerBindings();
 
         if (HasPrimaryController)
             return primaryController.TryActivate();
 
+        if (allowLegacyDirectorFallback)
+            return TryPlayStandaloneFallback();
+
+        return false;
+    }
+
+    public bool TryPlayModernUltimate(PlayerUltimateController owner)
+    {
+        if (!useCodeDrivenSequence)
+            return false;
+
+        ResolveReferences(true);
+        SyncPrimaryControllerBindings();
+
+        UltimateSequenceData resolvedData = sequenceData != null ? sequenceData : GetRuntimeFallbackData();
+        if (sequencePlayer == null)
+            return false;
+
+        bool started = sequencePlayer.TryPlay(owner, resolvedData);
+        if (debugLog && started)
+            Debug.Log("[Ultimate] Started code-driven ultimate sequence.", this);
+        return started;
+    }
+
+    bool TryPlayStandaloneFallback()
+    {
         if (director == null || director.playableAsset == null)
         {
             if (debugLog)
@@ -108,76 +144,79 @@ public sealed class UltimateSkillController : MonoBehaviour
             return false;
         }
 
-        if (isCutscenePlaying)
+        if (_isStandaloneCutscenePlaying)
             return false;
 
-        BeginCutscene();
+        BeginStandaloneCutscene();
         return true;
     }
 
-    private void BeginCutscene()
+    void BeginStandaloneCutscene()
     {
-        isCutscenePlaying = true;
+        _isStandaloneCutscenePlaying = true;
         RefreshDebugTickState();
 
-        if (blockAllInputsDuringCutscene && inputBlocker != null)
-            inputBlocker.BlockAll(true);
+        if (blockAllInputsDuringCutscene && _inputBlocker != null)
+            _inputBlocker.BlockAll(true);
 
-        if (setInvulnerableDuringCutscene && invulnerabilityToggle != null)
-            invulnerabilityToggle.SetInvulnerable(true);
+        if (setInvulnerableDuringCutscene && _invulnerabilityToggle != null)
+            _invulnerabilityToggle.SetInvulnerable(true);
 
         if (freezeTimeScaleDuringCutscene)
         {
-            cachedPrevTimeScale = Time.timeScale;
+            _cachedPrevTimeScale = Time.timeScale;
             Time.timeScale = 0f;
         }
 
         director.time = 0d;
         director.Play();
-
-        if (debugLog)
-            Debug.Log("[Ultimate] Standalone fallback cutscene begin", this);
     }
 
-    private void HandleDirectorStopped(PlayableDirector _)
+    void HandleDirectorStopped(PlayableDirector _)
     {
-        if (!isCutscenePlaying)
+        if (!_isStandaloneCutscenePlaying)
             return;
 
-        EndCutscene(force: false);
+        EndStandaloneCutscene(false);
     }
 
-    private void EndCutscene(bool force)
+    void EndStandaloneCutscene(bool force)
     {
         if (force && director != null && director.state == PlayState.Playing)
             director.Stop();
 
         if (freezeTimeScaleDuringCutscene)
-            Time.timeScale = cachedPrevTimeScale;
+            Time.timeScale = _cachedPrevTimeScale;
 
-        if (setInvulnerableDuringCutscene && invulnerabilityToggle != null)
-            invulnerabilityToggle.SetInvulnerable(false);
+        if (setInvulnerableDuringCutscene && _invulnerabilityToggle != null)
+            _invulnerabilityToggle.SetInvulnerable(false);
 
-        if (blockAllInputsDuringCutscene && inputBlocker != null)
-            inputBlocker.BlockAll(false);
+        if (blockAllInputsDuringCutscene && _inputBlocker != null)
+            _inputBlocker.BlockAll(false);
 
-        isCutscenePlaying = false;
+        _isStandaloneCutscenePlaying = false;
         RefreshDebugTickState();
-
-        if (debugLog)
-            Debug.Log("[Ultimate] Standalone fallback cutscene end", this);
     }
 
-    private void ResolveReferences()
+    void ResolveReferences(bool allowCreate)
     {
         if (primaryController == null)
             primaryController = GetComponent<PlayerUltimateController>();
-
         if (director == null)
             director = GetComponent<PlayableDirector>();
+        if (sequencePlayer == null)
+            sequencePlayer = GetComponent<UltimateSequencePlayer>() ?? (allowCreate ? gameObject.AddComponent<UltimateSequencePlayer>() : null);
+        if (targetBinder == null)
+            targetBinder = GetComponent<UltimateTargetBinder>() ?? (allowCreate ? gameObject.AddComponent<UltimateTargetBinder>() : null);
+        if (cameraDirector == null)
+            cameraDirector = GetComponent<UltimateCameraDirector>() ?? (allowCreate ? gameObject.AddComponent<UltimateCameraDirector>() : null);
+        if (hitProcessor == null)
+            hitProcessor = GetComponent<UltimateHitProcessor>() ?? (allowCreate ? gameObject.AddComponent<UltimateHitProcessor>() : null);
+        if (vfxPresenter == null)
+            vfxPresenter = GetComponent<UltimateVFXPresenter>() ?? (allowCreate ? gameObject.AddComponent<UltimateVFXPresenter>() : null);
     }
 
-    private void SyncPrimaryControllerBindings()
+    void SyncPrimaryControllerBindings()
     {
         if (!HasPrimaryController)
             return;
@@ -186,7 +225,7 @@ public sealed class UltimateSkillController : MonoBehaviour
             primaryController.director = director;
     }
 
-    private void ConfigureStandaloneDirector()
+    void ConfigureStandaloneDirector()
     {
         if (director == null)
             return;
@@ -199,8 +238,71 @@ public sealed class UltimateSkillController : MonoBehaviour
             : DirectorUpdateMode.GameTime;
     }
 
-    private void RefreshDebugTickState()
+    void RefreshDebugTickState()
     {
-        enabled = enableDebugHotkey || isCutscenePlaying;
+        enabled = enableDebugHotkey || _isStandaloneCutscenePlaying;
+    }
+
+    UltimateSequenceData GetRuntimeFallbackData()
+    {
+        if (sequenceData != null)
+            return PrepareRuntimeSequenceData(sequenceData);
+
+        UltimateSequenceData resourceData = Resources.Load<UltimateSequenceData>(DefaultSequenceResourcePath);
+        if (resourceData != null)
+            return PrepareRuntimeSequenceData(resourceData);
+
+        if (_runtimeFallbackData == null)
+        {
+            _runtimeFallbackData = UltimateSequenceData.CreateRuntimeDefaultInstance();
+            _runtimeFallbackSource = null;
+        }
+
+        PatchMissingCinematicClips(_runtimeFallbackData);
+        return _runtimeFallbackData;
+    }
+
+    UltimateSequenceData PrepareRuntimeSequenceData(UltimateSequenceData source)
+    {
+        if (_runtimeFallbackData == null || _runtimeFallbackSource != source)
+        {
+            _runtimeFallbackData = Instantiate(source);
+            _runtimeFallbackData.name = $"{source.name}_Runtime";
+            _runtimeFallbackData.hideFlags = HideFlags.DontSave;
+            _runtimeFallbackSource = source;
+        }
+
+        PatchMissingCinematicClips(_runtimeFallbackData);
+        return _runtimeFallbackData;
+    }
+
+    void PatchMissingCinematicClips(UltimateSequenceData data)
+    {
+        if (data == null)
+            return;
+
+        AnimationClip introPoseClip = Resources.Load<AnimationClip>(IntroPoseClipResourcePath);
+        if (introPoseClip != null)
+        {
+            data.CinematicAnimation.introPoseClip = introPoseClip;
+        }
+        else if (debugLog)
+        {
+            Debug.LogWarning(
+                $"[Ultimate] Missing runtime intro pose clip resource at Resources/{IntroPoseClipResourcePath}.",
+                this);
+        }
+
+        AnimationClip dashSlashClip = Resources.Load<AnimationClip>(DashSlashClipResourcePath);
+        if (dashSlashClip != null)
+        {
+            data.CinematicAnimation.dashSlashClip = dashSlashClip;
+        }
+        else if (debugLog)
+        {
+            Debug.LogWarning(
+                $"[Ultimate] Missing runtime dash slash clip resource at Resources/{DashSlashClipResourcePath}.",
+                this);
+        }
     }
 }

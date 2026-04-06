@@ -121,7 +121,20 @@ public sealed class TransientVfxPool : MonoBehaviour
                 return pooled;
         }
 
-        GameObject instance = Instantiate(prefab, parent);
+        UnityEngine.Object rawInstance = parent != null
+            ? UnityEngine.Object.Instantiate((UnityEngine.Object)prefab, parent, false)
+            : UnityEngine.Object.Instantiate((UnityEngine.Object)prefab);
+
+        GameObject instance = rawInstance as GameObject;
+        if (instance == null && rawInstance is Component component)
+            instance = component.gameObject;
+
+        if (instance == null)
+        {
+            Debug.LogWarning($"[TransientVfxPool] Failed to instantiate VFX prefab '{prefab.name}'. Assigned reference is not a GameObject root.", prefab);
+            return null;
+        }
+
         instance.name = $"{prefab.name}_Pooled";
         PooledInstance marker = instance.GetComponent<PooledInstance>();
         if (marker == null)
@@ -163,13 +176,13 @@ public sealed class TransientVfxPool : MonoBehaviour
             ActiveLease lease = _activeLeases[i];
             if (lease.Instance == null)
             {
-                _activeLeases.RemoveAt(i);
+                RemoveActiveLeaseAtSwapBack(i);
                 continue;
             }
 
             if (lease.Instance.LeaseId != lease.LeaseId)
             {
-                _activeLeases.RemoveAt(i);
+                RemoveActiveLeaseAtSwapBack(i);
                 continue;
             }
 
@@ -177,11 +190,23 @@ public sealed class TransientVfxPool : MonoBehaviour
                 continue;
 
             Recycle(lease.Prefab, lease.Instance);
-            _activeLeases.RemoveAt(i);
+            RemoveActiveLeaseAtSwapBack(i);
         }
 
         if (_activeLeases.Count == 0)
             enabled = false;
+    }
+
+    void RemoveActiveLeaseAtSwapBack(int index)
+    {
+        int lastIndex = _activeLeases.Count - 1;
+        if (index < 0 || index > lastIndex)
+            return;
+
+        if (index != lastIndex)
+            _activeLeases[index] = _activeLeases[lastIndex];
+
+        _activeLeases.RemoveAt(lastIndex);
     }
 
     Transform GetOrCreatePoolRoot(GameObject prefab)

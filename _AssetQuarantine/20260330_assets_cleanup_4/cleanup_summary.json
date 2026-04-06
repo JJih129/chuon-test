@@ -1,0 +1,17 @@
+{
+  "quarantine_root": "D:\\GitHub\\Project-ChuOn\\_AssetQuarantine\\20260330_assets_cleanup_4",
+  "moved": [
+    {
+      "src": "Assets/GhostSamurai_Animset/Animation/katana/Common/Root/idle.anim",
+      "dst": "Assets/AnimationKeep/GhostSamurai/idle.anim"
+    },
+    {
+      "src": "Assets/GhostSamurai_Animset",
+      "dst": "QUARANTINE/Assets/GhostSamurai_Animset"
+    },
+    {
+      "src": "Assets/QuickOutline/Samples",
+      "dst": "QUARANTINE/Assets/QuickOutline/Samples"
+    }
+  ]
+}

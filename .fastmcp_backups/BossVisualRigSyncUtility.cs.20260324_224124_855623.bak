@@ -1,0 +1,910 @@
+using System.Collections.Generic;
+using System.Text;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public static class BossVisualRigSyncUtility
+{
+    public const string TargetScenePath = "Assets/Scenes/MainScene.unity";
+    public const string BossModelPath = "Assets/boss.fbx";
+    const string VisualRootName = "VisualRoot";
+    const string LegacyVisualRootName = "LegacyVisualRoot";
+    const string VfxPivotName = "VfxPivot";
+    const string VisualInstanceName = "BossVisual";
+    const float PreferredBossVisualHeight = 3.6f;
+
+    static bool syncScheduled;
+
+    [MenuItem("Tools/Validation/Sync Boss Visual Rig")]
+    static void SyncBossVisualRig()
+    {
+        RunInternal(showDialog: true);
+    }
+
+    public static SyncSummary RunFromFastMcp()
+    {
+        return RunInternal(showDialog: false);
+    }
+
+    public static bool IsBossModelAssetPath(string assetPath)
+    {
+        return NormalizeAssetPath(assetPath) == NormalizeAssetPath(BossModelPath);
+    }
+
+    public static void ScheduleSyncFromImport()
+    {
+        if (syncScheduled)
+            return;
+
+        syncScheduled = true;
+        EditorApplication.delayCall += ProcessScheduledSync;
+    }
+
+    static void ProcessScheduledSync()
+    {
+        if (!syncScheduled)
+            return;
+
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            EditorApplication.delayCall += ProcessScheduledSync;
+            return;
+        }
+
+        syncScheduled = false;
+
+        try
+        {
+            SyncSummary summary = RunFromFastMcp();
+            Debug.Log("[BossVisualRigSyncUtility] " + summary.Details);
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogException(ex);
+        }
+    }
+
+    static SyncSummary RunInternal(bool showDialog)
+    {
+        Scene activeScene = SceneManager.GetActiveScene();
+        string activeScenePath = activeScene.IsValid() ? activeScene.path : string.Empty;
+        SyncReport report = new SyncReport();
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(TargetScenePath))
+            {
+                report.Warn("Target scene path is empty.");
+                return report.ToSummary();
+            }
+
+            Scene scene = EditorSceneManager.OpenScene(TargetScenePath, OpenSceneMode.Single);
+            bool changed = SyncSceneBoss(scene, report);
+            if (changed)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+                AssetDatabase.SaveAssets();
+            }
+        }
+        finally
+        {
+            if (!string.IsNullOrWhiteSpace(activeScenePath) && activeScenePath != TargetScenePath)
+                EditorSceneManager.OpenScene(activeScenePath, OpenSceneMode.Single);
+        }
+
+        report.Emit(showDialog);
+        return report.ToSummary();
+    }
+
+    static bool SyncSceneBoss(Scene scene, SyncReport report)
+    {
+        BossController bossController = FindSceneBoss(scene);
+        if (bossController == null)
+        {
+            report.Warn($"BossController not found in scene: {scene.path}");
+            return false;
+        }
+
+        return SyncBossObject(bossController.gameObject, report, scene);
+    }
+
+    static BossController FindSceneBoss(Scene scene)
+    {
+        GameObject[] roots = scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            BossController boss = roots[i].GetComponentInChildren<BossController>(true);
+            if (boss != null)
+                return boss;
+        }
+
+        return null;
+    }
+
+    static bool SyncBossObject(GameObject bossObject, SyncReport report, Scene scene)
+    {
+        bool changed = false;
+        Transform bossRoot = bossObject.transform;
+        Animator rootAnimator = bossObject.GetComponent<Animator>();
+        if (rootAnimator == null)
+        {
+            report.Warn("Boss root Animator is missing.");
+            return false;
+        }
+
+        PatternVisuals existingPatternVisuals = bossObject.GetComponentInChildren<PatternVisuals>(true);
+        Transform preservedPatternTransform = existingPatternVisuals != null && existingPatternVisuals.visualPartRenderer != null
+            ? existingPatternVisuals.visualPartRenderer.transform
+            : null;
+
+        Bounds legacyBounds = default;
+        bool hasLegacyBounds = TryGetLegacyVisualBounds(bossRoot, preservedPatternTransform, out legacyBounds);
+
+        Transform visualRoot = EnsureChild(bossRoot, VisualRootName, ref changed);
+        Transform legacyVisualRoot = EnsureChild(bossRoot, LegacyVisualRootName, ref changed);
+        if (legacyVisualRoot.gameObject.activeSelf)
+        {
+            legacyVisualRoot.gameObject.SetActive(false);
+            changed = true;
+        }
+
+        List<GameObject> detachedVisualRoots = CollectDetachedBossVisualRoots(scene, bossObject);
+        GameObject visualInstance = FindBestExistingVisualInstance(visualRoot, bossObject);
+        bool requiresHardVisualSnap = false;
+        if (visualInstance == null && detachedVisualRoots.Count > 0)
+        {
+            visualInstance = SelectBestVisualRoot(detachedVisualRoots);
+            if (visualInstance != null)
+            {
+                requiresHardVisualSnap = true;
+                changed |= NormalizeVisualInstance(visualInstance, visualRoot, bossObject.layer, resetLocalTransform: true);
+                report.Info($"Reattached detached boss visual root: {visualInstance.name}");
+            }
+        }
+
+        changed |= MoveLegacyVisualChildren(bossRoot, visualRoot, legacyVisualRoot, preservedPatternTransform);
+        changed |= DisableResidualLegacyVisualChildren(bossRoot, visualRoot, legacyVisualRoot, preservedPatternTransform);
+        changed |= RemoveOtherVisualRootChildren(visualRoot, visualInstance != null ? visualInstance.transform : null);
+        changed |= DestroyDetachedVisualRoots(detachedVisualRoots, visualInstance, report);
+
+        if (visualInstance == null)
+        {
+            GameObject bossModelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(BossModelPath);
+            if (bossModelAsset == null)
+            {
+                report.Warn($"Boss model asset not found: {BossModelPath}");
+                return changed;
+            }
+
+            visualInstance = PrefabUtility.InstantiatePrefab(bossModelAsset, scene) as GameObject;
+            if (visualInstance == null)
+            {
+                report.Warn($"Failed to instantiate boss model: {BossModelPath}");
+                return changed;
+            }
+
+            requiresHardVisualSnap = true;
+            changed = true;
+        }
+
+        changed |= NormalizeVisualInstance(visualInstance, visualRoot, bossObject.layer, resetLocalTransform: requiresHardVisualSnap);
+
+        BossVisualRig visualRig = visualInstance.GetComponent<BossVisualRig>();
+        if (visualRig == null)
+        {
+            visualRig = visualInstance.AddComponent<BossVisualRig>();
+            changed = true;
+        }
+
+        Avatar modelAvatar = ResolveAvatarAsset(BossModelPath);
+        if (modelAvatar != null)
+            visualRig.SetAvatarForSync(modelAvatar);
+
+        Animator visualAnimator = visualInstance.GetComponent<Animator>() ?? visualInstance.GetComponentInChildren<Animator>(true);
+        visualRig.SetSourceAnimatorForSync(visualAnimator);
+        visualRig.SetRenderersForSync(visualInstance.GetComponentsInChildren<Renderer>(true));
+        visualRig.SyncSerializedReferences();
+        EditorUtility.SetDirty(visualRig);
+
+        if (visualAnimator != null)
+        {
+            if (visualAnimator.enabled)
+            {
+                visualAnimator.enabled = false;
+                changed = true;
+            }
+
+            if (visualAnimator.applyRootMotion)
+            {
+                visualAnimator.applyRootMotion = false;
+                changed = true;
+            }
+        }
+
+        Renderer[] visualRenderers = visualRig.Renderers;
+        if (visualRenderers != null)
+        {
+            for (int i = 0; i < visualRenderers.Length; i++)
+            {
+                SkinnedMeshRenderer skinnedMeshRenderer = visualRenderers[i] as SkinnedMeshRenderer;
+                if (skinnedMeshRenderer == null)
+                    continue;
+
+                if (!skinnedMeshRenderer.updateWhenOffscreen)
+                {
+                    skinnedMeshRenderer.updateWhenOffscreen = true;
+                    changed = true;
+                }
+            }
+        }
+
+        if (modelAvatar != null && rootAnimator.avatar != modelAvatar)
+        {
+            rootAnimator.avatar = modelAvatar;
+            changed = true;
+        }
+
+        if (rootAnimator.cullingMode != AnimatorCullingMode.AlwaysAnimate)
+        {
+            rootAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            changed = true;
+        }
+
+        if (requiresHardVisualSnap)
+        {
+            if (hasLegacyBounds)
+                FitVisualInstanceToBounds(visualInstance.transform, legacyBounds, PreferredBossVisualHeight);
+            else
+                FitVisualInstanceToHeight(visualInstance.transform, PreferredBossVisualHeight, bossRoot.position.y);
+        }
+
+        if (TryGetRendererBounds(visualRoot, out Bounds newBounds))
+        {
+            Transform vfxPivot = EnsureChild(bossRoot, VfxPivotName, ref changed);
+            Vector3 pivotPosition = new Vector3(newBounds.center.x, Mathf.Lerp(newBounds.min.y, newBounds.max.y, 0.62f), newBounds.center.z);
+            if ((vfxPivot.position - pivotPosition).sqrMagnitude > 0.000001f)
+            {
+                vfxPivot.position = pivotPosition;
+                changed = true;
+            }
+
+            if (vfxPivot.localRotation != Quaternion.identity)
+            {
+                vfxPivot.localRotation = Quaternion.identity;
+                changed = true;
+            }
+        }
+
+        BossReferences bossReferences = bossObject.GetComponent<BossReferences>();
+        if (bossReferences == null)
+        {
+            bossReferences = bossObject.AddComponent<BossReferences>();
+            changed = true;
+        }
+
+        bossReferences.SyncSerializedReferences();
+        Transform activePatternTransform = bossReferences.PatternVisuals != null && bossReferences.PatternVisuals.visualPartRenderer != null
+            ? bossReferences.PatternVisuals.visualPartRenderer.transform
+            : preservedPatternTransform;
+        changed |= DeactivateUnusedHelperPlanes(visualInstance.transform, activePatternTransform);
+        EditorUtility.SetDirty(bossReferences);
+        changed = true;
+
+        BossController bossController = bossObject.GetComponent<BossController>();
+        if (bossController != null)
+        {
+            if (bossController.bossAnimator != rootAnimator)
+            {
+                bossController.bossAnimator = rootAnimator;
+                changed = true;
+            }
+
+            if (bossReferences.AttackHitbox != null && bossController.attackHitbox != bossReferences.AttackHitbox)
+            {
+                bossController.attackHitbox = bossReferences.AttackHitbox;
+                changed = true;
+            }
+
+            if (bossReferences.PatternVisuals != null && bossController.patternVisuals != bossReferences.PatternVisuals)
+            {
+                bossController.patternVisuals = bossReferences.PatternVisuals;
+                changed = true;
+            }
+
+            EditorUtility.SetDirty(bossController);
+        }
+
+        BossBreakController breakController = bossObject.GetComponent<BossBreakController>();
+        if (breakController != null)
+            EditorUtility.SetDirty(breakController);
+
+        BossHitReaction hitReaction = bossObject.GetComponent<BossHitReaction>();
+        if (hitReaction != null)
+        {
+            if (bossReferences.VfxPivot != null && hitReaction.vfxPivot != bossReferences.VfxPivot)
+            {
+                hitReaction.vfxPivot = bossReferences.VfxPivot;
+                changed = true;
+            }
+
+            if (hitReaction.bossAnimator != rootAnimator)
+            {
+                hitReaction.bossAnimator = rootAnimator;
+                changed = true;
+            }
+
+            EditorUtility.SetDirty(hitReaction);
+        }
+
+        EditorUtility.SetDirty(rootAnimator);
+        report.Info($"Boss visual rig synced with model: {BossModelPath}");
+        return changed;
+    }
+
+    static List<GameObject> CollectDetachedBossVisualRoots(Scene scene, GameObject bossObject)
+    {
+        List<GameObject> results = new List<GameObject>();
+        GameObject[] roots = scene.GetRootGameObjects();
+        for (int i = 0; i < roots.Length; i++)
+        {
+            GameObject root = roots[i];
+            if (!IsBossVisualCandidate(root, bossObject))
+                continue;
+
+            results.Add(root);
+        }
+
+        return results;
+    }
+
+    static GameObject FindBestExistingVisualInstance(Transform visualRoot, GameObject bossObject)
+    {
+        if (visualRoot == null)
+            return null;
+
+        GameObject best = null;
+        int bestScore = int.MinValue;
+        for (int i = 0; i < visualRoot.childCount; i++)
+        {
+            GameObject candidate = visualRoot.GetChild(i).gameObject;
+            if (!IsBossVisualCandidate(candidate, bossObject))
+                continue;
+
+            int score = GetBossVisualCandidateScore(candidate);
+            if (score <= bestScore)
+                continue;
+
+            best = candidate;
+            bestScore = score;
+        }
+
+        return best;
+    }
+
+    static GameObject SelectBestVisualRoot(List<GameObject> candidates)
+    {
+        if (candidates == null || candidates.Count == 0)
+            return null;
+
+        GameObject best = null;
+        int bestScore = int.MinValue;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            GameObject candidate = candidates[i];
+            int score = GetBossVisualCandidateScore(candidate);
+            if (score <= bestScore)
+                continue;
+
+            best = candidate;
+            bestScore = score;
+        }
+
+        return best;
+    }
+
+    static int GetBossVisualCandidateScore(GameObject candidate)
+    {
+        if (candidate == null)
+            return int.MinValue;
+
+        int score = 0;
+        if (string.Equals(candidate.name, VisualInstanceName, System.StringComparison.Ordinal))
+            score += 100;
+
+        if (IsBossModelAssetPath(PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(candidate)))
+            score += 50;
+
+        if (candidate.GetComponent<BossVisualRig>() != null || candidate.GetComponentInChildren<BossVisualRig>(true) != null)
+            score += 25;
+
+        if (HasBossVisualSignature(candidate.transform))
+            score += 10;
+
+        return score;
+    }
+
+    static bool IsBossVisualCandidate(GameObject candidate, GameObject bossObject)
+    {
+        if (candidate == null || candidate == bossObject)
+            return false;
+
+        if (candidate.GetComponent<BossController>() != null || candidate.GetComponentInChildren<BossController>(true) != null)
+            return false;
+
+        if (candidate.GetComponent<BossReferences>() != null)
+            return false;
+
+        if (IsBossModelAssetPath(PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(candidate)))
+            return true;
+
+        if (candidate.GetComponent<BossVisualRig>() != null || candidate.GetComponentInChildren<BossVisualRig>(true) != null)
+            return true;
+
+        if (string.Equals(candidate.name, VisualInstanceName, System.StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return HasBossVisualSignature(candidate.transform);
+    }
+
+    static bool HasBossVisualSignature(Transform root)
+    {
+        if (root == null)
+            return false;
+
+        return FindDescendantByName(root, "mixamorig:Hips") != null
+            || FindDescendantByName(root, "Object012") != null
+            || FindDescendantByName(root, "Plane009") != null;
+    }
+
+    static bool NormalizeVisualInstance(GameObject visualInstance, Transform visualRoot, int layer, bool resetLocalTransform)
+    {
+        if (visualInstance == null || visualRoot == null)
+            return false;
+
+        bool changed = false;
+        Transform visualTransform = visualInstance.transform;
+
+        if (visualInstance.name != VisualInstanceName)
+        {
+            visualInstance.name = VisualInstanceName;
+            changed = true;
+        }
+
+        if (!visualInstance.activeSelf)
+        {
+            visualInstance.SetActive(true);
+            changed = true;
+        }
+
+        if (visualTransform.parent != visualRoot)
+        {
+            visualTransform.SetParent(visualRoot, false);
+            changed = true;
+        }
+
+        if (resetLocalTransform)
+        {
+            if (visualTransform.localPosition != Vector3.zero)
+            {
+                visualTransform.localPosition = Vector3.zero;
+                changed = true;
+            }
+
+            if (visualTransform.localRotation != Quaternion.identity)
+            {
+                visualTransform.localRotation = Quaternion.identity;
+                changed = true;
+            }
+
+            if (visualTransform.localScale != Vector3.one)
+            {
+                visualTransform.localScale = Vector3.one;
+                changed = true;
+            }
+        }
+
+        SetLayerRecursively(visualTransform, layer);
+
+#if UNITY_EDITOR
+        if (changed)
+        {
+            PrefabUtility.RecordPrefabInstancePropertyModifications(visualInstance);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(visualTransform);
+            EditorUtility.SetDirty(visualInstance);
+            EditorUtility.SetDirty(visualTransform);
+        }
+#endif
+
+        return changed;
+    }
+
+    static bool DestroyDetachedVisualRoots(List<GameObject> detachedRoots, GameObject preservedRoot, SyncReport report)
+    {
+        bool changed = false;
+        if (detachedRoots == null || detachedRoots.Count == 0)
+            return false;
+
+        for (int i = 0; i < detachedRoots.Count; i++)
+        {
+            GameObject detachedRoot = detachedRoots[i];
+            if (detachedRoot == null || detachedRoot == preservedRoot)
+                continue;
+
+            string detachedRootName = detachedRoot.name;
+            Object.DestroyImmediate(detachedRoot);
+            report.Info($"Removed detached boss visual root: {detachedRootName}");
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    static bool RemoveOtherVisualRootChildren(Transform visualRoot, Transform preservedChild)
+    {
+        if (visualRoot == null)
+            return false;
+
+        bool changed = false;
+        List<GameObject> destroyTargets = new List<GameObject>();
+        for (int i = 0; i < visualRoot.childCount; i++)
+        {
+            Transform child = visualRoot.GetChild(i);
+            if (child == null || child == preservedChild)
+                continue;
+
+            destroyTargets.Add(child.gameObject);
+        }
+
+        for (int i = 0; i < destroyTargets.Count; i++)
+        {
+            Object.DestroyImmediate(destroyTargets[i]);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    static bool MoveLegacyVisualChildren(Transform bossRoot, Transform visualRoot, Transform legacyVisualRoot, Transform preservedPatternTransform)
+    {
+        bool changed = false;
+        List<Transform> moveTargets = new List<Transform>();
+
+        for (int i = 0; i < bossRoot.childCount; i++)
+        {
+            Transform child = bossRoot.GetChild(i);
+            if (child == null || child == visualRoot || child == legacyVisualRoot)
+                continue;
+
+            if (ShouldMoveToLegacy(child, preservedPatternTransform))
+                moveTargets.Add(child);
+        }
+
+        for (int i = 0; i < moveTargets.Count; i++)
+        {
+            moveTargets[i].SetParent(legacyVisualRoot, true);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    static bool DisableResidualLegacyVisualChildren(Transform bossRoot, Transform visualRoot, Transform legacyVisualRoot, Transform preservedPatternTransform)
+    {
+        bool changed = false;
+
+        for (int i = 0; i < bossRoot.childCount; i++)
+        {
+            Transform child = bossRoot.GetChild(i);
+            if (child == null || child == visualRoot || child == legacyVisualRoot)
+                continue;
+
+            if (!IsResidualLegacyVisualChild(child, preservedPatternTransform))
+                continue;
+
+            if (child.gameObject.activeSelf)
+            {
+                child.gameObject.SetActive(false);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    static bool IsResidualLegacyVisualChild(Transform child, Transform preservedPatternTransform)
+    {
+        if (child == null)
+            return false;
+
+        if (child.name == VfxPivotName)
+            return false;
+
+        if (preservedPatternTransform != null && (child == preservedPatternTransform || preservedPatternTransform.IsChildOf(child)))
+            return false;
+
+        if (child.GetComponent<AttackHitbox>() != null || child.GetComponentInChildren<AttackHitbox>(true) != null)
+            return false;
+
+        if (child.GetComponent<PatternVisuals>() != null || child.GetComponentInChildren<PatternVisuals>(true) != null)
+            return false;
+
+        if (child.GetComponent<Light>() != null || child.GetComponentInChildren<Light>(true) != null)
+            return false;
+
+        if (child.name.StartsWith("Bip", System.StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return child.GetComponent<SkinnedMeshRenderer>() != null || child.GetComponent<MeshRenderer>() != null;
+    }
+
+    static bool ShouldMoveToLegacy(Transform child, Transform preservedPatternTransform)
+    {
+        if (child == null)
+            return false;
+
+        if (child.name == VfxPivotName)
+            return false;
+
+        if (preservedPatternTransform != null && (child == preservedPatternTransform || preservedPatternTransform.IsChildOf(child)))
+            return false;
+
+        if (child.GetComponent<AttackHitbox>() != null || child.GetComponentInChildren<AttackHitbox>(true) != null)
+            return false;
+
+        if (child.GetComponent<PatternVisuals>() != null || child.GetComponentInChildren<PatternVisuals>(true) != null)
+            return false;
+
+        if (child.GetComponent<Light>() != null || child.GetComponentInChildren<Light>(true) != null)
+            return false;
+
+        if (child.name.StartsWith("Bip", System.StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (child.GetComponent<SkinnedMeshRenderer>() != null || child.GetComponentInChildren<SkinnedMeshRenderer>(true) != null)
+            return true;
+
+        return child.GetComponent<MeshRenderer>() != null;
+    }
+
+    static Transform EnsureChild(Transform parent, string childName, ref bool changed)
+    {
+        Transform child = parent.Find(childName);
+        if (child == null)
+        {
+            GameObject go = new GameObject(childName);
+            child = go.transform;
+            child.SetParent(parent, false);
+            changed = true;
+        }
+
+        if (child.localPosition != Vector3.zero)
+        {
+            child.localPosition = Vector3.zero;
+            changed = true;
+        }
+
+        if (child.localRotation != Quaternion.identity)
+        {
+            child.localRotation = Quaternion.identity;
+            changed = true;
+        }
+
+        if (child.localScale != Vector3.one)
+        {
+            child.localScale = Vector3.one;
+            changed = true;
+        }
+
+        return child;
+    }
+
+    static bool TryGetLegacyVisualBounds(Transform bossRoot, Transform preservedPatternTransform, out Bounds bounds)
+    {
+        List<Renderer> renderers = new List<Renderer>();
+        for (int i = 0; i < bossRoot.childCount; i++)
+        {
+            Transform child = bossRoot.GetChild(i);
+            if (!ShouldMoveToLegacy(child, preservedPatternTransform))
+                continue;
+
+            Renderer[] childRenderers = child.GetComponentsInChildren<Renderer>(true);
+            for (int j = 0; j < childRenderers.Length; j++)
+            {
+                if (childRenderers[j] == null)
+                    continue;
+
+                renderers.Add(childRenderers[j]);
+            }
+        }
+
+        return TryBuildBounds(renderers, out bounds, includeDisabledRenderers: true);
+    }
+
+    static bool TryGetRendererBounds(Transform root, out Bounds bounds)
+    {
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        return TryBuildBounds(renderers, out bounds, includeDisabledRenderers: false);
+    }
+
+    static bool TryBuildBounds(IList<Renderer> renderers, out Bounds bounds, bool includeDisabledRenderers)
+    {
+        bounds = default;
+        bool hasBounds = false;
+        if (renderers == null)
+            return false;
+
+        for (int i = 0; i < renderers.Count; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            if (!includeDisabledRenderers && !renderer.enabled)
+                continue;
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        return hasBounds;
+    }
+
+    static void FitVisualInstanceToBounds(Transform visualInstance, Bounds targetBounds, float minimumTargetHeight)
+    {
+        if (!TryGetRendererBounds(visualInstance, out Bounds sourceBounds))
+            return;
+
+        float sourceHeight = Mathf.Max(0.0001f, sourceBounds.size.y);
+        float targetHeight = Mathf.Max(minimumTargetHeight, targetBounds.size.y, 0.0001f);
+        float uniformScale = Mathf.Clamp(targetHeight / sourceHeight, 0.01f, 100f);
+        visualInstance.localScale = Vector3.one * uniformScale;
+
+        if (!TryGetRendererBounds(visualInstance, out sourceBounds))
+            return;
+
+        Vector3 offset = targetBounds.center - sourceBounds.center;
+        offset.y = targetBounds.min.y - sourceBounds.min.y;
+        visualInstance.position += offset;
+    }
+
+    static void FitVisualInstanceToHeight(Transform visualInstance, float targetHeight, float groundY)
+    {
+        if (!TryGetRendererBounds(visualInstance, out Bounds sourceBounds))
+            return;
+
+        float sourceHeight = Mathf.Max(0.0001f, sourceBounds.size.y);
+        float uniformScale = Mathf.Clamp(Mathf.Max(0.0001f, targetHeight) / sourceHeight, 0.01f, 100f);
+        visualInstance.localScale = Vector3.one * uniformScale;
+
+        if (!TryGetRendererBounds(visualInstance, out sourceBounds))
+            return;
+
+        Vector3 position = visualInstance.position;
+        position.y += groundY - sourceBounds.min.y;
+        visualInstance.position = position;
+    }
+
+    static Avatar ResolveAvatarAsset(string assetPath)
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+        for (int i = 0; i < assets.Length; i++)
+        {
+            Avatar avatar = assets[i] as Avatar;
+            if (avatar != null)
+                return avatar;
+        }
+
+        return null;
+    }
+
+    static void SetLayerRecursively(Transform root, int layer)
+    {
+        if (root == null)
+            return;
+
+        root.gameObject.layer = layer;
+        for (int i = 0; i < root.childCount; i++)
+            SetLayerRecursively(root.GetChild(i), layer);
+    }
+
+    static Transform FindDescendantByName(Transform root, string targetName)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(targetName))
+            return null;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child == null)
+                continue;
+
+            if (child.name == targetName)
+                return child;
+
+            Transform nested = FindDescendantByName(child, targetName);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
+    }
+
+    static string NormalizeAssetPath(string assetPath)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+            return string.Empty;
+
+        return assetPath.Replace('\\', '/').Trim();
+    }
+
+    public readonly struct SyncSummary
+    {
+        public SyncSummary(string details)
+        {
+            Details = details;
+        }
+
+        public string Details { get; }
+        public override string ToString() => Details;
+    }
+
+    sealed class SyncReport
+    {
+        readonly List<string> infos = new List<string>();
+        readonly List<string> warnings = new List<string>();
+
+        public void Info(string message)
+        {
+            infos.Add("[INFO] " + message);
+        }
+
+        public void Warn(string message)
+        {
+            warnings.Add("[WARN] " + message);
+        }
+
+        public void Emit(bool showDialog)
+        {
+            string details = BuildDetails();
+            if (warnings.Count > 0)
+                Debug.LogWarning(details);
+            else
+                Debug.Log(details);
+
+            if (showDialog)
+            {
+                EditorUtility.DisplayDialog(
+                    "Boss Visual Rig Sync",
+                    $"Warnings: {warnings.Count}\n\nSee Console for details.",
+                    "OK");
+            }
+        }
+
+        public SyncSummary ToSummary()
+        {
+            return new SyncSummary(BuildDetails());
+        }
+
+        string BuildDetails()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine("Boss visual rig sync completed.");
+            builder.AppendLine($"Warnings: {warnings.Count}");
+            for (int i = 0; i < infos.Count; i++)
+                builder.AppendLine(infos[i]);
+            for (int i = 0; i < warnings.Count; i++)
+                builder.AppendLine(warnings[i]);
+            return builder.ToString();
+        }
+    }
+}

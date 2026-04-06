@@ -1,0 +1,105 @@
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class BossVisualRig : MonoBehaviour
+{
+    [SerializeField] private Transform visualRoot;
+    [SerializeField] private Animator sourceAnimator;
+    [SerializeField] private Avatar avatar;
+    [SerializeField] private Renderer[] renderers;
+
+    public Transform VisualRoot => visualRoot ? visualRoot : transform;
+    public Animator SourceAnimator => sourceAnimator;
+    public Avatar Avatar => avatar != null ? avatar : (sourceAnimator != null ? sourceAnimator.avatar : null);
+    public Renderer[] Renderers => FilterValidObjects(renderers);
+
+    void Reset()
+    {
+        AutoWire();
+    }
+
+    void Awake()
+    {
+        AutoWire();
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+            AutoWire();
+    }
+#endif
+
+    public void SyncSerializedReferences()
+    {
+        AutoWire();
+    }
+
+    public void SetAvatarForSync(Avatar syncedAvatar)
+    {
+        avatar = syncedAvatar;
+    }
+
+    void AutoWire()
+    {
+        if (!visualRoot)
+            visualRoot = transform;
+
+        if (!sourceAnimator)
+            sourceAnimator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>(true);
+
+        if (!avatar && sourceAnimator != null)
+            avatar = sourceAnimator.avatar;
+
+        if (!HasValidObjects(renderers))
+            renderers = GetComponentsInChildren<Renderer>(true);
+
+        renderers = FilterValidObjects(renderers);
+    }
+
+    static bool HasValidObjects<T>(T[] objects) where T : Object
+    {
+        if (objects == null || objects.Length == 0)
+            return false;
+
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (objects[i])
+                return true;
+        }
+
+        return false;
+    }
+
+    static T[] FilterValidObjects<T>(T[] objects) where T : Object
+    {
+        if (objects == null || objects.Length == 0)
+            return null;
+
+        int validCount = 0;
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (objects[i])
+                validCount++;
+        }
+
+        if (validCount == 0)
+            return null;
+
+        if (validCount == objects.Length)
+            return objects;
+
+        T[] filtered = new T[validCount];
+        int index = 0;
+        for (int i = 0; i < objects.Length; i++)
+        {
+            if (!objects[i])
+                continue;
+
+            filtered[index++] = objects[i];
+        }
+
+        return filtered;
+    }
+}

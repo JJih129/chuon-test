@@ -55,6 +55,17 @@ public class BossHealth : MonoBehaviour, IHealth, IUltimateTarget
 
     // 내부 상태
     float _invincibleRemain;
+    BossBreakController _breakController;
+
+    void ResolveBreakController()
+    {
+        if (_breakController != null && _breakController.gameObject == gameObject)
+            return;
+
+        _breakController = GetComponent<BossBreakController>();
+        if (_breakController == null)
+            _breakController = GetComponentInParent<BossBreakController>();
+    }
 
     void Awake()
     {
@@ -66,6 +77,7 @@ public class BossHealth : MonoBehaviour, IHealth, IUltimateTarget
         IsDead      = CurrentHP <= 0;
         IsStaggered = startStaggered;
         isInvincible = invincibleOnStart;
+        ResolveBreakController();
 
         if (invincibleOnStart && hitInvincibleDuration > 0f)
             _invincibleRemain = hitInvincibleDuration;
@@ -222,7 +234,22 @@ public class BossHealth : MonoBehaviour, IHealth, IUltimateTarget
         if (fixedDamage <= 0 || IsDead)
             return;
 
-        TakeDamage(fixedDamage, HitType.Force, transform.position);
+        int prev = CurrentHP;
+        CurrentHP = Mathf.Clamp(CurrentHP - fixedDamage, 0, MaxHP);
+
+        OnHPChanged?.Invoke(CurrentHP, MaxHP);
+        OnHealthChanged?.Invoke(CurrentHP, MaxHP);
+        OnDamaged?.Invoke(fixedDamage);
+        OnDamagedWithType?.Invoke(fixedDamage, HitType.Heavy);
+
+        if (debugLog)
+            Debug.Log($"[BossHealth] ApplyUltimateDamage {fixedDamage} => {prev}->{CurrentHP}/{MaxHP}", this);
+
+        if (CurrentHP <= 0 && !IsDead)
+        {
+            Die();
+            return;
+        }
     }
 
     void Die()

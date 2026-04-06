@@ -1,87 +1,109 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 [DisallowMultipleComponent]
 public class PlayerLockOn : MonoBehaviour, ILockOnController
 {
-    [Header("?먯깋 踰붿쐞/?쒖빞 (?쒓? ?ㅻ챸)")]
-    [SerializeField, Min(0f)] private float lockOnRange = 18f;                // [議곗젅媛? ?쎌삩 ?먯깋 理쒕? 嫄곕━
-    [SerializeField, Range(10f, 180f)] private float lockOnFOV = 70f;         // [議곗젅媛? 移대찓??以묒떖 湲곗? ?덉슜 ?쒖빞媛?
-    [SerializeField] private LayerMask obstacleMask = 0;                      // [議곗젅媛? ?쒖빞瑜?媛由щ뒗 ?μ븷臾??덉씠??留덉뒪???놁쑝硫?0)
-    [SerializeField] private LayerMask enemyMask = 1 << 9;                    // [議곗젅媛? ???덉씠??留덉뒪??(?꾨줈?앺듃??留욊쾶 議곗젙)
+    const int OverlapBufferSize = 64;
+    const int UniqueRootBufferSize = 64;
 
-    [Header("?源??쇰쿁 ?앹꽦/異붿쟻 (?쒓? ?ㅻ챸)")]
-    [SerializeField] private string pivotName = "LockPivot";                  // [議곗젅媛? ?源?猷⑦듃 ?섏쐞???앹꽦???쎌삩 湲곗????대쫫
-    [SerializeField] private float defaultPivotY = 1.3f;                       // [議곗젅媛? Render媛 ?놁쓣 ??湲곕낯 ?믪씠
+    [Header("Search")]
+    [SerializeField, Min(0f)] private float lockOnRange = 18f;
+    [SerializeField, Range(10f, 180f)] private float lockOnFOV = 70f;
+    [SerializeField] private LayerMask obstacleMask = 0;
+    [SerializeField] private LayerMask enemyMask = 1 << 9;
+    [SerializeField] private LayerMask additionalTargetMask = 0;
+    [SerializeField] private bool includeDamageReceiverTargets = true;
 
-    [Header("?낅젰(?덇굅?? - Tab/MiddleMouse ?좉? (?쒓? ?ㅻ챸)")]
-    [SerializeField] private bool useLegacyInput = true;                      // [議곗젅媛? 援?Input ?쒖뒪??Tab/???대┃) ?ъ슜 ?щ?
-    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;                 // [議곗젅媛? ?쎌삩 ?좉? ??1
-    [SerializeField] private KeyCode toggleKeyAlt = KeyCode.Mouse2;           // [議곗젅媛? ?쎌삩 ?좉? ??2 (???대┃)
+    [Header("Pivot")]
+    [SerializeField] private string pivotName = "LockPivot";
+    [SerializeField] private float defaultPivotY = 1.3f;
+    [SerializeField, Range(0f, 1f)] private float autoPivotBottomToCenterRatio = 0.78f;
+    [SerializeField] private float autoPivotVerticalOffset = 0f;
 
-    [Header("移대찓???곕룞 (?쒓? ?ㅻ챸)")]
-    [SerializeField] private LockOnCameraManager cameraMgr;                    // [議곗젅媛? ?쎌삩 移대찓??留ㅻ땲? 李몄“
+    [Header("Input")]
+    [SerializeField] private bool useLegacyInput = true;
+    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
+    [SerializeField] private KeyCode toggleKeyAlt = KeyCode.Mouse2;
 
-    [Header("?먮룞 ?댁젣 ?듭뀡 (?쒓? ?ㅻ챸)")]
-    [Tooltip("?쎌삩 以??源?Transform???뚭눼?섍굅??鍮꾪솢?깊솕?섎㈃ ?먮룞?쇰줈 ?쎌삩???댁젣?좎? ?щ?")]
-    [SerializeField] private bool autoUnlockWhenTargetDisabled = true;        // [議곗젅媛?
+    [Header("Camera")]
+    [SerializeField] private LockOnCameraManager cameraMgr;
 
-    // ===== ?몃??먯꽌 李몄“?섎뒗 怨듦컻 ?곹깭/?ы띁 =====
-    public Transform CurrentTarget { get; private set; }                       // ?꾩옱 ?源껋쓽 '?쇰쿁' Transform
-    public bool IsLocked => CurrentTarget != null;                             // 湲곗〈 ?명솚??
-    public bool IsLockOn => IsLocked;                                          // 湲곗〈 ?명솚??
-    public bool HasTarget => CurrentTarget != null;                            // PlayerDodgeController ?명솚??
-    public Transform Target => CurrentTarget;                                  // ?源??쇰쿁 吏곸젒 ?묎렐??
+    [Header("Retention")]
+    [SerializeField] private bool autoUnlockWhenTargetDisabled = true;
+    [SerializeField, Min(0f)] private float targetLostGraceTime = 0.22f;
+    [SerializeField] private bool autoRetargetOnLost = true;
+    [SerializeField, Min(0f)] private float maintainRangeMultiplier = 1.25f;
+    [SerializeField, Range(0f, 180f)] private float autoRetargetFOV = 100f;
+    [SerializeField, Min(0f)] private float stickyTargetBias = 12f;
+    [SerializeField, Min(1f / 120f)] private float maintainCheckInterval = 1f / 30f;
+    [SerializeField, Min(0f)] private float maintainCheckCameraMoveThreshold = 0.06f;
+    [SerializeField, Min(0f)] private float maintainCheckTargetMoveThreshold = 0.08f;
+
+    public Transform CurrentTarget { get; private set; }
+    public bool IsLocked => CurrentTarget != null;
+    public bool IsLockOn => IsLocked;
+    public bool HasTarget => CurrentTarget != null;
+    public Transform Target => CurrentTarget;
     public Vector3 TargetPosition => CurrentTarget ? CurrentTarget.position : transform.position;
 
     public Vector3 DirectionFrom(Vector3 origin)
-        => (TargetPosition - origin).sqrMagnitude > 0.0001f
-            ? (TargetPosition - origin).normalized
-            : transform.forward;
+    {
+        Vector3 delta = TargetPosition - origin;
+        return delta.sqrMagnitude > 0.0001f ? delta.normalized : transform.forward;
+    }
 
-    Transform _playerPivot;                                                    // ?뚮젅?댁뼱 履??쎌삩 ?쇰쿁
+    Transform _playerPivot;
     PlayerReferences _playerReferences;
-    Transform _cam;                                                            // Camera.main 罹먯떆
+    Transform _cam;
     LockOnFacingDriver _facingDriver;
-
-    private bool _lockModeActive;
+    Transform _currentTargetRoot;
+    bool _lockModeActive;
     bool _timelineOwnsCamera;
+    float _targetInvalidSince = float.NegativeInfinity;
+    float _nextMaintainCheckAt;
+    Vector3 _lastMaintainCheckCameraPos;
+    Vector3 _lastMaintainCheckTargetPos;
+    bool _cachedMaintainable = true;
+    bool _hasMaintainCheckSample;
+
+    readonly Collider[] _overlapHits = new Collider[OverlapBufferSize];
+    readonly Transform[] _uniqueRoots = new Transform[UniqueRootBufferSize];
+    readonly System.Collections.Generic.Dictionary<int, bool> _validTargetCache = new System.Collections.Generic.Dictionary<int, bool>(64);
+    readonly System.Collections.Generic.Dictionary<int, Renderer> _rootRendererCache = new System.Collections.Generic.Dictionary<int, Renderer>(64);
+    readonly System.Collections.Generic.Dictionary<int, Transform> _pivotCache = new System.Collections.Generic.Dictionary<int, Transform>(64);
+    readonly System.Collections.Generic.Dictionary<int, LockPivotFollower> _pivotFollowerCache = new System.Collections.Generic.Dictionary<int, LockPivotFollower>(32);
+
     void Awake()
     {
-        // ?뚮젅?댁뼱 履??쇰쿁 ?뺣낫 ??移대찓??留ㅻ땲????꾨떖
         _playerReferences = GetComponent<PlayerReferences>();
         _playerPivot = _playerReferences != null && _playerReferences.LockPivot
             ? _playerReferences.LockPivot
-            : EnsurePivot(transform, pivotName, defaultPivotY);
-        if (!cameraMgr) cameraMgr = FindAnyObjectByType<LockOnCameraManager>();
-        cameraMgr?.SetPlayerPivot(_playerPivot);
+            : EnsurePivot(transform, pivotName, defaultPivotY, false);
+
+        EnsureCameraManagerResolved();
+
         _facingDriver = GetComponent<LockOnFacingDriver>();
         _facingDriver?.RefreshTickState();
 
-        // 移대찓??罹먯떆(硫붿씤 移대찓?쇰뒗 ?고??꾩뿉 諛붾????덉뼱 Start?먯꽌 ?ы솗蹂?
-        _cam = Camera.main ? Camera.main.transform : null;
+        _cam = GameplaySceneCache.ResolveMainCameraTransform();
     }
 
     void Start()
     {
-        if (!_cam && Camera.main) _cam = Camera.main.transform;
+        if (!_cam)
+            _cam = GameplaySceneCache.ResolveMainCameraTransform();
+
+        EnsureCameraManagerResolved();
     }
 
     void Update()
     {
-        // 0) ?쎌삩 以묒씤???寃잛씠 二쎌뿀嫄곕굹 鍮꾪솢?깊솕??寃쎌슦 ?먮룞?쇰줈 移대찓???댁젣
-        //    - CurrentTarget == null : Destroy ??寃쎌슦
-        //    - activeInHierarchy == false : SetActive(false) ??寃쎌슦
-        if (_lockModeActive && autoUnlockWhenTargetDisabled && (!CurrentTarget || !CurrentTarget.gameObject.activeInHierarchy))
-        {
-            _lockModeActive = false;
-            CurrentTarget = null;
-            _facingDriver?.RefreshTickState();
+        if (!_cam)
+            _cam = GameplaySceneCache.ResolveMainCameraTransform();
 
-            if (!_timelineOwnsCamera)
-                cameraMgr?.EndLockOn();   // freeLookDriver.enabled = true, 移대찓???곗꽑?쒖쐞 蹂듦뎄
-        }
+        if (_lockModeActive)
+            TickLockedTarget();
 
-        // 1) ?낅젰?쇰줈 ?쎌삩 ?좉?(Tab, ???대┃ ??
         if (useLegacyInput && (Input.GetKeyDown(toggleKey) || Input.GetKeyDown(toggleKeyAlt)))
         {
             if (IsLocked)
@@ -90,38 +112,62 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
             }
             else
             {
-                var enemyRoot = FindBestTarget();
-                if (enemyRoot) LockTo(enemyRoot);
+                Transform enemyRoot = FindBestTarget(null, true, lockOnFOV);
+                if (enemyRoot)
+                    LockTo(enemyRoot);
             }
         }
     }
 
-
-    // === ?몃? ?쒖뼱??API ===
     public void LockTo(Transform enemyRoot)
     {
-        // ???猷⑦듃?먯꽌 ?쇰쿁???뺣낫(?놁쑝硫??앹꽦)
-        CurrentTarget = EnsurePivot(enemyRoot, pivotName, defaultPivotY);
+        EnsureCameraManagerResolved();
+        if (!enemyRoot)
+        {
+            Unlock();
+            return;
+        }
 
-        _lockModeActive = CurrentTarget;           // ?쇰쿁???덉쑝硫??쎌삩 紐⑤뱶 ON
+        Transform root = enemyRoot.root != null ? enemyRoot.root : enemyRoot;
+        Transform pivot = EnsurePivot(root, pivotName, defaultPivotY, true);
+        if (!pivot)
+        {
+            Unlock();
+            return;
+        }
+
+        _currentTargetRoot = root;
+        CurrentTarget = pivot;
+        _lockModeActive = true;
+        _targetInvalidSince = float.NegativeInfinity;
+        _hasMaintainCheckSample = false;
+        _cachedMaintainable = true;
         _facingDriver?.RefreshTickState();
-        if (CurrentTarget && !_timelineOwnsCamera)
-            cameraMgr?.StartLockOn(CurrentTarget);
+
+        if (!_timelineOwnsCamera)
+            RefreshCameraTarget();
     }
 
     public void Unlock()
     {
-        _lockModeActive = false;                   // ?쎌삩 紐⑤뱶 OFF
+        EnsureCameraManagerResolved();
+        _lockModeActive = false;
         _timelineOwnsCamera = false;
+        _targetInvalidSince = float.NegativeInfinity;
+        _currentTargetRoot = null;
         CurrentTarget = null;
+        _hasMaintainCheckSample = false;
+        _cachedMaintainable = true;
         _facingDriver?.RefreshTickState();
         cameraMgr?.EndLockOn();
     }
 
     public bool TryAutoLock()
     {
-        var best = FindBestTarget();
-        if (!best) return false;
+        Transform best = FindBestTarget(null, true, lockOnFOV);
+        if (!best)
+            return false;
+
         LockTo(best);
         return true;
     }
@@ -130,11 +176,23 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
     public bool IsLockedOn() => IsLocked;
 
+    public string BuildDebugSummary()
+    {
+        string targetName = CurrentTarget != null ? CurrentTarget.name : "<null>";
+        string rootName = _currentTargetRoot != null ? _currentTargetRoot.name : "<null>";
+        return $"lockMode={_lockModeActive} timelineOwnsCamera={_timelineOwnsCamera} target={targetName} root={rootName} cachedMaintainable={_cachedMaintainable}";
+    }
+
     public void RestoreFreeLookAfterTimeline()
     {
+        EnsureCameraManagerResolved();
         _timelineOwnsCamera = false;
         _lockModeActive = false;
+        _targetInvalidSince = float.NegativeInfinity;
+        _currentTargetRoot = null;
         CurrentTarget = null;
+        _hasMaintainCheckSample = false;
+        _cachedMaintainable = true;
         _facingDriver?.RefreshTickState();
 
         if (cameraMgr == null)
@@ -144,8 +202,49 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         cameraMgr.ForceRestoreGameplayFreeLook();
     }
 
+    public void RestoreLockOnAfterTimeline(Transform targetOverride = null)
+    {
+        EnsureCameraManagerResolved();
+        _timelineOwnsCamera = false;
+        _targetInvalidSince = float.NegativeInfinity;
+        _hasMaintainCheckSample = false;
+        _cachedMaintainable = true;
+        _currentTargetRoot = null;
+        CurrentTarget = null;
+        _lockModeActive = false;
+
+        if (cameraMgr != null)
+            cameraMgr.EndLockOn(false);
+
+        if (targetOverride != null)
+        {
+            Transform root = targetOverride.root != null ? targetOverride.root : targetOverride;
+            Transform pivot = EnsurePivot(root, pivotName, defaultPivotY, true);
+            if (pivot != null)
+            {
+                _currentTargetRoot = root;
+                CurrentTarget = pivot;
+                _lockModeActive = true;
+            }
+        }
+
+        _facingDriver?.RefreshTickState();
+
+        if (cameraMgr == null)
+            return;
+
+        if (_lockModeActive && CurrentTarget && CurrentTarget.gameObject.activeInHierarchy)
+        {
+            RefreshCameraTarget();
+            return;
+        }
+
+        cameraMgr.EndLockOn(false);
+    }
+
     public void GiveCameraControlToTimeline(bool give)
     {
+        EnsureCameraManagerResolved();
         _timelineOwnsCamera = give;
         _facingDriver?.RefreshTickState();
 
@@ -161,7 +260,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
         if (_lockModeActive && CurrentTarget && CurrentTarget.gameObject.activeInHierarchy)
         {
-            cameraMgr.StartLockOn(CurrentTarget);
+            RefreshCameraTarget();
             return;
         }
 
@@ -169,40 +268,177 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         cameraMgr.ForceRestoreGameplayFreeLook();
     }
 
-    // === ?대? 援ы쁽 ===
+    void TickLockedTarget()
+    {
+        if (!CurrentTarget || !_currentTargetRoot || !_currentTargetRoot.gameObject.activeInHierarchy)
+        {
+            HandleLostTarget();
+            return;
+        }
 
-    // 移대찓???꾨갑 ?먮퓭(FOV) + ?μ븷臾??쇱씤罹먯뒪?몃줈 理쒖쟻 ?源??먯깋
-    Transform FindBestTarget()
+        if (!autoUnlockWhenTargetDisabled)
+        {
+            _targetInvalidSince = float.NegativeInfinity;
+            return;
+        }
+
+        if (IsCurrentTargetMaintainable())
+        {
+            _targetInvalidSince = float.NegativeInfinity;
+            return;
+        }
+
+        HandleLostTarget();
+    }
+
+    void HandleLostTarget()
+    {
+        if (float.IsNegativeInfinity(_targetInvalidSince))
+            _targetInvalidSince = Time.time;
+
+        if (Time.time - _targetInvalidSince < targetLostGraceTime)
+            return;
+
+        if (autoRetargetOnLost)
+        {
+            Transform replacement = FindBestTarget(_currentTargetRoot, false, autoRetargetFOV);
+            if (replacement)
+            {
+                LockTo(replacement);
+                return;
+            }
+        }
+
+        Unlock();
+    }
+
+    bool IsCurrentTargetMaintainable()
+    {
+        if (!_cam || !CurrentTarget)
+            return true;
+
+        Vector3 targetPos = CurrentTarget.position;
+        Vector3 toTarget = targetPos - _cam.position;
+        float distance = toTarget.magnitude;
+        float maxMaintainDistance = Mathf.Max(lockOnRange + 2f, lockOnRange * Mathf.Max(1f, maintainRangeMultiplier));
+        if (distance > maxMaintainDistance)
+            return false;
+
+        if (obstacleMask.value == 0)
+            return true;
+
+        Vector3 cameraPosition = _cam.position;
+        if (!ShouldRefreshMaintainability(cameraPosition, targetPos))
+            return _cachedMaintainable;
+
+        _cachedMaintainable = !Physics.Linecast(cameraPosition, targetPos, obstacleMask, QueryTriggerInteraction.Ignore);
+        _lastMaintainCheckCameraPos = cameraPosition;
+        _lastMaintainCheckTargetPos = targetPos;
+        _nextMaintainCheckAt = Time.unscaledTime + Mathf.Max(1f / 120f, maintainCheckInterval);
+        _hasMaintainCheckSample = true;
+
+        return _cachedMaintainable;
+    }
+
+    bool ShouldRefreshMaintainability(Vector3 cameraPosition, Vector3 targetPosition)
+    {
+        if (!_hasMaintainCheckSample)
+            return true;
+
+        float cameraThreshold = Mathf.Max(0f, maintainCheckCameraMoveThreshold);
+        if ((cameraPosition - _lastMaintainCheckCameraPos).sqrMagnitude >= cameraThreshold * cameraThreshold)
+            return true;
+
+        float targetThreshold = Mathf.Max(0f, maintainCheckTargetMoveThreshold);
+        if ((targetPosition - _lastMaintainCheckTargetPos).sqrMagnitude >= targetThreshold * targetThreshold)
+            return true;
+
+        return Time.unscaledTime >= _nextMaintainCheckAt;
+    }
+
+    void RefreshCameraTarget()
+    {
+        EnsureCameraManagerResolved();
+        if (cameraMgr == null || CurrentTarget == null)
+            return;
+
+        cameraMgr.RefreshLockOnTarget(CurrentTarget);
+        cameraMgr.StartLockOn(CurrentTarget);
+    }
+
+    void EnsureCameraManagerResolved()
+    {
+        if (!cameraMgr)
+            cameraMgr = GameplaySceneCache.ResolveLockOnCameraManager();
+
+        cameraMgr?.SetPlayerPivot(_playerPivot);
+    }
+
+    Transform FindBestTarget(Transform excludedRoot, bool applyStickyBias, float searchFov)
     {
         if (!_cam)
         {
-            if (!Camera.main) return null;
-            _cam = Camera.main.transform;
+            _cam = GameplaySceneCache.ResolveMainCameraTransform();
+            if (_cam == null)
+                return null;
         }
 
-        var cols = Physics.OverlapSphere(_cam.position, lockOnRange, enemyMask, QueryTriggerInteraction.Ignore);
+        int hitCount = Physics.OverlapSphereNonAlloc(
+            _cam.position,
+            lockOnRange,
+            _overlapHits,
+            ResolveTargetSearchMask(),
+            QueryTriggerInteraction.Collide);
+
         float bestScore = float.MaxValue;
         Transform bestRoot = null;
+        int uniqueCount = 0;
+        float halfFov = Mathf.Clamp(searchFov, 1f, 180f) * 0.5f;
 
-        for (int i = 0; i < cols.Length; ++i)
+        for (int i = 0; i < hitCount; i++)
         {
-            var root = cols[i].transform.root;
-            var pivot = EnsurePivot(root, pivotName, defaultPivotY);
-            if (!pivot) continue;
-
-            Vector3 to = pivot.position - _cam.position;
-            float dist = to.magnitude;
-            if (dist > lockOnRange) continue;
-
-            float ang = Vector3.Angle(_cam.forward, to / (dist > 0.0001f ? dist : 1f));
-            if (ang > lockOnFOV * 0.5f) continue;
-
-            if (obstacleMask.value != 0 &&
-                Physics.Linecast(_cam.position, pivot.position, obstacleMask, QueryTriggerInteraction.Ignore))
+            Collider col = _overlapHits[i];
+            if (col == null)
                 continue;
 
-            // 以묒븰+洹쇨굅由??곗꽑 媛以묒튂
+            Transform root = ResolveLockOnTargetRoot(col);
+            if (!root || root == excludedRoot || !root.gameObject.activeInHierarchy)
+                continue;
+
+            bool duplicate = false;
+            for (int j = 0; j < uniqueCount; j++)
+            {
+                if (_uniqueRoots[j] == root)
+                {
+                    duplicate = true;
+                    break;
+                }
+            }
+
+            if (duplicate)
+                continue;
+
+            if (uniqueCount < _uniqueRoots.Length)
+                _uniqueRoots[uniqueCount++] = root;
+
+            Vector3 aimPoint = GetLockAimPoint(root);
+            Vector3 to = aimPoint - _cam.position;
+            float dist = to.magnitude;
+            if (dist > lockOnRange || dist <= 0.0001f)
+                continue;
+
+            float ang = Vector3.Angle(_cam.forward, to / dist);
+            if (ang > halfFov)
+                continue;
+
+            if (obstacleMask.value != 0 &&
+                Physics.Linecast(_cam.position, aimPoint, obstacleMask, QueryTriggerInteraction.Ignore))
+                continue;
+
             float score = ang * 2f + dist;
+            if (applyStickyBias && root == _currentTargetRoot)
+                score -= stickyTargetBias;
+
             if (score < bestScore)
             {
                 bestScore = score;
@@ -213,49 +449,247 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         return bestRoot;
     }
 
-    // ?源?猷⑦듃???쎌삩 ?쇰쿁???놁쑝硫??앹꽦?댁꽌 諛섑솚
-    Transform EnsurePivot(Transform root, string name, float defaultY)
+    LayerMask ResolveTargetSearchMask()
     {
-        if (!root) return null;
+        LayerMask searchMask = enemyMask;
+        if (additionalTargetMask.value != 0 && additionalTargetMask.value != ~0)
+            searchMask |= additionalTargetMask;
 
-        var t = root.Find(name);
-        if (t) return t;
+        if (searchMask.value == 0 && includeDamageReceiverTargets)
+            searchMask = ~0;
 
-        // ?뚮뜑?ш? ?덉쑝硫?癒몃━ 洹쇱쿂濡? ?놁쑝硫?湲곕낯 ?믪씠濡?
-        var rend = root.GetComponentInChildren<Renderer>();
-        Vector3 worldPos;
-        if (rend)
+        return searchMask;
+    }
+
+    Transform ResolveLockOnTargetRoot(Collider col)
+    {
+        if (!col)
+            return null;
+
+        Transform candidate = col.transform;
+        Transform playerRoot = transform.root;
+        while (candidate != null)
         {
-            float cy = rend.bounds.center.y;
-            float ty = rend.bounds.max.y;
-            float y = Mathf.Lerp(cy, ty, 0.6f) - 0.1f; // ?댁쭩 ?꾨옒濡?
-            worldPos = new Vector3(rend.bounds.center.x, y, rend.bounds.center.z);
+            if (candidate == playerRoot)
+                return null;
+
+            if (IsValidLockOnTarget(candidate))
+                return candidate;
+
+            candidate = candidate.parent;
+        }
+
+        return null;
+    }
+
+    bool IsValidLockOnTarget(Transform candidate)
+    {
+        if (!candidate || !candidate.gameObject.activeInHierarchy)
+            return false;
+
+        int key = candidate.GetInstanceID();
+        if (_validTargetCache.TryGetValue(key, out bool cachedResult))
+            return cachedResult;
+
+        bool isValid;
+        if (candidate.CompareTag("Enemy"))
+        {
+            isValid = true;
+        }
+        else if (ResolveExistingPivot(candidate) != null)
+        {
+            isValid = true;
+        }
+        else if (!includeDamageReceiverTargets)
+        {
+            isValid = false;
         }
         else
         {
-            worldPos = root.position + Vector3.up * defaultY;
+            isValid = candidate.GetComponent<IDamageReceiver>() != null
+                || candidate.GetComponent<IHealth>() != null;
         }
 
-        var go = new GameObject(name);
+        _validTargetCache[key] = isValid;
+        return isValid;
+    }
+
+    Vector3 GetLockAimPoint(Transform root)
+    {
+        if (!root)
+            return transform.position;
+
+        Transform existingPivot = ResolveExistingPivot(root);
+        if (existingPivot && ShouldUseExistingPivot(root, existingPivot))
+            return existingPivot.position;
+
+        Renderer rend = ResolveRootRenderer(root);
+        if (rend)
+            return GetAutoLockAimPoint(rend);
+
+        return root.position + Vector3.up * defaultPivotY;
+    }
+
+    Transform EnsurePivot(Transform root, string name, float fallbackY, bool allowAutoCalibrateExisting)
+    {
+        if (!root)
+            return null;
+
+        Transform existing = ResolveExistingPivot(root);
+        if (existing)
+        {
+            if (allowAutoCalibrateExisting)
+                AutoCalibrateExistingPivot(root, existing, fallbackY);
+            return existing;
+        }
+
+        Renderer rend = ResolveRootRenderer(root);
+        Vector3 worldPos = rend ? GetAutoLockAimPoint(rend) : root.position + Vector3.up * fallbackY;
+        GameObject go = new GameObject(name);
         go.transform.SetParent(root, true);
         go.transform.position = worldPos;
         go.transform.rotation = Quaternion.identity;
 
-        // ?源?紐⑤뜽???ㅼ???蹂??대룞???곕씪 Y瑜??곕씪媛?꾨줉 蹂댁“ 而댄룷?뚰듃
-        var follower = go.AddComponent<LockPivotFollower>();
-        follower.sourceRenderer = rend;
-        follower.yOffset = rend ? go.transform.position.y - rend.bounds.center.y : defaultY;
+        if (rend)
+        {
+            LockPivotFollower follower = go.AddComponent<LockPivotFollower>();
+            follower.sourceRenderer = rend;
+            follower.yOffset = go.transform.position.y - rend.bounds.center.y;
+            _pivotFollowerCache[go.transform.GetInstanceID()] = follower;
+        }
 
+        CacheRootPivot(root, go.transform);
         return go.transform;
+    }
+
+    Vector3 GetAutoLockAimPoint(Renderer rend)
+    {
+        float by = rend.bounds.min.y;
+        float cy = rend.bounds.center.y;
+        float y = Mathf.Lerp(by, cy, autoPivotBottomToCenterRatio) + autoPivotVerticalOffset;
+        return new Vector3(rend.bounds.center.x, y, rend.bounds.center.z);
+    }
+
+    bool ShouldUseExistingPivot(Transform root, Transform existingPivot)
+    {
+        if (!existingPivot)
+            return false;
+
+        if (ResolvePivotFollower(existingPivot) != null)
+            return true;
+
+        Renderer rend = ResolveRootRenderer(root);
+        if (!rend)
+            return true;
+
+        Vector3 autoPoint = GetAutoLockAimPoint(rend);
+        return Mathf.Abs(existingPivot.position.y - autoPoint.y) <= 0.25f;
+    }
+
+    void AutoCalibrateExistingPivot(Transform root, Transform existingPivot, float fallbackY)
+    {
+        if (!existingPivot || root == transform.root)
+            return;
+
+        Renderer rend = ResolveRootRenderer(root);
+        if (!rend)
+            return;
+
+        Vector3 autoPoint = GetAutoLockAimPoint(rend);
+        if (Mathf.Abs(existingPivot.position.y - autoPoint.y) <= 0.25f)
+            return;
+
+        existingPivot.position = autoPoint;
+        existingPivot.rotation = Quaternion.identity;
+
+        LockPivotFollower follower = ResolvePivotFollower(existingPivot);
+        if (follower == null)
+            follower = existingPivot.gameObject.AddComponent<LockPivotFollower>();
+
+        follower.sourceRenderer = rend;
+        follower.yOffset = autoPoint.y - rend.bounds.center.y;
+        follower.refreshInterval = 1f / 30f;
+        _pivotFollowerCache[existingPivot.GetInstanceID()] = follower;
+    }
+
+    Transform ResolveExistingPivot(Transform root)
+    {
+        if (!root)
+            return null;
+
+        int key = root.GetInstanceID();
+        if (_pivotCache.TryGetValue(key, out Transform cachedPivot))
+        {
+            if (cachedPivot != null)
+                return cachedPivot;
+
+            _pivotCache.Remove(key);
+        }
+
+        Transform pivot = root.Find(pivotName);
+        if (pivot != null)
+            _pivotCache[key] = pivot;
+
+        return pivot;
+    }
+
+    void CacheRootPivot(Transform root, Transform pivot)
+    {
+        if (!root)
+            return;
+
+        _pivotCache[root.GetInstanceID()] = pivot;
+    }
+
+    Renderer ResolveRootRenderer(Transform root)
+    {
+        if (!root)
+            return null;
+
+        int key = root.GetInstanceID();
+        if (_rootRendererCache.TryGetValue(key, out Renderer cachedRenderer))
+        {
+            if (cachedRenderer != null)
+                return cachedRenderer;
+
+            _rootRendererCache.Remove(key);
+        }
+
+        Renderer renderer = root.GetComponentInChildren<Renderer>();
+        if (renderer != null)
+            _rootRendererCache[key] = renderer;
+
+        return renderer;
+    }
+
+    LockPivotFollower ResolvePivotFollower(Transform pivot)
+    {
+        if (!pivot)
+            return null;
+
+        int key = pivot.GetInstanceID();
+        if (_pivotFollowerCache.TryGetValue(key, out LockPivotFollower cachedFollower))
+        {
+            if (cachedFollower != null)
+                return cachedFollower;
+
+            _pivotFollowerCache.Remove(key);
+        }
+
+        LockPivotFollower follower = pivot.GetComponent<LockPivotFollower>();
+        if (follower != null)
+            _pivotFollowerCache[key] = follower;
+
+        return follower;
     }
 
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {
-        // ?먯깋 援??쒖빞媛?媛?쒗솕(?먮뵒??
-        var cam = Camera.main ? Camera.main.transform : null;
+        Transform cam = Camera.main ? Camera.main.transform : null;
         Gizmos.color = new Color(0f, 1f, 0f, 0.2f);
-        if (cam) Gizmos.DrawWireSphere(cam.position, lockOnRange);
+        if (cam)
+            Gizmos.DrawWireSphere(cam.position, lockOnRange);
 
         if (cam)
         {
@@ -269,4 +703,3 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
     }
 #endif
 }
-

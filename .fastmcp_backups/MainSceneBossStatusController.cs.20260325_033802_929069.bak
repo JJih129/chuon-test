@@ -1,0 +1,548 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
+
+[DisallowMultipleComponent]
+public class MainSceneBossStatusController : MonoBehaviour
+{
+    [SerializeField] private BossUIController bossUiController;
+    [SerializeField] private BossController bossController;
+    [SerializeField] private BossBreakController bossBreakController;
+    [SerializeField] private PlayerUltimateController playerUltimateController;
+
+    [Header("Layout")]
+    [SerializeField] private Vector2 panelAnchoredPosition = new Vector2(0f, -136f);
+    [SerializeField] private Vector2 panelSize = new Vector2(496f, 72f);
+    [SerializeField] private Vector2 badgeAnchoredPosition = new Vector2(16f, -13f);
+    [SerializeField] private Vector2 badgeSize = new Vector2(96f, 24f);
+    [SerializeField] private Vector2 statusAnchoredPosition = new Vector2(124f, -12f);
+    [SerializeField] private Vector2 statusSize = new Vector2(356f, 24f);
+    [SerializeField] private Vector2 directiveAnchoredPosition = new Vector2(16f, -40f);
+    [SerializeField] private Vector2 directiveSize = new Vector2(464f, 20f);
+    [SerializeField] private int badgeFontSize = 14;
+    [SerializeField] private int statusFontSize = 18;
+    [SerializeField] private int directiveFontSize = 15;
+
+    [Header("Colors")]
+    [SerializeField] private Color phaseOneColor = new Color(0.24f, 0.84f, 1f, 0.96f);
+    [SerializeField] private Color phaseTwoColor = new Color(1f, 0.74f, 0.30f, 0.98f);
+    [SerializeField] private Color phaseThreeColor = new Color(1f, 0.34f, 0.34f, 0.98f);
+    [SerializeField] private Color panelColor = new Color(0.03f, 0.08f, 0.11f, 0.82f);
+    [SerializeField] private Color statusTextColor = new Color(0.88f, 0.97f, 1f, 0.96f);
+    [SerializeField] private Color directiveTextColor = new Color(0.72f, 0.92f, 1f, 0.92f);
+
+    [Header("Pulse")]
+    [SerializeField, Min(0.05f)] private float pulseDuration = 0.24f;
+    [SerializeField] private string breakBadge = "BREAK";
+    [SerializeField] private string breakStatus = "\ube48\ud2c8 \uac1c\ubc29. \uc9e7\uac8c \ub123\uace0 \uad81\uadf9\uae30\ub97c \uacb9\uccd0";
+    [SerializeField] private Color breakColor = new Color(0.86f, 1f, 0.42f, 0.98f);
+
+    [Header("Directive")]
+    [SerializeField] private string phaseOneDirective = "\ubaa9\ud45c: \ud328\ud134 \ud655\uc778 \ud6c4 \uc9e7\uac8c \ub123\uc5b4";
+    [SerializeField] private string phaseTwoDirective = "\ubaa9\ud45c: \uacf5\uc138 \uc751\uc218 \ud6c4 \uc0ac\uac70\ub9ac \uc720\uc9c0";
+    [SerializeField] private string phaseThreeDirective = "\ubaa9\ud45c: \ud68c\ud53c \uc6b0\uc120. \ubb34\ub9ac\ud55c \uc555\ubc15 \uae08\uc9c0";
+    [SerializeField] private string breakDirective = "\ubaa9\ud45c: \ube0c\ub808\uc774\ud06c \uadf9\ub51c. \uad81\uadf9\uae30 \ud0c0\uc774\ubc0d \uacb9\uccd0";
+    [SerializeField] private string ultimateReadyDirective = "\ubaa9\ud45c: ULT READY. \ube0c\ub808\uc774\ud06c \uc9c4\uc785 \uc2dc \uc0ac\uc6a9";
+    [SerializeField] private string ultimateActiveDirective = "\ubaa9\ud45c: \uad81\uadf9\uae30 \uc9d1\ud589 \uc911";
+    [SerializeField] private string clearBadge = "CLEAR";
+    [SerializeField] private string clearStatus = "\uc704\ud611 \ubc18\uc751 \uc18c\uba78. \uc2e4\uc804 \uac80\uc99d \uc644\ub8cc";
+    [SerializeField] private string clearDirective = "\ubaa9\ud45c: \uc804\ud22c \uc885\ub8cc. \ub2e4\uc74c \uad6c\uac04\uc73c\ub85c \ubcf5\uadc0";
+    [SerializeField] private Color clearColor = new Color(0.74f, 1f, 0.84f, 0.98f);
+
+    RectTransform _root;
+    Image _panelImage;
+    Image _badgeImage;
+    Text _badgeText;
+    Text _statusText;
+    Text _directiveText;
+    Coroutine _pulseRoutine;
+    bool _subscribed;
+    bool _breakOverrideActive;
+    bool _ultimateReady;
+    bool _ultimateActive;
+    bool _clearOverrideActive;
+
+    public void ConfigureRuntime(
+        BossUIController runtimeBossUiController,
+        BossController runtimeBossController,
+        BossBreakController runtimeBossBreakController,
+        PlayerUltimateController runtimePlayerUltimateController)
+    {
+        bossUiController = runtimeBossUiController;
+        bossController = runtimeBossController;
+        bossBreakController = runtimeBossBreakController;
+        playerUltimateController = runtimePlayerUltimateController;
+        NormalizeCompactLayout();
+        EnsureVisuals();
+        RefreshSubscriptions();
+        ApplyPhase(bossController != null ? bossController.CurrentPhase : 1, false);
+    }
+
+    void OnEnable()
+    {
+        NormalizeCompactLayout();
+        EnsureVisuals();
+        RefreshSubscriptions();
+    }
+
+    void OnDisable()
+    {
+        ReleaseSubscriptions();
+        StopPulse();
+    }
+
+    void OnDestroy()
+    {
+        ReleaseSubscriptions();
+        StopPulse();
+    }
+
+    void RefreshSubscriptions()
+    {
+        ReleaseSubscriptions();
+
+        if (bossUiController == null)
+            bossUiController = FindObjectOfType<BossUIController>(true);
+
+        if (bossController == null)
+            bossController = FindObjectOfType<BossController>(true);
+        if (bossBreakController == null && bossController != null)
+            bossBreakController = bossController.GetComponent<BossBreakController>();
+        if (bossBreakController == null)
+            bossBreakController = FindObjectOfType<BossBreakController>(true);
+        if (playerUltimateController == null)
+            playerUltimateController = FindObjectOfType<PlayerUltimateController>(true);
+
+        if (bossController == null && bossBreakController == null && playerUltimateController == null)
+            return;
+
+        if (bossController != null)
+        {
+            bossController.OnBossPhaseChanged += HandleBossPhaseChanged;
+            _subscribed = true;
+        }
+
+        if (bossBreakController != null)
+        {
+            bossBreakController.OnBreakEnter.AddListener(HandleBreakEnter);
+            bossBreakController.OnBreakExit.AddListener(HandleBreakExit);
+            _subscribed = true;
+        }
+
+        if (playerUltimateController != null)
+        {
+            playerUltimateController.OnGaugeChanged += HandleUltimateGaugeChanged;
+            playerUltimateController.OnUltimateStarted += HandleUltimateStarted;
+            playerUltimateController.OnUltimateEnded += HandleUltimateEnded;
+            HandleUltimateGaugeChanged(
+                playerUltimateController.Gauge,
+                playerUltimateController.gaugeMax > 0f ? Mathf.Clamp01(playerUltimateController.Gauge / playerUltimateController.gaugeMax) : 0f,
+                playerUltimateController.IsGaugeReady);
+            _subscribed = true;
+        }
+    }
+
+    void ReleaseSubscriptions()
+    {
+        if (!_subscribed)
+            return;
+
+        if (bossController != null)
+            bossController.OnBossPhaseChanged -= HandleBossPhaseChanged;
+
+        if (bossBreakController != null)
+        {
+            bossBreakController.OnBreakEnter.RemoveListener(HandleBreakEnter);
+            bossBreakController.OnBreakExit.RemoveListener(HandleBreakExit);
+        }
+
+        if (playerUltimateController != null)
+        {
+            playerUltimateController.OnGaugeChanged -= HandleUltimateGaugeChanged;
+            playerUltimateController.OnUltimateStarted -= HandleUltimateStarted;
+            playerUltimateController.OnUltimateEnded -= HandleUltimateEnded;
+        }
+
+        _subscribed = false;
+    }
+
+    void HandleBossPhaseChanged(int phase, float hpNormalized)
+    {
+        if (_breakOverrideActive || _clearOverrideActive)
+            return;
+
+        ApplyPhase(phase, true);
+    }
+
+    void HandleBreakEnter()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _breakOverrideActive = true;
+        ApplyBreakState(true);
+    }
+
+    void HandleBreakExit()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _breakOverrideActive = false;
+        ApplyPhase(bossController != null ? bossController.CurrentPhase : 1, false);
+    }
+
+    void HandleUltimateStarted()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _ultimateActive = true;
+        _ultimateReady = false;
+        RefreshDirectiveState(true);
+    }
+
+    void HandleUltimateEnded()
+    {
+        if (_clearOverrideActive)
+            return;
+
+        _ultimateActive = false;
+        RefreshDirectiveState(false);
+    }
+
+    void HandleUltimateGaugeChanged(float gauge, float normalized, bool ready)
+    {
+        if (_clearOverrideActive)
+            return;
+
+        bool nextReady = ready && !_ultimateActive;
+        if (_ultimateReady == nextReady)
+            return;
+
+        _ultimateReady = nextReady;
+        RefreshDirectiveState(false);
+    }
+
+    void EnsureVisuals()
+    {
+        if (bossUiController == null)
+            bossUiController = FindObjectOfType<BossUIController>(true);
+
+        if (bossUiController == null || bossUiController.topHudRoot == null)
+            return;
+
+        RectTransform parent = bossUiController.topHudRoot.transform as RectTransform;
+        if (parent == null)
+            return;
+
+        if (_root == null)
+        {
+            Transform existing = parent.Find("RuntimeBossStatus");
+            if (existing != null)
+                _root = existing as RectTransform;
+
+            if (_root == null)
+            {
+                GameObject rootObject = new GameObject("RuntimeBossStatus", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                _root = rootObject.GetComponent<RectTransform>();
+                _root.SetParent(parent, false);
+            }
+        }
+
+        _root.anchorMin = new Vector2(0.5f, 1f);
+        _root.anchorMax = new Vector2(0.5f, 1f);
+        _root.pivot = new Vector2(0.5f, 1f);
+        _root.anchoredPosition = panelAnchoredPosition;
+        _root.sizeDelta = panelSize;
+        _root.localScale = Vector3.one;
+
+        _panelImage = _root.GetComponent<Image>();
+        if (_panelImage != null)
+        {
+            _panelImage.color = panelColor;
+            _panelImage.raycastTarget = false;
+        }
+
+        _badgeImage = EnsureImage(_root, "Badge", out RectTransform badgeRect);
+        badgeRect.anchorMin = new Vector2(0f, 1f);
+        badgeRect.anchorMax = new Vector2(0f, 1f);
+        badgeRect.pivot = new Vector2(0f, 1f);
+        badgeRect.anchoredPosition = badgeAnchoredPosition;
+        badgeRect.sizeDelta = badgeSize;
+
+        _badgeText = EnsureText(_badgeImage.rectTransform, "BadgeText");
+        StretchToParent(_badgeText.rectTransform);
+        _badgeText.fontSize = badgeFontSize;
+        _badgeText.alignment = TextAnchor.MiddleCenter;
+        _badgeText.fontStyle = FontStyle.Bold;
+        _badgeText.raycastTarget = false;
+
+        _statusText = EnsureText(_root, "Status");
+        RectTransform statusRect = _statusText.rectTransform;
+        statusRect.anchorMin = new Vector2(0f, 1f);
+        statusRect.anchorMax = new Vector2(0f, 1f);
+        statusRect.pivot = new Vector2(0f, 1f);
+        statusRect.anchoredPosition = statusAnchoredPosition;
+        statusRect.sizeDelta = statusSize;
+        _statusText.fontSize = statusFontSize;
+        _statusText.alignment = TextAnchor.MiddleLeft;
+        _statusText.fontStyle = FontStyle.Bold;
+        _statusText.raycastTarget = false;
+        _statusText.color = statusTextColor;
+        _statusText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _statusText.verticalOverflow = VerticalWrapMode.Overflow;
+
+        _directiveText = EnsureText(_root, "Directive");
+        RectTransform directiveRect = _directiveText.rectTransform;
+        directiveRect.anchorMin = new Vector2(0f, 1f);
+        directiveRect.anchorMax = new Vector2(0f, 1f);
+        directiveRect.pivot = new Vector2(0f, 1f);
+        directiveRect.anchoredPosition = directiveAnchoredPosition;
+        directiveRect.sizeDelta = directiveSize;
+        _directiveText.fontSize = directiveFontSize;
+        _directiveText.alignment = TextAnchor.UpperLeft;
+        _directiveText.fontStyle = FontStyle.Normal;
+        _directiveText.raycastTarget = false;
+        _directiveText.color = directiveTextColor;
+        _directiveText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        _directiveText.verticalOverflow = VerticalWrapMode.Overflow;
+    }
+
+    void ApplyPhase(int phase, bool animated)
+    {
+        EnsureVisuals();
+        if (_badgeImage == null || _badgeText == null || _statusText == null)
+            return;
+
+        Color phaseColor = ResolvePhaseColor(phase);
+        _badgeImage.color = Color.Lerp(phaseColor, Color.black, 0.34f);
+        _badgeText.color = phaseColor;
+        _badgeText.text = GetPhaseBadge(phase);
+        _statusText.text = GetPhaseStatus(phase);
+        _statusText.color = Color.Lerp(statusTextColor, phaseColor, 0.18f);
+        if (_directiveText != null)
+        {
+            _directiveText.text = ResolveDirectiveText(phase, false);
+            _directiveText.color = Color.Lerp(directiveTextColor, phaseColor, 0.12f);
+        }
+
+        if (animated)
+            PlayPulse(phaseColor);
+    }
+
+    void ApplyBreakState(bool animated)
+    {
+        EnsureVisuals();
+        if (_badgeImage == null || _badgeText == null || _statusText == null)
+            return;
+
+        _badgeImage.color = Color.Lerp(breakColor, Color.black, 0.28f);
+        _badgeText.color = breakColor;
+        _badgeText.text = breakBadge;
+        _statusText.text = breakStatus;
+        _statusText.color = Color.Lerp(statusTextColor, breakColor, 0.24f);
+        if (_directiveText != null)
+        {
+            _directiveText.text = ResolveDirectiveText(bossController != null ? bossController.CurrentPhase : 1, true);
+            _directiveText.color = Color.Lerp(directiveTextColor, breakColor, 0.16f);
+        }
+
+        if (animated)
+            PlayPulse(breakColor);
+    }
+
+    void RefreshDirectiveState(bool animated)
+    {
+        if (_clearOverrideActive)
+        {
+            ApplyClearState(animated);
+            return;
+        }
+
+        if (_breakOverrideActive)
+        {
+            ApplyBreakState(animated);
+            return;
+        }
+
+        ApplyPhase(bossController != null ? bossController.CurrentPhase : 1, animated);
+    }
+
+    public void ShowClearState()
+    {
+        _clearOverrideActive = true;
+        _breakOverrideActive = false;
+        _ultimateActive = false;
+        _ultimateReady = false;
+        ReleaseSubscriptions();
+        ApplyClearState(true);
+    }
+
+    void ApplyClearState(bool animated)
+    {
+        EnsureVisuals();
+        if (_badgeImage == null || _badgeText == null || _statusText == null)
+            return;
+
+        _badgeImage.color = Color.Lerp(clearColor, Color.black, 0.30f);
+        _badgeText.color = clearColor;
+        _badgeText.text = clearBadge;
+        _statusText.text = clearStatus;
+        _statusText.color = Color.Lerp(statusTextColor, clearColor, 0.22f);
+        if (_directiveText != null)
+        {
+            _directiveText.text = clearDirective;
+            _directiveText.color = Color.Lerp(directiveTextColor, clearColor, 0.18f);
+        }
+
+        if (animated)
+            PlayPulse(clearColor);
+    }
+
+    void PlayPulse(Color phaseColor)
+    {
+        StopPulse();
+        _pulseRoutine = StartCoroutine(CoPulse(phaseColor));
+    }
+
+    IEnumerator CoPulse(Color phaseColor)
+    {
+        float duration = Mathf.Max(0.05f, pulseDuration);
+        float elapsed = 0f;
+        Vector3 startScale = new Vector3(0.96f, 0.96f, 1f);
+        Vector3 endScale = Vector3.one;
+        _root.localScale = startScale;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = 1f - Mathf.Pow(1f - t, 3f);
+            _root.localScale = Vector3.LerpUnclamped(startScale, endScale, eased);
+            _panelImage.color = Color.Lerp(panelColor, Color.Lerp(phaseColor, Color.black, 0.42f), 1f - eased);
+            yield return null;
+        }
+
+        _root.localScale = endScale;
+        _panelImage.color = panelColor;
+        _pulseRoutine = null;
+    }
+
+    void StopPulse()
+    {
+        if (_pulseRoutine == null)
+            return;
+
+        StopCoroutine(_pulseRoutine);
+        _pulseRoutine = null;
+
+        if (_root != null)
+            _root.localScale = Vector3.one;
+        if (_panelImage != null)
+            _panelImage.color = panelColor;
+    }
+
+    Color ResolvePhaseColor(int phase)
+    {
+        switch (phase)
+        {
+            case 2:
+                return phaseTwoColor;
+            case 3:
+                return phaseThreeColor;
+            default:
+                return phaseOneColor;
+        }
+    }
+
+    static string GetPhaseBadge(int phase)
+    {
+        switch (phase)
+        {
+            case 2:
+                return "PHASE 02";
+            case 3:
+                return "PHASE 03";
+            default:
+                return "PHASE 01";
+        }
+    }
+
+    static string GetPhaseStatus(int phase)
+    {
+        switch (phase)
+        {
+            case 2:
+                return "\uacf5\uc138\uac00 \ube68\ub77c\uc9c4\ub2e4. \uc751\uc218 \ud6c4 \uc9e7\uac8c \ub123\uc5b4";
+            case 3:
+                return "\ubc84\uc11c\ud06c \uad6c\uac04. \ubb34\ub9ac\ud558\uc9d3 \ub9d0\uace0 \ud328\ud134 \uc6b0\uc120";
+            default:
+                return "\uccab \uad50\ud658\uc740 \ubc29\uc5b4 \uc6b0\uc120. \ube48\ud2c8\uc740 \uc9e7\uac8c \ucc14\ub974";
+        }
+    }
+
+    string ResolveDirectiveText(int phase, bool isBreak)
+    {
+        if (_ultimateActive)
+            return ultimateActiveDirective;
+
+        if (isBreak)
+            return _ultimateReady ? ultimateReadyDirective : breakDirective;
+
+        if (_ultimateReady)
+            return ultimateReadyDirective;
+
+        switch (phase)
+        {
+            case 2:
+                return phaseTwoDirective;
+            case 3:
+                return phaseThreeDirective;
+            default:
+                return phaseOneDirective;
+        }
+    }
+
+    static Image EnsureImage(Transform parent, string objectName, out RectTransform rectTransform)
+    {
+        Transform existing = parent.Find(objectName);
+        Image image = existing != null ? existing.GetComponent<Image>() : null;
+        if (image == null)
+        {
+            GameObject imageObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            imageObject.transform.SetParent(parent, false);
+            image = imageObject.GetComponent<Image>();
+        }
+
+        rectTransform = image.rectTransform;
+        image.raycastTarget = false;
+        return image;
+    }
+
+    static Text EnsureText(Transform parent, string objectName)
+    {
+        Transform existing = parent.Find(objectName);
+        Text text = existing != null ? existing.GetComponent<Text>() : null;
+        if (text == null)
+        {
+            GameObject textObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            textObject.transform.SetParent(parent, false);
+            text = textObject.GetComponent<Text>();
+        }
+
+        text.font = RuntimeBuiltInFontUtility.GetDefaultFont();
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+        text.raycastTarget = false;
+        return text;
+    }
+
+    static void StretchToParent(RectTransform rectTransform)
+    {
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+    }
+}

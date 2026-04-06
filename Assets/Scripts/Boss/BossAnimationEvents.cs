@@ -1,4 +1,3 @@
-// 파일명: BossAnimationEvents.cs
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -12,6 +11,10 @@ public class BossAnimationEvents : MonoBehaviour
     [Tooltip("비워두면 자식에서 AttackHitbox 전부 자동 검색")]
     [SerializeField] private AttackHitbox[] hitboxes;
 
+    [Header("공격 VFX")]
+    [Tooltip("패턴별 검기 이펙트 프레젠터. 비워두면 부모에서 자동 검색합니다.")]
+    [SerializeField] private BossAttackVfxPresenter attackVfxPresenter;
+
     [Header("설정 / 디버그")]
     [SerializeField] private bool autoFindOnAwake = true;
     [SerializeField] private bool debugLog = false;
@@ -22,6 +25,7 @@ public class BossAnimationEvents : MonoBehaviour
             bossController = GetComponentInParent<BossController>();
 
         hitboxes = GetComponentsInChildren<AttackHitbox>(true);
+        attackVfxPresenter = GetComponentInParent<BossAttackVfxPresenter>();
     }
 
     void Awake()
@@ -31,73 +35,135 @@ public class BossAnimationEvents : MonoBehaviour
             if (!bossController)
                 bossController = GetComponentInParent<BossController>();
 
-            if (hitboxes == null || hitboxes.Length == 0)
-                hitboxes = GetComponentsInChildren<AttackHitbox>(true);
+            if (!attackVfxPresenter)
+                attackVfxPresenter = GetComponentInParent<BossAttackVfxPresenter>();
+
+            RefreshHitboxesIfNeeded(force: true);
         }
     }
 
-    // ------------------------------------------------------------------
-    //  애니메이션 이벤트에서 직접 호출할 함수들
-    //  이름을 Anim_XXX 로 해서 다른 컴포넌트와 절대 안 겹치게 만든다.
-    // ------------------------------------------------------------------
-
-    /// <summary>
-    /// 히트박스 ON (공격 판정 시작 프레임)
-    /// Animation Event: BossAnimationEvents.Anim_ActivateHitbox()
-    /// </summary>
     public void Anim_ActivateHitbox()
     {
         if (debugLog) Debug.Log("[BossAnimEvents] Anim_ActivateHitbox", this);
 
-        if (bossController != null && bossController.IsInUltimateVictimState)
+        if (!CanProcessAttackEvents())
+        {
+            SetResolvedHitboxesActive(false);
+            return;
+        }
+
+        if (attackVfxPresenter != null)
+            attackVfxPresenter.PlayCurrentPatternSlash();
+
+        if (SetResolvedHitboxesActive(true))
             return;
 
-        if (hitboxes != null && hitboxes.Length > 0)
+        if (bossController != null && bossController.attackHitbox != null)
         {
-            for (int i = 0; i < hitboxes.Length; i++)
-            {
-                if (hitboxes[i] != null)
-                    hitboxes[i].ActivateWindow();
-            }
+            bossController.attackHitbox.ActivateWindow();
+            return;
         }
-        else if (bossController != null)
-        {
-            // 혹시 루트에 콜라이더로 때리는 구조를 쓸 때 대비한 백업 경로
+
+        if (bossController != null)
             bossController.ActivateHitbox();
-        }
     }
 
-    /// <summary>
-    /// 히트박스 OFF (공격 판정 끝 프레임)
-    /// Animation Event: BossAnimationEvents.Anim_DeactivateHitbox()
-    /// </summary>
     public void Anim_DeactivateHitbox()
     {
         if (debugLog) Debug.Log("[BossAnimEvents] Anim_DeactivateHitbox", this);
 
-        if (hitboxes != null && hitboxes.Length > 0)
+        if (attackVfxPresenter != null)
+            attackVfxPresenter.StopCurrentPatternSlash();
+
+        if (SetResolvedHitboxesActive(false))
+            return;
+
+        if (bossController != null && bossController.attackHitbox != null)
         {
-            for (int i = 0; i < hitboxes.Length; i++)
-            {
-                if (hitboxes[i] != null)
-                    hitboxes[i].DeactivateWindow();
-            }
+            bossController.attackHitbox.DeactivateWindow();
+            return;
         }
-        else if (bossController != null)
-        {
+
+        if (bossController != null)
             bossController.DeactivateHitbox();
-        }
     }
 
-    /// <summary>
-    /// 공격 패턴 클립이 완전히 끝났을 때
-    /// Animation Event: BossAnimationEvents.Anim_SignalPatternEnd()
-    /// </summary>
     public void Anim_SignalPatternEnd()
     {
         if (debugLog) Debug.Log("[BossAnimEvents] Anim_SignalPatternEnd", this);
 
-        if (bossController != null)
+        if (bossController != null && bossController.CanProcessAttackAnimationEvents)
             bossController.OnAnimationPatternEnd();
+    }
+
+    bool CanProcessAttackEvents()
+    {
+        if (bossController == null)
+            return true;
+
+        return bossController.CanProcessAttackAnimationEvents;
+    }
+
+    bool SetResolvedHitboxesActive(bool active)
+    {
+        if (!TryResolveHitboxes(out AttackHitbox[] resolvedHitboxes))
+            return false;
+
+        for (int i = 0; i < resolvedHitboxes.Length; i++)
+        {
+            if (resolvedHitboxes[i] == null)
+                continue;
+
+            if (active)
+                resolvedHitboxes[i].ActivateWindow();
+            else
+                resolvedHitboxes[i].DeactivateWindow();
+        }
+
+        return true;
+    }
+
+    bool TryResolveHitboxes(out AttackHitbox[] resolvedHitboxes)
+    {
+        RefreshHitboxesIfNeeded(force: false);
+
+        if (hitboxes != null)
+        {
+            for (int i = 0; i < hitboxes.Length; i++)
+            {
+                if (hitboxes[i] != null)
+                {
+                    resolvedHitboxes = hitboxes;
+                    return true;
+                }
+            }
+        }
+
+        if (bossController != null && bossController.attackHitbox != null)
+        {
+            hitboxes = new[] { bossController.attackHitbox };
+            resolvedHitboxes = hitboxes;
+            return true;
+        }
+
+        resolvedHitboxes = null;
+        return false;
+    }
+
+    void RefreshHitboxesIfNeeded(bool force)
+    {
+        if (!force && hitboxes != null)
+        {
+            for (int i = 0; i < hitboxes.Length; i++)
+            {
+                if (hitboxes[i] != null)
+                    return;
+            }
+        }
+
+        hitboxes = GetComponentsInChildren<AttackHitbox>(true);
+
+        if ((hitboxes == null || hitboxes.Length == 0) && bossController != null && bossController.attackHitbox != null)
+            hitboxes = new[] { bossController.attackHitbox };
     }
 }

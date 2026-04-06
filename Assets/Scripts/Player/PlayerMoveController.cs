@@ -5,6 +5,11 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public class PlayerMoveController : MonoBehaviour
 {
+    public Vector2 CurrentMoveInput => _currentMoveInput;
+    public Vector3 CurrentWishDirection => _currentWishDirection;
+    public Vector3 CurrentPlanarVelocity => _velXZ;
+    public Vector3 LastNonZeroMoveDirection => _lastNonZeroMoveDirection;
+
     // ─────────[① 참조 설정]─────────
     [Header("① 참조 설정")]
     [Tooltip("캐릭터 모델링 루트 (회전할 대상)")]
@@ -42,7 +47,7 @@ public class PlayerMoveController : MonoBehaviour
     // ─────────[⑤ 중력]─────────
     [Header("⑤ 중력")]
     [SerializeField, Range(5f, 30f)] private float gravity = 20f;
-    [SerializeField, Range(0.01f, 0.3f)] private float groundSnap = 0.1f;
+    [SerializeField, Range(0.005f, 0.3f)] private float groundSnap = 0.03f;
 
     [Header("⑥ 애니 파라미터")]
     [SerializeField] private string p_Speed = "speed";
@@ -53,8 +58,13 @@ public class PlayerMoveController : MonoBehaviour
     private float _velY;
     private bool _externLocked; // 외부에서 이동을 막았는지 여부
     private IInputBlocker _inputBlocker;
+    private ICombatStateReader _combatStateReader;
     private PlayerReferences _playerReferences;
+    private PlayerHealth _playerHealth;
     private float _lastAnimSpeed = float.NaN;
+    private Vector2 _currentMoveInput;
+    private Vector3 _currentWishDirection;
+    private Vector3 _lastNonZeroMoveDirection;
 
     const float AnimSpeedWriteEpsilon = 0.0025f;
 
@@ -65,10 +75,12 @@ public class PlayerMoveController : MonoBehaviour
         
         // 참조 자동 할당 시도
         if (!playerRoot) playerRoot = _playerReferences ? _playerReferences.PlayerRoot : transform;
-        if (!cameraTransform && Camera.main) cameraTransform = Camera.main.transform;
+        if (!cameraTransform) cameraTransform = GameplaySceneCache.ResolveMainCameraTransform();
         if (!animator) animator = _playerReferences && _playerReferences.MainAnimator ? _playerReferences.MainAnimator : GetComponentInChildren<Animator>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
         if (!guardController) guardController = GetComponent<PlayerGuardController>();
+        _playerHealth = GetComponent<PlayerHealth>();
+        _combatStateReader = CombatStateReaderResolver.ResolveOrAttach(this);
         _inputBlocker = GetComponent<IInputBlocker>();
     }
 
@@ -80,6 +92,9 @@ public class PlayerMoveController : MonoBehaviour
         // 시작 시 잠금 해제 및 초기화
         _externLocked = false;
         _velXZ = Vector3.zero;
+        _currentMoveInput = Vector2.zero;
+        _currentWishDirection = Vector3.zero;
+        _lastNonZeroMoveDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
         SetAnimSpeed(0f);
     }
 
@@ -88,9 +103,21 @@ public class PlayerMoveController : MonoBehaviour
         // 1. 일시정지 체크 (커서 문제 해결용 필수 코드)
         if (Time.timeScale == 0f) return;
 
+        if (_playerHealth != null && _playerHealth.IsDead)
+        {
+            _velXZ = Vector3.zero;
+            _currentMoveInput = Vector2.zero;
+            _currentWishDirection = Vector3.zero;
+            MoveWithGravity(Vector3.zero);
+            SetAnimSpeed(0f);
+            return;
+        }
+
         // 2. 외부 잠금 체크 (공격, 피격, 대쉬 중일 때 이동 금지)
         if (_externLocked)
         {
+            _currentMoveInput = Vector2.zero;
+            _currentWishDirection = Vector3.zero;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
             return;
@@ -99,6 +126,8 @@ public class PlayerMoveController : MonoBehaviour
         if (IsInputBlocked())
         {
             _velXZ = Vector3.zero;
+            _currentMoveInput = Vector2.zero;
+            _currentWishDirection = Vector3.zero;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
             return;
@@ -106,6 +135,7 @@ public class PlayerMoveController : MonoBehaviour
 
         // 3. 입력 받기 (Input System & Legacy & 비상용 강제 입력 통합)
         Vector2 input = ReadMoveInput();
+        _currentMoveInput = input;
 
         // 4. 방향 및 회전 계산
         bool locked = playerLockOn && playerLockOn.IsLocked;
@@ -118,13 +148,24 @@ public class PlayerMoveController : MonoBehaviour
         }
         else // 일반 상태: 카메라 기준 이동
         {
-            var cam = cameraTransform ? cameraTransform : (Camera.main ? Camera.main.transform : playerRoot);
+            Transform cam = cameraTransform;
+            if (cam == null)
+            {
+                cam = GameplaySceneCache.ResolveMainCameraTransform();
+                if (cam != null)
+                    cameraTransform = cam;
+                else
+                    cam = playerRoot;
+            }
             fwd = Flat(cam.forward);
             right = Flat(cam.right);
         }
 
         Vector3 wishDir = (right * input.x + fwd * input.y);
         if (wishDir.sqrMagnitude > 1e-6f) wishDir.Normalize();
+        _currentWishDirection = wishDir;
+        if (wishDir.sqrMagnitude > 0.0004f)
+            _lastNonZeroMoveDirection = wishDir;
 
         // 5. 속도 계산 (가속/감속)
         float targetSpeed = ComputeTargetSpeed(input, IsGuarding());
@@ -147,7 +188,14 @@ public class PlayerMoveController : MonoBehaviour
 
         // 7. 최종 이동 적용 (중력 포함)
         MoveWithGravity(_velXZ);
-        SetAnimSpeed(Mathf.Clamp01(_velXZ.magnitude / Mathf.Max(0.01f, runSpeed)));
+
+        // This controller currently drives an Idle/Run style locomotion setup.
+        // Use desired move speed instead of smoothed velocity so run anim engages
+        // reliably as soon as movement input is committed.
+        float animSpeed01 = targetSpeed <= 0.01f
+            ? 0f
+            : Mathf.Clamp01(targetSpeed / Mathf.Max(0.01f, runSpeed * 0.6f));
+        SetAnimSpeed(animSpeed01);
     }
 
     // ──────────────────────────────────────────────
@@ -161,6 +209,8 @@ public class PlayerMoveController : MonoBehaviour
         if (locked)
         {
             _velXZ = Vector3.zero;
+            _currentMoveInput = Vector2.zero;
+            _currentWishDirection = Vector3.zero;
             SetAnimSpeed(0f);
         }
     }
@@ -170,6 +220,8 @@ public class PlayerMoveController : MonoBehaviour
     {
         _externLocked = true;
         _velXZ = Vector3.zero;
+        _currentMoveInput = Vector2.zero;
+        _currentWishDirection = Vector3.zero;
         SetAnimSpeed(0f);
     }
 
@@ -225,14 +277,31 @@ public class PlayerMoveController : MonoBehaviour
         return runSpeed * guardStrafeMul;
     }
 
-    bool IsGuarding() => guardController && guardController.IsGuarding;
+    bool IsGuarding()
+    {
+        if (_combatStateReader != null)
+            return _combatStateReader.IsGuardMovementActive();
+
+        return guardController && guardController.IsGuardMovementActive;
+    }
 
     void MoveWithGravity(Vector3 vXZ)
     {
-        if (_cc.isGrounded && _velY < 0f) _velY = -groundSnap;
-        _velY -= gravity * Time.deltaTime;
+        if (_cc == null || !_cc.enabled)
+            return;
 
-        _cc.Move(vXZ * Time.deltaTime + Vector3.up * _velY * Time.deltaTime);
+        float dt = Time.deltaTime;
+        float snapVelocity = -Mathf.Max(0.005f, groundSnap);
+        bool groundedBeforeMove = _cc.isGrounded;
+
+        if (groundedBeforeMove && _velY <= 0f)
+            _velY = snapVelocity;
+        else
+            _velY -= gravity * dt;
+
+        CollisionFlags flags = _cc.Move(vXZ * dt + Vector3.up * (_velY * dt));
+        if ((flags & CollisionFlags.Below) != 0 && _velY <= 0f)
+            _velY = snapVelocity;
     }
 
     static Vector3 Flat(Vector3 v) { v.y = 0f; return v.sqrMagnitude > 0.0001f ? v.normalized : Vector3.forward; }

@@ -20,7 +20,7 @@ public class EnemyHPBarPool : MonoBehaviour
             if (prefab != null && prefab.GetComponent<RectTransform>() != null)
             {
                 // UI 프리팹이면 Canvas 찾아서 부모로 사용
-                var c = FindObjectOfType<Canvas>();
+                Canvas c = GameplaySceneCache.ResolveCanvas();
                 parent = c != null ? c.transform : null;
             }
 

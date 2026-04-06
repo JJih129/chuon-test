@@ -6,6 +6,10 @@ using UnityEngine.Events;
 [DisallowMultipleComponent]
 public class PerfectDodgeController : MonoBehaviour
 {
+    const float DefaultGameplayFixedDeltaTime = 0.02f;
+    const float SimulationClockEpsilon = 0.0005f;
+    const float SimulationClockHealInterval = 0.25f;
+
     public bool IsWindowOpen => _windowOpen;
     public float RemainingWindow => _remain;
 
@@ -73,6 +77,9 @@ public class PerfectDodgeController : MonoBehaviour
     private float _initialFixedDelta;
     private Coroutine _coSlow;
     private Coroutine _coClose;
+    private bool _slowSessionActive;
+    private float _slowExpectedEndRealtime = float.NegativeInfinity;
+    private float _nextSimulationClockHealAt;
     private Transform _attackFollowUpTarget;
     private float _attackFollowUpUntilRealtime;
     private readonly Dictionary<Animator, (AnimatorUpdateMode mode, float speed)> _animatorBackup
@@ -88,11 +95,39 @@ public class PerfectDodgeController : MonoBehaviour
         if (autoAfterImage && !afterImageEffect)
             afterImageEffect = gameObject.AddComponent<PerfectDodgeAfterImageEffect>();
 
-        _initialFixedDelta = Time.fixedDeltaTime;
+        _initialFixedDelta = ResolveBaseFixedDeltaTime(Time.fixedDeltaTime);
         EnsureAnimatorList();
 
         if (slowRecoverCurve == null || slowRecoverCurve.length == 0)
             slowRecoverCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+    }
+
+    void OnDisable()
+    {
+        ForceEndSlow();
+        PerfectDodgeWindow_Close();
+        ClearAttackFollowUp();
+
+        if (afterImageEffect != null)
+            afterImageEffect.StopContinuousTrail();
+    }
+
+    void OnDestroy()
+    {
+        ForceEndSlow();
+    }
+
+    void LateUpdate()
+    {
+        if (_slowSessionActive && Time.realtimeSinceStartup > _slowExpectedEndRealtime)
+        {
+            if (enableLogs)
+                Debug.LogWarning("[PD] Slow watchdog restored simulation clock", this);
+
+            ForceEndSlow();
+        }
+
+        RestoreSimulationClockIfIdle();
     }
 
     public void PerfectDodgeWindow_Pulse(float seconds) => PerfectDodgeWindow_Open(seconds);
@@ -178,7 +213,13 @@ public class PerfectDodgeController : MonoBehaviour
         if (autoFeedback && feedback)
             feedback.PlayPerfectDodgeFeedback(hitPoint, attacker);
         if (autoAfterImage && afterImageEffect)
+        {
             afterImageEffect.Play();
+            float trailDuration = dodgeController != null
+                ? Mathf.Max(0.12f, dodgeController.RemainingDodgeTime)
+                : 0.18f;
+            afterImageEffect.StartContinuousTrail(trailDuration);
+        }
 
         if (autoUltimateGain && ultimate)
             ultimate.AddGauge(ultimateGainOnPerfect);
@@ -220,6 +261,8 @@ public class PerfectDodgeController : MonoBehaviour
             BeginAnimatorEnforcement();
 
         float totalDuration = Mathf.Max(0f, initialFreezeDuration) + Mathf.Max(0.01f, duration);
+        _slowSessionActive = true;
+        _slowExpectedEndRealtime = Time.realtimeSinceStartup + totalDuration + 0.15f;
         if (lockMoveDuringSlow && moveLocker)
             moveLocker.Lock("PD_SLOW", totalDuration, zeroVelocityOnSlow, disableRootMotionOnSlow);
 
@@ -269,6 +312,8 @@ public class PerfectDodgeController : MonoBehaviour
 
     void CompleteSlow(bool clearCoroutineReference)
     {
+        _slowSessionActive = false;
+        _slowExpectedEndRealtime = float.NegativeInfinity;
         ApplyTimeScale(1f);
         RestoreAnimators();
 
@@ -282,13 +327,34 @@ public class PerfectDodgeController : MonoBehaviour
             Debug.Log("[PD] Slow reset -> timeScale=1", this);
     }
 
+    void RestoreSimulationClockIfIdle()
+    {
+        if (_slowSessionActive || CombatFeelRuntimeUtility.IsHitStopActive)
+            return;
+
+        if (Mathf.Abs(Time.timeScale - 1f) > 0.001f)
+            return;
+
+        if (Time.unscaledTime < _nextSimulationClockHealAt)
+            return;
+
+        if (adjustFixedDelta)
+        {
+            float desiredFixedDelta = ResolveBaseFixedDeltaTime(_initialFixedDelta);
+            if (Mathf.Abs(Time.fixedDeltaTime - desiredFixedDelta) > SimulationClockEpsilon)
+                Time.fixedDeltaTime = desiredFixedDelta;
+        }
+
+        _nextSimulationClockHealAt = Time.unscaledTime + SimulationClockHealInterval;
+    }
+
     void ApplyTimeScale(float scale)
     {
         scale = Mathf.Clamp(scale, 0.0001f, 1f);
         Time.timeScale = scale;
 
         if (adjustFixedDelta)
-            Time.fixedDeltaTime = _initialFixedDelta * scale;
+            Time.fixedDeltaTime = ResolveBaseFixedDeltaTime(_initialFixedDelta) * scale;
 
         if (forceAnimatorsToScaled && overrideAnimatorSpeed)
             ApplyAnimatorSpeed(scale);
@@ -310,6 +376,14 @@ public class PerfectDodgeController : MonoBehaviour
 
         if (animator != null)
             animatorsToAffect.Add(animator);
+    }
+
+    static float ResolveBaseFixedDeltaTime(float currentFixedDelta)
+    {
+        if (currentFixedDelta < 0.015f || currentFixedDelta > 0.05f)
+            return DefaultGameplayFixedDeltaTime;
+
+        return currentFixedDelta;
     }
 
     void BeginAnimatorEnforcement()

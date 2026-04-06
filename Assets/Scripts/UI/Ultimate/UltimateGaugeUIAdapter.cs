@@ -7,35 +7,56 @@ public class UltimateGaugeUIAdapter : MonoBehaviour
 
     float _lastRatio = -1f;
     bool _lastReady;
-    float _nextRefreshAt;
-    const float RefreshInterval = 1f / 10f;
+    bool _subscribed;
 
     void Awake()
     {
-        if (source == null)
-            source = FindFirstObjectByType<PlayerUltimateController>();
-
+        ResolveSource();
         SyncImmediate();
-        enabled = false;
     }
 
-    void Update()
+    void OnEnable()
+    {
+        ResolveSource();
+        Subscribe();
+        SyncImmediate();
+    }
+
+    void OnDisable()
+    {
+        Unsubscribe();
+    }
+
+    void ResolveSource()
     {
         if (source == null)
+            source = FindFirstObjectByType<PlayerUltimateController>();
+    }
+
+    void Subscribe()
+    {
+        if (_subscribed || source == null)
             return;
 
-        if (Time.unscaledTime < _nextRefreshAt)
+        source.OnGaugeChanged += HandleGaugeChanged;
+        _subscribed = true;
+    }
+
+    void Unsubscribe()
+    {
+        if (!_subscribed || source == null)
             return;
 
-        _nextRefreshAt = Time.unscaledTime + RefreshInterval;
+        source.OnGaugeChanged -= HandleGaugeChanged;
+        _subscribed = false;
+    }
 
-        float ratio = source.Gauge / Mathf.Max(1f, source.gaugeMax);
-        bool ready = ratio >= 1f - 0.0001f;
-
-        if (Mathf.Abs(ratio - _lastRatio) > 0.001f)
+    void HandleGaugeChanged(float gauge, float normalized, bool ready)
+    {
+        if (Mathf.Abs(normalized - _lastRatio) > 0.001f)
         {
-            _lastRatio = ratio;
-            UI_UltimateGauge.UpdateValue(ratio);
+            _lastRatio = normalized;
+            UI_UltimateGauge.UpdateValue(normalized);
         }
 
         if (ready != _lastReady)
@@ -50,11 +71,9 @@ public class UltimateGaugeUIAdapter : MonoBehaviour
         if (source == null)
             return;
 
-        float ratio = source.Gauge / Mathf.Max(1f, source.gaugeMax);
-        bool ready = ratio >= 1f - 0.0001f;
-        _lastRatio = ratio;
-        _lastReady = ready;
-        UI_UltimateGauge.UpdateValue(ratio);
-        UI_UltimateGauge.SetReady(ready);
+        HandleGaugeChanged(
+            source.Gauge,
+            source.gaugeMax > 0f ? Mathf.Clamp01(source.Gauge / source.gaugeMax) : 0f,
+            source.IsGaugeReady);
     }
 }

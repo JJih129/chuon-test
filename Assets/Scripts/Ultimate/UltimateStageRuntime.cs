@@ -16,6 +16,7 @@ public class UltimateStageRuntime : MonoBehaviour
     const string KeyLightName = "StageKeyLight";
     const string RimLightName = "StageRimLight";
     const string ShotOpenName = "Shot_Open";
+    const string ShotOpenLookName = "Shot_Open_Look";
     const string ShotWideName = "Shot_Wide";
     const string ShotSlashLeftName = "Shot_Slash_L";
     const string ShotSlashRightName = "Shot_Slash_R";
@@ -29,6 +30,7 @@ public class UltimateStageRuntime : MonoBehaviour
     [SerializeField] Transform floorVisual;
     [SerializeField] Transform backdropVisual;
     [SerializeField] Transform shotOpenAnchor;
+    [SerializeField] Transform shotOpenLookAnchor;
     [SerializeField] Transform shotWideAnchor;
     [SerializeField] Transform shotSlashLeftAnchor;
     [SerializeField] Transform shotSlashRightAnchor;
@@ -40,15 +42,23 @@ public class UltimateStageRuntime : MonoBehaviour
     [SerializeField] Light keyLight;
     [SerializeField] Light rimLight;
     [SerializeField] float stageHeightOffset = 160f;
+    [SerializeField] int presentationLayer = 31;
+    [SerializeField] bool showFloorVisualDuringPresentation = true;
+    [SerializeField] bool showBackdropVisualDuringPresentation = true;
 
     Camera _previousMainCamera;
     bool _presentationCaptureActive;
+    bool _cachedSourceCameraEnabled = true;
+    int _cachedSourceCullingMask = ~0;
+    CameraClearFlags _cachedSourceClearFlags = CameraClearFlags.Skybox;
+    Color _cachedSourceBackgroundColor = Color.black;
 
     public Transform PlayerAnchor => playerAnchor;
     public Transform VictimAnchor => victimAnchor;
     public Transform FocusAnchor => focusAnchor;
     public Transform WalkOutAnchor => walkOutAnchor;
     public Transform OpenShotAnchor => shotOpenAnchor;
+    public Transform OpenShotLookAnchor => shotOpenLookAnchor;
     public Transform WideShotAnchor => shotWideAnchor;
     public Transform SlashLeftShotAnchor => shotSlashLeftAnchor;
     public Transform SlashRightShotAnchor => shotSlashRightAnchor;
@@ -58,6 +68,7 @@ public class UltimateStageRuntime : MonoBehaviour
     public CameraShake SequenceCameraShake => cameraShake;
     public Camera PresentationCamera => presentationCamera;
     public float StageHeightOffset => stageHeightOffset;
+    public int PresentationLayer => Mathf.Clamp(presentationLayer, 0, 31);
 
     public static UltimateStageRuntime GetOrCreate()
     {
@@ -92,6 +103,7 @@ public class UltimateStageRuntime : MonoBehaviour
         focusAnchor = EnsureChild(focusAnchor, FocusAnchorName);
         walkOutAnchor = EnsureChild(walkOutAnchor, WalkOutAnchorName);
         shotOpenAnchor = EnsureChild(shotOpenAnchor, ShotOpenName);
+        shotOpenLookAnchor = EnsureChild(shotOpenLookAnchor, ShotOpenLookName);
         shotWideAnchor = EnsureChild(shotWideAnchor, ShotWideName);
         shotSlashLeftAnchor = EnsureChild(shotSlashLeftAnchor, ShotSlashLeftName);
         shotSlashRightAnchor = EnsureChild(shotSlashRightAnchor, ShotSlashRightName);
@@ -121,7 +133,9 @@ public class UltimateStageRuntime : MonoBehaviour
         sequenceCamera.LookAt = null;
         keyLight = ResolveOrCreateLight(keyLight, KeyLightName, LightType.Directional);
         rimLight = ResolveOrCreateLight(rimLight, RimLightName, LightType.Directional);
+        SetLayerRecursively(transform, PresentationLayer);
         ConfigureStageVisuals();
+        SetPresentationVisualsActive(_presentationCaptureActive);
     }
 
     public void SyncLensFrom(Camera sourceCamera)
@@ -137,8 +151,6 @@ public class UltimateStageRuntime : MonoBehaviour
         presentationCamera.fieldOfView = sourceCamera.fieldOfView;
         presentationCamera.nearClipPlane = sourceCamera.nearClipPlane;
         presentationCamera.farClipPlane = sourceCamera.farClipPlane;
-        presentationCamera.clearFlags = sourceCamera.clearFlags;
-        presentationCamera.backgroundColor = sourceCamera.backgroundColor;
         presentationCamera.cullingMask = sourceCamera.cullingMask;
         presentationCamera.orthographic = sourceCamera.orthographic;
         presentationCamera.orthographicSize = sourceCamera.orthographicSize;
@@ -149,14 +161,26 @@ public class UltimateStageRuntime : MonoBehaviour
     public void BeginPresentationCapture(Camera sourceCamera)
     {
         EnsureRuntimeObjects();
+        showFloorVisualDuringPresentation = true;
+        showBackdropVisualDuringPresentation = true;
         SyncLensFrom(sourceCamera);
+        if (sourceCamera != null)
+        {
+            _cachedSourceCameraEnabled = sourceCamera.enabled;
+            _cachedSourceCullingMask = sourceCamera.cullingMask;
+            _cachedSourceClearFlags = sourceCamera.clearFlags;
+            _cachedSourceBackgroundColor = sourceCamera.backgroundColor;
+        }
         _presentationCaptureActive = true;
+        SetPresentationVisualsActive(true);
 
         _previousMainCamera = sourceCamera;
+        SetSourceCameraSuppressed(true);
         if (presentationCamera != null)
         {
             if (_previousMainCamera != null)
                 presentationCamera.depth = _previousMainCamera.depth + 100f;
+            SetPresentationIsolation(false);
             presentationCamera.enabled = true;
         }
     }
@@ -167,7 +191,51 @@ public class UltimateStageRuntime : MonoBehaviour
         if (presentationCamera != null)
             presentationCamera.enabled = false;
 
+        SetSourceCameraSuppressed(false);
+        SetPresentationVisualsActive(false);
         _previousMainCamera = null;
+    }
+
+    public void SetPresentationIsolation(bool isolated)
+    {
+        if (presentationCamera == null)
+            return;
+
+        if (isolated)
+        {
+            presentationCamera.clearFlags = CameraClearFlags.SolidColor;
+            presentationCamera.backgroundColor = new Color(0.24f, 0.32f, 0.43f, 1f);
+            presentationCamera.cullingMask = 1 << PresentationLayer;
+            return;
+        }
+
+        presentationCamera.clearFlags = _cachedSourceClearFlags;
+        presentationCamera.backgroundColor = _cachedSourceBackgroundColor;
+        presentationCamera.cullingMask = _cachedSourceCullingMask;
+    }
+
+    void SetSourceCameraSuppressed(bool suppressed)
+    {
+        if (_previousMainCamera == null)
+            return;
+
+        if (!_cachedSourceCameraEnabled)
+        {
+            _previousMainCamera.enabled = false;
+            return;
+        }
+
+        _previousMainCamera.enabled = true;
+        if (suppressed)
+        {
+            _previousMainCamera.cullingMask = 0;
+            _previousMainCamera.clearFlags = CameraClearFlags.Depth;
+            return;
+        }
+
+        _previousMainCamera.cullingMask = _cachedSourceCullingMask;
+        _previousMainCamera.clearFlags = _cachedSourceClearFlags;
+        _previousMainCamera.backgroundColor = _cachedSourceBackgroundColor;
     }
 
     public void PositionStage(Vector3 worldOrigin, Vector3 facingDirection)
@@ -179,6 +247,11 @@ public class UltimateStageRuntime : MonoBehaviour
 
         flatForward.Normalize();
         transform.SetPositionAndRotation(worldOrigin + Vector3.up * stageHeightOffset, Quaternion.LookRotation(flatForward, Vector3.up));
+    }
+
+    public void PositionStageFixed(Vector3 worldOrigin)
+    {
+        transform.SetPositionAndRotation(worldOrigin + Vector3.up * stageHeightOffset, Quaternion.identity);
     }
 
     public Vector3 StagePoint(Vector3 localOffset)
@@ -229,7 +302,11 @@ public class UltimateStageRuntime : MonoBehaviour
             walkDirection = stageForward;
         walkDirection.Normalize();
 
-        SetShotPose(shotOpenAnchor, playerWorld + stageForward * 0.8f - side * 0.72f + Vector3.up * 1.42f, victimWorld + Vector3.up * 1.18f);
+        Vector3 introLookPoint = playerWorld + stageForward * 0.26f + side * 0.78f + Vector3.up * 0.8f;
+        if (shotOpenLookAnchor != null)
+            shotOpenLookAnchor.position = introLookPoint;
+
+        SetShotPose(shotOpenAnchor, playerWorld + stageForward * 0.12f - side * 1.08f + Vector3.up * 0.98f, introLookPoint);
         SetShotPose(shotWideAnchor, focusPoint - stageForward * 5.2f + side * 2.15f + Vector3.up * 1.36f, focusPoint);
         SetShotPose(shotSlashLeftAnchor, focusPoint - stageForward * 3.55f - side * 2.05f + Vector3.up * 1.08f, focusPoint);
         SetShotPose(shotSlashRightAnchor, focusPoint - stageForward * 3.55f + side * 2.05f + Vector3.up * 1.08f, focusPoint);
@@ -312,18 +389,18 @@ public class UltimateStageRuntime : MonoBehaviour
     {
         if (floorVisual != null)
         {
-            floorVisual.localPosition = new Vector3(0f, -0.04f, 2.6f);
+            floorVisual.localPosition = new Vector3(0f, -0.04f, 3.15f);
             floorVisual.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            floorVisual.localScale = new Vector3(11f, 6.5f, 1f);
-            ConfigurePrimitiveRenderer(floorVisual.GetComponent<Renderer>(), new Color(0.15f, 0.17f, 0.2f, 1f));
+            floorVisual.localScale = new Vector3(18f, 10.5f, 1f);
+            ConfigurePrimitiveRenderer(floorVisual.GetComponent<Renderer>(), new Color(0.18f, 0.24f, 0.32f, 1f));
         }
 
         if (backdropVisual != null)
         {
-            backdropVisual.localPosition = new Vector3(0f, 2.4f, 8.8f);
+            backdropVisual.localPosition = new Vector3(0f, 2.65f, 10.8f);
             backdropVisual.localRotation = Quaternion.identity;
-            backdropVisual.localScale = new Vector3(17f, 6.5f, 1f);
-            ConfigurePrimitiveRenderer(backdropVisual.GetComponent<Renderer>(), new Color(0.06f, 0.07f, 0.09f, 1f));
+            backdropVisual.localScale = new Vector3(26f, 12.5f, 1f);
+            ConfigurePrimitiveRenderer(backdropVisual.GetComponent<Renderer>(), new Color(0.2f, 0.28f, 0.38f, 1f));
         }
 
         if (keyLight != null)
@@ -343,6 +420,27 @@ public class UltimateStageRuntime : MonoBehaviour
             rimLight.color = new Color(0.45f, 0.72f, 1f, 1f);
             rimLight.shadows = LightShadows.None;
         }
+    }
+
+    void SetPresentationVisualsActive(bool active)
+    {
+        SetRendererEnabled(floorVisual, active && showFloorVisualDuringPresentation);
+        SetRendererEnabled(backdropVisual, active && showBackdropVisualDuringPresentation);
+
+        if (keyLight != null)
+            keyLight.enabled = active;
+        if (rimLight != null)
+            rimLight.enabled = active;
+    }
+
+    void SetRendererEnabled(Transform target, bool enabled)
+    {
+        if (target == null)
+            return;
+
+        Renderer renderer = target.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.enabled = enabled;
     }
 
     void ConfigurePrimitiveRenderer(Renderer renderer, Color color)
@@ -381,5 +479,15 @@ public class UltimateStageRuntime : MonoBehaviour
             direction = transform.forward;
 
         shotAnchor.SetPositionAndRotation(position, Quaternion.LookRotation(direction.normalized, Vector3.up));
+    }
+
+    static void SetLayerRecursively(Transform root, int layer)
+    {
+        if (root == null)
+            return;
+
+        root.gameObject.layer = layer;
+        for (int i = 0; i < root.childCount; i++)
+            SetLayerRecursively(root.GetChild(i), layer);
     }
 }

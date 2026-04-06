@@ -102,11 +102,13 @@ public class FreeLookCamera : MonoBehaviour
     public void AutoResolveReferences()
     {
         if (playerLockOn == null)
-            playerLockOn = GetComponentInParent<PlayerLockOn>() ?? FindAnyObjectByType<PlayerLockOn>();
+            playerLockOn = GetComponentInParent<PlayerLockOn>() ?? GameplaySceneCache.ResolvePlayerLockOn();
 
         if (player == null)
         {
             playerReferences = GetComponentInParent<PlayerReferences>();
+            if (playerReferences == null)
+                playerReferences = GameplaySceneCache.ResolvePlayerReferences();
             if (playerReferences != null)
                 player = playerReferences.PlayerRoot;
 
@@ -175,6 +177,9 @@ public class FreeLookCamera : MonoBehaviour
 
     public void RestoreManualControl(bool applyImmediately = true)
     {
+        if (this == null)
+            return;
+
         enabled = true;
         AutoResolveReferences();
         ResolveLegacyFreeLookCamera();

@@ -75,6 +75,13 @@ public class InteractionManager : MonoBehaviour
         get
         {
             if (playerRoot) return playerRoot;
+            PlayerReferences refs = GameplaySceneCache.ResolvePlayerReferences();
+            if (refs != null && refs.PlayerRoot != null)
+            {
+                playerRoot = refs.PlayerRoot;
+                return playerRoot;
+            }
+
             var go = GameObject.FindGameObjectWithTag("Player");
             if (go) playerRoot = go.transform;
             return playerRoot;
@@ -84,7 +91,7 @@ public class InteractionManager : MonoBehaviour
     void Awake()
     {
         _startTime = Time.time;
-        _cam = Camera.main;
+        _cam = GameplaySceneCache.ResolveMainCamera();
         if (!cameraTransform && _cam) cameraTransform = _cam.transform;
         TryResolveInputBlocker();
         TryResolveLockOnController();

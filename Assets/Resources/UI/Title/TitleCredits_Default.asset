@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b34f817682bf662469d498a77cf48c99, type: 3}
+  m_Name: TitleCredits_Default
+  m_EditorClassIdentifier: 
+  title: 개발진
+  subtitle: "프로젝트 추온 개발 기록\n실제 개발진 정보와 개발 사진을 이 에셋에서 직접 편집하면 타이틀 크레딧에 바로 반영됩니다."
+  autoScrollNormalizedPerSecond: 0.016
+  sections:
+  - heading: 총괄 디렉션
+    responsibilities: 프로젝트 비전, 타이틀 경험, 전체 연출 방향을 담당합니다.
+    members:
+    - 이름 입력
+    - 이름 입력
+    photos:
+    - sprite: {fileID: 0}
+      caption: 메인 무드보드 / 타이틀 방향 보드
+    - sprite: {fileID: 0}
+      caption: 세계관 정리 / 키 비주얼 리뷰
+  - heading: 전투 시스템
+    responsibilities: 플레이어 전투 감각, 보스 패턴, 락온 카메라, 전투 밸런싱을 담당합니다.
+    members:
+    - 이름 입력
+    - 이름 입력
+    photos:
+    - sprite: {fileID: 0}
+      caption: 전투 프로토타입 반복 작업
+    - sprite: {fileID: 0}
+      caption: 보스 패턴 디버그 캡처
+  - heading: 캐릭터 아트 & UI
+    responsibilities: 캐릭터 표현, 타이틀 아트, 메뉴 구성, HUD와 시각 연출을 담당합니다.
+    members:
+    - 이름 입력
+    - 이름 입력
+    photos:
+    - sprite: {fileID: 0}
+      caption: 캐릭터 표현 / 표정 보정
+    - sprite: {fileID: 0}
+      caption: 메뉴 구성 / UI 스터디
+  - heading: 레벨 / 시네마틱 / QA
+    responsibilities: 전장 구성, 시네마틱 타이밍, 씬 조립, 최종 검수를 담당합니다.
+    members:
+    - 이름 입력
+    - 이름 입력
+    photos:
+    - sprite: {fileID: 0}
+      caption: 시네마틱 샷 기획
+    - sprite: {fileID: 0}
+      caption: 플레이테스트 / 밸런스 로그

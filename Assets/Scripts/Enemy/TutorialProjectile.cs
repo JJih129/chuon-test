@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class TutorialProjectile : MonoBehaviour
@@ -13,11 +14,35 @@ public class TutorialProjectile : MonoBehaviour
     public bool unblockable = false;
 
     [HideInInspector] public Transform owner;
+    public event Action<TutorialProjectile, bool> Released;
+
     float _lifeRemaining;
+    bool _hitPlayer;
 
     void OnEnable()
     {
         _lifeRemaining = lifeTime;
+        _hitPlayer = false;
+    }
+
+    public void ConfigureRuntime(
+        Transform runtimeOwner,
+        float runtimeDamage,
+        float runtimeSpeed,
+        float runtimeLifeTime,
+        bool allowParry,
+        bool allowPerfectDodge,
+        bool isUnblockable)
+    {
+        owner = runtimeOwner;
+        damage = runtimeDamage;
+        speed = runtimeSpeed;
+        lifeTime = runtimeLifeTime;
+        canBeParried = allowParry;
+        canBePerfectDodged = allowPerfectDodge;
+        unblockable = isUnblockable;
+        _lifeRemaining = lifeTime;
+        _hitPlayer = false;
     }
 
     void Update()
@@ -42,6 +67,7 @@ public class TutorialProjectile : MonoBehaviour
             IDamageReceiver receiver = other.GetComponent<IDamageReceiver>();
             if (receiver != null)
             {
+                _hitPlayer = true;
                 HitPayload payload = new HitPayload
                 {
                     damage = damage,
@@ -51,6 +77,7 @@ public class TutorialProjectile : MonoBehaviour
                     hitType = HitType.Normal,
                     canParry = canBeParried,
                     canPerfectDodge = canBePerfectDodged,
+                    canGuard = !unblockable,
                     unblockable = unblockable
                 };
 
@@ -68,10 +95,13 @@ public class TutorialProjectile : MonoBehaviour
     void OnDisable()
     {
         owner = null;
+        Released = null;
     }
 
     void ReleaseSelf()
     {
+        Released?.Invoke(this, _hitPlayer);
+        Released = null;
         RuntimeObjectPool.Release(gameObject);
     }
 }

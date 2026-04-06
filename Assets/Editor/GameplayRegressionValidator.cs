@@ -262,7 +262,6 @@ public static class GameplayRegressionValidator
     static void ValidatePlayer(string sceneLabel, GameObject player, ValidationReport report)
     {
         var refs = player.GetComponent<PlayerReferences>();
-        var combatState = player.GetComponent<SimpleCombatStateReader>();
         var move = player.GetComponent<PlayerMoveController>();
         var lockOn = player.GetComponent<PlayerLockOn>();
         var ultimate = player.GetComponent<PlayerUltimateController>();
@@ -272,7 +271,6 @@ public static class GameplayRegressionValidator
         var dodge = player.GetComponent<PlayerDodgeController>();
 
         Require(sceneLabel, refs, "PlayerReferences missing on Player.", report);
-        Require(sceneLabel, combatState, "SimpleCombatStateReader missing on Player.", report);
         Require(sceneLabel, move, "PlayerMoveController missing on Player.", report);
         Require(sceneLabel, lockOn, "PlayerLockOn missing on Player.", report);
         Require(sceneLabel, ultimate, "PlayerUltimateController missing on Player.", report);

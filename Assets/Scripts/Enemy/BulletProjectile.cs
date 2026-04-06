@@ -67,24 +67,12 @@ public class BulletProjectile : MonoBehaviour
         if (debugLogs)
             Debug.Log($"[BulletProjectile] Collided with {other.gameObject.name}", this);
 
-        var hitReceiver = other.GetComponentInParent<IHitReceiver>();
-        if (hitReceiver != null)
+        var damageReceiver = other.GetComponentInParent<IDamageReceiver>();
+        if (damageReceiver != null)
         {
-            var hd = CreateHitData();
-            hitReceiver.ReceiveHit(hd);
+            damageReceiver.ReceiveHit(CreateHitPayload());
             if (debugLogs)
-                Debug.Log("[BulletProjectile] Delivered hit to IHitReceiver on " + other.gameObject.name, this);
-            ReleaseSelf();
-            return;
-        }
-
-        var pdr = other.GetComponentInParent<PlayerDamageReceiver>();
-        if (pdr != null)
-        {
-            var hd = CreateHitData();
-            pdr.ReceiveHit(damage, owner ? owner.transform : null, transform.position, /*isParryable*/ false);
-            if (debugLogs)
-                Debug.Log("[BulletProjectile] Delivered hit to PlayerDamageReceiver on " + other.gameObject.name, this);
+                Debug.Log("[BulletProjectile] Delivered hit to IDamageReceiver on " + other.gameObject.name, this);
             ReleaseSelf();
             return;
         }
@@ -94,14 +82,14 @@ public class BulletProjectile : MonoBehaviour
         {
             try
             {
-                h.ApplyDamage(damage);
+                CombatHealthApplicationUtility.ApplyHitPayload(h, CreateHitPayload());
                 if (debugLogs)
-                    Debug.Log("[BulletProjectile] Applied damage via IHealth on " + other.gameObject.name, this);
+                    Debug.Log("[BulletProjectile] Applied hit payload via IHealth on " + other.gameObject.name, this);
             }
             catch
             {
                 if (debugLogs)
-                    Debug.LogWarning("[BulletProjectile] IHealth.ApplyDamage threw or not supported on " + other.gameObject.name, this);
+                    Debug.LogWarning("[BulletProjectile] IHealth.TakeDamage threw or not supported on " + other.gameObject.name, this);
             }
             ReleaseSelf();
             return;
@@ -112,19 +100,20 @@ public class BulletProjectile : MonoBehaviour
         ReleaseSelf();
     }
 
-    HitData CreateHitData()
+    HitPayload CreateHitPayload()
     {
-        var hd = new HitData();
-        try
+        return new HitPayload
         {
-            hd.attacker = owner;
-            hd.damage = damage;
-            hd.hitPoint = transform.position;
-            hd.hitType = HitType.Normal;
-            hd.isParryable = false;
-        }
-        catch { }
-        return hd;
+            attacker = owner ? owner.transform : null,
+            damage = damage,
+            hitPoint = transform.position,
+            hitDirection = transform.forward,
+            hitType = HitType.Normal,
+            canParry = false,
+            canPerfectDodge = true,
+            canGuard = true,
+            unblockable = false
+        };
     }
 
     void ReleaseSelf()

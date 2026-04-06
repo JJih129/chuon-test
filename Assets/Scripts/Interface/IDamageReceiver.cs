@@ -10,8 +10,11 @@ public struct HitPayload
     public Vector3 hitPoint;
     public Vector3 hitDirection;
     public Transform attacker;
+    public int attackSequenceId;
     public bool canParry;
     public bool canPerfectDodge;
+    public bool canGuard;
+    public bool causesGuardBreak;
     public bool unblockable;
 }
 

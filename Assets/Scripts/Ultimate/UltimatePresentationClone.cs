@@ -14,7 +14,7 @@ public class UltimatePresentationClone : MonoBehaviour
     public Transform CloneRoot => cloneRoot != null ? cloneRoot : transform;
     public Animator CloneAnimator => cloneAnimator;
 
-    public void BuildFromSource(Transform source, Transform anchor, string cloneName)
+    public void BuildFromSource(Transform source, Transform anchor, string cloneName, bool preserveSourceLocalPose = false)
     {
         ClearClone();
         if (source == null)
@@ -30,11 +30,20 @@ public class UltimatePresentationClone : MonoBehaviour
         GameObject instance = Instantiate(source.gameObject, transform);
         instance.name = $"{source.gameObject.name}_Presentation";
         cloneRoot = instance.transform;
-        cloneRoot.localPosition = Vector3.zero;
-        cloneRoot.localRotation = Quaternion.identity;
-        cloneRoot.localScale = Vector3.one;
+        if (preserveSourceLocalPose)
+        {
+            ApplySourcePoseRelativeToAnchor(source, anchor, cloneRoot);
+        }
+        else
+        {
+            cloneRoot.localPosition = Vector3.zero;
+            cloneRoot.localRotation = Quaternion.identity;
+            cloneRoot.localScale = Vector3.one;
+        }
 
-        cloneAnimator = cloneRoot.GetComponent<Animator>() ?? cloneRoot.GetComponentInChildren<Animator>(true);
+        SetLayerRecursively(cloneRoot, anchor.gameObject.layer);
+
+        cloneAnimator = ResolvePreferredAnimator(cloneRoot);
         SanitizeCloneHierarchy();
         CacheAndHideSourceRenderers();
     }
@@ -45,6 +54,7 @@ public class UltimatePresentationClone : MonoBehaviour
 
         if (cloneRoot != null)
         {
+            cloneRoot.gameObject.SetActive(false);
             if (Application.isPlaying)
                 Destroy(cloneRoot.gameObject);
             else
@@ -78,6 +88,9 @@ public class UltimatePresentationClone : MonoBehaviour
         if (cloneAnimator == null || sourceAnimator == null)
             return;
 
+        if (cloneAnimator.runtimeAnimatorController == null || sourceAnimator.runtimeAnimatorController == null)
+            return;
+
         AnimatorControllerParameter[] parameters = sourceAnimator.parameters;
         for (int i = 0; i < parameters.Length; i++)
         {
@@ -109,16 +122,29 @@ public class UltimatePresentationClone : MonoBehaviour
         cloneAnimator.Update(0f);
     }
 
-    public void TrySetTrigger(string triggerName)
+    public bool TrySetTrigger(string triggerName)
     {
         if (cloneAnimator == null || string.IsNullOrWhiteSpace(triggerName))
-            return;
+            return false;
 
         if (!HasParameter(triggerName, AnimatorControllerParameterType.Trigger))
-            return;
+            return false;
 
         cloneAnimator.ResetTrigger(triggerName);
         cloneAnimator.SetTrigger(triggerName);
+        return true;
+    }
+
+    public bool TryCrossFadeState(string statePath, float duration)
+    {
+        if (cloneAnimator == null || string.IsNullOrWhiteSpace(statePath) || cloneAnimator.runtimeAnimatorController == null)
+            return false;
+
+        if (!TryResolveState(cloneAnimator, statePath, out int layerIndex, out int stateHash))
+            return false;
+
+        cloneAnimator.CrossFadeInFixedTime(stateHash, Mathf.Max(0.01f, duration), layerIndex, 0f);
+        return true;
     }
 
     public Transform ResolveMappedTransform(Transform sourceTransform)
@@ -142,16 +168,42 @@ public class UltimatePresentationClone : MonoBehaviour
         if (sourceRoot == null)
             return;
 
-        _sourceRenderers = sourceRoot.GetComponentsInChildren<Renderer>(true);
-        _sourceRendererStates = new bool[_sourceRenderers.Length];
-        for (int i = 0; i < _sourceRenderers.Length; i++)
+        Renderer[] renderers = sourceRoot.GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            return;
+
+        int sourceRendererCount = 0;
+        for (int i = 0; i < renderers.Length; i++)
         {
-            Renderer renderer = _sourceRenderers[i];
+            Renderer renderer = renderers[i];
             if (renderer == null)
                 continue;
 
-            _sourceRendererStates[i] = renderer.enabled;
+            if (cloneRoot != null && renderer.transform.IsChildOf(cloneRoot))
+                continue;
+
+            sourceRendererCount++;
+        }
+
+        if (sourceRendererCount == 0)
+            return;
+
+        _sourceRenderers = new Renderer[sourceRendererCount];
+        _sourceRendererStates = new bool[sourceRendererCount];
+        int writeIndex = 0;
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            if (cloneRoot != null && renderer.transform.IsChildOf(cloneRoot))
+                continue;
+
+            _sourceRenderers[writeIndex] = renderer;
+            _sourceRendererStates[writeIndex] = renderer.enabled;
             renderer.enabled = false;
+            writeIndex++;
         }
     }
 
@@ -159,6 +211,22 @@ public class UltimatePresentationClone : MonoBehaviour
     {
         if (cloneRoot == null)
             return;
+
+        foreach (Animator animator in cloneRoot.GetComponentsInChildren<Animator>(true))
+        {
+            if (animator == null || animator == cloneAnimator)
+                continue;
+
+            animator.enabled = false;
+        }
+
+        foreach (MonoBehaviour runtimeScript in cloneRoot.GetComponentsInChildren<MonoBehaviour>(true))
+        {
+            if (runtimeScript == null)
+                continue;
+
+            runtimeScript.enabled = false;
+        }
 
         foreach (Behaviour behaviour in cloneRoot.GetComponentsInChildren<Behaviour>(true))
         {
@@ -170,14 +238,18 @@ public class UltimatePresentationClone : MonoBehaviour
 
         foreach (Collider collider in cloneRoot.GetComponentsInChildren<Collider>(true))
         {
-            if (collider != null)
-                collider.enabled = false;
+            if (collider == null)
+                continue;
+
+            collider.enabled = false;
         }
 
         foreach (CharacterController characterController in cloneRoot.GetComponentsInChildren<CharacterController>(true))
         {
-            if (characterController != null)
-                characterController.enabled = false;
+            if (characterController == null)
+                continue;
+
+            characterController.enabled = false;
         }
 
         foreach (Rigidbody rigidbody in cloneRoot.GetComponentsInChildren<Rigidbody>(true))
@@ -185,8 +257,8 @@ public class UltimatePresentationClone : MonoBehaviour
             if (rigidbody == null)
                 continue;
 
-            rigidbody.isKinematic = true;
             rigidbody.detectCollisions = false;
+            rigidbody.isKinematic = true;
         }
 
         if (cloneAnimator == null)
@@ -195,6 +267,62 @@ public class UltimatePresentationClone : MonoBehaviour
         cloneAnimator.updateMode = AnimatorUpdateMode.UnscaledTime;
         cloneAnimator.applyRootMotion = false;
         cloneAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+    }
+
+    static Animator ResolvePreferredAnimator(Transform root)
+    {
+        if (root == null)
+            return null;
+
+        Animator directAnimator = root.GetComponent<Animator>();
+        if (IsUsableAnimator(directAnimator))
+            return directAnimator;
+
+        Animator[] animators = root.GetComponentsInChildren<Animator>(true);
+        if (animators == null || animators.Length == 0)
+            return directAnimator;
+
+        Animator fallbackAnimator = directAnimator;
+        for (int i = 0; i < animators.Length; i++)
+        {
+            Animator animator = animators[i];
+            if (animator == null)
+                continue;
+
+            if (IsUsableAnimator(animator))
+                return animator;
+
+            if (fallbackAnimator == null)
+                fallbackAnimator = animator;
+        }
+
+        return fallbackAnimator;
+    }
+
+    static bool IsUsableAnimator(Animator animator)
+    {
+        return animator != null
+            && animator.avatar != null
+            && animator.runtimeAnimatorController != null
+            && animator.gameObject.activeInHierarchy;
+    }
+
+    static void ApplySourcePoseRelativeToAnchor(Transform source, Transform anchor, Transform target)
+    {
+        if (source == null || anchor == null || target == null)
+            return;
+
+        if (source.parent == anchor)
+        {
+            target.localPosition = source.localPosition;
+            target.localRotation = source.localRotation;
+            target.localScale = source.localScale;
+            return;
+        }
+
+        target.position = source.position;
+        target.rotation = source.rotation;
+        target.localScale = source.lossyScale;
     }
 
     bool HasParameter(string name, AnimatorControllerParameterType type)
@@ -208,6 +336,48 @@ public class UltimatePresentationClone : MonoBehaviour
             AnimatorControllerParameter parameter = parameters[i];
             if (parameter.type == type && parameter.name == name)
                 return true;
+        }
+
+        return false;
+    }
+
+    static bool TryResolveState(Animator animator, string statePath, out int layerIndex, out int stateHash)
+    {
+        layerIndex = 0;
+        stateHash = 0;
+        if (animator == null || string.IsNullOrWhiteSpace(statePath))
+            return false;
+
+        string trimmed = statePath.Trim();
+        int separator = trimmed.IndexOf('.');
+        if (separator > 0)
+        {
+            string layerName = trimmed.Substring(0, separator);
+            for (int i = 0; i < animator.layerCount; i++)
+            {
+                if (animator.GetLayerName(i) != layerName)
+                    continue;
+
+                int fullPathHash = Animator.StringToHash(trimmed);
+                if (!animator.HasState(i, fullPathHash))
+                    return false;
+
+                layerIndex = i;
+                stateHash = fullPathHash;
+                return true;
+            }
+        }
+
+        for (int i = 0; i < animator.layerCount; i++)
+        {
+            string fullPath = $"{animator.GetLayerName(i)}.{trimmed}";
+            int fullPathHash = Animator.StringToHash(fullPath);
+            if (!animator.HasState(i, fullPathHash))
+                continue;
+
+            layerIndex = i;
+            stateHash = fullPathHash;
+            return true;
         }
 
         return false;
@@ -234,5 +404,15 @@ public class UltimatePresentationClone : MonoBehaviour
 
         segments.Reverse();
         return string.Join("/", segments);
+    }
+
+    static void SetLayerRecursively(Transform root, int layer)
+    {
+        if (root == null)
+            return;
+
+        root.gameObject.layer = layer;
+        for (int i = 0; i < root.childCount; i++)
+            SetLayerRecursively(root.GetChild(i), layer);
     }
 }
