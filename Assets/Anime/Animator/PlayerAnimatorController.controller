@@ -984,6 +984,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8edccae462b958343807e0c72d78562e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  logOnStateEnter: 0
 --- !u!1101 &1632086507711865341
 AnimatorStateTransition:
   m_ObjectHideFlags: 1

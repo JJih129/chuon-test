@@ -62,6 +62,7 @@ public class SceneFader : MonoBehaviour
             fadeCanvasGroup.blocksRaycasts = true; // 터치 방지
 
             fadeCanvasGroup.DOFade(0, fadeDuration)
+                .SetUpdate(true)
                 .SetEase(Ease.InOutQuad)
                 .OnComplete(() => {
                     fadeCanvasGroup.blocksRaycasts = false; // 끝나면 조작 허용
@@ -76,6 +77,7 @@ public class SceneFader : MonoBehaviour
         {
             fadeCanvasGroup.blocksRaycasts = true;
             fadeCanvasGroup.DOFade(1, fadeDuration)
+                .SetUpdate(true)
                 .SetEase(Ease.InOutQuad)
                 .OnComplete(() => SceneManager.LoadScene(sceneName));
         }
