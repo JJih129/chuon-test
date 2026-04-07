@@ -46,7 +46,7 @@ public sealed class CombatDebugHudRuntime : MonoBehaviour
     }
 
     [SerializeField] KeyCode toggleKey = KeyCode.F12;
-    [SerializeField] bool visibleByDefault = true;
+    [SerializeField] bool visibleByDefault = false;
 
     Canvas _canvas;
     CanvasScaler _canvasScaler;

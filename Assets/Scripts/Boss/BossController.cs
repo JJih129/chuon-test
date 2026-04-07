@@ -569,6 +569,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     [Tooltip("공격 후 CombatIdle 상태 유지 시간(초). 0이면 바로 다음 상태로 이동.")]
     public float combatIdleTime = 0.3f;
 
+    [Header("Attack Tempo Tuning")]
+    [SerializeField, Min(0f)] private float globalPostAttackRecoveryPadding = 0.14f;
+    [SerializeField, Min(0f)] private float globalFollowUpDelayPadding = 0.08f;
+
     [Tooltip("궁극기 victim 상태 해제 직후 AI가 다시 패턴을 잡기 전 쉬는 시간(초).")]
     [SerializeField] private float ultimateVictimRecoveryDuration = 1.2f;
 
@@ -2105,7 +2109,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (isQueuedFollowUp)
             recovery += Mathf.Max(0f, followUpRecoveryTax);
 
-        return recovery;
+        recovery += Mathf.Max(0f, globalPostAttackRecoveryPadding);
+        return Mathf.Max(combatIdleTime, recovery);
     }
 
     float ResolveMinimumPunishWindow(AttackPattern pattern, bool isQueuedFollowUp)
@@ -2554,7 +2559,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             return false;
 
         _queuedFollowUpPattern = followUp;
-        _queuedFollowUpDelay = sourcePattern.ResolveFollowUpDelay();
+        _queuedFollowUpDelay = Mathf.Max(0f, sourcePattern.ResolveFollowUpDelay() + globalFollowUpDelayPadding);
         _followUpChainDepth++;
         return true;
     }
