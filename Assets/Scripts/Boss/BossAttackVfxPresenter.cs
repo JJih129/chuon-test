@@ -111,13 +111,6 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
             _proceduralTrailRibbon.Stop();
     }
 
-    void Reset()
-    {
-        AutoWire();
-        EnsureDefaultMappings(force: true);
-        MarkLookupDirty();
-    }
-
     void Awake()
     {
         AutoWire();
@@ -131,6 +124,13 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     }
 
 #if UNITY_EDITOR
+    void Reset()
+    {
+        AutoWire();
+        EnsureDefaultMappings(force: true);
+        MarkLookupDirty();
+    }
+
     void OnValidate()
     {
         if (Application.isPlaying)
