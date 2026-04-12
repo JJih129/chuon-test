@@ -26,6 +26,7 @@ public static class FastMCPUnityAPI
     public static void SyncPauseOptionsChrome() { PauseOptionsChromeSyncUtility.RunFromFastMcp(); }
     public static void ScanMissingScripts() { MissingScriptScannerUtility.RunFromFastMcp(); }
     public static void SyncPlayerWiring() { PlayerWiringSyncUtility.RunFromFastMcp(); }
+    public static void SyncPlayerVisualPrefab() { PlayerVisualPrefabSyncUtility.RunFromFastMcp(); }
     public static void SyncBossVisualRig() { BossVisualRigSyncUtility.RunFromFastMcp(); }
     public static void RunGameplayRegressionChecks() { GameplayRegressionValidator.RunFromFastMcp(); }
     public static void StartPlayModeSmokeTest() { PlayModeSmokeTestRunner.StartFromFastMcp(); }

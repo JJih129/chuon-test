@@ -263,6 +263,8 @@ public static class FastMCPUnityBridge
             case "scan_missing_scripts": return ScanMissingScripts();
             case "sync_pause_options_chrome": return SyncPauseOptionsChrome();
             case "sync_player_wiring": return SyncPlayerWiring();
+            case "sync_player_visual_prefab": return SyncPlayerVisualPrefab();
+            case "sync_boss_visual_rig": return SyncBossVisualRig();
             case "run_gameplay_regression_checks": return RunGameplayRegressionChecks();
             case "start_playmode_smoke_test": return StartPlayModeSmokeTest();
             case "get_playmode_smoke_test_status": return GetPlayModeSmokeTestStatus();
@@ -594,6 +596,18 @@ public static class FastMCPUnityBridge
     private static Response SyncPlayerWiring()
     {
         PlayerWiringSyncUtility.SyncSummary summary = PlayerWiringSyncUtility.RunFromFastMcp();
+        return Ok(summary.Details);
+    }
+
+    private static Response SyncPlayerVisualPrefab()
+    {
+        PlayerVisualPrefabSyncUtility.SyncSummary summary = PlayerVisualPrefabSyncUtility.RunFromFastMcp();
+        return Ok(summary.Details);
+    }
+
+    private static Response SyncBossVisualRig()
+    {
+        BossVisualRigSyncUtility.SyncSummary summary = BossVisualRigSyncUtility.RunFromFastMcp();
         return Ok(summary.Details);
     }
 

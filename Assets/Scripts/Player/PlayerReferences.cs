@@ -7,6 +7,7 @@ public class PlayerReferences : MonoBehaviour
     [SerializeField] private Transform playerRoot;
     [SerializeField] private Transform visualRoot;
     [SerializeField] private PlayerVisualRig visualRig;
+    [SerializeField] private GameObject visualPrefab;
     [SerializeField] private Transform lockPivot;
     [SerializeField] private Transform ultimateSpawnRoot;
     [SerializeField] private Transform cameraPivot;
@@ -46,6 +47,7 @@ public class PlayerReferences : MonoBehaviour
             return visualRig;
         }
     }
+    public GameObject VisualPrefab => visualPrefab;
     public Transform LockPivot => lockPivot;
     public Transform UltimateSpawnRoot => ultimateSpawnRoot;
     public Transform CameraPivot => cameraPivot;
@@ -99,6 +101,12 @@ public class PlayerReferences : MonoBehaviour
     void Awake()
     {
         AutoWire();
+
+        if (Application.isPlaying)
+        {
+            EnsureRuntimeVisualPrefabHierarchy();
+            AutoWire();
+        }
     }
 
 #if UNITY_EDITOR
@@ -113,6 +121,61 @@ public class PlayerReferences : MonoBehaviour
     {
         AutoWire();
     }
+
+    void EnsureRuntimeVisualPrefabHierarchy()
+    {
+        if (visualRoot == null || visualPrefab == null)
+            return;
+
+        var currentVisualInstance = FindCurrentVisualInstance();
+        if (IsRuntimeVisualPrefabMatching(currentVisualInstance))
+            return;
+
+        if (currentVisualInstance != null)
+            Destroy(currentVisualInstance.gameObject);
+
+        var instance = Instantiate(visualPrefab, visualRoot, false);
+
+        instance.transform.localPosition = Vector3.zero;
+        instance.transform.localRotation = Quaternion.identity;
+        instance.transform.localScale = Vector3.one;
+        instance.name = visualPrefab.name;
+
+        var rig = instance.GetComponent<PlayerVisualRig>() ?? instance.GetComponentInChildren<PlayerVisualRig>(true);
+        if (rig == null)
+            rig = instance.AddComponent<PlayerVisualRig>();
+
+        if (rig != null)
+        {
+            rig.SyncSerializedReferences();
+            visualRig = rig;
+            if (rig.MainAnimator != null)
+                mainAnimator = rig.MainAnimator;
+
+            var rigHitboxes = rig.AttackHitboxes;
+            if (rigHitboxes != null && rigHitboxes.Length > 0)
+                attackHitboxes = rigHitboxes;
+        }
+    }
+
+    bool IsRuntimeVisualPrefabMatching(Transform child)
+    {
+        if (visualRoot == null || visualPrefab == null || child == null)
+            return false;
+
+        if (!string.Equals(child.name, visualPrefab.name, System.StringComparison.Ordinal))
+            return false;
+
+        return child.GetComponent<PlayerVisualRig>() != null || child.GetComponentInChildren<PlayerVisualRig>(true) != null;
+    }
+
+#if UNITY_EDITOR
+    public void SyncVisualPrefabHierarchyForEditor()
+    {
+        AutoWire();
+        SyncVisualPrefabHierarchy();
+    }
+#endif
 
     void AutoWire()
     {
@@ -176,6 +239,164 @@ public class PlayerReferences : MonoBehaviour
 
         if ((attackHitboxes == null || attackHitboxes.Length == 0) && visualRig && visualRig.PrimaryAttackHitbox)
             attackHitboxes = new[] { visualRig.PrimaryAttackHitbox };
+
+#if UNITY_EDITOR
+        EnsureEditorVisualPrefabFallback();
+#endif
+    }
+
+#if UNITY_EDITOR
+    const string DefaultVisualPrefabPath = "Assets/Prefabs/Generated/PlayerVisual_Chuon.prefab";
+    static bool s_SyncingVisualPrefab;
+
+    void EnsureEditorVisualPrefabFallback()
+    {
+        if (Application.isPlaying || visualRoot == null || visualPrefab != null)
+            return;
+
+        var fallback = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(DefaultVisualPrefabPath);
+        if (fallback == null)
+            return;
+
+        visualPrefab = fallback;
+        UnityEditor.EditorUtility.SetDirty(this);
+    }
+
+    void SyncVisualPrefabHierarchy()
+    {
+        if (Application.isPlaying || visualRoot == null)
+            return;
+        if (visualPrefab == null)
+            return;
+        if (s_SyncingVisualPrefab)
+            return;
+
+        s_SyncingVisualPrefab = true;
+        try
+        {
+            var currentVisualInstance = FindCurrentVisualInstance();
+            if (IsCurrentVisualPrefabMatching(currentVisualInstance))
+                return;
+
+            ReplaceVisualHierarchy(currentVisualInstance);
+            UnityEditor.EditorUtility.SetDirty(this);
+            UnityEditor.EditorUtility.SetDirty(gameObject);
+        }
+        finally
+        {
+            s_SyncingVisualPrefab = false;
+        }
+    }
+
+    bool IsCurrentVisualPrefabMatching(Transform child)
+    {
+        if (visualRoot == null || child == null)
+            return false;
+
+        var source = UnityEditor.PrefabUtility.GetCorrespondingObjectFromSource(child.gameObject) as GameObject;
+        if (source != visualPrefab)
+            return false;
+
+        if (!string.Equals(child.name, visualPrefab.name, System.StringComparison.Ordinal))
+            return false;
+
+        return child.GetComponent<PlayerVisualRig>() != null || child.GetComponentInChildren<PlayerVisualRig>(true) != null;
+    }
+
+    void ReplaceVisualHierarchy(Transform currentVisualInstance)
+    {
+        if (currentVisualInstance != null)
+            UnityEngine.Object.DestroyImmediate(currentVisualInstance.gameObject);
+
+        var instance = InstantiateEditorVisualPrefabClone();
+        if (instance == null)
+            return;
+
+        instance.transform.SetParent(visualRoot, false);
+
+        var instanceTransform = instance.transform;
+        instanceTransform.localPosition = Vector3.zero;
+        instanceTransform.localRotation = Quaternion.identity;
+        instanceTransform.localScale = Vector3.one;
+        instance.name = visualPrefab.name;
+
+        var rig = instance.GetComponent<PlayerVisualRig>() ?? instance.GetComponentInChildren<PlayerVisualRig>(true);
+        if (rig == null)
+            rig = instance.AddComponent<PlayerVisualRig>();
+
+        if (rig != null)
+        {
+            rig.SyncSerializedReferences();
+            visualRig = rig;
+            if (rig.MainAnimator != null)
+                mainAnimator = rig.MainAnimator;
+
+            var rigRoot = rig.VisualRoot;
+            if (rigRoot != null && visualRoot == null)
+                visualRoot = rigRoot;
+
+            var rigHitboxes = rig.AttackHitboxes;
+            if (rigHitboxes != null && rigHitboxes.Length > 0)
+                attackHitboxes = rigHitboxes;
+
+            UnityEditor.EditorUtility.SetDirty(instance);
+            UnityEditor.EditorUtility.SetDirty(rig);
+        }
+    }
+
+    GameObject InstantiateEditorVisualPrefabClone()
+    {
+        if (visualPrefab == null)
+            return null;
+
+        var assetPath = UnityEditor.PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(visualPrefab);
+        if (string.IsNullOrWhiteSpace(assetPath))
+            assetPath = UnityEditor.AssetDatabase.GetAssetPath(visualPrefab);
+
+        if (string.IsNullOrWhiteSpace(assetPath))
+            return null;
+
+        var prefabContentsRoot = UnityEditor.PrefabUtility.LoadPrefabContents(assetPath);
+        try
+        {
+            return UnityEngine.Object.Instantiate(prefabContentsRoot);
+        }
+        finally
+        {
+            UnityEditor.PrefabUtility.UnloadPrefabContents(prefabContentsRoot);
+        }
+    }
+#endif
+
+    Transform FindCurrentVisualInstance()
+    {
+        if (visualRoot == null)
+            return null;
+
+        var rigs = visualRoot.GetComponentsInChildren<PlayerVisualRig>(true);
+        if (rigs != null)
+        {
+            foreach (var rig in rigs)
+            {
+                if (rig == null)
+                    continue;
+
+                if (rig.transform.parent == visualRoot)
+                    return rig.transform;
+            }
+        }
+
+        for (var i = 0; i < visualRoot.childCount; i++)
+        {
+            var child = visualRoot.GetChild(i);
+            if (child == null)
+                continue;
+
+            if (child.GetComponent<Renderer>() != null || child.GetComponentInChildren<Renderer>(true) != null)
+                return child;
+        }
+
+        return null;
     }
 
     Transform FindLikelyVisualRoot()

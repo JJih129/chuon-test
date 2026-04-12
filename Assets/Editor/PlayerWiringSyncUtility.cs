@@ -99,6 +99,7 @@ public static class PlayerWiringSyncUtility
         else
         {
             playerReferences.SyncSerializedReferences();
+            playerReferences.SyncVisualPrefabHierarchyForEditor();
             EditorUtility.SetDirty(playerReferences);
             changed = true;
         }
