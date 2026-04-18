@@ -50,6 +50,9 @@ public class PauseMenuView : MonoBehaviour
         EnsureSettingsContent();
 
         menuRoot.SetActive(true);
+        menuContainer.gameObject.SetActive(true);
+        if (settingsPanel != null)
+            settingsPanel.SetActive(false);
 
         backgroundGroup.alpha = 0f;
         backgroundGroup.DOFade(1f, 0.3f).SetUpdate(true);

@@ -13,6 +13,7 @@ public sealed class UltimateCameraSessionController : MonoBehaviour
     bool _sessionActive;
 
     public CinemachineBrain Brain => brain;
+    public CinemachineVirtualCameraBase[] SequenceCameras => sequenceCameras;
 
     void Awake()
     {

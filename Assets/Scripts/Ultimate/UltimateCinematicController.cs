@@ -51,6 +51,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
     Coroutine _walkoutRoutine;
     bool _cleanupCompleted = true;
     bool _gameplayDamageCommitted;
+    bool _cachedPlayerPoseValid;
+    Vector3 _cachedPlayerWorldPosition;
+    Quaternion _cachedPlayerWorldRotation = Quaternion.identity;
 
     void Awake()
     {
@@ -60,6 +63,26 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if ((playerRenderers == null || playerRenderers.Length == 0) && playerVisualRoot != null)
             playerRenderers = playerVisualRoot.GetComponentsInChildren<Renderer>(true);
     }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (Application.isPlaying)
+            return;
+
+        if (playableDirector == null || bindings == null || cameraSession == null)
+            return;
+
+        try
+        {
+            SyncEditorTimelineBindings();
+        }
+        catch
+        {
+            // Avoid noisy editor exceptions during partial scene deserialization.
+        }
+    }
+#endif
 
     void OnEnable()
     {
@@ -91,6 +114,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         CleanupIfNeeded("Replay");
         _cleanupCompleted = false;
         _gameplayDamageCommitted = false;
+        CacheInitialPlayerPose();
 
         if (!targetBinder.TryBind(owner, data, out _boundTarget, out string failureReason))
         {
@@ -284,6 +308,15 @@ public sealed class UltimateCinematicController : MonoBehaviour
             valid = false;
         }
 
+        if (bindings != null)
+        {
+            valid &= ValidateRef(bindings.PlayerRoot, nameof(bindings.PlayerRoot));
+            valid &= ValidateRef(bindings.PlayerAnimator, nameof(bindings.PlayerAnimator));
+            valid &= ValidateRef(bindings.TargetRoot, nameof(bindings.TargetRoot));
+            valid &= ValidateRef(bindings.TargetCenter, nameof(bindings.TargetCenter));
+            valid &= ValidateRef(bindings.TargetExplosionAnchor, nameof(bindings.TargetExplosionAnchor));
+        }
+
         return valid;
     }
 
@@ -322,6 +355,62 @@ public sealed class UltimateCinematicController : MonoBehaviour
             if (track is CinemachineTrack)
             {
                 playableDirector.SetGenericBinding(track, cameraSession.Brain);
+            }
+        }
+
+        BindCinemachineShotReferences(timelineAsset);
+    }
+
+#if UNITY_EDITOR
+    void SyncEditorTimelineBindings()
+    {
+        TimelineAsset timelineAsset = playableDirector.playableAsset as TimelineAsset;
+        if (timelineAsset == null)
+            return;
+
+        foreach (TrackAsset track in timelineAsset.GetOutputTracks())
+        {
+            if (track is AnimationTrack && bindings.PlayerAnimator != null)
+                playableDirector.SetGenericBinding(track, bindings.PlayerAnimator);
+            else if (track is SignalTrack && signalReceiver != null)
+                playableDirector.SetGenericBinding(track, signalReceiver);
+            else if (track is CinemachineTrack && cameraSession.Brain != null)
+                playableDirector.SetGenericBinding(track, cameraSession.Brain);
+        }
+
+        BindCinemachineShotReferences(timelineAsset);
+        UnityEditor.EditorUtility.SetDirty(playableDirector);
+        UnityEditor.EditorUtility.SetDirty(this);
+    }
+#endif
+
+    void BindCinemachineShotReferences(TimelineAsset timelineAsset)
+    {
+        if (timelineAsset == null || cameraSession == null || cameraSession.SequenceCameras == null)
+            return;
+
+        var cameras = cameraSession.SequenceCameras;
+        foreach (TrackAsset track in timelineAsset.GetOutputTracks())
+        {
+            if (track is not CinemachineTrack)
+                continue;
+
+            int cameraIndex = 0;
+            foreach (TimelineClip clip in track.GetClips())
+            {
+                var shot = clip.asset as CinemachineShot;
+                if (shot == null)
+                    continue;
+
+                if (cameraIndex >= cameras.Length || cameras[cameraIndex] == null)
+                {
+                    Warn($"Missing sequence camera for clip '{clip.displayName}' at index {cameraIndex}.");
+                    cameraIndex++;
+                    continue;
+                }
+
+                playableDirector.SetReferenceValue(shot.VirtualCamera.exposedName, cameras[cameraIndex]);
+                cameraIndex++;
             }
         }
     }
@@ -436,6 +525,27 @@ public sealed class UltimateCinematicController : MonoBehaviour
         CleanupIfNeeded("DirectorStopped");
     }
 
+    void CacheInitialPlayerPose()
+    {
+        _cachedPlayerPoseValid = false;
+
+        if (bindings == null || bindings.PlayerRoot == null)
+            return;
+
+        _cachedPlayerWorldPosition = bindings.PlayerRoot.position;
+        _cachedPlayerWorldRotation = bindings.PlayerRoot.rotation;
+        _cachedPlayerPoseValid = true;
+    }
+
+    void RestoreInitialPlayerPoseIfNeeded()
+    {
+        if (!_cachedPlayerPoseValid || bindings == null || bindings.PlayerRoot == null || targetBinder == null)
+            return;
+
+        Vector3 lookTarget = _cachedPlayerWorldPosition + (_cachedPlayerWorldRotation * Vector3.forward);
+        targetBinder.SnapPlayerTo(_cachedPlayerWorldPosition, lookTarget);
+    }
+
     void CleanupIfNeeded(string reason)
     {
         if (_cleanupCompleted)
@@ -453,6 +563,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         slashStormVfx?.StopStorm(false);
         vfxPresenter?.EndSequence();
         hitProcessor?.EndSequence();
+        RestoreInitialPlayerPoseIfNeeded();
         targetBinder?.EndSequence();
         enemyCinematicState?.CleanupIfNeeded();
         cameraSession?.CleanupIfNeeded();
@@ -467,6 +578,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _data = null;
         _boundTarget = null;
         _gameplayDamageCommitted = false;
+        _cachedPlayerPoseValid = false;
 
         if (debugLog)
             Debug.Log($"[UltimateCinematic] Cleanup: {reason}", this);
