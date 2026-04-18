@@ -497,6 +497,15 @@ public static class BossVisualRigSyncUtility
         if (candidate == null || candidate == bossObject)
             return false;
 
+        if (candidate.CompareTag("Player"))
+            return false;
+
+        if (candidate.GetComponent<PlayerReferences>() != null || candidate.GetComponentInChildren<PlayerReferences>(true) != null)
+            return false;
+
+        if (candidate.GetComponent<PlayerVisualRig>() != null || candidate.GetComponentInChildren<PlayerVisualRig>(true) != null)
+            return false;
+
         if (candidate.GetComponent<BossController>() != null || candidate.GetComponentInChildren<BossController>(true) != null)
             return false;
 

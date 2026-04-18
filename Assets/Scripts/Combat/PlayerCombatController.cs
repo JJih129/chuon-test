@@ -1286,12 +1286,22 @@ public class PlayerCombatController : MonoBehaviour
         if (playerReferences == null)
             playerReferences = GetComponent<PlayerReferences>();
 
-        if (playerReferences == null)
+        if (playerReferences != null)
+        {
+            var preferredHitbox = playerReferences.PrimaryAttackHitbox;
+            if (preferredHitbox != null && preferredHitbox.gameObject.activeInHierarchy)
+            {
+                weaponHitbox = preferredHitbox;
+                return;
+            }
+        }
+
+        if (weaponHitbox != null && weaponHitbox.gameObject.activeInHierarchy)
             return;
 
-        var preferredHitbox = playerReferences.PrimaryAttackHitbox;
-        if (preferredHitbox != null && preferredHitbox.gameObject.activeInHierarchy)
-            weaponHitbox = preferredHitbox;
+        var fallbackHitbox = GetComponentInChildren<AttackHitbox>(true);
+        if (fallbackHitbox != null && fallbackHitbox.gameObject.activeInHierarchy)
+            weaponHitbox = fallbackHitbox;
     }
 
     private void ActivateWeaponHitboxImmediate()

@@ -1,0 +1,52 @@
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public sealed class UltimateCinematicBindings : MonoBehaviour
+{
+    [Header("Player")]
+    [SerializeField] private Transform playerRoot;
+    [SerializeField] private Animator playerAnimator;
+    [SerializeField] private Transform playerVisualRoot;
+    [SerializeField] private Transform swordCloseAnchor;
+    [SerializeField] private Transform walkoutFacingAnchor;
+    [SerializeField] private Transform slashStormCenter;
+
+    [Header("Target")]
+    [SerializeField] private Transform targetRoot;
+    [SerializeField] private Transform targetCenter;
+    [SerializeField] private Transform targetExplosionAnchor;
+    [SerializeField] private Transform targetCineHoldAnchor;
+
+    [Header("Shot Anchors")]
+    [SerializeField] private Transform shot01Pos;
+    [SerializeField] private Transform shot01LookAt;
+    [SerializeField] private Transform shot02Pos;
+    [SerializeField] private Transform shot02LookAt;
+    [SerializeField] private Transform shot03Pos;
+    [SerializeField] private Transform shot03LookAt;
+    [SerializeField] private Transform shot04Pos;
+    [SerializeField] private Transform shot04LookAt;
+    [SerializeField] private Transform shot05Pos;
+    [SerializeField] private Transform shot05LookAt;
+
+    public Transform PlayerRoot => playerRoot;
+    public Animator PlayerAnimator => playerAnimator;
+    public Transform PlayerVisualRoot => playerVisualRoot;
+    public Transform SwordCloseAnchor => swordCloseAnchor;
+    public Transform WalkoutFacingAnchor => walkoutFacingAnchor;
+    public Transform SlashStormCenter => slashStormCenter;
+    public Transform TargetRoot => targetRoot;
+    public Transform TargetCenter => targetCenter;
+    public Transform TargetExplosionAnchor => targetExplosionAnchor;
+    public Transform TargetCineHoldAnchor => targetCineHoldAnchor;
+    public Transform Shot01Pos => shot01Pos;
+    public Transform Shot01LookAt => shot01LookAt;
+    public Transform Shot02Pos => shot02Pos;
+    public Transform Shot02LookAt => shot02LookAt;
+    public Transform Shot03Pos => shot03Pos;
+    public Transform Shot03LookAt => shot03LookAt;
+    public Transform Shot04Pos => shot04Pos;
+    public Transform Shot04LookAt => shot04LookAt;
+    public Transform Shot05Pos => shot05Pos;
+    public Transform Shot05LookAt => shot05LookAt;
+}

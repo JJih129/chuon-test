@@ -3,6 +3,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class PlayerReferences : MonoBehaviour
 {
+    const string DefaultForwardHitboxName = "RuntimeForwardAttackHitbox";
+
     [Header("Root")]
     [SerializeField] private Transform playerRoot;
     [SerializeField] private Transform visualRoot;
@@ -134,7 +136,12 @@ public class PlayerReferences : MonoBehaviour
         if (currentVisualInstance != null)
             Destroy(currentVisualInstance.gameObject);
 
-        var instance = Instantiate(visualPrefab, visualRoot, false);
+        var instance = Object.Instantiate((Object)visualPrefab, visualRoot, false) as GameObject;
+        if (instance == null)
+        {
+            Debug.LogWarning("[PlayerReferences] visualPrefab could not be instantiated as a GameObject.", this);
+            return;
+        }
 
         instance.transform.localPosition = Vector3.zero;
         instance.transform.localRotation = Quaternion.identity;
@@ -217,6 +224,10 @@ public class PlayerReferences : MonoBehaviour
         if (!mainAnimator)
             mainAnimator = GetComponent<Animator>() ?? (visualRig ? visualRig.MainAnimator : null) ?? GetComponentInChildren<Animator>(true);
 
+        var rootAttackHitbox = EnsureDefaultForwardHitbox();
+        if (rootAttackHitbox != null)
+            attackHitboxes = new[] { rootAttackHitbox };
+
         var activeChildHitboxes = FilterActiveHitboxes(GetComponentsInChildren<AttackHitbox>(true));
         var preferredHitboxes = GetPreferredAttackHitboxes();
         if (!HasUsableHitboxes(attackHitboxes) && activeChildHitboxes != null)
@@ -243,6 +254,57 @@ public class PlayerReferences : MonoBehaviour
 #if UNITY_EDITOR
         EnsureEditorVisualPrefabFallback();
 #endif
+    }
+
+    AttackHitbox EnsureDefaultForwardHitbox()
+    {
+        if (playerRoot == null)
+            return null;
+
+        Transform hitboxTransform = playerRoot.Find(DefaultForwardHitboxName);
+        if (hitboxTransform == null)
+        {
+            var go = new GameObject(DefaultForwardHitboxName);
+            go.layer = playerRoot.gameObject.layer;
+            hitboxTransform = go.transform;
+            hitboxTransform.SetParent(playerRoot, false);
+        }
+
+        hitboxTransform.localPosition = new Vector3(0f, 1.0f, 1.05f);
+        hitboxTransform.localRotation = Quaternion.identity;
+        hitboxTransform.localScale = Vector3.one;
+
+        BoxCollider boxCollider = hitboxTransform.GetComponent<BoxCollider>();
+        if (boxCollider == null)
+            boxCollider = hitboxTransform.gameObject.AddComponent<BoxCollider>();
+
+        boxCollider.isTrigger = true;
+        boxCollider.enabled = false;
+        boxCollider.center = Vector3.zero;
+        boxCollider.size = new Vector3(1.25f, 1.4f, 1.6f);
+
+        AttackHitbox hitbox = hitboxTransform.GetComponent<AttackHitbox>();
+        if (hitbox == null)
+            hitbox = hitboxTransform.gameObject.AddComponent<AttackHitbox>();
+
+        int enemyLayer = LayerMask.NameToLayer("Enemy");
+        hitbox.baseDamage = 10f;
+        hitbox.hitType = HitType.Normal;
+        hitbox.canParry = true;
+        hitbox.canPerfectDodge = true;
+        hitbox.canGuard = true;
+        hitbox.unblockable = false;
+        hitbox.attackerRoot = playerRoot;
+        hitbox.hitLayers = enemyLayer >= 0 ? (1 << enemyLayer) : ~0;
+        hitbox.ignoreTriggerColliders = true;
+        hitbox.useOneShotWindow = true;
+        hitbox.oneShotWindow = 0.2f;
+        hitbox.hitEachReceiverOncePerActivation = true;
+        hitbox.useExpandedHitDetection = true;
+        hitbox.useSweepHitDetection = false;
+        hitbox.expandedPadding = 0.08f;
+        hitbox.expandedScanInterval = 0.02f;
+        return hitbox;
     }
 
 #if UNITY_EDITOR

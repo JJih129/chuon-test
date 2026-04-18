@@ -15,6 +15,7 @@ public sealed class UltimateSkillController : MonoBehaviour
     [SerializeField] private bool useCodeDrivenSequence = true;
     [SerializeField] private UltimateSequenceData sequenceData;
     [SerializeField] private UltimateSequencePlayer sequencePlayer;
+    [SerializeField] private UltimateCinematicController cinematicController;
     [SerializeField] private UltimateTargetBinder targetBinder;
     [SerializeField] private UltimateCameraDirector cameraDirector;
     [SerializeField] private UltimateHitProcessor hitProcessor;
@@ -126,6 +127,13 @@ public sealed class UltimateSkillController : MonoBehaviour
         SyncPrimaryControllerBindings();
 
         UltimateSequenceData resolvedData = sequenceData != null ? sequenceData : GetRuntimeFallbackData();
+        if (cinematicController != null && cinematicController.Play(owner, resolvedData))
+        {
+            if (debugLog)
+                Debug.Log("[Ultimate] Started timeline cinematic ultimate sequence.", this);
+            return true;
+        }
+
         if (sequencePlayer == null)
             return false;
 

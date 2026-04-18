@@ -1250,9 +1250,10 @@ GameObject:
   - component: {fileID: 171033920233620033}
   - component: {fileID: 5469350674181791896}
   - component: {fileID: 2996402383616999470}
-  - component: {fileID: 7854029322980053481}
-  - component: {fileID: 634111914035777834}
-  - component: {fileID: 245853775745863209}
+    - component: {fileID: 7854029322980053481}
+    - component: {fileID: 634111914035777834}
+    - component: {fileID: 245853775745863209}
+    - component: {fileID: 6612084301157624411}
   m_Layer: 0
   m_Name: PlayerRoot
   m_TagString: Player
@@ -2435,6 +2436,19 @@ MonoBehaviour:
   uiAnchor: {fileID: 0}
   mainAnimator: {fileID: 5777839405900600649}
   attackHitboxes: []
+--- !u!114 &6612084301157624411
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3762919195783750324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 061b1eb700231e346831c9b79fa8e415, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  combatController: {fileID: 3625136038103508255}
 --- !u!1 &3795597417212057411
 GameObject:
   m_ObjectHideFlags: 0

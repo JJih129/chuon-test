@@ -165,6 +165,8 @@ public class PlayerUltimateController : MonoBehaviour
     ICombatStateReader _combatStateReader;
     PlayerLockOn _playerLockOn;
     UltimateSkillController _ultimateSkillController;
+    UltimateHitProcessor _ultimateHitProcessor;
+    UltimateCinematicController _activeUltimateCinematic;
     IInvulnerabilityToggle _invul;
     PlayerCombatController _combatController;
     PlayerGuardController _guardController;
@@ -215,6 +217,7 @@ public class PlayerUltimateController : MonoBehaviour
         _input = GetComponent<IInputBlocker>();
         _playerLockOn = GetComponent<PlayerLockOn>();
         _ultimateSkillController = GetComponent<UltimateSkillController>();
+        _ultimateHitProcessor = GetComponent<UltimateHitProcessor>();
         _combatStateReader = CombatStateReaderResolver.ResolveOrAttach(this);
         _lockOn = _playerLockOn as ILockOnController ?? GetComponent<ILockOnController>();
         _invul = GetComponent<IInvulnerabilityToggle>();
@@ -509,6 +512,28 @@ public class PlayerUltimateController : MonoBehaviour
 
         OnUltimateEnded?.Invoke();
         _isCinematic = false;
+    }
+
+    public void SetActiveUltimateCinematic(UltimateCinematicController controller)
+    {
+        _activeUltimateCinematic = controller;
+    }
+
+    public void ClearActiveUltimateCinematic(UltimateCinematicController controller)
+    {
+        if (_activeUltimateCinematic == controller)
+            _activeUltimateCinematic = null;
+    }
+
+    public void OnUltimateDamageCommit()
+    {
+        if (_activeUltimateCinematic != null)
+        {
+            _activeUltimateCinematic.CommitGameplayDamage();
+            return;
+        }
+
+        _ultimateHitProcessor?.FlushBufferedDamage();
     }
 
     public void PrepareModernPresentationActor()

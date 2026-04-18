@@ -1,4 +1,4 @@
-﻿%YAML 1.1
+%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!114 &11400000
 MonoBehaviour:
@@ -19,10 +19,18 @@ MonoBehaviour:
   cancelStart: 0.44
   cancelEnd: 0.92
   baseDamage: 10
+  hitType: 1
+  hitWindows: []
+  hitWindowLeadNormalized: -1
+  hitWindowTailNormalized: -1
+  hitDetectionMode: 0
+  hitboxExpandedPadding: -1
+  hitboxMeshPaddingScale: -1
+  hitboxScanInterval: -1
+  hitboxOneShotWindow: -1
   variantTag: 
   nextByInput:
   - input: 0
     next: {fileID: 11400000, guid: 6d1c7965d746f8e448c8092106f83ae4, type: 2}
   - input: 1
     next: {fileID: 11400000, guid: 14d22a5bdfcee3443a671eba3723acff, type: 2}
-

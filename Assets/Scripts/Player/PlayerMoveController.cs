@@ -37,6 +37,9 @@ public class PlayerMoveController : MonoBehaviour
     [SerializeField, Range(2f, 30f)] private float decel = 24f;
     [SerializeField, Range(90f, 1080f)] private float rotationSpeed = 720f;
     [SerializeField] private bool rotateOnlyWhenMoving = true;
+    [SerializeField, Range(2f, 30f)] private float inputAccel = 14f;
+    [SerializeField, Range(2f, 30f)] private float inputDecel = 18f;
+    [SerializeField, Range(0f, 0.35f)] private float inputDeadzone = 0.08f;
 
     // ─────────[④ 가드 중 속도 배수]─────────
     [Header("④ 가드 중 속도 배수")]
@@ -62,6 +65,7 @@ public class PlayerMoveController : MonoBehaviour
     private PlayerReferences _playerReferences;
     private PlayerHealth _playerHealth;
     private float _lastAnimSpeed = float.NaN;
+    private Vector2 _smoothedMoveInput;
     private Vector2 _currentMoveInput;
     private Vector3 _currentWishDirection;
     private Vector3 _lastNonZeroMoveDirection;
@@ -92,6 +96,7 @@ public class PlayerMoveController : MonoBehaviour
         // 시작 시 잠금 해제 및 초기화
         _externLocked = false;
         _velXZ = Vector3.zero;
+        _smoothedMoveInput = Vector2.zero;
         _currentMoveInput = Vector2.zero;
         _currentWishDirection = Vector3.zero;
         _lastNonZeroMoveDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
@@ -106,6 +111,7 @@ public class PlayerMoveController : MonoBehaviour
         if (_playerHealth != null && _playerHealth.IsDead)
         {
             _velXZ = Vector3.zero;
+            _smoothedMoveInput = Vector2.zero;
             _currentMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
             MoveWithGravity(Vector3.zero);
@@ -117,6 +123,7 @@ public class PlayerMoveController : MonoBehaviour
         if (_externLocked)
         {
             _currentMoveInput = Vector2.zero;
+            _smoothedMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
@@ -126,6 +133,7 @@ public class PlayerMoveController : MonoBehaviour
         if (IsInputBlocked())
         {
             _velXZ = Vector3.zero;
+            _smoothedMoveInput = Vector2.zero;
             _currentMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
             MoveWithGravity(Vector3.zero);
@@ -134,8 +142,10 @@ public class PlayerMoveController : MonoBehaviour
         }
 
         // 3. 입력 받기 (Input System & Legacy & 비상용 강제 입력 통합)
-        Vector2 input = ReadMoveInput();
-        _currentMoveInput = input;
+        Vector2 rawInput = ReadMoveInput();
+        float dt = Time.deltaTime;
+        _smoothedMoveInput = MoveTowardsInput(_smoothedMoveInput, rawInput, inputAccel, inputDecel, dt);
+        _currentMoveInput = _smoothedMoveInput;
 
         // 4. 방향 및 회전 계산
         bool locked = playerLockOn && playerLockOn.IsLocked;
@@ -161,17 +171,16 @@ public class PlayerMoveController : MonoBehaviour
             right = Flat(cam.right);
         }
 
-        Vector3 wishDir = (right * input.x + fwd * input.y);
+        Vector3 wishDir = (right * _smoothedMoveInput.x + fwd * _smoothedMoveInput.y);
         if (wishDir.sqrMagnitude > 1e-6f) wishDir.Normalize();
         _currentWishDirection = wishDir;
         if (wishDir.sqrMagnitude > 0.0004f)
             _lastNonZeroMoveDirection = wishDir;
 
         // 5. 속도 계산 (가속/감속)
-        float targetSpeed = ComputeTargetSpeed(input, IsGuarding());
+        float targetSpeed = ComputeTargetSpeed(_smoothedMoveInput, IsGuarding()) * Mathf.Clamp01(_smoothedMoveInput.magnitude);
         Vector3 targetVel = wishDir * targetSpeed;
 
-        float dt = Time.deltaTime;
         _velXZ = MoveTowardsXZ(_velXZ, targetVel, accel, decel, dt);
 
         // 6. 캐릭터 회전
@@ -192,9 +201,9 @@ public class PlayerMoveController : MonoBehaviour
         // This controller currently drives an Idle/Run style locomotion setup.
         // Use desired move speed instead of smoothed velocity so run anim engages
         // reliably as soon as movement input is committed.
-        float animSpeed01 = targetSpeed <= 0.01f
+        float animSpeed01 = _velXZ.sqrMagnitude <= 0.0001f
             ? 0f
-            : Mathf.Clamp01(targetSpeed / Mathf.Max(0.01f, runSpeed * 0.6f));
+            : Mathf.Clamp01(_velXZ.magnitude / Mathf.Max(0.01f, runSpeed));
         SetAnimSpeed(animSpeed01);
     }
 
@@ -209,6 +218,7 @@ public class PlayerMoveController : MonoBehaviour
         if (locked)
         {
             _velXZ = Vector3.zero;
+            _smoothedMoveInput = Vector2.zero;
             _currentMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
             SetAnimSpeed(0f);
@@ -220,6 +230,7 @@ public class PlayerMoveController : MonoBehaviour
     {
         _externLocked = true;
         _velXZ = Vector3.zero;
+        _smoothedMoveInput = Vector2.zero;
         _currentMoveInput = Vector2.zero;
         _currentWishDirection = Vector3.zero;
         SetAnimSpeed(0f);
@@ -263,7 +274,10 @@ public class PlayerMoveController : MonoBehaviour
             if (Keyboard.current.aKey.isPressed) input.x -= 1;
         }
 
-        return input.sqrMagnitude > 1f ? input.normalized : input;
+        if (input.sqrMagnitude > 1f)
+            input.Normalize();
+
+        return input.magnitude <= inputDeadzone ? Vector2.zero : input;
     }
 
     float ComputeTargetSpeed(Vector2 input, bool guarding)
@@ -311,6 +325,17 @@ public class PlayerMoveController : MonoBehaviour
         Vector3 diff = tgt - cur;
         float maxDelta = ((tgt.magnitude >= cur.magnitude) ? acc : dec) * dt;
         return (diff.magnitude <= maxDelta) ? tgt : cur + diff.normalized * maxDelta;
+    }
+
+    static Vector2 MoveTowardsInput(Vector2 current, Vector2 target, float acc, float dec, float dt)
+    {
+        Vector2 diff = target - current;
+        float maxDelta = ((target.magnitude >= current.magnitude) ? acc : dec) * dt;
+        float diffMagnitude = diff.magnitude;
+        if (diffMagnitude <= maxDelta || diffMagnitude <= 0.0001f)
+            return target;
+
+        return current + diff / diffMagnitude * maxDelta;
     }
 
     void SetAnimSpeed(float spd01)
