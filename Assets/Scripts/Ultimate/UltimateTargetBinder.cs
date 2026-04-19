@@ -125,28 +125,6 @@ public sealed class UltimateTargetBinder : MonoBehaviour
         Vector3 targetAimPoint = GetTargetAimPoint(targetRoot, 0.8f, 0f);
         Vector3 flatToTarget = targetAimPoint - playerRoot.position;
         flatToTarget.y = 0f;
-        float distance = flatToTarget.magnitude;
-        if (distance > data.Activation.maxDistance)
-        {
-            failureReason = "Target is out of range.";
-            return false;
-        }
-
-        if (data.Activation.maxAngle < 179.5f)
-        {
-            Vector3 forward = playerRoot.forward;
-            forward.y = 0f;
-            if (forward.sqrMagnitude > 0.0001f)
-            {
-                float angle = Vector3.Angle(forward.normalized, flatToTarget.sqrMagnitude > 0.0001f ? flatToTarget.normalized : forward.normalized);
-                if (angle > data.Activation.maxAngle)
-                {
-                    failureReason = "Target angle is invalid.";
-                    return false;
-                }
-            }
-        }
-
         boundTarget = new BoundTarget
         {
             TargetRoot = targetRoot,

@@ -9,11 +9,22 @@ public sealed class UltimateEnemyCinematicState : MonoBehaviour
     UltimateTargetBinder.BoundTarget _target;
     bool _sessionActive;
     bool _disabledBossController;
+    bool _cachedTargetPoseValid;
+    Vector3 _cachedTargetPosition;
+    Quaternion _cachedTargetRotation = Quaternion.identity;
 
     public void EnterCinematicState(UltimateTargetBinder.BoundTarget target)
     {
         _target = target;
         _sessionActive = true;
+        _cachedTargetPoseValid = false;
+
+        if (_target != null && _target.TargetRoot != null)
+        {
+            _cachedTargetPosition = _target.TargetRoot.position;
+            _cachedTargetRotation = _target.TargetRoot.rotation;
+            _cachedTargetPoseValid = true;
+        }
 
         if ((_target == null || _target.VictimState == null) && bossController != null && bossController.enabled)
         {
@@ -55,10 +66,11 @@ public sealed class UltimateEnemyCinematicState : MonoBehaviour
         if (_target != null && _target.VictimState != null)
             _target.VictimState.EndUltimateVictimState();
 
-        if (debugLog)
-            Debug.Log("[UltimateEnemyCinematicState] Restored target state.", this);
+        if (_cachedTargetPoseValid && _target != null && _target.TargetRoot != null)
+            _target.TargetRoot.SetPositionAndRotation(_cachedTargetPosition, _cachedTargetRotation);
 
         _disabledBossController = false;
+        _cachedTargetPoseValid = false;
         _target = null;
         _sessionActive = false;
     }

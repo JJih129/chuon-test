@@ -97,17 +97,17 @@ public class PlayerReferences : MonoBehaviour
 
     void Reset()
     {
-        AutoWire();
+        AutoWire(false);
     }
 
     void Awake()
     {
-        AutoWire();
+        AutoWire(true);
 
         if (Application.isPlaying)
         {
             EnsureRuntimeVisualPrefabHierarchy();
-            AutoWire();
+            AutoWire(true);
         }
     }
 
@@ -115,13 +115,13 @@ public class PlayerReferences : MonoBehaviour
     void OnValidate()
     {
         if (!Application.isPlaying)
-            AutoWire();
+            AutoWire(false);
     }
 #endif
 
     public void SyncSerializedReferences()
     {
-        AutoWire();
+        AutoWire(Application.isPlaying);
     }
 
     void EnsureRuntimeVisualPrefabHierarchy()
@@ -179,12 +179,12 @@ public class PlayerReferences : MonoBehaviour
 #if UNITY_EDITOR
     public void SyncVisualPrefabHierarchyForEditor()
     {
-        AutoWire();
+        AutoWire(false);
         SyncVisualPrefabHierarchy();
     }
 #endif
 
-    void AutoWire()
+    void AutoWire(bool allowRuntimeCreate)
     {
         if (!playerRoot)
             playerRoot = transform;
@@ -224,7 +224,7 @@ public class PlayerReferences : MonoBehaviour
         if (!mainAnimator)
             mainAnimator = GetComponent<Animator>() ?? (visualRig ? visualRig.MainAnimator : null) ?? GetComponentInChildren<Animator>(true);
 
-        var rootAttackHitbox = EnsureDefaultForwardHitbox();
+        var rootAttackHitbox = allowRuntimeCreate ? EnsureDefaultForwardHitbox() : null;
         if (rootAttackHitbox != null)
             attackHitboxes = new[] { rootAttackHitbox };
 
@@ -261,7 +261,25 @@ public class PlayerReferences : MonoBehaviour
         if (playerRoot == null)
             return null;
 
-        Transform hitboxTransform = playerRoot.Find(DefaultForwardHitboxName);
+        Transform hitboxTransform = null;
+        for (int i = playerRoot.childCount - 1; i >= 0; i--)
+        {
+            Transform child = playerRoot.GetChild(i);
+            if (!string.Equals(child.name, DefaultForwardHitboxName, System.StringComparison.Ordinal))
+                continue;
+
+            if (hitboxTransform == null)
+            {
+                hitboxTransform = child;
+                continue;
+            }
+
+            if (Application.isPlaying)
+                Object.Destroy(child.gameObject);
+            else
+                Object.DestroyImmediate(child.gameObject);
+        }
+
         if (hitboxTransform == null)
         {
             var go = new GameObject(DefaultForwardHitboxName);

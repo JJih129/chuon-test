@@ -72,7 +72,5 @@ public sealed class UltimateCameraSessionController : MonoBehaviour
             camera.enabled = active;
         }
 
-        if (debugLog)
-            Debug.Log($"[UltimateCameraSession] rig active={active}", this);
     }
 }

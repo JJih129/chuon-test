@@ -49,9 +49,12 @@ public sealed class UltimateCinematicController : MonoBehaviour
     UltimateSequenceData _data;
     UltimateTargetBinder.BoundTarget _boundTarget;
     Coroutine _walkoutRoutine;
+    Coroutine _safetyCleanupRoutine;
+    Coroutine _directorStartVerifyRoutine;
     bool _cleanupCompleted = true;
     bool _gameplayDamageCommitted;
     bool _cachedPlayerPoseValid;
+    bool _suppressDirectorStoppedCallback;
     Vector3 _cachedPlayerWorldPosition;
     Quaternion _cachedPlayerWorldRotation = Quaternion.identity;
 
@@ -126,7 +129,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (!owner.TryBeginExternalCinematicSession(
                 data.Activation.blockInputDuringSequence,
                 data.Activation.grantInvulnerability,
-                data.Activation.freezeGameplayTime,
+                false,
                 true))
         {
             Warn("Failed to begin external cinematic session.");
@@ -150,14 +153,33 @@ public sealed class UltimateCinematicController : MonoBehaviour
             targetBinder.SnapPlayerTo(introPosition, GetTargetLookPoint());
         }
 
+        RefreshIntroShotAnchors();
+
+        playableDirector.enabled = true;
+        if (!playableDirector.gameObject.activeSelf)
+            playableDirector.gameObject.SetActive(true);
+        playableDirector.timeUpdateMode = DirectorUpdateMode.UnscaledGameTime;
+        playableDirector.extrapolationMode = DirectorWrapMode.None;
+        _suppressDirectorStoppedCallback = true;
+        try
+        {
+            playableDirector.Stop();
+            if (!playableDirector.playableGraph.IsValid())
+                playableDirector.RebuildGraph();
+        }
+        finally
+        {
+            _suppressDirectorStoppedCallback = false;
+        }
+
         ConfigureDirectorBindings();
         EnsureSignalBindings();
-
+        playableDirector.RebindPlayableGraphOutputs();
         playableDirector.time = 0d;
-        playableDirector.Play();
-
-        if (debugLog)
-            Debug.Log("[UltimateCinematic] Play started.", this);
+        playableDirector.initialTime = 0d;
+        playableDirector.Play(playableDirector.playableAsset);
+        StartDirectorStartVerify();
+        StartSafetyCleanupWatchdog();
 
         return true;
     }
@@ -188,8 +210,11 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (_data == null)
             return;
 
+        RefreshIntroShotAnchors();
         Vector3 introPosition = targetBinder.GetIntroPosition(_data.Movement.introDistance, _data.Movement.introSideOffset);
-        targetBinder.SnapPlayerTo(introPosition, GetTargetLookPoint());
+        Vector3 targetLookPoint = GetTargetLookPoint();
+        targetBinder.SnapPlayerTo(introPosition, targetLookPoint);
+        targetBinder.FacePlayerTowardsImmediate(targetLookPoint);
         RefreshTargetAnchor();
         slashStormVfx?.PlayIntroPose();
     }
@@ -243,6 +268,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
         Vector3 startPosition = targetBinder.PlayerRoot.position;
         Vector3 endPosition = targetBinder.GetWalkoutPosition(_data.Movement.walkoutDistance, _data.Movement.walkoutSideOffset);
+        PositionTargetForWalkout(startPosition, endPosition);
         slashStormVfx?.PlayDrawRelease(startPosition, startPosition + (endPosition - startPosition).normalized * 2f);
         vfxPresenter?.PlayWalkout(startPosition, endPosition - startPosition);
         _walkoutRoutine = StartCoroutine(CoWalkout(startPosition, endPosition, Mathf.Max(0.01f, _data.Timings.walkoutDuration)));
@@ -338,11 +364,14 @@ public sealed class UltimateCinematicController : MonoBehaviour
             return;
         }
 
+        ConfigureTimelineAnimationClips(timelineAsset);
+        Animator animationTarget = ResolveTimelineAnimationTarget();
+
         foreach (TrackAsset track in timelineAsset.GetOutputTracks())
         {
             if (track is AnimationTrack)
             {
-                playableDirector.SetGenericBinding(track, bindings.PlayerAnimator);
+                playableDirector.SetGenericBinding(track, animationTarget);
                 continue;
             }
 
@@ -359,6 +388,57 @@ public sealed class UltimateCinematicController : MonoBehaviour
         }
 
         BindCinemachineShotReferences(timelineAsset);
+    }
+
+    void ConfigureTimelineAnimationClips(TimelineAsset timelineAsset)
+    {
+        if (timelineAsset == null || _data == null || _data.CinematicAnimation == null)
+            return;
+
+        foreach (TrackAsset track in timelineAsset.GetOutputTracks())
+        {
+            if (track is not AnimationTrack)
+                continue;
+
+            foreach (TimelineClip clip in track.GetClips())
+            {
+                if (clip.asset is not AnimationPlayableAsset animationAsset)
+                    continue;
+
+                if (clip.displayName.Contains("IntroPose", StringComparison.OrdinalIgnoreCase) && _data.CinematicAnimation.introPoseClip != null)
+                {
+                    animationAsset.clip = _data.CinematicAnimation.introPoseClip;
+                    clip.clipIn = Mathf.Clamp(
+                        _data.CinematicAnimation.introPoseClip.length * Mathf.Clamp01(_data.CinematicAnimation.introPoseClipStartNormalized),
+                        0f,
+                        Mathf.Max(0f, _data.CinematicAnimation.introPoseClip.length - 0.01f));
+                }
+                else if (clip.displayName.Contains("DrawSlash", StringComparison.OrdinalIgnoreCase) && _data.CinematicAnimation.dashSlashClip != null)
+                {
+                    animationAsset.clip = _data.CinematicAnimation.dashSlashClip;
+                    clip.clipIn = Mathf.Clamp(
+                        _data.CinematicAnimation.dashSlashClip.length * Mathf.Clamp01(_data.CinematicAnimation.dashSlashClipStartNormalized),
+                        0f,
+                        Mathf.Max(0f, _data.CinematicAnimation.dashSlashClip.length - 0.01f));
+                }
+                else if (clip.displayName.Contains("Walkout", StringComparison.OrdinalIgnoreCase) && _data.CinematicAnimation.walkoutClip != null)
+                {
+                    animationAsset.clip = _data.CinematicAnimation.walkoutClip;
+                    clip.clipIn = 0f;
+                }
+            }
+        }
+    }
+
+    Animator ResolveTimelineAnimationTarget()
+    {
+        if (targetBinder != null && targetBinder.PlayerPresentationAnimator != null)
+            return targetBinder.PlayerPresentationAnimator;
+
+        if (bindings != null && bindings.PlayerAnimator != null)
+            return bindings.PlayerAnimator;
+
+        return null;
     }
 
 #if UNITY_EDITOR
@@ -493,6 +573,30 @@ public sealed class UltimateCinematicController : MonoBehaviour
         return GetTargetLookPoint();
     }
 
+    void PositionTargetForWalkout(Vector3 startPosition, Vector3 endPosition)
+    {
+        if (bindings == null || bindings.TargetCineHoldAnchor == null)
+        {
+            RefreshTargetAnchor();
+            return;
+        }
+
+        Vector3 walkDirection = endPosition - startPosition;
+        walkDirection.y = 0f;
+        if (walkDirection.sqrMagnitude <= 0.0001f)
+        {
+            RefreshTargetAnchor();
+            return;
+        }
+
+        walkDirection.Normalize();
+        float holdDistance = Mathf.Max(1.2f, _data != null ? _data.Movement.walkoutDistance * 0.72f : 1.8f);
+        Vector3 holdPosition = endPosition - walkDirection * holdDistance;
+        holdPosition.y = bindings.TargetRoot != null ? bindings.TargetRoot.position.y : holdPosition.y;
+        bindings.TargetCineHoldAnchor.position = holdPosition;
+        RefreshTargetAnchor();
+    }
+
     void RefreshTargetAnchor()
     {
         if (enemyCinematicState == null)
@@ -522,7 +626,129 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
     void HandleDirectorStopped(PlayableDirector _)
     {
+        if (_suppressDirectorStoppedCallback)
+            return;
+
         CleanupIfNeeded("DirectorStopped");
+    }
+
+    void StartSafetyCleanupWatchdog()
+    {
+        if (_safetyCleanupRoutine != null)
+        {
+            StopCoroutine(_safetyCleanupRoutine);
+            _safetyCleanupRoutine = null;
+        }
+
+        double duration = playableDirector != null ? playableDirector.duration : 0d;
+        if (duration <= 0d && playableDirector != null && playableDirector.playableAsset is TimelineAsset asset)
+            duration = asset.duration;
+
+        float timeout = Mathf.Max(0.5f, (float)duration + 0.35f);
+        _safetyCleanupRoutine = StartCoroutine(CoSafetyCleanupWatchdog(timeout));
+    }
+
+    void StartDirectorStartVerify()
+    {
+        if (_directorStartVerifyRoutine != null)
+        {
+            StopCoroutine(_directorStartVerifyRoutine);
+            _directorStartVerifyRoutine = null;
+        }
+
+        _directorStartVerifyRoutine = StartCoroutine(CoDirectorStartVerify());
+    }
+
+    IEnumerator CoDirectorStartVerify()
+    {
+        yield return null;
+        if (_cleanupCompleted || playableDirector == null)
+        {
+            _directorStartVerifyRoutine = null;
+            yield break;
+        }
+
+        if (playableDirector.state != PlayState.Playing)
+        {
+            playableDirector.enabled = true;
+            if (!playableDirector.gameObject.activeSelf)
+                playableDirector.gameObject.SetActive(true);
+            _suppressDirectorStoppedCallback = true;
+            try
+            {
+                playableDirector.Stop();
+                playableDirector.time = 0d;
+                playableDirector.initialTime = 0d;
+            }
+            finally
+            {
+                _suppressDirectorStoppedCallback = false;
+            }
+
+            ConfigureDirectorBindings();
+            EnsureSignalBindings();
+            playableDirector.RebindPlayableGraphOutputs();
+            playableDirector.Play(playableDirector.playableAsset);
+            yield return null;
+        }
+
+        _directorStartVerifyRoutine = null;
+
+        if (_cleanupCompleted || playableDirector == null)
+            yield break;
+
+        if (playableDirector.state == PlayState.Playing)
+            yield break;
+
+        Warn($"Director failed to start. state={playableDirector.state}, time={playableDirector.time:0.###}");
+        CleanupIfNeeded("DirectorStartFailed");
+    }
+
+    void RefreshIntroShotAnchors()
+    {
+        if (bindings == null || bindings.PlayerRoot == null)
+            return;
+
+        Transform shot01Pos = bindings.Shot01Pos;
+        Transform shot01LookAt = bindings.Shot01LookAt;
+        Transform shot02Pos = bindings.Shot02Pos;
+        Transform shot02LookAt = bindings.Shot02LookAt;
+        if (shot01Pos == null || shot01LookAt == null || shot02Pos == null || shot02LookAt == null)
+            return;
+
+        Vector3 playerPosition = bindings.PlayerRoot.position;
+        Vector3 lookTarget = GetTargetLookPoint();
+        Vector3 forward = lookTarget - playerPosition;
+        forward.y = 0f;
+        if (forward.sqrMagnitude <= 0.0001f)
+            forward = bindings.PlayerRoot.forward;
+
+        forward.Normalize();
+        Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+        Vector3 chest = playerPosition + Vector3.up * 1.08f;
+        Vector3 head = playerPosition + Vector3.up * 1.38f;
+
+        // Keep the intro close to target-side frontal coverage instead of an over-the-shoulder angle.
+        shot01Pos.position = chest + forward * 1.28f + right * 0.03f;
+        shot01LookAt.position = chest + Vector3.up * 0.02f;
+
+        shot02Pos.position = head + forward * 0.82f + right * 0.02f;
+        shot02LookAt.position = head + right * 0.01f;
+    }
+
+    IEnumerator CoSafetyCleanupWatchdog(float timeout)
+    {
+        float elapsed = 0f;
+        while (!_cleanupCompleted && elapsed < timeout)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        _safetyCleanupRoutine = null;
+
+        if (!_cleanupCompleted)
+            CleanupIfNeeded("SafetyWatchdog");
     }
 
     void CacheInitialPlayerPose()
@@ -559,6 +785,32 @@ public sealed class UltimateCinematicController : MonoBehaviour
             _walkoutRoutine = null;
         }
 
+        if (_safetyCleanupRoutine != null)
+        {
+            StopCoroutine(_safetyCleanupRoutine);
+            _safetyCleanupRoutine = null;
+        }
+
+        if (_directorStartVerifyRoutine != null)
+        {
+            StopCoroutine(_directorStartVerifyRoutine);
+            _directorStartVerifyRoutine = null;
+        }
+
+        if (playableDirector != null)
+        {
+            _suppressDirectorStoppedCallback = true;
+            try
+            {
+                playableDirector.time = 0d;
+                playableDirector.Stop();
+            }
+            finally
+            {
+                _suppressDirectorStoppedCallback = false;
+            }
+        }
+
         SetPlayerPresentationState(true, false);
         slashStormVfx?.StopStorm(false);
         vfxPresenter?.EndSequence();
@@ -580,8 +832,6 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _gameplayDamageCommitted = false;
         _cachedPlayerPoseValid = false;
 
-        if (debugLog)
-            Debug.Log($"[UltimateCinematic] Cleanup: {reason}", this);
     }
 
     void Warn(string message)

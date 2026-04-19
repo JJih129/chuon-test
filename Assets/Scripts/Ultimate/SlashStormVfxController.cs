@@ -40,8 +40,6 @@ public sealed class SlashStormVfxController : MonoBehaviour
         if (!keepResidue)
             return;
 
-        if (debugLog)
-            Debug.Log("[SlashStorm] Keeping residue state.", this);
     }
 
     IEnumerator CoStorm(UltimateSequenceData data, UltimateTargetBinder binder)

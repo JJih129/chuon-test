@@ -70,8 +70,8 @@ MonoBehaviour:
     finalShakeAmplitude: 0.18
     finalShakeDuration: 0.16
   cinematicAnimation:
-    introPoseClip: {fileID: 7400000, guid: 3c7229c5a81676e40a595649c63fd0b2, type: 2}
-    dashSlashClip: {fileID: 0}
+    introPoseClip: {fileID: 7400000, guid: c9221b11d190c7d449c4dc7537108f8e, type: 2}
+    dashSlashClip: {fileID: 7400000, guid: f2c91788444039144b3029cb4bde2a9f, type: 2}
     walkoutClip: {fileID: 7400000, guid: 9fc370413956a934da609bfc04344391, type: 2}
     introPoseClipStartNormalized: 0.205
     introPoseClipEndNormalized: 0.205
@@ -79,7 +79,7 @@ MonoBehaviour:
     dashSlashClipEndNormalized: 0.68
     useSwordCloseupDuringIntro: 1
     introSwordCameraOffset: {x: 0, y: 0, z: 0}
-    introSwordLookLocalOffset: {x: 0.02, y: 0.04, z: 0.0}
+    introSwordLookLocalOffset: {x: 0.02, y: 0.04, z: 0}
     introSwordCloseupCamera:
       cameraLocalOffset: {x: 0.38, y: 0.24, z: -0.62}
       playerAnchorLocalOffset: {x: 0.22, y: 0.68, z: 0.05}
