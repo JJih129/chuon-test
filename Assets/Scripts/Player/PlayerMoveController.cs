@@ -40,6 +40,10 @@ public class PlayerMoveController : MonoBehaviour
     [SerializeField, Range(2f, 30f)] private float inputAccel = 14f;
     [SerializeField, Range(2f, 30f)] private float inputDecel = 18f;
     [SerializeField, Range(0f, 0.35f)] private float inputDeadzone = 0.08f;
+    [SerializeField] private bool useSoulsLikeRotationTuning = true;
+    [SerializeField, Range(180f, 720f)] private float soulsLikeRotationSpeed = 420f;
+    [SerializeField, Range(0.01f, 0.4f)] private float rotationDirectionSmoothTime = 0.12f;
+    [SerializeField, Range(0f, 1f)] private float rotationInputThreshold = 0.18f;
 
     // ─────────[④ 가드 중 속도 배수]─────────
     [Header("④ 가드 중 속도 배수")]
@@ -69,6 +73,7 @@ public class PlayerMoveController : MonoBehaviour
     private Vector2 _currentMoveInput;
     private Vector3 _currentWishDirection;
     private Vector3 _lastNonZeroMoveDirection;
+    private Vector3 _smoothedRotationDirection;
 
     const float AnimSpeedWriteEpsilon = 0.0025f;
 
@@ -100,6 +105,7 @@ public class PlayerMoveController : MonoBehaviour
         _currentMoveInput = Vector2.zero;
         _currentWishDirection = Vector3.zero;
         _lastNonZeroMoveDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
+        _smoothedRotationDirection = _lastNonZeroMoveDirection;
         SetAnimSpeed(0f);
     }
 
@@ -114,6 +120,7 @@ public class PlayerMoveController : MonoBehaviour
             _smoothedMoveInput = Vector2.zero;
             _currentMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
+            _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
             return;
@@ -125,6 +132,19 @@ public class PlayerMoveController : MonoBehaviour
             _currentMoveInput = Vector2.zero;
             _smoothedMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
+            _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
+            MoveWithGravity(Vector3.zero);
+            SetAnimSpeed(0f);
+            return;
+        }
+
+        if (guardController != null && guardController.IsMoveLockActive)
+        {
+            _velXZ = Vector3.zero;
+            _currentMoveInput = Vector2.zero;
+            _smoothedMoveInput = Vector2.zero;
+            _currentWishDirection = Vector3.zero;
+            _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
             return;
@@ -136,6 +156,7 @@ public class PlayerMoveController : MonoBehaviour
             _smoothedMoveInput = Vector2.zero;
             _currentMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
+            _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
             return;
@@ -190,8 +211,25 @@ public class PlayerMoveController : MonoBehaviour
             bool shouldRotate = !rotateOnlyWhenMoving || rotationDirection.sqrMagnitude > 0.0004f;
             if (shouldRotate && rotationDirection.sqrMagnitude > 0.000001f)
             {
-                Quaternion t = Quaternion.LookRotation(rotationDirection.normalized, Vector3.up);
-                playerRoot.rotation = Quaternion.RotateTowards(playerRoot.rotation, t, rotationSpeed * dt);
+                Vector3 desiredDirection = rotationDirection.normalized;
+                if (useSoulsLikeRotationTuning)
+                {
+                    if (_smoothedMoveInput.magnitude < rotationInputThreshold && _velXZ.sqrMagnitude <= 0.0004f)
+                        desiredDirection = _smoothedRotationDirection.sqrMagnitude > 0.0001f ? _smoothedRotationDirection : desiredDirection;
+
+                    Vector3 currentDirection = _smoothedRotationDirection.sqrMagnitude > 0.0001f ? _smoothedRotationDirection : desiredDirection;
+                    float smoothT = 1f - Mathf.Exp(-dt / Mathf.Max(0.0001f, rotationDirectionSmoothTime));
+                    _smoothedRotationDirection = Vector3.Slerp(currentDirection, desiredDirection, smoothT).normalized;
+                    desiredDirection = _smoothedRotationDirection;
+                }
+                else
+                {
+                    _smoothedRotationDirection = desiredDirection;
+                }
+
+                Quaternion t = Quaternion.LookRotation(desiredDirection, Vector3.up);
+                float turnSpeed = useSoulsLikeRotationTuning ? soulsLikeRotationSpeed : rotationSpeed;
+                playerRoot.rotation = Quaternion.RotateTowards(playerRoot.rotation, t, turnSpeed * dt);
             }
         }
 
@@ -221,6 +259,7 @@ public class PlayerMoveController : MonoBehaviour
             _smoothedMoveInput = Vector2.zero;
             _currentMoveInput = Vector2.zero;
             _currentWishDirection = Vector3.zero;
+            _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             SetAnimSpeed(0f);
         }
     }
@@ -233,6 +272,7 @@ public class PlayerMoveController : MonoBehaviour
         _smoothedMoveInput = Vector2.zero;
         _currentMoveInput = Vector2.zero;
         _currentWishDirection = Vector3.zero;
+        _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
         SetAnimSpeed(0f);
     }
 

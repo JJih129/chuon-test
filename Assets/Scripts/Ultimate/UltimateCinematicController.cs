@@ -26,6 +26,13 @@ public sealed class UltimateCinematicController : MonoBehaviour
     [SerializeField] private Renderer[] playerRenderers;
     [SerializeField] private GameObject playerGhostHelper;
 
+    [Header("Shot03 Orbit")]
+    [SerializeField] private float shot03OrbitRadius = 2.35f;
+    [SerializeField] private float shot03OrbitHeight = 1.45f;
+    [SerializeField] private float shot03OrbitDegreesPerSecond = 72f;
+    [SerializeField] private float shot03LookAtHeight = 1.05f;
+    [SerializeField] private float shot03LookAhead = 0.1f;
+
     [Header("Signals")]
     [SerializeField] private SignalAsset sigCameraSessionBegin;
     [SerializeField] private SignalAsset sigDrawPoseStart;
@@ -51,6 +58,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
     Coroutine _walkoutRoutine;
     Coroutine _safetyCleanupRoutine;
     Coroutine _directorStartVerifyRoutine;
+    Coroutine _slashStormCameraRoutine;
     bool _cleanupCompleted = true;
     bool _gameplayDamageCommitted;
     bool _cachedPlayerPoseValid;
@@ -239,6 +247,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
     public void OnSlashStormStart()
     {
         RefreshTargetAnchor();
+        StartSlashStormCameraOrbit();
     }
 
     public void OnSlashStormSustainStart()
@@ -261,6 +270,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (_data == null)
             return;
 
+        StopSlashStormCameraOrbit();
         slashStormVfx?.StopStorm(true);
 
         if (_walkoutRoutine != null)
@@ -549,6 +559,60 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _walkoutRoutine = null;
     }
 
+    void StartSlashStormCameraOrbit()
+    {
+        StopSlashStormCameraOrbit();
+
+        if (bindings == null || bindings.Shot03Pos == null || bindings.Shot03LookAt == null)
+            return;
+
+        _slashStormCameraRoutine = StartCoroutine(CoSlashStormCameraOrbit());
+    }
+
+    void StopSlashStormCameraOrbit()
+    {
+        if (_slashStormCameraRoutine == null)
+            return;
+
+        StopCoroutine(_slashStormCameraRoutine);
+        _slashStormCameraRoutine = null;
+    }
+
+    IEnumerator CoSlashStormCameraOrbit()
+    {
+        float angle = 0f;
+
+        while (!_cleanupCompleted && _data != null)
+        {
+            UpdateSlashStormShotAnchors(angle);
+            angle += shot03OrbitDegreesPerSecond * Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        _slashStormCameraRoutine = null;
+    }
+
+    void UpdateSlashStormShotAnchors(float angleDegrees)
+    {
+        if (bindings == null || bindings.Shot03Pos == null || bindings.Shot03LookAt == null)
+            return;
+
+        Vector3 center = GetTargetLookPoint();
+        Vector3 playerPosition = bindings.PlayerRoot != null ? bindings.PlayerRoot.position : center;
+        Vector3 toPlayer = playerPosition - center;
+        toPlayer.y = 0f;
+        if (toPlayer.sqrMagnitude <= 0.0001f)
+            toPlayer = Vector3.back;
+        toPlayer.Normalize();
+
+        Quaternion orbitRotation = Quaternion.AngleAxis(angleDegrees, Vector3.up);
+        Vector3 orbitDirection = orbitRotation * toPlayer;
+        Vector3 cameraPosition = center + orbitDirection * shot03OrbitRadius + Vector3.up * shot03OrbitHeight;
+
+        bindings.Shot03Pos.position = cameraPosition;
+        bindings.Shot03LookAt.position = center + Vector3.up * shot03LookAtHeight + orbitDirection * shot03LookAhead;
+    }
+
     Vector3 GetTargetLookPoint()
     {
         if (bindings != null && bindings.TargetCenter != null)
@@ -783,6 +847,12 @@ public sealed class UltimateCinematicController : MonoBehaviour
         {
             StopCoroutine(_walkoutRoutine);
             _walkoutRoutine = null;
+        }
+
+        if (_slashStormCameraRoutine != null)
+        {
+            StopCoroutine(_slashStormCameraRoutine);
+            _slashStormCameraRoutine = null;
         }
 
         if (_safetyCleanupRoutine != null)

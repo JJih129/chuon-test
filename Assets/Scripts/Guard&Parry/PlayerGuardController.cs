@@ -117,6 +117,8 @@ public class PlayerGuardController : MonoBehaviour
     public float parryStrainRecover = 24f;
     [Tooltip("가드 브레이크 지속 시간")]
     public float guardBreakDuration = 0.9f;
+    [Tooltip("활성화 시에만 가드 브레이크를 허용")]
+    public bool enableGuardBreak = false;
 
     // ─────────────────────────────────────────────────────────────────────
     // ⑥ 리액션 중 이동 잠금
@@ -189,6 +191,7 @@ public class PlayerGuardController : MonoBehaviour
     public bool IsParryRecovering => Time.realtimeSinceStartup < _parryRecoveryUntilRealtime;
     public bool IsGuardBroken => Time.realtimeSinceStartup < _guardBrokenUntilRealtime;
     public bool IsGuardMovementActive => IsGuarding || (_guardHoldPending && !IsGuardBroken && !IsGuardActionBlocked());
+    public bool IsMoveLockActive => _moveLockedByTimer && Time.time < _moveUnlockAt;
     public float GuardStrainNormalized => !enableGuardStrain || maxGuardStrain <= 0f ? 0f : Mathf.Clamp01(_guardStrain / maxGuardStrain);
     public bool IsParryCounterReady => enableParryCounterWindow && Time.realtimeSinceStartup < _parryCounterUntilRealtime;
     public float ParryCounterRemaining => IsParryCounterReady ? Mathf.Max(0f, _parryCounterUntilRealtime - Time.realtimeSinceStartup) : 0f;
@@ -627,6 +630,9 @@ public class PlayerGuardController : MonoBehaviour
         _guardStrain = Mathf.Min(maxGuardStrain, _guardStrain + added);
         _guardStrainRecoverAllowedRealtime = Time.realtimeSinceStartup + Mathf.Max(0f, guardStrainRecoverDelay);
 
+        if (!enableGuardBreak)
+            return false;
+
         if (_guardStrain + 0.001f < maxGuardStrain)
             return false;
 
@@ -636,6 +642,9 @@ public class PlayerGuardController : MonoBehaviour
 
     public bool ForceGuardBreakFromAttack()
     {
+        if (!enableGuardBreak)
+            return false;
+
         if (IsGuardBroken)
             return true;
 
@@ -706,14 +715,14 @@ public class PlayerGuardController : MonoBehaviour
     {
         _guardBrokenUntilRealtime = Mathf.Max(_guardBrokenUntilRealtime, Time.realtimeSinceStartup + Mathf.Max(0.01f, guardBreakDuration));
         _guardStrainRecoverAllowedRealtime = _guardBrokenUntilRealtime + Mathf.Max(0f, guardStrainRecoverDelay);
-        _guardHoldPending = false;
+        _guardHoldPending = autoResumeGuardIfHolding && IsGuardInputHeldNow();
         _parryAvailableThisGuard = false;
         _parryRecoveryUntilRealtime = float.NegativeInfinity;
         _parrySpamPenaltyStacks = 0;
         _lastParryAttemptStartedRealtime = float.NegativeInfinity;
         _guardRearmBlockedUntilRealtime = float.NegativeInfinity;
         _parryCounterUntilRealtime = float.NegativeInfinity;
-        _requireGuardReleaseAfterBreak = true;
+        _requireGuardReleaseAfterBreak = false;
         _guardReactionVisualUntilRealtime = float.NegativeInfinity;
         ClearGuardVisualImmediate();
 
@@ -727,6 +736,17 @@ public class PlayerGuardController : MonoBehaviour
         }
         LockMoveFor(guardBreakDuration);
         OnGuardBreak?.Invoke();
+    }
+
+    bool IsGuardInputHeldNow()
+    {
+        if (guardAction && guardAction.action != null)
+            return guardAction.action.IsPressed();
+
+        if (ShouldUseLegacyGuardFallback())
+            return Input.GetKey(KeyCode.E);
+
+        return false;
     }
 
     // ───────────────────── 이동 잠금 로직 ─────────────────────

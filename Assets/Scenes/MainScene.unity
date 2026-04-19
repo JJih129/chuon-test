@@ -29956,9 +29956,9 @@ MonoBehaviour:
   playerTracker: {fileID: 0}
   currentState: 1
   introIdleDuration: 3
-  combatIdleTime: 0.72
-  globalPostAttackRecoveryPadding: 0.14
-  globalFollowUpDelayPadding: 0.08
+  combatIdleTime: 0.9
+  globalPostAttackRecoveryPadding: 0.22
+  globalFollowUpDelayPadding: 0.14
   ultimateVictimRecoveryDuration: 1.2
   maxAttackStateWaitTime: 2
   phaseTwoThresholdNormalized: 0.66
@@ -29979,14 +29979,14 @@ MonoBehaviour:
   minimumDodgePunishWindow: 0.52
   minimumDangerPunishWindow: 0.82
   parryStunDuration: 0.32
-  parryRecoveryDuration: 1.6
-  parryPunishWindowDuration: 1.1
+  parryRecoveryDuration: 2.2
+  parryPunishWindowDuration: 1.35
   parryPunishDamageMultiplier: 1.35
   parryPunishSource: PARRY
   parryStunTriggerName: Stagger
   parryStunStateName: Break
   parryStunTransitionDuration: 0.03
-  followUpRecoveryTax: 0.26
+  followUpRecoveryTax: 0.34
   fakeOutFollowUpChanceMultiplier: 0.18
   dangerFollowUpChanceMultiplier: 0.06
   punishHeavyFollowUpChanceMultiplier: 0.24
@@ -30019,7 +30019,7 @@ MonoBehaviour:
     causesGuardBreak: 0
     damageAmount: 12
     telegraphType: 1
-    telegraphLeadTime: 0.32
+    telegraphLeadTime: 0.4
     telegraphLabel: CHECK
     timingStyle: 1
     extraHoldDelay: 0
@@ -30028,13 +30028,13 @@ MonoBehaviour:
     preAttackPoseTriggerName: 
     preAttackPoseDuration: 0
     preAttackPoseLabel: 
-    cooldown: 1.85
+    cooldown: 2.2
     currentCooldown: 0
-    weight: 1.05
+    weight: 0.92
     minRange: 0
     maxRange: 2.2
     forbiddenAfter: a
-    recoveryTime: 0.56
+    recoveryTime: 0.78
     punishWindowDuration: 0.42
     punishDamageMultiplier: 1.06
     hitboxExpandedPadding: 0
@@ -30044,7 +30044,7 @@ MonoBehaviour:
     allowFollowUpChain: 1
     followUpChance: 0.22
     followUpMaxDistance: 2.4
-    followUpDelay: 0.22
+    followUpDelay: 0.32
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 3
     minPhase: 1
@@ -30058,7 +30058,7 @@ MonoBehaviour:
     causesGuardBreak: 0
     damageAmount: 16
     telegraphType: 1
-    telegraphLeadTime: 0.38
+    telegraphLeadTime: 0.48
     telegraphLabel: SLASH
     timingStyle: 1
     extraHoldDelay: 0
@@ -30067,13 +30067,13 @@ MonoBehaviour:
     preAttackPoseTriggerName: 
     preAttackPoseDuration: 0
     preAttackPoseLabel: 
-    cooldown: 2.35
+    cooldown: 2.7
     currentCooldown: 0
-    weight: 1
+    weight: 0.95
     minRange: 0
     maxRange: 3.6
     forbiddenAfter: b
-    recoveryTime: 0.72
+    recoveryTime: 0.92
     punishWindowDuration: 0.58
     punishDamageMultiplier: 1.12
     hitboxExpandedPadding: 0
@@ -30083,7 +30083,7 @@ MonoBehaviour:
     allowFollowUpChain: 1
     followUpChance: 0.16
     followUpMaxDistance: 2.8
-    followUpDelay: 0.26
+    followUpDelay: 0.38
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 3
     minPhase: 1
@@ -30097,7 +30097,7 @@ MonoBehaviour:
     causesGuardBreak: 1
     damageAmount: 24
     telegraphType: 4
-    telegraphLeadTime: 0.78
+    telegraphLeadTime: 0.92
     telegraphLabel: CRUSH
     timingStyle: 3
     extraHoldDelay: 0.24
@@ -30106,13 +30106,13 @@ MonoBehaviour:
     preAttackPoseTriggerName: 
     preAttackPoseDuration: 0
     preAttackPoseLabel: 
-    cooldown: 5.4
+    cooldown: 6.2
     currentCooldown: 0
-    weight: 0.38
+    weight: 0.32
     minRange: 0
     maxRange: 3.2
     forbiddenAfter: c
-    recoveryTime: 1.18
+    recoveryTime: 1.45
     punishWindowDuration: 1.35
     punishDamageMultiplier: 1.48
     hitboxExpandedPadding: 0
@@ -30122,7 +30122,7 @@ MonoBehaviour:
     allowFollowUpChain: 0
     followUpChance: 0
     followUpMaxDistance: 0
-    followUpDelay: 0.35
+    followUpDelay: 0.48
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 0
     minPhase: 3
@@ -30136,7 +30136,7 @@ MonoBehaviour:
     causesGuardBreak: 0
     damageAmount: 20
     telegraphType: 3
-    telegraphLeadTime: 0.48
+    telegraphLeadTime: 0.58
     telegraphLabel: LUNGE
     timingStyle: 2
     extraHoldDelay: 0.16
@@ -30145,13 +30145,13 @@ MonoBehaviour:
     preAttackPoseTriggerName: 
     preAttackPoseDuration: 0
     preAttackPoseLabel: 
-    cooldown: 3.55
+    cooldown: 4.1
     currentCooldown: 0
-    weight: 0.78
+    weight: 0.62
     minRange: 0
     maxRange: 6.4
     forbiddenAfter: d
-    recoveryTime: 0.98
+    recoveryTime: 1.18
     punishWindowDuration: 0.82
     punishDamageMultiplier: 1.24
     hitboxExpandedPadding: 0
@@ -30161,7 +30161,7 @@ MonoBehaviour:
     allowFollowUpChain: 0
     followUpChance: 0
     followUpMaxDistance: 0
-    followUpDelay: 0.3
+    followUpDelay: 0.42
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 0
     minPhase: 2
@@ -30175,7 +30175,7 @@ MonoBehaviour:
     causesGuardBreak: 0
     damageAmount: 16
     telegraphType: 2
-    telegraphLeadTime: 0.36
+    telegraphLeadTime: 0.46
     telegraphLabel: PRESSURE
     timingStyle: 1
     extraHoldDelay: 0
@@ -30184,13 +30184,13 @@ MonoBehaviour:
     preAttackPoseTriggerName: 
     preAttackPoseDuration: 0
     preAttackPoseLabel: 
-    cooldown: 3.15
+    cooldown: 3.65
     currentCooldown: 0
-    weight: 0.82
+    weight: 0.68
     minRange: 0
     maxRange: 4.2
     forbiddenAfter: e
-    recoveryTime: 0.84
+    recoveryTime: 1.02
     punishWindowDuration: 0.56
     punishDamageMultiplier: 1.05
     hitboxExpandedPadding: 0
@@ -30200,7 +30200,7 @@ MonoBehaviour:
     allowFollowUpChain: 1
     followUpChance: 0.1
     followUpMaxDistance: 2.6
-    followUpDelay: 0.24
+    followUpDelay: 0.36
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 1
     minPhase: 2
@@ -30214,7 +30214,7 @@ MonoBehaviour:
     causesGuardBreak: 0
     damageAmount: 16
     telegraphType: 3
-    telegraphLeadTime: 0.42
+    telegraphLeadTime: 0.52
     telegraphLabel: SWEEP
     timingStyle: 2
     extraHoldDelay: 0.12
@@ -30223,13 +30223,13 @@ MonoBehaviour:
     preAttackPoseTriggerName: 
     preAttackPoseDuration: 0
     preAttackPoseLabel: 
-    cooldown: 3.05
+    cooldown: 3.55
     currentCooldown: 0
-    weight: 0.62
+    weight: 0.52
     minRange: 0
     maxRange: 3.4
     forbiddenAfter: f
-    recoveryTime: 0.94
+    recoveryTime: 1.12
     punishWindowDuration: 0.72
     punishDamageMultiplier: 1.18
     hitboxExpandedPadding: 0
@@ -30239,7 +30239,7 @@ MonoBehaviour:
     allowFollowUpChain: 0
     followUpChance: 0
     followUpMaxDistance: 0
-    followUpDelay: 0.32
+    followUpDelay: 0.42
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 0
     minPhase: 2
