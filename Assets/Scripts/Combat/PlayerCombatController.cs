@@ -10,11 +10,11 @@ public class PlayerCombatController : MonoBehaviour
     // ───────────────── 변수 헤더 ─────────────────
     [Header("▶ 입력 설정")]
     [SerializeField] private float inputBufferTime = 0.25f;
-    [SerializeField] private float comboResetTime = 0.6f;
+    [SerializeField] private float comboResetTime = 0.45f;
     [SerializeField] private float minClickInterval = 0.05f;
-    [SerializeField] private float comboChainBufferTime = 0.45f;
+    [SerializeField] private float comboChainBufferTime = 0.28f;
     [SerializeField, Range(0f, 0.25f)] private float comboLateGraceNormalized = 0.08f;
-    [SerializeField] private float attackTransitionGraceSeconds = 0.08f;
+    [SerializeField] private float attackTransitionGraceSeconds = 0.05f;
     [SerializeField, Range(0f, 0.2f)] private float dodgeCancelEarlyBufferNormalized = 0.04f;
 
     [Header("▶ 데이터 기반 히트 윈도우")]

@@ -51,6 +51,11 @@ public class PlayerMoveController : MonoBehaviour
     [SerializeField, Range(0.1f, 1f)] private float guardBackMul = 0.6f;
     [SerializeField, Range(0.1f, 1f)] private float guardStrafeMul = 0.7f;
 
+    [Header("④-1 락온 중 속도 배수")]
+    [SerializeField, Range(0.1f, 1f)] private float lockOnFwdMul = 0.82f;
+    [SerializeField, Range(0.1f, 1f)] private float lockOnBackMul = 0.62f;
+    [SerializeField, Range(0.1f, 1f)] private float lockOnStrafeMul = 0.72f;
+
     // ─────────[⑤ 중력]─────────
     [Header("⑤ 중력")]
     [SerializeField, Range(5f, 30f)] private float gravity = 20f;
@@ -199,7 +204,7 @@ public class PlayerMoveController : MonoBehaviour
             _lastNonZeroMoveDirection = wishDir;
 
         // 5. 속도 계산 (가속/감속)
-        float targetSpeed = ComputeTargetSpeed(_smoothedMoveInput, IsGuarding()) * Mathf.Clamp01(_smoothedMoveInput.magnitude);
+        float targetSpeed = ComputeTargetSpeed(_smoothedMoveInput, IsGuarding(), locked) * Mathf.Clamp01(_smoothedMoveInput.magnitude);
         Vector3 targetVel = wishDir * targetSpeed;
 
         _velXZ = MoveTowardsXZ(_velXZ, targetVel, accel, decel, dt);
@@ -320,15 +325,27 @@ public class PlayerMoveController : MonoBehaviour
         return input.magnitude <= inputDeadzone ? Vector2.zero : input;
     }
 
-    float ComputeTargetSpeed(Vector2 input, bool guarding)
+    float ComputeTargetSpeed(Vector2 input, bool guarding, bool locked)
     {
         if (input.sqrMagnitude <= 1e-6f) return 0f;
-        if (!guarding) return runSpeed;
-        
-        float f = input.y;
-        if (f > 0.5f) return runSpeed * guardFwdMul;
-        if (f < -0.5f) return runSpeed * guardBackMul;
-        return runSpeed * guardStrafeMul;
+
+        if (guarding)
+        {
+            float f = input.y;
+            if (f > 0.5f) return runSpeed * guardFwdMul;
+            if (f < -0.5f) return runSpeed * guardBackMul;
+            return runSpeed * guardStrafeMul;
+        }
+
+        if (locked)
+        {
+            float f = input.y;
+            if (f > 0.5f) return runSpeed * lockOnFwdMul;
+            if (f < -0.5f) return runSpeed * lockOnBackMul;
+            return runSpeed * lockOnStrafeMul;
+        }
+
+        return runSpeed;
     }
 
     bool IsGuarding()

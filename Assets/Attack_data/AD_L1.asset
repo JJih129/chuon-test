@@ -14,10 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   stateName: L1
   animatorLayer: 1
-  playSpeed: 1
+  playSpeed: 1.16
   hitTime: 0.35
-  cancelStart: 0.44
-  cancelEnd: 0.92
+  cancelStart: 0.34
+  cancelEnd: 0.86
   baseDamage: 10
   hitType: 1
   hitWindows: []

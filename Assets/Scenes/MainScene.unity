@@ -2177,8 +2177,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.2158441, y: 0.0046171388, z: 0.0010206527, w: 0.9764164}
-  m_LocalPosition: {x: -0.61812174, y: -1.0767186, z: -22.500896}
+  m_LocalRotation: {x: -0.21864899, y: 0.0056454935, z: 0.0012650118, w: 0.97578645}
+  m_LocalPosition: {x: -0.63104194, y: -1.1082958, z: -22.488886}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -7326,6 +7326,11 @@ MonoBehaviour:
   - {fileID: 298233475}
   - {fileID: 378939647}
   playerGhostHelper: {fileID: 571111860}
+  shot03OrbitRadius: 2.35
+  shot03OrbitHeight: 1.45
+  shot03OrbitDegreesPerSecond: 72
+  shot03LookAtHeight: 1.05
+  shot03LookAhead: 0.1
   sigCameraSessionBegin: {fileID: 11400000, guid: 62f5bfac92a226d4a845447a47f7ed3d, type: 2}
   sigDrawPoseStart: {fileID: 11400000, guid: 512762858cdac0c4ea2750c0b22d609d, type: 2}
   sigCloseUpStart: {fileID: 11400000, guid: a314609f151fefa42ba5ac9a36c06e3d, type: 2}
@@ -15741,7 +15746,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 5000
-  field of view: 46.8034
+  field of view: 40
   orthographic: 0
   orthographic size: 10
   m_Depth: -1
@@ -15767,8 +15772,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.2158441, y: 0.0046171388, z: 0.0010206527, w: 0.9764164}
-  m_LocalPosition: {x: -0.5587721, y: 0.09122741, z: -16.515463}
+  m_LocalRotation: {x: -0.01122562, y: 0.9442602, z: -0.32741198, w: -0.03237482}
+  m_LocalPosition: {x: -0.42255434, y: 2.6908677, z: -12.325872}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -20885,6 +20890,18 @@ PrefabInstance:
       propertyPath: visualRig
       value: 
       objectReference: {fileID: 2112828027}
+    - target: {fileID: 245853775745863209, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
+      propertyPath: attackHitboxes.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 245853775745863209, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
+      propertyPath: attackHitboxes.Array.data[0]
+      value: 
+      objectReference: {fileID: 1632515188}
+    - target: {fileID: 634111914035777834, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
+      propertyPath: attackHitboxes.Array.data[0]
+      value: 
+      objectReference: {fileID: 1632515188}
     - target: {fileID: 3762919195783750324, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
       propertyPath: m_Name
       value: PlayerRoot

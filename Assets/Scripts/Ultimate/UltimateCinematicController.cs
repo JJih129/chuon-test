@@ -27,11 +27,11 @@ public sealed class UltimateCinematicController : MonoBehaviour
     [SerializeField] private GameObject playerGhostHelper;
 
     [Header("Shot03 Orbit")]
-    [SerializeField] private float shot03OrbitRadius = 2.35f;
-    [SerializeField] private float shot03OrbitHeight = 1.45f;
-    [SerializeField] private float shot03OrbitDegreesPerSecond = 72f;
-    [SerializeField] private float shot03LookAtHeight = 1.05f;
-    [SerializeField] private float shot03LookAhead = 0.1f;
+    [SerializeField] private float shot03OrbitRadius = 5.6f;
+    [SerializeField] private float shot03OrbitHeight = 2.05f;
+    [SerializeField] private float shot03OrbitDegreesPerSecond = 54f;
+    [SerializeField] private float shot03LookAtHeight = 1.2f;
+    [SerializeField] private float shot03LookAhead = -0.18f;
 
     [Header("Signals")]
     [SerializeField] private SignalAsset sigCameraSessionBegin;

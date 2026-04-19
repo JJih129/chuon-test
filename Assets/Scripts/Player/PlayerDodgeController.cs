@@ -73,6 +73,8 @@ public class PlayerDodgeController : MonoBehaviour
     [Header("Animator Params")]
     [SerializeField] string p_IsDodging = "IsDodging";
     [SerializeField] string p_DodgeTrigger = "";
+    [SerializeField] string p_DodgeMoveX = "DodgeMoveX";
+    [SerializeField] string p_DodgeMoveY = "DodgeMoveY";
     [SerializeField] bool forceImmediateDodgeState = true;
     [SerializeField] string dodgeStateName = "Base Layer.Dodge_Roll";
     [SerializeField, Range(0f, 0.08f)] float dodgeStateTransitionDuration = 0.02f;
@@ -81,7 +83,8 @@ public class PlayerDodgeController : MonoBehaviour
     [Header("Move Lock")]
     [SerializeField] bool lockMoveDuringDodge = true;
     [SerializeField] bool zeroVelocityOnDodge = true;
-    [SerializeField] bool disableRootMotionOnDodge = true;
+    [SerializeField] bool disableRootMotionOnDodge = false;
+    [SerializeField] bool useDirectionalRootMotionDodge = true;
 
     [Header("Events")]
     public UnityEvent OnDodgeStart;
@@ -110,10 +113,14 @@ public class PlayerDodgeController : MonoBehaviour
     PlayerReferences playerReferences;
     bool hasIsDodgingParam;
     bool hasDodgeTriggerParam;
+    bool hasDodgeMoveXParam;
+    bool hasDodgeMoveYParam;
     int dodgeStateHash;
     Vector3 lastCommittedMoveDirection;
     float lastCommittedMoveRealtime = float.NegativeInfinity;
     uint _lastConsumedDodgeCommandSequence;
+    bool _cachedAnimatorRootMotionBeforeDodge;
+    bool _hasCachedAnimatorRootMotionBeforeDodge;
 
     void Reset()
     {
@@ -184,10 +191,18 @@ public class PlayerDodgeController : MonoBehaviour
         if (lockMoveDuringDodge && moveLocker != null)
             moveLocker.Lock("DODGE", dodgeDuration, zeroVelocityOnDodge, disableRootMotionOnDodge);
 
+        if (useDirectionalRootMotionDodge && animator != null)
+        {
+            _cachedAnimatorRootMotionBeforeDodge = animator.applyRootMotion;
+            _hasCachedAnimatorRootMotionBeforeDodge = true;
+            animator.applyRootMotion = true;
+        }
+
         ApplyImmediateDodgeFacing();
 
         if (animator != null)
         {
+            ApplyDodgeAnimatorDirection();
             if (hasIsDodgingParam)
                 animator.SetBool(p_IsDodging, true);
             if (hasDodgeTriggerParam)
@@ -224,7 +239,11 @@ public class PlayerDodgeController : MonoBehaviour
 
         ApplyDodgeFacing(currentT);
 
-        if (feelProfile == DodgeFeelProfile.Soulslike)
+        if (useDirectionalRootMotionDodge && animator != null && animator.applyRootMotion)
+        {
+            // Root motion drives translation while dodging.
+        }
+        else if (feelProfile == DodgeFeelProfile.Soulslike)
         {
             float distanceStep = Mathf.Max(0f, EvaluateSoulslikeTravel01(currentT) - EvaluateSoulslikeTravel01(prevT)) * totalDodgeDistance;
             if (distanceStep > 0f)
@@ -247,8 +266,19 @@ public class PlayerDodgeController : MonoBehaviour
         if (lockMoveDuringDodge && moveLocker != null)
             moveLocker.Unlock("DODGE");
 
+        if (animator != null && _hasCachedAnimatorRootMotionBeforeDodge)
+        {
+            animator.applyRootMotion = _cachedAnimatorRootMotionBeforeDodge;
+            _hasCachedAnimatorRootMotionBeforeDodge = false;
+        }
+
         if (animator != null && hasIsDodgingParam)
             animator.SetBool(p_IsDodging, false);
+        if (animator != null)
+        {
+            if (hasDodgeMoveXParam) animator.SetFloat(p_DodgeMoveX, 0f);
+            if (hasDodgeMoveYParam) animator.SetFloat(p_DodgeMoveY, 0f);
+        }
 
         if (playEndSound)
             PlayDodgeEndSound();
@@ -450,7 +480,24 @@ public class PlayerDodgeController : MonoBehaviour
     {
         hasIsDodgingParam = HasAnimatorParameter(animator, p_IsDodging, AnimatorControllerParameterType.Bool);
         hasDodgeTriggerParam = HasAnimatorParameter(animator, p_DodgeTrigger, AnimatorControllerParameterType.Trigger);
+        hasDodgeMoveXParam = HasAnimatorParameter(animator, p_DodgeMoveX, AnimatorControllerParameterType.Float);
+        hasDodgeMoveYParam = HasAnimatorParameter(animator, p_DodgeMoveY, AnimatorControllerParameterType.Float);
         dodgeStateHash = string.IsNullOrWhiteSpace(dodgeStateName) ? 0 : Animator.StringToHash(dodgeStateName);
+    }
+
+    void ApplyDodgeAnimatorDirection()
+    {
+        if (animator == null || (!hasDodgeMoveXParam && !hasDodgeMoveYParam))
+            return;
+
+        Transform basis = GetDodgeBasis();
+        Vector3 forward = Flat(basis.forward);
+        Vector3 right = Flat(basis.right);
+        float x = Mathf.Clamp(Vector3.Dot(dodgeDir, right), -1f, 1f);
+        float y = Mathf.Clamp(Vector3.Dot(dodgeDir, forward), -1f, 1f);
+
+        if (hasDodgeMoveXParam) animator.SetFloat(p_DodgeMoveX, x);
+        if (hasDodgeMoveYParam) animator.SetFloat(p_DodgeMoveY, y);
     }
 
     static bool HasAnimatorParameter(Animator targetAnimator, string parameterName, AnimatorControllerParameterType expectedType)
@@ -664,6 +711,16 @@ public class PlayerDodgeController : MonoBehaviour
         dodgeAudioSource.spatialBlend = 1f;
         dodgeAudioSource.rolloffMode = AudioRolloffMode.Linear;
         dodgeAudioSource.maxDistance = 30f;
+    }
+
+    void OnAnimatorMove()
+    {
+        if (!useDirectionalRootMotionDodge || !isDodging || animator == null || cc == null || !animator.applyRootMotion)
+            return;
+
+        Vector3 delta = animator.deltaPosition;
+        if (delta.sqrMagnitude > 0f)
+            cc.Move(delta);
     }
 
     void PlayDodgeStartSound()

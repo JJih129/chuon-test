@@ -1245,6 +1245,7 @@ GameObject:
   - component: {fileID: 1662422217768781370}
   - component: {fileID: 6859759437674284329}
   - component: {fileID: 2900880499268755157}
+  - component: {fileID: 4715231189046627701}
   - component: {fileID: 515813866395359483}
   - component: {fileID: 2570013235222381821}
   - component: {fileID: 171033920233620033}
@@ -1599,13 +1600,16 @@ MonoBehaviour:
   dodgeRotationWindowNormalized: 0.22
   p_IsDodging: IsDodging
   p_DodgeTrigger: 
+  p_DodgeMoveX: DodgeMoveX
+  p_DodgeMoveY: DodgeMoveY
   forceImmediateDodgeState: 1
   dodgeStateName: Base Layer.Dodge_Roll
   dodgeStateTransitionDuration: 0.02
   dodgeStateStartNormalizedTime: 0
   lockMoveDuringDodge: 1
   zeroVelocityOnDodge: 1
-  disableRootMotionOnDodge: 1
+  disableRootMotionOnDodge: 0
+  useDirectionalRootMotionDodge: 1
   OnDodgeStart:
     m_PersistentCalls:
       m_Calls: []
@@ -2163,6 +2167,36 @@ MonoBehaviour:
   minSpeedToUseFallback: 0.05
   inputFallbackScale: 1
   guardIdleSnap: 0.08
+--- !u!114 &4715231189046627701
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3762919195783750324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f2d5df6a2f6d4ee3ac8b9f3a0f65a981, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  animator: {fileID: 5777839405900600649}
+  playerReferences: {fileID: 245853775745863209}
+  moveController: {fileID: 710101040890137229}
+  playerLockOn: {fileID: 3629856975197315660}
+  guardController: {fileID: 6669824055994905385}
+  movementBasis: {fileID: 9217704258761649807}
+  characterController: {fileID: 7261877498965566706}
+  rigidbodyRef: {fileID: 0}
+  velocitySource: {fileID: 9217704258761649807}
+  p_IsLockOn: IsLockOn
+  p_LockOnSpeed: LockOnSpeed
+  p_MoveX: LockOnMoveX
+  p_MoveY: LockOnMoveY
+  normalizeSpeed: 4
+  deadZone: 0.12
+  dampTime: 0.08
+  idleSnap: 0.06
+  write2DBlend: 1
 --- !u!114 &515813866395359483
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2449,6 +2483,26 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   combatController: {fileID: 3625136038103508255}
+  footstepSource: {fileID: 7796985139684201708}
+  footstepClips:
+  - {fileID: 8300000, guid: b4692db9cbc277149a90728fc7f51d5c, type: 3}
+  - {fileID: 8300000, guid: f535df1b37c90694eaa1ab6194ee9c54, type: 3}
+  - {fileID: 8300000, guid: 1da37f9906c46de4fa5666397cbcadec, type: 3}
+  - {fileID: 8300000, guid: 7e3e45f7eb7feaa49948b621257bbc76, type: 3}
+  - {fileID: 8300000, guid: 82ba0102078165141a839e959fdc73e7, type: 3}
+  - {fileID: 8300000, guid: 334b396aba5e4dd428bb6db8f8b44111, type: 3}
+  - {fileID: 8300000, guid: 0e8d3d974d1526c4aada7d0fd4916c4e, type: 3}
+  - {fileID: 8300000, guid: 7d2155952fe4c1d4990a0a220623c08f, type: 3}
+  - {fileID: 8300000, guid: f28becedd52dd144da48a65a1d3c60d1, type: 3}
+  - {fileID: 8300000, guid: 329b1f0f182843c47a23dcc52057afa7, type: 3}
+  useVelocityDrivenFootsteps: 1
+  minMoveSpeedForFootsteps: 0.2
+  minStepInterval: 0.26
+  maxStepInterval: 0.46
+  maxSpeedForCadence: 4.5
+  footstepVolume: 0.7
+  footstepVolumeJitter: 0.08
+  footstepPitchJitter: 0.06
 --- !u!1 &3795597417212057411
 GameObject:
   m_ObjectHideFlags: 0
