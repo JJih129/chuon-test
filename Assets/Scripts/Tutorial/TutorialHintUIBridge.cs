@@ -21,8 +21,8 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private TutorialComboGuideView comboGuideView;
 
     [Header("Runtime Layout")]
-    [SerializeField] private Vector2 dialoguePanelAnchoredPosition = new Vector2(32f, 32f);
-    [SerializeField] private Vector2 dialoguePanelSize = new Vector2(880f, 236f);
+    [SerializeField] private Vector2 dialoguePanelAnchoredPosition = new Vector2(0f, 112f);
+    [SerializeField] private Vector2 dialoguePanelSize = new Vector2(1280f, 180f);
     [SerializeField] private Vector2 objectivePanelAnchoredPosition = new Vector2(-28f, -28f);
     [SerializeField] private Vector2 objectivePanelSize = new Vector2(960f, 372f);
     [SerializeField] private Vector2 comboPanelAnchoredPosition = new Vector2(32f, -160f);
@@ -224,29 +224,38 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     void CreateDialoguePanel()
     {
-        CanvasGroup panelGroup = CreatePanelGroup(
+        CanvasGroup panelGroup = CreateCanvasGroup(
             "DialoguePanel",
             _runtimeHudRoot,
-            new Vector2(0f, 0f),
-            new Vector2(0f, 0f),
-            new Vector2(0f, 0f),
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
             dialoguePanelAnchoredPosition,
-            dialoguePanelSize,
-            dialoguePanelColor);
+            dialoguePanelSize);
         panelGroup.alpha = 0f;
-
-        EnsureAccent(panelGroup.transform, "Accent", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 8f));
 
         dialogueGroup = panelGroup;
         speakerText = EnsureText(panelGroup.transform, "Speaker");
-        ApplyTextStyle(speakerText, 28f, FontStyles.Bold, speakerColor, TextAlignmentOptions.TopLeft);
-        ConfigureRect(speakerText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(24f, -18f), new Vector2(dialoguePanelSize.x - 48f, 34f));
+        ApplyTextStyle(speakerText, 24f, FontStyles.Bold, speakerColor, TextAlignmentOptions.Bottom);
+        ConfigureRect(
+            speakerText.rectTransform,
+            new Vector2(0.5f, 1f),
+            new Vector2(0.5f, 1f),
+            new Vector2(0.5f, 1f),
+            new Vector2(0f, -8f),
+            new Vector2(dialoguePanelSize.x, 28f));
 
         contentText = EnsureText(panelGroup.transform, "Content");
-        ApplyTextStyle(contentText, 30f, FontStyles.Bold, guideBodyColor, TextAlignmentOptions.TopLeft);
+        ApplyTextStyle(contentText, 30f, FontStyles.Bold, guideBodyColor, TextAlignmentOptions.Top);
         contentText.enableWordWrapping = true;
         contentText.richText = true;
-        ConfigureStretchRect(contentText.rectTransform, new Vector2(24f, 24f), new Vector2(-24f, -62f));
+        ConfigureRect(
+            contentText.rectTransform,
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
+            new Vector2(0f, 20f),
+            new Vector2(dialoguePanelSize.x, 112f));
     }
 
     void CreateObjectivePanel()
@@ -336,6 +345,26 @@ public class TutorialHintUIBridge : MonoBehaviour
         Image background = panelObject.GetComponent<Image>();
         background.color = backgroundColor;
         background.raycastTarget = false;
+
+        CanvasGroup group = panelObject.GetComponent<CanvasGroup>();
+        group.interactable = false;
+        group.blocksRaycasts = false;
+        return group;
+    }
+
+    CanvasGroup CreateCanvasGroup(
+        string objectName,
+        Transform parent,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Vector2 pivot,
+        Vector2 anchoredPosition,
+        Vector2 size)
+    {
+        GameObject panelObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasGroup));
+        RectTransform rectTransform = panelObject.GetComponent<RectTransform>();
+        rectTransform.SetParent(parent, false);
+        ConfigureRect(rectTransform, anchorMin, anchorMax, pivot, anchoredPosition, size);
 
         CanvasGroup group = panelObject.GetComponent<CanvasGroup>();
         group.interactable = false;

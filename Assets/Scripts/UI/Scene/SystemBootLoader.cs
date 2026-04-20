@@ -1,50 +1,36 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.SceneManagement;
-using TMPro;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using DG.Tweening;
+using TMPro;
+using UnityEngine;
 using UnityEngine.InputSystem;
-using System.Collections.Generic;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
-/// <summary>
-/// 부팅 로그를 터미널처럼 위에서 아래로 흘려보내고,
-/// 모든 로그가 끝난 뒤에만 PRESS ANY KEY를 보여주며,
-/// PRESS ANY KEY 위치 근처에 SYSTEM READY... N% 진행률을 함께 표시한다.
-/// </summary>
 public class SystemBootLoader : MonoBehaviour
 {
-    [Header("■ 기본 설정")]
-    [Tooltip("부팅 후 이동할 다음 씬 이름")]
+    [Header("Boot")]
     public string nextSceneName = "Tutorial";
-
-    [Tooltip("로그 한 줄과 한 줄 사이의 간격(초). 작을수록 더 빨리 내려옴")]
     public float typingSpeed = 0.02f;
+    [SerializeField] private bool useFastBootMode = true;
+    [SerializeField, Min(0.1f)] private float fastBootMinDuration = 4.2f;
+    [SerializeField, Min(0.1f)] private float fastBootMaxDuration = 4.8f;
+    [SerializeField, Min(0.1f)] private float minimumBootSequenceDuration = 4.5f;
+    [SerializeField, Min(0f)] private float autoProceedDelayWhenNoPrompt = 0.15f;
+    [SerializeField, Min(0f)] private float sceneActivationFadeDuration = 0.2f;
 
-    [Header("■ 로그 연출 설정")]
-    [Tooltip("화면에 동시에 보이는 최대 로그 줄 수")]
-    [Range(1, 30)]
-    public int maxVisibleLines = 10;              // 터미널 창에 항상 보이는 줄 수(기본 10줄)
+    [Header("Log Display")]
+    [Range(1, 30)] public int maxVisibleLines = 10;
 
-    [Header("■ UI 연결")]
-    [Tooltip("로그 출력용 텍스트 (멀티라인)")]
-    public TextMeshProUGUI logText;               // 로그 출력용 텍스트
+    [Header("UI")]
+    public TextMeshProUGUI logText;
+    public TextMeshProUGUI progressText;
+    public Slider progressBar;
+    public TextMeshProUGUI pressAnyKeyText;
+    public TextMeshProUGUI readyStatusText;
 
-    [Tooltip("진행률 % 텍스트 (상단 등)")]
-    public TextMeshProUGUI progressText;          // 진행률 % 텍스트
-
-    [Tooltip("부팅 진행 바")]
-    public Slider progressBar;                    // 진행률 바
-
-    [Tooltip("아무 키나 누르라는 메시지용 텍스트")]
-    public TextMeshProUGUI pressAnyKeyText;       // PRESS ANY KEY 텍스트
-
-    [Header("■ READY 상태 UI")]
-    [Tooltip("READY 퍼센트를 보여줄 텍스트 (PRESS ANY KEY 근처에 배치)")]
-    public TextMeshProUGUI readyStatusText;       // SYSTEM READY... N% 표시용 텍스트
-
-    [Header("■ 부팅 로그 내용 (길게 넣어도 됨)")]
+    [Header("Boot Logs")]
     [TextArea(2, 10)]
     public string[] bootLogs = new string[]
     {
@@ -88,37 +74,111 @@ public class SystemBootLoader : MonoBehaviour
         "SYSTEM READY."
     };
 
-    // 내부 상태
-    private string finalLogState;                        // 전체 로그 텍스트(필요 시 재사용)
-    private readonly Queue<string> visibleLines = new Queue<string>(); // 화면에 보이는 로그 버퍼
+    private string finalLogState;
+    private readonly Queue<string> visibleLines = new Queue<string>();
     private AsyncOperation pendingSceneLoad;
     private bool awaitingPlayerInput;
     private bool forceContinueRequested;
+    private float _bootSequenceStartedAt;
 
     public bool IsAwaitingPlayerInput => awaitingPlayerInput;
 
     void Awake()
     {
-        // PRESS ANY KEY는 시작 시 무조건 숨김
+        ConfigureResponsiveUi();
+
         if (pressAnyKeyText != null)
         {
-            pressAnyKeyText.gameObject.SetActive(false);
-
-            // 알파 초기화(혹시 이전 트윈 영향 제거)
+            if (pressAnyKeyText != progressText)
+                pressAnyKeyText.gameObject.SetActive(false);
             Color c = pressAnyKeyText.color;
             c.a = 1f;
             pressAnyKeyText.color = c;
         }
 
-        // READY 퍼센트 텍스트 초기화
         if (readyStatusText != null)
-        {
             readyStatusText.text = string.Empty;
-        }
 
-        // 로그 텍스트 초기화
         if (logText != null)
             logText.text = string.Empty;
+    }
+
+    void ConfigureResponsiveUi()
+    {
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null)
+            return;
+
+        var scaler = canvas.GetComponent<CanvasScaler>();
+        if (scaler != null)
+        {
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+        }
+
+        ConfigureLogRect();
+        ConfigureProgressBarRect();
+        ConfigureProgressTextRect();
+        ConfigureReadyStatusRect();
+    }
+
+    void ConfigureLogRect()
+    {
+        if (logText == null)
+            return;
+
+        var rect = logText.rectTransform;
+        rect.anchorMin = new Vector2(0.06f, 0.58f);
+        rect.anchorMax = new Vector2(0.58f, 0.94f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
+    void ConfigureProgressBarRect()
+    {
+        if (progressBar == null)
+            return;
+
+        var rect = progressBar.transform as RectTransform;
+        if (rect == null)
+            return;
+
+        rect.anchorMin = new Vector2(0.08f, 0.10f);
+        rect.anchorMax = new Vector2(0.92f, 0.18f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+    }
+
+    void ConfigureProgressTextRect()
+    {
+        if (progressText == null)
+            return;
+
+        var rect = progressText.rectTransform;
+        rect.anchorMin = new Vector2(0.08f, 0.20f);
+        rect.anchorMax = new Vector2(0.92f, 0.28f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        progressText.alignment = TextAlignmentOptions.Center;
+    }
+
+    void ConfigureReadyStatusRect()
+    {
+        if (readyStatusText == null)
+            return;
+
+        var rect = readyStatusText.rectTransform;
+        rect.anchorMin = new Vector2(0.08f, 0.30f);
+        rect.anchorMax = new Vector2(0.92f, 0.36f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        readyStatusText.alignment = TextAlignmentOptions.Center;
     }
 
     void Start()
@@ -128,84 +188,74 @@ public class SystemBootLoader : MonoBehaviour
 
     IEnumerator BootSequence()
     {
-        // 1. 비동기 씬 로딩 시작 (자동 전환은 막아둠)
+        _bootSequenceStartedAt = Time.unscaledTime;
+
         AsyncOperation op = SceneManager.LoadSceneAsync(nextSceneName);
         op.allowSceneActivation = false;
         pendingSceneLoad = op;
         forceContinueRequested = false;
 
         StringBuilder fullLogBuilder = new StringBuilder();
-        int totalLogs = bootLogs.Length;
+        int totalLogs = bootLogs != null ? bootLogs.Length : 0;
+        float revealDuration = useFastBootMode
+            ? Mathf.Clamp(Mathf.Max(typingSpeed, 0.001f) * Mathf.Max(1, totalLogs), fastBootMinDuration, fastBootMaxDuration)
+            : Mathf.Max(typingSpeed, 0.001f) * Mathf.Max(1, totalLogs);
 
         visibleLines.Clear();
+        float elapsed = 0f;
+        int revealedCount = 0;
 
-        // 2. 로그를 한 줄씩 위에서 아래로 "내려오듯" 출력
-        for (int i = 0; i < totalLogs; i++)
+        while (revealedCount < totalLogs)
         {
-            string line = bootLogs[i];
+            elapsed += Time.unscaledDeltaTime;
+            float normalized = revealDuration <= 0.0001f ? 1f : Mathf.Clamp01(elapsed / revealDuration);
+            int targetRevealCount = Mathf.Clamp(Mathf.CeilToInt(normalized * totalLogs), 1, totalLogs);
 
-            // 전체 로그에 누적 (필요하다면 나중에 전체 로그 표시용)
-            fullLogBuilder.AppendLine(line);
-            finalLogState = fullLogBuilder.ToString();
-
-            // 화면에 보이는 큐에 추가
-            visibleLines.Enqueue(line);
-            // maxVisibleLines보다 많아지면 가장 오래된 줄부터 제거 → 터미널에서 위로 밀리는 느낌
-            while (visibleLines.Count > maxVisibleLines)
+            while (revealedCount < targetRevealCount)
             {
-                visibleLines.Dequeue();
+                string line = bootLogs[revealedCount];
+                fullLogBuilder.AppendLine(line);
+                finalLogState = fullLogBuilder.ToString();
+
+                visibleLines.Enqueue(line);
+                while (visibleLines.Count > maxVisibleLines)
+                    visibleLines.Dequeue();
+
+                revealedCount++;
             }
 
-            if (logText != null)
-            {
-                // 큐에 들어있는 것만 다시 이어 붙여서 보여줌
-                logText.text = string.Join("\n", visibleLines.ToArray());
-            }
-
-            // 로그 진행도 (0~1)
-            float progress = (float)(i + 1) / totalLogs;
-
-            // 상단 진행률 UI 갱신
-            if (progressBar != null)
-                progressBar.value = progress;
-
-            if (progressText != null)
-                progressText.text = $"SYSTEM BOOT... {(progress * 100f):0}%";
-
-            // PRESS ANY KEY 자리 근처 READY 퍼센트 표시
-            if (readyStatusText != null)
-            {
-                // 로그 진행도에 맞춰 SYSTEM READY... N% 갱신
-                readyStatusText.text = $"SYSTEM READY... {(progress * 100f):0}%";
-            }
-
-            // 줄 간 간격(랜덤 약간 섞어서 기계 로그 느낌)
-            yield return new WaitForSeconds(Random.Range(typingSpeed * 0.5f, typingSpeed * 1.5f));
-        }
-
-        // 3. 완료 상태 표시 (100%)
-        if (progressText != null)
-            progressText.text = "SYSTEM BOOT... 100%";
-
-        if (progressBar != null)
-            progressBar.value = 1.0f;
-
-        if (readyStatusText != null)
-            readyStatusText.text = "SYSTEM READY... 100%";
-
-        // 4. 실제 로딩이 끝날 때까지 대기 (씬은 아직 전환하지 않음)
-        while (op.progress < 0.9f)
-        {
+            RefreshBootProgressUi(revealedCount, totalLogs);
             yield return null;
         }
 
-        // 5. 모든 로그가 끝난 후에만 PRESS ANY KEY 등장 + 입력 대기
+        RefreshBootProgressUi(totalLogs, totalLogs);
+
+        while (op.progress < 0.9f)
+            yield return null;
+
+        while (Time.unscaledTime - _bootSequenceStartedAt < minimumBootSequenceDuration)
+            yield return null;
+
         yield return StartCoroutine(WaitForPlayerInputAndProceed(op));
     }
 
-    /// <summary>
-    /// 새 입력 시스템/구 입력 시스템 둘 다에서 "아무 키" 입력 감지.
-    /// </summary>
+    void RefreshBootProgressUi(int revealedCount, int totalLogs)
+    {
+        float progress = totalLogs > 0 ? Mathf.Clamp01((float)revealedCount / totalLogs) : 1f;
+
+        if (logText != null)
+            logText.text = string.Join("\n", visibleLines.ToArray());
+
+        if (progressBar != null)
+            progressBar.value = progress;
+
+        if (progressText != null)
+            progressText.text = $"SYSTEM BOOT... {(progress * 100f):0}%";
+
+        if (readyStatusText != null)
+            readyStatusText.text = $"SYSTEM READY... {(progress * 100f):0}%";
+    }
+
     private bool IsAnyKeyPressedThisFrame()
     {
 #if ENABLE_INPUT_SYSTEM
@@ -215,21 +265,23 @@ public class SystemBootLoader : MonoBehaviour
         return Input.anyKeyDown;
     }
 
-    // 아무 키 입력 대기 로직
     IEnumerator WaitForPlayerInputAndProceed(AsyncOperation op)
     {
-        // 인스펙터에서 pressAnyKeyText 연결 안 되어 있으면
-        // 자동으로 넘어갈 수밖에 없음 → 반드시 할당해 둘 것.
         if (pressAnyKeyText == null)
         {
-            yield return new WaitForSeconds(1.0f);
+            float delay = Mathf.Max(0f, autoProceedDelayWhenNoPrompt);
+            while (delay > 0f)
+            {
+                delay -= Time.unscaledDeltaTime;
+                yield return null;
+            }
+
             awaitingPlayerInput = false;
             pendingSceneLoad = null;
             op.allowSceneActivation = true;
             yield break;
         }
 
-        // 혹시 이전 키 입력이 남아있을 수 있으니 짧게 버퍼 플러시
         float flushTime = 0.15f;
         while (flushTime > 0f)
         {
@@ -237,36 +289,30 @@ public class SystemBootLoader : MonoBehaviour
             yield return null;
         }
 
-        // 여기서부터 PRESS ANY KEY 표시 (로그 + 로딩 완료 후)
         awaitingPlayerInput = true;
-        pressAnyKeyText.gameObject.SetActive(true);
+        if (pressAnyKeyText != progressText)
+            pressAnyKeyText.gameObject.SetActive(true);
         pressAnyKeyText.text = "PRESS ANY KEY . . .";
 
-        // 점멸(알파 1 ↔ 0.3) 반복
         Tween blinkTween = pressAnyKeyText
             .DOFade(0.3f, 0.5f)
             .SetLoops(-1, LoopType.Yoyo)
-            .SetUpdate(true); // timeScale 영향 안 받게
+            .SetUpdate(true);
 
-        // READY 퍼센트는 이미 100%로 고정된 상태에서,
-        // 플레이어 실제 입력을 기다림.
         while (!IsAnyKeyPressedThisFrame() && !forceContinueRequested)
-        {
             yield return null;
-        }
 
-        // 점멸 종료 및 숨김
         blinkTween.Kill();
-        pressAnyKeyText.gameObject.SetActive(false);
+        if (pressAnyKeyText != progressText)
+            pressAnyKeyText.gameObject.SetActive(false);
         awaitingPlayerInput = false;
         forceContinueRequested = false;
 
-        // 6. 페이드 아웃 후 씬 활성화
         if (SceneFader.Instance != null && SceneFader.Instance.fadeCanvasGroup != null)
         {
             SceneFader.Instance.fadeCanvasGroup.blocksRaycasts = true;
             SceneFader.Instance.fadeCanvasGroup
-                .DOFade(1f, 1.0f)
+                .DOFade(1f, Mathf.Max(0.01f, sceneActivationFadeDuration))
                 .OnComplete(() =>
                 {
                     pendingSceneLoad = null;

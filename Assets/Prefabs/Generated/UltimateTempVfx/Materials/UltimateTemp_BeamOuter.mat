@@ -56,7 +56,7 @@ Material:
     - _BlendOp: 0
     - _Cull: 2
     - _Cutoff: 0.5
-    - _DstBlend: 1
+    - _DstBlend: 10
     - _DstBlendAlpha: 10
     - _QueueOffset: 0
     - _SampleGI: 0
@@ -66,5 +66,5 @@ Material:
     - _ZWrite: 0
     m_Colors:
     - _BaseColor: {r: 0.15, g: 0.9, b: 1, a: 0.22}
-    - _Color: {r: 0.15, g: 0.9, b: 1, a: 0.22}
+    - _Color: {r: 0.14999998, g: 0.9, b: 1, a: 0.22}
   m_BuildTextureStacks: []

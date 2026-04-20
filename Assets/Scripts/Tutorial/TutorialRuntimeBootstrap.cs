@@ -270,10 +270,12 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (dummyObject == null)
             return null;
 
-        PrepareTutorialLockOnTarget(dummyObject);
+        TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
         TrainingDummyController controller = EnsureComponent<TrainingDummyController>(dummyObject);
         RemoveConflictingDamageReceivers(dummyObject, controller);
-        Renderer renderer = dummyObject.GetComponentInChildren<Renderer>(true);
+        Renderer renderer = visualRig != null && visualRig.PrimaryRenderer != null
+            ? visualRig.PrimaryRenderer
+            : dummyObject.GetComponentInChildren<Renderer>(true);
         controller.ConfigureRuntime(
             _playerBridge,
             TutorialDummyRole.PassiveTarget,
@@ -306,15 +308,19 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (dummyObject == null)
             return null;
 
-        PrepareTutorialLockOnTarget(dummyObject);
+        TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
         Transform attackOrigin = dummyObject.transform;
-        Transform firePoint = dummyObject.transform.Find("FirePoint");
+        Transform firePoint = visualRig != null && visualRig.FirePoint != null
+            ? visualRig.FirePoint
+            : dummyObject.transform.Find("FirePoint");
         if (firePoint != null)
             attackOrigin = firePoint;
 
         TrainingDummyController controller = EnsureComponent<TrainingDummyController>(dummyObject);
         RemoveConflictingDamageReceivers(dummyObject, controller);
-        Renderer renderer = dummyObject.GetComponentInChildren<Renderer>(true);
+        Renderer renderer = visualRig != null && visualRig.PrimaryRenderer != null
+            ? visualRig.PrimaryRenderer
+            : dummyObject.GetComponentInChildren<Renderer>(true);
         controller.ConfigureRuntime(
             _playerBridge,
             TutorialDummyRole.GuardParry,
@@ -950,17 +956,23 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         }
     }
 
-    void PrepareTutorialLockOnTarget(GameObject target)
+    TutorialEnemyVisualRig PrepareTutorialLockOnTarget(GameObject target)
     {
         if (target == null)
-            return;
+            return null;
 
         int enemyLayer = LayerMask.NameToLayer("Enemy");
         if (enemyLayer >= 0)
             ApplyLayerRecursively(target.transform, enemyLayer);
 
         TryAssignEnemyTag(target);
-        EnsureRuntimeLockPivot(target);
+        TutorialEnemyVisualRig visualRig = EnsureComponent<TutorialEnemyVisualRig>(target);
+        if (visualRig != null)
+            visualRig.EnsureSetup();
+        else
+            EnsureRuntimeLockPivot(target);
+
+        return visualRig;
     }
 
     void ApplyLayerRecursively(Transform root, int layer)

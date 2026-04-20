@@ -10,6 +10,7 @@ public class PauseMenuView : MonoBehaviour
 #if UNITY_EDITOR
     const string SettingsContentPrefabPath = "Assets/Prefabs/Generated/PauseOptionsRoot.prefab";
 #endif
+    const string UnifiedSettingsPrefabResourcePath = "UI/Title/PauseOptionsRoot_Title";
     const string SettingsContentHostName = "_SettingsContentHost";
 
     [Header("UI 연결")]
@@ -23,14 +24,32 @@ public class PauseMenuView : MonoBehaviour
     public RectTransform settingsContentHostOverride;
     public GameObject settingsContentPrefab;
 
+    [Header("Unified Settings Overlay")]
+    [SerializeField] bool useUnifiedSettingsOverlay = true;
+    [SerializeField] string unifiedSettingsPrefabResourcePath = UnifiedSettingsPrefabResourcePath;
+
     GameObject settingsContentInstance;
     RectTransform settingsContentVisualRoot;
     RectTransform settingsContentHost;
     PauseSettingsOverlayStyler settingsOverlayStyler;
     RectTransform settingsOverlayHostRect;
+    TitleSettingsOverlay unifiedSettingsOverlay;
+    GameObject unifiedSettingsPrefab;
 
     void Awake()
     {
+        EnsureUnifiedSettingsOverlay();
+
+        if (useUnifiedSettingsOverlay)
+        {
+            if (menuRoot != null)
+                menuRoot.SetActive(false);
+
+            if (settingsPanel != null)
+                settingsPanel.SetActive(false);
+            return;
+        }
+
         EnsureSettingsPanelReferences();
         EnsureSettingsContent();
 
@@ -46,8 +65,14 @@ public class PauseMenuView : MonoBehaviour
         if (menuRoot == null || backgroundGroup == null || menuContainer == null)
             return;
 
-        EnsureSettingsPanelReferences();
-        EnsureSettingsContent();
+        if (unifiedSettingsOverlay != null)
+            unifiedSettingsOverlay.Hide();
+
+        if (!useUnifiedSettingsOverlay)
+        {
+            EnsureSettingsPanelReferences();
+            EnsureSettingsContent();
+        }
 
         menuRoot.SetActive(true);
         menuContainer.gameObject.SetActive(true);
@@ -76,6 +101,9 @@ public class PauseMenuView : MonoBehaviour
             return;
         }
 
+        if (unifiedSettingsOverlay != null)
+            unifiedSettingsOverlay.Hide();
+
         backgroundGroup.DOFade(0f, 0.2f).SetUpdate(true);
         menuContainer.DOScale(0.8f, 0.2f).SetEase(Ease.InQuad).SetUpdate(true);
 
@@ -92,6 +120,22 @@ public class PauseMenuView : MonoBehaviour
 
     public void ToggleSettings(bool isOpen)
     {
+        if (useUnifiedSettingsOverlay && EnsureUnifiedSettingsOverlay())
+        {
+            if (menuContainer != null)
+                menuContainer.gameObject.SetActive(!isOpen);
+
+            if (settingsPanel != null)
+                settingsPanel.SetActive(false);
+
+            if (isOpen)
+                unifiedSettingsOverlay.Show();
+            else
+                unifiedSettingsOverlay.Hide();
+
+            return;
+        }
+
         EnsureSettingsPanelReferences();
         EnsureSettingsContent();
 
@@ -119,6 +163,46 @@ public class PauseMenuView : MonoBehaviour
                 menuContainer.DOScale(1f, 0.2f).SetEase(Ease.OutBack).SetUpdate(true);
             });
         }
+    }
+
+    bool EnsureUnifiedSettingsOverlay()
+    {
+        if (!useUnifiedSettingsOverlay)
+            return false;
+
+        if (unifiedSettingsOverlay != null)
+            return true;
+
+        if (string.IsNullOrWhiteSpace(unifiedSettingsPrefabResourcePath))
+            return false;
+
+        if (unifiedSettingsPrefab == null)
+            unifiedSettingsPrefab = Resources.Load<GameObject>(unifiedSettingsPrefabResourcePath);
+        if (unifiedSettingsPrefab == null)
+            return false;
+
+        var parent = menuRoot != null ? menuRoot.transform.parent : transform;
+        if (parent == null)
+            return false;
+
+        var overlayObject = new GameObject(
+            "PauseUnifiedSettingsOverlay",
+            typeof(RectTransform),
+            typeof(CanvasGroup),
+            typeof(Image),
+            typeof(TitleSettingsOverlay));
+        overlayObject.layer = gameObject.layer;
+        overlayObject.transform.SetParent(parent, false);
+
+        unifiedSettingsOverlay = overlayObject.GetComponent<TitleSettingsOverlay>();
+        if (!unifiedSettingsOverlay.Initialize(parent, unifiedSettingsPrefab))
+        {
+            Destroy(overlayObject);
+            unifiedSettingsOverlay = null;
+            return false;
+        }
+
+        return true;
     }
 
     void EnsureSettingsPanelReferences()
