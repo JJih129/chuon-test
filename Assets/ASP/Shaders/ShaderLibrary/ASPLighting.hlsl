@@ -17,9 +17,7 @@
 
 void RemapFloat(float In, half2 InMinMax, half2 OutMinMax, out float Out)
 {
-    float inRange = InMinMax.y - InMinMax.x;
-    float safeRange = abs(inRange) > 1e-5 ? inRange : 1e-5;
-    Out = OutMinMax.x + (In - InMinMax.x) * (OutMinMax.y - OutMinMax.x) / safeRange;
+    Out = OutMinMax.x + (In - InMinMax.x) * (OutMinMax.y - OutMinMax.x) / (InMinMax.y - InMinMax.x);
 }
 
 real FaceShadowMapAttenuation(float2 uv, ASPInputData inputData, Light light)
@@ -38,24 +36,14 @@ real FaceShadowMapAttenuation(float2 uv, ASPInputData inputData, Light light)
     float faceShadowValue = 1;
     float faceShadowValue2 = 1;
 #endif
-    float2 rightXZ = right.xz;
-    float2 lightXZ = lightDir.xz;
-    float rightXZLengthSq = max(dot(rightXZ, rightXZ), 1e-5);
-    float lightXZLengthSq = max(dot(lightXZ, lightXZ), 1e-5);
-    float horizontalLightDot = dot(rightXZ * rsqrt(rightXZLengthSq), lightXZ * rsqrt(lightXZLengthSq));
-    bool switchShadow = horizontalLightDot > 0;
+    bool switchShadow = (dot(normalize(right.xz), normalize(lightDir.xz))) > 0;
     float flippedFaceShadow = switchShadow ? faceShadowValue : faceShadowValue2;
-    float2 frontXZ = front.xz;
-    float frontXZLengthSq = max(dot(frontXZ, frontXZ), 1e-5);
-    float frontLightDot = dot(frontXZ * rsqrt(frontXZLengthSq), lightXZ * rsqrt(lightXZLengthSq));
-    float lightAngleHorizontal = acos(clamp(frontLightDot, -1.0, 1.0));
+    float lightAngleHorizontal = acos(dot(normalize(front.xz),  normalize(lightDir.xz)));
     float threshold = lightAngleHorizontal / 3.141592653;
-    float safeFaceShadowPow = max(inputData.faceShadowPow, 1e-4);
-    threshold = pow(saturate(threshold), max(1.0 / safeFaceShadowPow, 0.0));
-    float safeFaceShadowSmoothness = max(inputData.faceShadowSmoothness, 1e-4);
+    threshold = pow(threshold, max(1 / inputData.faceShadowPow, 0));
 
-    float lightAttenuation = saturate(smoothstep(threshold - safeFaceShadowSmoothness,
-                                                 threshold + safeFaceShadowSmoothness, flippedFaceShadow));
+    float lightAttenuation = saturate(smoothstep(threshold - inputData.faceShadowSmoothness,
+                                                 threshold + inputData.faceShadowSmoothness, flippedFaceShadow));
     return lightAttenuation;
 }
 
@@ -401,12 +389,8 @@ bool IsPointInsideCube(float3 pointWS, float3 cubeCenter, float cubeSize)
 
 bool IntersectRayWithAABB(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax, out float3 hitPoint)
 {
-    float3 safeRayDir = float3(
-        abs(rayDir.x) > 1e-5 ? rayDir.x : (rayDir.x >= 0 ? 1e-5 : -1e-5),
-        abs(rayDir.y) > 1e-5 ? rayDir.y : (rayDir.y >= 0 ? 1e-5 : -1e-5),
-        abs(rayDir.z) > 1e-5 ? rayDir.z : (rayDir.z >= 0 ? 1e-5 : -1e-5));
-    float3 tMin = (boxMin - rayOrigin) / safeRayDir;
-    float3 tMax = (boxMax - rayOrigin) / safeRayDir;
+    float3 tMin = (boxMin - rayOrigin) / rayDir;
+    float3 tMax = (boxMax - rayOrigin) / rayDir;
     float3 t1 = min(tMin, tMax);
     float3 t2 = max(tMin, tMax);
     float tNear = max(max(t1.x, t1.y), t1.z);

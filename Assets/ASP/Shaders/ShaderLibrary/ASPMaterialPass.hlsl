@@ -82,7 +82,7 @@ half4 MaterialPassFragment(Varyings IN) : SV_TARGET
     
     half alpha = _BaseColor.a * SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv.xy).a;
     clip(alpha - _Cutoff);
-    Alpha(SampleAlbedoAlpha(IN.uv.xy, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap)).a, _BaseColor, _Cutoff);
+    Alpha(SampleAlbedoAlpha(IN.uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap)).a, _BaseColor, _Cutoff);
 
     float clipMapValue = SAMPLE_TEXTURE2D(_ClipMap, sampler_ClipMap, IN.uv.zw).r;
     clip(clipMapValue - _Cutoff);
