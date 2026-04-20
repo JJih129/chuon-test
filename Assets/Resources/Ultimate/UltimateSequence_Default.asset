@@ -98,13 +98,13 @@ MonoBehaviour:
       holdStaticFraming: 1
   vfx:
     introPoseVfxPrefab: {fileID: 5210959345948210511, guid: b79c52e011006e3408e7d3090aacc51c, type: 3}
-    dashSlashVfxPrefab: {fileID: 0}
+    dashSlashVfxPrefab: {fileID: 5757494987360826802, guid: d29647f8db5fc204eb952e60b234896f, type: 3}
     lightBeamVfxPrefab: {fileID: 2411774245160808706, guid: 6354926733bd68948806832890f33e78, type: 3}
-    crackWorldVfxPrefab: {fileID: 0}
+    crackWorldVfxPrefab: {fileID: 6366026470070092117, guid: 8a8ba7e20e37d8544a78a859054126a3, type: 3}
     crackScreenVfxPrefab: {fileID: 0}
     explosionVfxPrefab: {fileID: 1381459172728124388, guid: 591d1bd705f6a8f4b820021876636083, type: 3}
-    shardVfxPrefab: {fileID: 0}
-    walkoutVfxPrefab: {fileID: 0}
+    shardVfxPrefab: {fileID: 7229793754096018441, guid: be87923a1d00334438f3d93701889602, type: 3}
+    walkoutVfxPrefab: {fileID: 8232990265197679967, guid: a615c46ec6f57fd4faebdb1e33dd9c9b, type: 3}
     useScreenSpaceCrack: 0
     useAfterImageStyleSlash: 1
     supportSlashCount: 0
