@@ -19,6 +19,7 @@ MonoBehaviour:
   cancelStart: 0.36
   cancelEnd: 0.88
   baseDamage: 10
+  attackDamageMultiplier: 1.16
   hitType: 1
   hitWindows: []
   hitWindowLeadNormalized: -1

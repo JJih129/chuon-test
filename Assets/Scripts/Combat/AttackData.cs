@@ -90,6 +90,7 @@ namespace Combat
 
         [Header("▶ 기본 데미지 (밸런싱용)")]
         public float baseDamage = 10f;
+        public float attackDamageMultiplier = 1f;
 
         [Header("▶ 히트 타입 (None이면 히트박스 기본값 유지)")]
         public HitType hitType = HitType.Normal;
@@ -119,6 +120,13 @@ namespace Combat
         public HitType ResolveHitType(HitType fallback)
         {
             return hitType != HitType.None ? hitType : fallback;
+        }
+
+        public float ResolveAttackBaseDamage(float fallbackBaseDamage)
+        {
+            float baseValue = Mathf.Max(0f, baseDamage > 0f ? baseDamage : fallbackBaseDamage);
+            float multiplier = attackDamageMultiplier > 0f ? attackDamageMultiplier : 1f;
+            return Mathf.Max(0f, baseValue * multiplier);
         }
 
         public float ResolveHitboxExpandedPadding(float fallback)

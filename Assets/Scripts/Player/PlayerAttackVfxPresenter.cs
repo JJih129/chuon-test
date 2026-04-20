@@ -42,14 +42,18 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [SerializeField] float minRespawnGap = 0.03f;
 
     [Header("프로시저럴 트레일")]
-    [SerializeField] Color trailStartColor = new Color(1f, 0.95f, 0.9f, 0.95f);
-    [SerializeField] Color trailEndColor = new Color(1f, 0.45f, 0.2f, 0f);
-    [SerializeField] float trailTime = 0.12f;
-    [SerializeField] float trailStartWidth = 0.12f;
+    [SerializeField] Color trailStartColor = new Color(1f, 0.32f, 0.28f, 0.95f);
+    [SerializeField] Color trailEndColor = new Color(0.85f, 0.08f, 0.08f, 0f);
+    [SerializeField] float trailTime = 0.09f;
+    [SerializeField] float trailStartWidth = 0.14f;
     [SerializeField] float trailEndWidth = 0.02f;
-    [SerializeField] float trailMinVertexDistance = 0.02f;
-    [SerializeField] Vector3 proceduralTrailLocalOffset = Vector3.zero;
+    [SerializeField] float trailMinVertexDistance = 0.065f;
     [SerializeField] float swordTipForwardPadding = 0.03f;
+    [SerializeField] float swordBaseBackwardPadding = 0.01f;
+    [SerializeField] bool autoSizeTrailFromSword = true;
+    [SerializeField] float trailWidthMultiplier = 1.35f;
+    [SerializeField] float minimumAutoTrailWidth = 0.32f;
+    [SerializeField] float autoTrailEndWidthRatio = 0.24f;
 
     [Header("프로시저럴 범위 플래시")]
     [SerializeField] bool useProceduralRangeFlashFallback = false;
@@ -67,10 +71,14 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     AttackInput _currentInput;
     int _currentComboDepth;
     float _lastSpawnTime = float.NegativeInfinity;
-    TrailRenderer _proceduralTrail;
+    BossSwordTrailRibbon _proceduralTrailRibbon;
     Material _proceduralTrailMaterial;
-    Transform _activeTrailAnchor;
+    Transform _activeTrailBaseAnchor;
+    Transform _activeTrailTipAnchor;
+    Transform _resolvedSwordBaseAnchor;
     Transform _resolvedSwordTrailAnchor;
+    float _cachedStartWidthScale = -1f;
+    float _cachedEndWidthScale = -1f;
     GameObject _proceduralRangeFlashObject;
     MeshRenderer _proceduralRangeFlashRenderer;
     Material _proceduralRangeFlashMaterial;
@@ -136,6 +144,10 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         _currentAttackData = attackData;
         _currentComboDepth = comboDepth;
         _currentInput = input;
+
+        AutoWire();
+        if (ShouldUseProceduralTrailFallback(attackData))
+            EnableProceduralTrail();
     }
 
     public void NotifyAttackEnded()
@@ -172,8 +184,8 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         if (entry.weaponTrailVfxPrefab != null || defaultWeaponTrailVfxPrefab != null)
             SpawnWeaponTrail(entry, trailAnchor);
-        else if (useProceduralTrailFallback)
-            EnableProceduralTrail(trailAnchor);
+        else if (ShouldUseProceduralTrailFallback())
+            EnableProceduralTrail();
 
         GameObject rangePrefab = entry.hitRangeVfxPrefab != null ? entry.hitRangeVfxPrefab : defaultHitRangeVfxPrefab;
         if (rangePrefab == null)
@@ -217,6 +229,22 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         if (combatController == null)
             combatController = GetComponent<PlayerCombatController>() ?? GetComponentInParent<PlayerCombatController>(true);
+
+        if (defaultWeaponTrailVfxPrefab == null)
+            useProceduralTrailFallback = true;
+
+    }
+
+    bool ShouldUseProceduralTrailFallback(AttackData attackData = null)
+    {
+        if (!useProceduralTrailFallback)
+            return false;
+
+        GameObject attackTrailPrefab = null;
+        if (attackData != null)
+            attackTrailPrefab = ResolveEntry(attackData).weaponTrailVfxPrefab;
+
+        return attackTrailPrefab == null && defaultWeaponTrailVfxPrefab == null;
     }
 
     AttackVfxEntry ResolveEntry(AttackData attackData)
@@ -271,40 +299,45 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         spawned.transform.localScale = entry.localScaleMultiplier;
     }
 
-    void EnableProceduralTrail(Transform trailAnchor)
+    void EnableProceduralTrail()
     {
-        if (trailAnchor == null)
+        if (!ResolveTrailAnchors(out Transform baseAnchor, out Transform tipAnchor))
             return;
 
-        EnsureProceduralTrail(trailAnchor);
-        if (_proceduralTrail == null)
+        EnsureProceduralTrail(baseAnchor);
+        if (_proceduralTrailRibbon == null)
             return;
 
-        if (_activeTrailAnchor != trailAnchor)
-        {
-            _activeTrailAnchor = trailAnchor;
-            _proceduralTrail.transform.SetParent(trailAnchor, false);
-            _proceduralTrail.transform.localPosition = proceduralTrailLocalOffset;
-            _proceduralTrail.transform.localRotation = Quaternion.identity;
-            _proceduralTrail.transform.localScale = Vector3.one;
-        }
+        _activeTrailBaseAnchor = baseAnchor;
+        _activeTrailTipAnchor = tipAnchor;
 
-        _proceduralTrail.Clear();
-        _proceduralTrail.emitting = true;
-        _proceduralTrail.gameObject.SetActive(true);
+        if (_cachedStartWidthScale < 0f || _cachedEndWidthScale < 0f)
+            ResolveDynamicTrailWidthScales(tipAnchor, out _cachedStartWidthScale, out _cachedEndWidthScale);
+
+        _proceduralTrailRibbon.Configure(
+            baseAnchor,
+            tipAnchor,
+            _proceduralTrailMaterial,
+            trailTime,
+            trailMinVertexDistance,
+            _cachedStartWidthScale,
+            _cachedEndWidthScale,
+            trailStartColor,
+            trailEndColor);
+        _proceduralTrailRibbon.Begin();
     }
 
     void DisableProceduralTrail()
     {
-        if (_proceduralTrail == null)
+        if (_proceduralTrailRibbon == null)
             return;
 
-        _proceduralTrail.emitting = false;
+        _proceduralTrailRibbon.Stop();
     }
 
-    void EnsureProceduralTrail(Transform trailAnchor)
+    void EnsureProceduralTrail(Transform baseAnchor)
     {
-        if (_proceduralTrail != null)
+        if (_proceduralTrailRibbon != null || baseAnchor == null)
             return;
 
         if (_proceduralTrailMaterial == null)
@@ -319,42 +352,57 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         }
 
         GameObject trailObject = new GameObject("RuntimeAttackTrail");
-        trailObject.transform.SetParent(trailAnchor, false);
-        trailObject.transform.localPosition = proceduralTrailLocalOffset;
-        trailObject.transform.localRotation = Quaternion.identity;
+        trailObject.hideFlags = HideFlags.HideAndDontSave;
+        trailObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+        trailObject.transform.localScale = Vector3.one;
 
-        _proceduralTrail = trailObject.AddComponent<TrailRenderer>();
-        _proceduralTrail.material = _proceduralTrailMaterial;
-        _proceduralTrail.time = Mathf.Max(0.01f, trailTime);
-        _proceduralTrail.startWidth = Mathf.Max(0.01f, trailStartWidth);
-        _proceduralTrail.endWidth = Mathf.Max(0f, trailEndWidth);
-        _proceduralTrail.minVertexDistance = Mathf.Max(0.001f, trailMinVertexDistance);
-        _proceduralTrail.shadowCastingMode = ShadowCastingMode.Off;
-        _proceduralTrail.receiveShadows = false;
-        _proceduralTrail.alignment = LineAlignment.View;
-        _proceduralTrail.textureMode = LineTextureMode.Stretch;
-        _proceduralTrail.numCornerVertices = 2;
-        _proceduralTrail.numCapVertices = 1;
-        _proceduralTrail.emitting = false;
-        _proceduralTrail.generateLightingData = false;
+        _proceduralTrailRibbon = trailObject.AddComponent<BossSwordTrailRibbon>();
+        _activeTrailBaseAnchor = baseAnchor;
+    }
 
-        Gradient gradient = new Gradient();
-        gradient.SetKeys(
-            new[]
+    bool ResolveTrailAnchors(out Transform baseAnchor, out Transform tipAnchor)
+    {
+        tipAnchor = ResolveTrailAnchor(null);
+        baseAnchor = ResolveSwordBaseAnchor();
+
+        if (tipAnchor == null)
+        {
+            baseAnchor = null;
+            return false;
+        }
+
+        if (baseAnchor == null)
+            baseAnchor = tipAnchor;
+
+        return true;
+    }
+
+    void ResolveDynamicTrailWidthScales(Transform trailAnchor, out float startWidthScale, out float endWidthScale)
+    {
+        float baseScale = Mathf.Max(1f, trailStartWidth / Mathf.Max(0.01f, minimumAutoTrailWidth));
+        float endScaleFromBase = Mathf.Clamp(baseScale * Mathf.Clamp01(autoTrailEndWidthRatio), 0.02f, baseScale);
+        Transform swordTransform = trailAnchor != null && trailAnchor.parent != null ? trailAnchor.parent : trailAnchor;
+        if (swordTransform != null && TryGetLocalMeshBounds(swordTransform, out Bounds swordBounds))
+        {
+            Vector3 scaledSize = Vector3.Scale(swordBounds.size, Abs(swordTransform.lossyScale));
+            float swordWorldLength = Mathf.Max(scaledSize.x, Mathf.Max(scaledSize.y, scaledSize.z));
+            if (autoSizeTrailFromSword && swordWorldLength > 0.001f)
             {
-                new GradientColorKey(trailStartColor, 0f),
-                new GradientColorKey(Color.Lerp(trailStartColor, trailEndColor, 0.45f), 0.35f),
-                new GradientColorKey(trailEndColor, 1f)
-            },
-            new[]
-            {
-                new GradientAlphaKey(trailStartColor.a, 0f),
-                new GradientAlphaKey(Mathf.Lerp(trailStartColor.a, trailEndColor.a, 0.4f), 0.4f),
-                new GradientAlphaKey(trailEndColor.a, 1f)
-            });
+                float autoWidth = Mathf.Max(minimumAutoTrailWidth, swordWorldLength * trailWidthMultiplier);
+                startWidthScale = Mathf.Max(baseScale, autoWidth / Mathf.Max(0.01f, swordWorldLength));
+                float worldEndWidth = Mathf.Max(trailEndWidth, autoWidth * Mathf.Clamp01(autoTrailEndWidthRatio));
+                endWidthScale = Mathf.Clamp(worldEndWidth / Mathf.Max(0.01f, swordWorldLength), 0.02f, startWidthScale);
+                return;
+            }
+        }
 
-        _proceduralTrail.colorGradient = gradient;
-        _activeTrailAnchor = trailAnchor;
+        startWidthScale = baseScale;
+        endWidthScale = endScaleFromBase;
+    }
+
+    static Vector3 Abs(Vector3 value)
+    {
+        return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
     }
 
     void ShowProceduralRangeFlash(AttackVfxEntry entry, AttackHitbox hitbox)
@@ -431,14 +479,14 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
                 return swordAnchor;
         }
 
-        if (!useWeaponSocketForTrail && hitbox != null)
-            return hitbox.transform;
-
         if (weaponSocketOverride != null)
             return weaponSocketOverride;
 
         if (playerReferences != null && playerReferences.WeaponSocket != null)
             return playerReferences.WeaponSocket;
+
+        if (!useWeaponSocketForTrail && hitbox != null)
+            return hitbox.transform;
 
         return hitbox != null ? hitbox.transform : transform;
     }
@@ -452,8 +500,35 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (swordTransform == null)
             return null;
 
+        SkinnedMeshRenderer skinned = swordTransform.GetComponent<SkinnedMeshRenderer>();
+        if (skinned != null && skinned.rootBone != null)
+        {
+            _resolvedSwordTrailAnchor = CreateSkinnedSwordTrailAnchor(swordTransform, skinned);
+            return _resolvedSwordTrailAnchor;
+        }
+
         _resolvedSwordTrailAnchor = CreateSwordTipAnchor(swordTransform);
         return _resolvedSwordTrailAnchor;
+    }
+
+    Transform ResolveSwordBaseAnchor()
+    {
+        if (_resolvedSwordBaseAnchor != null)
+            return _resolvedSwordBaseAnchor;
+
+        Transform swordTransform = FindSwordVisualTransform();
+        if (swordTransform == null)
+            return null;
+
+        SkinnedMeshRenderer skinned = swordTransform.GetComponent<SkinnedMeshRenderer>();
+        if (skinned != null && skinned.rootBone != null)
+        {
+            _resolvedSwordBaseAnchor = CreateSkinnedSwordBaseAnchor(swordTransform, skinned);
+            return _resolvedSwordBaseAnchor;
+        }
+
+        _resolvedSwordBaseAnchor = CreateSwordBaseAnchor(swordTransform);
+        return _resolvedSwordBaseAnchor;
     }
 
     Transform FindSwordVisualTransform()
@@ -523,6 +598,128 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         anchor.localRotation = Quaternion.identity;
         anchor.localScale = Vector3.one;
         return anchor;
+    }
+
+    Transform CreateSwordBaseAnchor(Transform swordTransform)
+    {
+        const string anchorName = "RuntimeSwordBaseAnchor";
+        Transform existing = swordTransform.Find(anchorName);
+        if (existing != null)
+            return existing;
+
+        Bounds localBounds;
+        if (!TryGetLocalMeshBounds(swordTransform, out localBounds))
+            return swordTransform;
+
+        Vector3 size = localBounds.size;
+        int axis = 0;
+        if (size.y > size.x && size.y >= size.z)
+            axis = 1;
+        else if (size.z > size.x && size.z >= size.y)
+            axis = 2;
+
+        Vector3 localPosition = localBounds.center;
+        switch (axis)
+        {
+            case 1:
+                localPosition.y = localBounds.min.y - swordBaseBackwardPadding;
+                break;
+            case 2:
+                localPosition.z = localBounds.min.z - swordBaseBackwardPadding;
+                break;
+            default:
+                localPosition.x = localBounds.min.x - swordBaseBackwardPadding;
+                break;
+        }
+
+        GameObject anchorObject = new GameObject(anchorName);
+        Transform anchor = anchorObject.transform;
+        anchor.SetParent(swordTransform, false);
+        anchor.localPosition = localPosition;
+        anchor.localRotation = Quaternion.identity;
+        anchor.localScale = Vector3.one;
+        return anchor;
+    }
+
+    Transform CreateSkinnedSwordTrailAnchor(Transform swordTransform, SkinnedMeshRenderer skinned)
+    {
+        const string anchorName = "RuntimeSwordTrailAnchor";
+        Transform rootBone = skinned != null ? skinned.rootBone : null;
+        if (rootBone == null)
+            return CreateSwordTipAnchor(swordTransform);
+
+        Transform existing = rootBone.Find(anchorName);
+        if (existing != null)
+            return existing;
+
+        Vector3 worldPosition = ResolveSkinnedSwordTipWorldPosition(swordTransform, rootBone);
+
+        GameObject anchorObject = new GameObject(anchorName);
+        Transform anchor = anchorObject.transform;
+        anchor.SetParent(rootBone, false);
+        anchor.position = worldPosition;
+        anchor.rotation = rootBone.rotation;
+        anchor.localScale = Vector3.one;
+        return anchor;
+    }
+
+    Transform CreateSkinnedSwordBaseAnchor(Transform swordTransform, SkinnedMeshRenderer skinned)
+    {
+        const string anchorName = "RuntimeSwordBaseAnchor";
+        Transform rootBone = skinned != null ? skinned.rootBone : null;
+        if (rootBone == null)
+            return CreateSwordBaseAnchor(swordTransform);
+
+        Transform existing = rootBone.Find(anchorName);
+        if (existing != null)
+            return existing;
+
+        Vector3 worldPosition = rootBone.position;
+
+        GameObject anchorObject = new GameObject(anchorName);
+        Transform anchor = anchorObject.transform;
+        anchor.SetParent(rootBone, false);
+        anchor.position = worldPosition;
+        anchor.rotation = rootBone.rotation;
+        anchor.localScale = Vector3.one;
+        return anchor;
+    }
+
+    Vector3 ResolveSkinnedSwordTipWorldPosition(Transform swordTransform, Transform rootBone)
+    {
+        if (swordTransform == null || rootBone == null || !TryGetLocalMeshBounds(swordTransform, out Bounds localBounds))
+            return rootBone != null ? rootBone.position : transform.position;
+
+        Vector3 size = localBounds.size;
+        int axis = 0;
+        if (size.y > size.x && size.y >= size.z)
+            axis = 1;
+        else if (size.z > size.x && size.z >= size.y)
+            axis = 2;
+
+        Vector3 localMin = localBounds.center;
+        Vector3 localMax = localBounds.center;
+        switch (axis)
+        {
+            case 1:
+                localMin.y = localBounds.min.y - swordBaseBackwardPadding;
+                localMax.y = localBounds.max.y + swordTipForwardPadding;
+                break;
+            case 2:
+                localMin.z = localBounds.min.z - swordBaseBackwardPadding;
+                localMax.z = localBounds.max.z + swordTipForwardPadding;
+                break;
+            default:
+                localMin.x = localBounds.min.x - swordBaseBackwardPadding;
+                localMax.x = localBounds.max.x + swordTipForwardPadding;
+                break;
+        }
+
+        Vector3 worldMin = swordTransform.TransformPoint(localMin);
+        Vector3 worldMax = swordTransform.TransformPoint(localMax);
+        float minDistance = Vector3.Distance(rootBone.position, worldMin);
+        float maxDistance = Vector3.Distance(rootBone.position, worldMax);
+        return maxDistance >= minDistance ? worldMax : worldMin;
     }
 
     static bool TryGetLocalMeshBounds(Transform target, out Bounds bounds)
@@ -664,7 +861,6 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return;
 
         defaultHitRangeVfxPrefab = null;
-
         defaultWeaponTrailVfxPrefab = null;
 
         string[] attackAssetPaths =
@@ -673,14 +869,19 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             @"Assets/Attack_data/Combo_A/AD_L2.asset",
             @"Assets/Attack_data/Combo_A/AD_L3.asset",
             @"Assets/Attack_data/Combo_A/AD_L4.asset",
+            @"Assets/Attack_data/Combo_D/AD_L2_D.asset",
+            @"Assets/Attack_data/Combo_C/AD_L3_C.asset",
             @"Assets/Attack_data/AD_H1.asset",
             @"Assets/Attack_data/Combo_E/AD_H2.asset",
             @"Assets/Attack_data/Combo_E/AD_H3.asset",
+            @"Assets/Attack_data/Combo_C/AD_H2_C.asset",
+            @"Assets/Attack_data/Combo_D/AD_H3_D.asset",
             @"Assets/Attack_data/Combo_B/AD_H4_B.asset",
+            @"Assets/Attack_data/Combo_C/AD_H4_C.asset",
             @"Assets/Attack_data/Combo_B/AD_H5_B.asset"
         };
 
-        GameObject trailPrefab = defaultWeaponTrailVfxPrefab;
+        GameObject trailPrefab = null;
 
         AttackVfxEntry[] defaults = new AttackVfxEntry[attackAssetPaths.Length];
         for (int i = 0; i < attackAssetPaths.Length; i++)

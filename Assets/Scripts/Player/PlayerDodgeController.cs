@@ -85,6 +85,8 @@ public class PlayerDodgeController : MonoBehaviour
     [SerializeField] bool zeroVelocityOnDodge = true;
     [SerializeField] bool disableRootMotionOnDodge = false;
     [SerializeField] bool useDirectionalRootMotionDodge = true;
+    [SerializeField] bool smoothDirectionalRootMotionDodge = true;
+    [SerializeField, Range(0.01f, 0.12f)] float rootMotionDodgeSpeedSmoothTime = 0.045f;
 
     [Header("Events")]
     public UnityEvent OnDodgeStart;
@@ -121,6 +123,8 @@ public class PlayerDodgeController : MonoBehaviour
     uint _lastConsumedDodgeCommandSequence;
     bool _cachedAnimatorRootMotionBeforeDodge;
     bool _hasCachedAnimatorRootMotionBeforeDodge;
+    float _smoothedRootMotionDodgeSpeed;
+    float _smoothedRootMotionDodgeSpeedVelocity;
 
     void Reset()
     {
@@ -183,6 +187,9 @@ public class PlayerDodgeController : MonoBehaviour
         baseSpeed = useDistanceBased
             ? Mathf.Max(0.01f, dodgeDistance / Mathf.Max(0.01f, dodgeDuration))
             : dodgeSpeed;
+
+        _smoothedRootMotionDodgeSpeed = 0f;
+        _smoothedRootMotionDodgeSpeedVelocity = 0f;
 
         isDodging = true;
         elapsed = 0f;
@@ -284,6 +291,9 @@ public class PlayerDodgeController : MonoBehaviour
             PlayDodgeEndSound();
 
         OnDodgeEnd?.Invoke();
+
+        _smoothedRootMotionDodgeSpeed = 0f;
+        _smoothedRootMotionDodgeSpeedVelocity = 0f;
     }
 
     void CacheReferences()
@@ -719,8 +729,25 @@ public class PlayerDodgeController : MonoBehaviour
             return;
 
         Vector3 delta = animator.deltaPosition;
-        if (delta.sqrMagnitude > 0f)
-            cc.Move(delta);
+        delta.y = 0f;
+        if (delta.sqrMagnitude <= 0.000001f)
+            return;
+
+        if (smoothDirectionalRootMotionDodge)
+        {
+            float rawSpeed = delta.magnitude / Mathf.Max(Time.deltaTime, 0.0001f);
+            _smoothedRootMotionDodgeSpeed = Mathf.SmoothDamp(
+                _smoothedRootMotionDodgeSpeed,
+                rawSpeed,
+                ref _smoothedRootMotionDodgeSpeedVelocity,
+                rootMotionDodgeSpeedSmoothTime,
+                Mathf.Infinity,
+                Time.deltaTime);
+
+            delta = delta.normalized * _smoothedRootMotionDodgeSpeed * Time.deltaTime;
+        }
+
+        cc.Move(delta);
     }
 
     void PlayDodgeStartSound()

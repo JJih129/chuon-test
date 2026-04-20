@@ -26,6 +26,11 @@ public class PlayerCombatController : MonoBehaviour
     [Header("▶ 콤보 데이터")]
     [SerializeField] private AttackData firstLight;
     [SerializeField] private AttackData firstHeavy;
+    [SerializeField] private float fallbackAttackBaseDamage = 10f;
+    [SerializeField] private float lightAttackDamageMultiplier = 1f;
+    [SerializeField] private float heavyAttackDamageMultiplier = 1.35f;
+    [SerializeField] private float lightComboStepBonus = 0.07f;
+    [SerializeField] private float heavyComboStepBonus = 0.09f;
 
     [Header("▶ 애니메이터 설정")]
     [SerializeField] private Animator animator;
@@ -750,6 +755,28 @@ public class PlayerCombatController : MonoBehaviour
         return perfectDodgeAfterImageEffect;
     }
 
+    void OnAnimatorMove()
+    {
+        if (!inAttack || inHit || animator == null || !animator.applyRootMotion)
+            return;
+
+        if (perfectDodgeAssistDashRoutine != null)
+            return;
+
+        Vector3 delta = animator.deltaPosition;
+        delta.y = 0f;
+        if (delta.sqrMagnitude <= 0.000001f)
+            return;
+
+        if (characterController != null && characterController.enabled)
+        {
+            characterController.Move(delta);
+            return;
+        }
+
+        transform.position += delta;
+    }
+
     private void MovePerfectDodgeAttackAssistStep(Vector3 delta)
     {
         delta.y = 0f;
@@ -1332,9 +1359,10 @@ public class PlayerCombatController : MonoBehaviour
             return;
 
         CacheWeaponHitboxDefaults(weaponHitbox);
+        float baseAttackDamage = ResolveCurrentAttackBaseDamage();
         float resolvedDamage = hitWindowOverride.HasValue
-            ? hitWindowOverride.Value.ResolveDamage(current.baseDamage)
-            : current.baseDamage;
+            ? hitWindowOverride.Value.ResolveDamage(baseAttackDamage)
+            : baseAttackDamage;
         HitType resolvedHitType = hitWindowOverride.HasValue
             ? hitWindowOverride.Value.ResolveHitType(current.ResolveHitType(_defaultWeaponHitboxType))
             : current.ResolveHitType(_defaultWeaponHitboxType);
@@ -1355,6 +1383,25 @@ public class PlayerCombatController : MonoBehaviour
         weaponHitbox.expandedScanInterval = current.ResolveHitboxScanInterval(_defaultWeaponHitboxScanInterval);
         weaponHitbox.oneShotWindow = current.ResolveHitboxOneShotWindow(_defaultWeaponHitboxOneShotWindow);
         weaponHitbox.useOneShotWindow = _defaultWeaponHitboxUseOneShotWindow && weaponHitbox.oneShotWindow > 0.001f;
+    }
+
+    private float ResolveCurrentAttackBaseDamage()
+    {
+        if (current == null)
+            return fallbackAttackBaseDamage;
+
+        float attackBaseDamage = current.ResolveAttackBaseDamage(fallbackAttackBaseDamage);
+        float attackTypeMultiplier = _currentAttackInput == AttackInput.Heavy
+            ? Mathf.Max(0f, heavyAttackDamageMultiplier)
+            : Mathf.Max(0f, lightAttackDamageMultiplier);
+
+        int comboDepth = Mathf.Max(1, _currentComboDepth);
+        float comboBonusPerStep = _currentAttackInput == AttackInput.Heavy
+            ? heavyComboStepBonus
+            : lightComboStepBonus;
+        float comboMultiplier = 1f + Mathf.Max(0f, comboBonusPerStep) * Mathf.Max(0, comboDepth - 1);
+
+        return Mathf.Max(0f, attackBaseDamage * attackTypeMultiplier * comboMultiplier);
     }
 
     private void CacheWeaponHitboxDefaults(AttackHitbox hitbox)
