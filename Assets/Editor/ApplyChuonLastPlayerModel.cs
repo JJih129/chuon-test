@@ -6,10 +6,10 @@ using UnityEngine.SceneManagement;
 
 public static class ApplyChuonLastPlayerModel
 {
-    const string ModelPath = "Assets/Modeling/Player/chuonLast.fbx";
+    const string ModelPath = "Assets/Modeling/Player/on (3).fbx";
     const string VisualPrefabPath = "Assets/Prefabs/Generated/PlayerVisual_Chuon.prefab";
     const string PlayerRootPrefabPath = "Assets/Prefabs/Generated/PlayerRoot.prefab";
-    const string SessionKey = "ProjectChuOn.ApplyChuonLastPlayerModel.Attempted";
+    const string SessionKey = "ProjectChuOn.ApplyChuonLastPlayerModel.Attempted.v3";
 
     [InitializeOnLoadMethod]
     static void AutoApplyOnLoad()
@@ -17,7 +17,7 @@ public static class ApplyChuonLastPlayerModel
         EditorApplication.delayCall += TryApplyOnce;
     }
 
-    [MenuItem("Tools/Player/Apply chuonLast Model")]
+    [MenuItem("Tools/Player/Apply on(3) Model")]
     public static void ApplyFromMenu()
     {
         SessionState.EraseBool(SessionKey);
@@ -53,11 +53,11 @@ public static class ApplyChuonLastPlayerModel
 
         RebuildVisualPrefab(modelAsset);
         UpdatePlayerRootPrefab(avatar);
-        SyncLoadedSceneVisuals();
+        SyncLoadedSceneVisuals(avatar);
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("[ApplyChuonLastPlayerModel] Applied chuonLast to player visual prefab, prefab hierarchy, and loaded scene visuals.");
+        Debug.Log("[ApplyChuonLastPlayerModel] Applied on(3) to player visual prefab, prefab hierarchy, and loaded scene visuals.");
     }
 
     static bool IsAlreadyApplied(GameObject modelAsset, Avatar avatar)
@@ -150,8 +150,9 @@ public static class ApplyChuonLastPlayerModel
         }
     }
 
-    static void SyncLoadedSceneVisuals()
+    static void SyncLoadedSceneVisuals(Avatar avatar)
     {
+        var visualPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(VisualPrefabPath);
         for (int i = 0; i < SceneManager.sceneCount; i++)
         {
             var scene = SceneManager.GetSceneAt(i);
@@ -175,10 +176,23 @@ public static class ApplyChuonLastPlayerModel
                     if (playerReferences == null)
                         continue;
 
+                    var refsSo = new SerializedObject(playerReferences);
+                    if (visualPrefab != null)
+                        refsSo.FindProperty("visualPrefab").objectReferenceValue = visualPrefab;
+                    refsSo.ApplyModifiedPropertiesWithoutUndo();
+
                     playerReferences.SyncSerializedReferences();
                     playerReferences.SyncVisualPrefabHierarchyForEditor();
                     EditorUtility.SetDirty(playerReferences);
                     EditorUtility.SetDirty(playerReferences.gameObject);
+
+                    var animator = playerReferences.GetComponent<Animator>();
+                    if (animator != null && avatar != null)
+                    {
+                        animator.avatar = avatar;
+                        EditorUtility.SetDirty(animator);
+                    }
+
                     updated = true;
                 }
             }

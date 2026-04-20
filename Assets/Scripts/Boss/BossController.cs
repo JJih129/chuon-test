@@ -568,6 +568,19 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     [Tooltip("공격 후 CombatIdle 상태 유지 시간(초). 0이면 바로 다음 상태로 이동.")]
     public float combatIdleTime = 0.3f;
+    [SerializeField, Min(0f)] private float minimumPostAttackIdleDuration = 5.0f;
+    [SerializeField] private bool useCombatIdleStrafe = true;
+    [SerializeField, Range(0.1f, 1f)] private float combatIdleStrafeSpeedMultiplier = 0.42f;
+    [SerializeField] private float combatIdleDesiredDistance = 2.6f;
+    [SerializeField] private float combatIdleDistanceTolerance = 0.45f;
+    [SerializeField] private float combatIdleFacingTurnSpeed = 540f;
+    [SerializeField, Min(0f)] private float combatIdlePreRetreatPause = 1.0f;
+    [SerializeField, Min(0f)] private float combatIdlePostRetreatPause = 1.0f;
+    [SerializeField] private bool useCombatIdleRetreatWhenTooClose = true;
+    [SerializeField] private string combatIdleRetreatTriggerName = "Quickshift_B";
+    [SerializeField] private float combatIdleRetreatTriggerDistance = 1.7f;
+    [SerializeField] private float combatIdleRetreatDuration = 0.42f;
+    [SerializeField] private float combatIdleRetreatSpeed = 4.4f;
 
     [Header("Attack Tempo Tuning")]
     [SerializeField, Min(0f)] private float globalPostAttackRecoveryPadding = 0.14f;
@@ -1854,10 +1867,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     {
         float t = _pendingCombatIdleDuration > 0.01f ? _pendingCombatIdleDuration : combatIdleTime;
         _pendingCombatIdleDuration = -1f;
+
+        if (ShouldTriggerCombatIdleRetreat())
+            yield return StartCoroutine(Co_CombatIdleRetreat());
+
+        t = Mathf.Max(t, minimumPostAttackIdleDuration);
         while (t > 0f && !_isDead)
         {
             t -= Time.deltaTime;
-            UpdateMoveAnimation(0f);
+            if (!TryApplyCombatIdleStrafe())
+                UpdateMoveAnimation(0f);
             yield return null;
         }
 
@@ -2103,14 +2122,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     float ResolvePatternRecoveryTime(AttackPattern pattern, bool isQueuedFollowUp)
     {
         if (pattern == null)
-            return combatIdleTime;
+            return Mathf.Max(combatIdleTime, minimumPostAttackIdleDuration);
 
         float recovery = Mathf.Max(0f, pattern.ResolveRecoveryTime());
         if (isQueuedFollowUp)
             recovery += Mathf.Max(0f, followUpRecoveryTax);
 
         recovery += Mathf.Max(0f, globalPostAttackRecoveryPadding);
-        return Mathf.Max(combatIdleTime, recovery);
+        return Mathf.Max(Mathf.Max(combatIdleTime, minimumPostAttackIdleDuration), recovery);
     }
 
     float ResolveMinimumPunishWindow(AttackPattern pattern, bool isQueuedFollowUp)
@@ -2156,6 +2175,114 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             return Mathf.Min(recoveryTime, punishWindow);
 
         return punishWindow;
+    }
+
+    bool TryApplyCombatIdleStrafe()
+    {
+        if (!useCombatIdleStrafe)
+            return false;
+
+        EnsureGameplayPlayerTarget();
+        if (playerTarget == null)
+            return false;
+
+        Vector3 toPlayer = playerTarget.position - transform.position;
+        toPlayer.y = 0f;
+        float distance = toPlayer.magnitude;
+        if (distance <= 0.001f)
+            return false;
+
+        Vector3 forward = toPlayer / distance;
+        Quaternion look = Quaternion.LookRotation(forward);
+        transform.rotation = Quaternion.RotateTowards(
+            transform.rotation,
+            look,
+            Mathf.Max(60f, combatIdleFacingTurnSpeed) * Time.deltaTime);
+
+        Vector3 left = -transform.right;
+        float desiredDistance = Mathf.Max(0.5f, combatIdleDesiredDistance);
+        float radialError = distance - desiredDistance;
+        Vector3 drift = Vector3.zero;
+
+        if (Mathf.Abs(radialError) > Mathf.Max(0.05f, combatIdleDistanceTolerance))
+            drift = -forward * Mathf.Sign(radialError) * Mathf.Clamp01(Mathf.Abs(radialError));
+
+        Vector3 moveDir = left + drift * 0.65f;
+        moveDir.y = 0f;
+        if (moveDir.sqrMagnitude <= 0.0001f)
+        {
+            UpdateMoveAnimation(0f);
+            return true;
+        }
+
+        moveDir.Normalize();
+        float speed01 = Mathf.Clamp01(combatIdleStrafeSpeedMultiplier);
+        Vector3 delta = moveDir * (moveSpeed * speed01 * Time.deltaTime);
+        ApplyMovementDelta(delta);
+        UpdateMoveAnimation(speed01);
+        return true;
+    }
+
+    bool ShouldTriggerCombatIdleRetreat()
+    {
+        if (!useCombatIdleRetreatWhenTooClose || playerTarget == null)
+            return false;
+
+        Vector3 toPlayer = playerTarget.position - transform.position;
+        toPlayer.y = 0f;
+        float distance = toPlayer.magnitude;
+        if (distance > Mathf.Max(0.25f, combatIdleRetreatTriggerDistance))
+            return false;
+
+        if (!useCollisionAwareMovement)
+            return true;
+
+        float requestedDistance = Mathf.Max(0f, combatIdleRetreatSpeed) * Mathf.Max(0f, combatIdleRetreatDuration);
+        if (requestedDistance <= 0.01f)
+            return true;
+
+        Vector3 away = -toPlayer.normalized;
+        float clearance = MeasureMovementClearance(rb != null ? rb.position : transform.position, away, requestedDistance);
+        return clearance >= requestedDistance * Mathf.Clamp01(minimumBackstepClearanceRatio);
+    }
+
+    IEnumerator Co_CombatIdleRetreat()
+    {
+        if (playerTarget == null)
+            yield break;
+
+        FaceToPlayerInstant();
+
+        if (!string.IsNullOrEmpty(combatIdleRetreatTriggerName))
+            PlayAnimTrigger(combatIdleRetreatTriggerName);
+
+        float elapsed = 0f;
+        Vector3 backDir = -transform.forward;
+        float totalDistance = 0f;
+        if (combatIdleRetreatSpeed > 0f && combatIdleRetreatDuration > 0.0001f)
+        {
+            float requestedDistance = combatIdleRetreatSpeed * combatIdleRetreatDuration;
+            totalDistance = useCollisionAwareMovement
+                ? MeasureMovementClearance(rb != null ? rb.position : transform.position, backDir, requestedDistance)
+                : requestedDistance;
+        }
+
+        while (elapsed < combatIdleRetreatDuration && !_isDead)
+        {
+            float stepDeltaTime = Time.deltaTime;
+            RotateTowardsPlayer(stepDeltaTime, Mathf.Max(180f, combatIdleFacingTurnSpeed));
+
+            if (totalDistance > 0f && combatIdleRetreatDuration > 0.0001f)
+            {
+                float normalizedStep = Mathf.Clamp01(stepDeltaTime / combatIdleRetreatDuration);
+                Vector3 delta = backDir * (totalDistance * normalizedStep);
+                ApplyMovementDelta(delta);
+            }
+
+            UpdateMoveAnimation(0f);
+            elapsed += stepDeltaTime;
+            yield return null;
+        }
     }
 
     void ClearPunishWindow()
