@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using Unity.Cinemachine;
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
+using UnityEngine.Timeline;
 
 [DefaultExecutionOrder(-5000)]
 public class TutorialRuntimeBootstrap : MonoBehaviour
@@ -103,6 +106,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
         TrainingDummyController attackDummy = ConfigureAttackDummy(player, attackDummyObject);
         TrainingDummyController guardDummy = ConfigureGuardDummy(player, droneObject, guardProjectilePrefab);
+        ConfigureTutorialModernUltimate(player, attackDummyObject, mainCamera);
         TutorialZoneTrigger exitZone = BuildExitZone(sceneMoveObject, player.transform);
 
         TutorialWorldMarker movementMarker = CreateWorldMarker(
@@ -283,6 +287,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             player.transform,
             renderer,
             null);
+        controller.ConfigureHitEffectRuntime(ResolveTutorialDummyHitEffectPrefab());
         controller.SetRuntimeProfiles(
             new TrainingDummyStepProfile { stepType = TutorialStepType.CameraFocus, active = true, loopAttack = false, invulnerable = true, stateColor = new Color(0.25f, 0.85f, 1f, 1f) },
             new TrainingDummyStepProfile { stepType = TutorialStepType.LockOn, active = true, loopAttack = false, invulnerable = true, stateColor = new Color(0.25f, 0.85f, 1f, 1f) },
@@ -328,6 +333,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             player.transform,
             renderer,
             null);
+        controller.ConfigureHitEffectRuntime(ResolveTutorialDummyHitEffectPrefab());
         controller.ConfigureProjectileRuntime(projectilePrefab, attackOrigin);
         controller.SetRuntimeProfiles(
             new TrainingDummyStepProfile
@@ -453,6 +459,151 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
         dummyObject.SetActive(false);
         return controller;
+    }
+
+    void ConfigureTutorialModernUltimate(GameObject player, GameObject ultimateTargetObject, Camera mainCamera)
+    {
+#if !UNITY_EDITOR
+        return;
+#else
+        if (player == null || ultimateTargetObject == null || mainCamera == null)
+            return;
+
+        PlayerUltimateController ultimateController = EnsureComponent<PlayerUltimateController>(player);
+        UltimateSkillController skillController = EnsureComponent<UltimateSkillController>(player);
+        UltimateTargetBinder targetBinder = EnsureComponent<UltimateTargetBinder>(player);
+        UltimateHitProcessor hitProcessor = EnsureComponent<UltimateHitProcessor>(player);
+        UltimateVFXPresenter vfxPresenter = EnsureComponent<UltimateVFXPresenter>(player);
+        PlayerReferences playerReferences = EnsureComponent<PlayerReferences>(player);
+        if (ultimateController == null || skillController == null || targetBinder == null || hitProcessor == null || vfxPresenter == null || playerReferences == null)
+            return;
+
+        PlayableAsset timelineAsset = LoadEditorAsset<PlayableAsset>("Assets/Cinematics/Ultimate/TL_Ultimate_PlayerSword.playable");
+        UltimateSequenceData sequenceData = Resources.Load<UltimateSequenceData>("Ultimate/UltimateSequence_Default");
+        CinemachineBrain brain = mainCamera.GetComponent<CinemachineBrain>();
+        if (timelineAsset == null || sequenceData == null || brain == null)
+            return;
+
+        SignalAsset sigCameraSessionBegin = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_CameraSessionBegin.asset");
+        SignalAsset sigDrawPoseStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_DrawPoseStart.asset");
+        SignalAsset sigCloseUpStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_CloseUpStart.asset");
+        SignalAsset sigDrawSlashRelease = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_DrawSlashRelease.asset");
+        SignalAsset sigSlashStormStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_SlashStormStart.asset");
+        SignalAsset sigSlashStormSustainStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_SlashStormSustainStart.asset");
+        SignalAsset sigPlayerHideForStorm = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_PlayerHideForStorm.asset");
+        SignalAsset sigPlayerShowForWalkout = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_PlayerShowForWalkout.asset");
+        SignalAsset sigWalkoutStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_WalkoutStart.asset");
+        SignalAsset sigGameplayCommitDamage = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_GameplayCommitDamage.asset");
+        SignalAsset sigExplosionPrepare = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_ExplosionPrepare.asset");
+        SignalAsset sigFinalExplosion = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_FinalExplosion.asset");
+        SignalAsset sigCameraSessionEnd = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_CameraSessionEnd.asset");
+        SignalAsset sigGameplayRestore = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_GameplayRestore.asset");
+
+        GameObject root = GameObject.Find("TutorialUltimateCinematicRoot");
+        if (root == null)
+            root = new GameObject("TutorialUltimateCinematicRoot");
+
+        PlayableDirector director = EnsureComponent<PlayableDirector>(root);
+        director.playableAsset = timelineAsset;
+        director.timeUpdateMode = DirectorUpdateMode.UnscaledGameTime;
+
+        SignalReceiver signalReceiver = EnsureComponent<SignalReceiver>(root);
+        UltimateCinematicBindings bindings = EnsureComponent<UltimateCinematicBindings>(root);
+        UltimateCameraSessionController cameraSession = EnsureComponent<UltimateCameraSessionController>(root);
+        SlashStormVfxController slashStormVfx = EnsureComponent<SlashStormVfxController>(root);
+        slashStormVfx.ConfigureRuntime(vfxPresenter);
+        ExplosionVfxController explosionVfx = EnsureComponent<ExplosionVfxController>(root);
+        explosionVfx.ConfigureRuntime(vfxPresenter);
+        UltimateEnemyCinematicState enemyState = EnsureComponent<UltimateEnemyCinematicState>(root);
+        UltimateCinematicController cinematicController = EnsureComponent<UltimateCinematicController>(root);
+
+        Transform playerRoot = player.transform;
+        Transform visualRoot = playerReferences.VisualRoot != null ? playerReferences.VisualRoot : player.transform;
+        Animator playerAnimator = playerReferences.MainAnimator;
+        Renderer[] playerRenderers = visualRoot.GetComponentsInChildren<Renderer>(true);
+        Transform cineRoot = EnsureAnchor(playerRoot, "Ult_CineRoot", Vector3.zero);
+        Transform shot01Pos = EnsureAnchor(cineRoot, "Ult_Shot01_Pos", new Vector3(0.03f, 1.38f, 1.28f));
+        Transform shot01LookAt = EnsureAnchor(cineRoot, "Ult_Shot01_LookAt", new Vector3(0.02f, 1.12f, 0.26f));
+        Transform shot02Pos = EnsureAnchor(cineRoot, "Ult_Shot02_Pos", new Vector3(0.02f, 1.44f, 0.82f));
+        Transform shot02LookAt = EnsureAnchor(cineRoot, "Ult_Shot02_LookAt", new Vector3(0.04f, 1.16f, 0.20f));
+        Transform shot03Pos = EnsureAnchor(cineRoot, "Ult_Shot03_Pos", new Vector3(0f, 1.9f, -5.6f));
+        Transform shot03LookAt = EnsureAnchor(cineRoot, "Ult_Shot03_LookAt", new Vector3(0f, 1.2f, 2.1f));
+        Transform shot04Pos = EnsureAnchor(cineRoot, "Ult_Shot04_Pos", new Vector3(0f, 1.45f, 2.8f));
+        Transform shot04LookAt = EnsureAnchor(cineRoot, "Ult_Shot04_LookAt", new Vector3(0f, 1.15f, -1.5f));
+        Transform shot05Pos = EnsureAnchor(cineRoot, "Ult_Shot05_Pos", new Vector3(0f, 1.85f, 4.2f));
+        Transform shot05LookAt = EnsureAnchor(cineRoot, "Ult_Shot05_LookAt", new Vector3(0f, 1.2f, -0.4f));
+        Transform swordCloseAnchor = playerReferences.UltimateSpawnRoot != null ? playerReferences.UltimateSpawnRoot : EnsureAnchor(cineRoot, "Ult_Sword_CloseAnchor", new Vector3(0.25f, 1.25f, 0.55f));
+        Transform walkoutFacingAnchor = EnsureAnchor(cineRoot, "Ult_Walkout_FacingAnchor", new Vector3(0f, 1.15f, 4.8f));
+        Transform slashStormCenter = EnsureAnchor(cineRoot, "Ult_SlashStorm_Center", new Vector3(0f, 1.15f, 2.2f));
+
+        Transform targetRoot = ultimateTargetObject.transform;
+        Transform targetCenter = EnsureAnchor(targetRoot, "Ult_TargetCenter", new Vector3(0f, 1.0f, 0f));
+        Transform targetExplosionAnchor = EnsureAnchor(targetRoot, "Ult_ExplosionAnchor", new Vector3(0f, 1.0f, 0f));
+        Transform targetCineHoldAnchor = EnsureAnchor(targetRoot, "Ult_CineHoldAnchor", Vector3.zero);
+
+        GameObject cameraRigRoot = EnsureChildObject(root.transform, "UltimateCameraRig");
+        CinemachineVirtualCameraBase[] sequenceCameras =
+        {
+            EnsureUltimateShotCamera(cameraRigRoot.transform, shot01Pos, "VCam_Ult_Intro", shot01LookAt, 32f),
+            EnsureUltimateShotCamera(cameraRigRoot.transform, shot02Pos, "VCam_Ult_CloseUp", shot02LookAt, 28f),
+            EnsureUltimateShotCamera(cameraRigRoot.transform, shot03Pos, "VCam_Ult_SlashStorm", shot03LookAt, 42f),
+            EnsureUltimateShotCamera(cameraRigRoot.transform, shot04Pos, "VCam_Ult_Walkout", shot04LookAt, 36f),
+            EnsureUltimateShotCamera(cameraRigRoot.transform, shot05Pos, "VCam_Ult_Explosion", shot05LookAt, 40f)
+        };
+        cameraRigRoot.SetActive(false);
+
+        cameraSession.ConfigureRuntime(cameraRigRoot, brain, sequenceCameras);
+        bindings.ConfigureRuntime(
+            playerRoot,
+            playerAnimator,
+            visualRoot,
+            swordCloseAnchor,
+            walkoutFacingAnchor,
+            slashStormCenter,
+            targetRoot,
+            targetCenter,
+            targetExplosionAnchor,
+            targetCineHoldAnchor,
+            shot01Pos,
+            shot01LookAt,
+            shot02Pos,
+            shot02LookAt,
+            shot03Pos,
+            shot03LookAt,
+            shot04Pos,
+            shot04LookAt,
+            shot05Pos,
+            shot05LookAt);
+        cinematicController.ConfigureRuntime(
+            director,
+            signalReceiver,
+            bindings,
+            targetBinder,
+            hitProcessor,
+            vfxPresenter,
+            cameraSession,
+            slashStormVfx,
+            explosionVfx,
+            enemyState,
+            visualRoot.gameObject,
+            playerRenderers,
+            null,
+            sigCameraSessionBegin,
+            sigDrawPoseStart,
+            sigCloseUpStart,
+            sigDrawSlashRelease,
+            sigSlashStormStart,
+            sigSlashStormSustainStart,
+            sigPlayerHideForStorm,
+            sigPlayerShowForWalkout,
+            sigWalkoutStart,
+            sigGameplayCommitDamage,
+            sigExplosionPrepare,
+            sigFinalExplosion,
+            sigCameraSessionEnd,
+            sigGameplayRestore);
+        skillController.ConfigureRuntimeModern(ultimateController, sequenceData, cinematicController, targetBinder, hitProcessor, vfxPresenter);
+#endif
     }
 
     TutorialWorldMarker CreateWorldMarker(
@@ -690,7 +841,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         healChecker.ConfigureRuntime(_playerBridge, 0.42f);
 
         TutorialUltimateConditionChecker ultimateChecker = gameObject.AddComponent<TutorialUltimateConditionChecker>();
-        ultimateChecker.ConfigureRuntime(_playerBridge);
+        ultimateChecker.ConfigureRuntime(_playerBridge, attackDummy != null ? attackDummy.GetComponent<UltimateTargetSimple>() : null);
 
         TutorialZoneConditionChecker exitChecker = null;
         if (exitZone != null)
@@ -1031,4 +1182,77 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             component = target.AddComponent<T>();
         return component;
     }
+
+    static Transform EnsureAnchor(Transform parent, string name, Vector3 localPosition)
+    {
+        if (parent == null)
+            return null;
+
+        Transform child = parent.Find(name);
+        if (child == null)
+        {
+            GameObject go = new GameObject(name);
+            child = go.transform;
+            child.SetParent(parent, false);
+        }
+
+        child.localPosition = localPosition;
+        child.localRotation = Quaternion.identity;
+        child.localScale = Vector3.one;
+        return child;
+    }
+
+    static GameObject EnsureChildObject(Transform parent, string name)
+    {
+        Transform child = parent.Find(name);
+        if (child != null)
+            return child.gameObject;
+
+        GameObject go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        return go;
+    }
+
+    static CinemachineVirtualCameraBase EnsureUltimateShotCamera(Transform cameraRigRoot, Transform shotAnchor, string name, Transform lookAtTarget, float fov)
+    {
+        if (cameraRigRoot == null || shotAnchor == null)
+            return null;
+
+        Transform child = shotAnchor.Find(name);
+        GameObject go = child != null ? child.gameObject : new GameObject(name);
+        go.transform.SetParent(shotAnchor, false);
+        go.transform.localPosition = Vector3.zero;
+        go.transform.localRotation = Quaternion.identity;
+
+        CinemachineCamera camera = EnsureComponent<CinemachineCamera>(go);
+        camera.LookAt = lookAtTarget;
+        camera.Lens.FieldOfView = fov;
+        EnsureComponent<CinemachineHardLookAt>(go);
+        return camera;
+    }
+
+    static GameObject ResolveTutorialDummyHitEffectPrefab()
+    {
+#if UNITY_EDITOR
+        const string preferredGuid = "607e21a67da6e1844bf2059eb0888f52";
+        string preferredPath = UnityEditor.AssetDatabase.GUIDToAssetPath(preferredGuid);
+        if (!string.IsNullOrWhiteSpace(preferredPath))
+        {
+            GameObject preferred = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(preferredPath);
+            if (preferred != null)
+                return preferred;
+        }
+
+        return LoadEditorAsset<GameObject>("Assets/Effects/111/FX_Slash_02.prefab");
+#else
+        return null;
+#endif
+    }
+
+#if UNITY_EDITOR
+    static T LoadEditorAsset<T>(string assetPath) where T : UnityEngine.Object
+    {
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<T>(assetPath);
+    }
+#endif
 }

@@ -9,6 +9,11 @@ public sealed class SlashStormVfxController : MonoBehaviour
 
     Coroutine _stormRoutine;
 
+    public void ConfigureRuntime(UltimateVFXPresenter presenter)
+    {
+        vfxPresenter = presenter;
+    }
+
     public void PlayIntroPose()
     {
         vfxPresenter?.PlayIntroPose();

@@ -24,7 +24,7 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private Vector2 dialoguePanelAnchoredPosition = new Vector2(0f, 112f);
     [SerializeField] private Vector2 dialoguePanelSize = new Vector2(1280f, 180f);
     [SerializeField] private Vector2 objectivePanelAnchoredPosition = new Vector2(-28f, -28f);
-    [SerializeField] private Vector2 objectivePanelSize = new Vector2(960f, 372f);
+    [SerializeField] private Vector2 objectivePanelSize = new Vector2(680f, 236f);
     [SerializeField] private Vector2 comboPanelAnchoredPosition = new Vector2(32f, -160f);
     [SerializeField] private Vector2 comboPanelSize = new Vector2(680f, 500f);
 

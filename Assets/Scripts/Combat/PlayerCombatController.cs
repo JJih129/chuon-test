@@ -40,6 +40,10 @@ public class PlayerCombatController : MonoBehaviour
     [Header("▶ 이동 제어")]
     [SerializeField] private bool lockMovementWhileAttacking = true;
     [SerializeField] private bool locomotionDuringAttack = false;
+    [SerializeField, Range(0.7f, 1f)] private float lightRecoveryMoveUnlockNormalized = 0.84f;
+    [SerializeField, Range(0.7f, 1f)] private float heavyRecoveryMoveUnlockNormalized = 0.9f;
+    [SerializeField, Range(0.85f, 1f)] private float lightRecoveryEndNormalized = 0.94f;
+    [SerializeField, Range(0.88f, 1f)] private float heavyRecoveryEndNormalized = 0.97f;
     [SerializeField] private string speedParam = "speed";
     [SerializeField] private Transform playerRoot;
     [SerializeField] private CharacterController characterController;
@@ -322,6 +326,12 @@ public class PlayerCombatController : MonoBehaviour
 
         UpdateDataDrivenAttackHitboxWindow(t);
 
+        if (movementLocked && ShouldUnlockMovementDuringRecovery(t))
+        {
+            SetMoveLock(false);
+            animator.applyRootMotion = false;
+        }
+
         float comboWindowEnd = ResolveAttackCancelWindowEnd(current);
         if (t >= current.cancelStart && t <= comboWindowEnd)
         {
@@ -337,7 +347,7 @@ public class PlayerCombatController : MonoBehaviour
             }
         }
 
-        if (t >= 0.99f && !animator.IsInTransition(layer) &&
+        if (t >= ResolveRecoveryEndNormalized(current) && !animator.IsInTransition(layer) &&
             (Time.time - lastAttackPlayTime) >= attackTransitionGraceSeconds)
         {
             EndAttack();
@@ -1288,6 +1298,32 @@ public class PlayerCombatController : MonoBehaviour
         }
 
         if (locked) animator.SetFloat(speedParam, 0f);
+    }
+
+    private bool ShouldUnlockMovementDuringRecovery(float normalizedTime)
+    {
+        if (!lockMovementWhileAttacking || current == null)
+            return false;
+
+        float unlockAt = ResolveRecoveryMoveUnlockNormalized(current);
+        return normalizedTime >= unlockAt;
+    }
+
+    private float ResolveRecoveryMoveUnlockNormalized(AttackData attack)
+    {
+        float configured = _currentAttackInput == AttackInput.Heavy
+            ? heavyRecoveryMoveUnlockNormalized
+            : lightRecoveryMoveUnlockNormalized;
+        return Mathf.Clamp(Mathf.Max(configured, attack.cancelEnd), 0f, 0.985f);
+    }
+
+    private float ResolveRecoveryEndNormalized(AttackData attack)
+    {
+        float configured = _currentAttackInput == AttackInput.Heavy
+            ? heavyRecoveryEndNormalized
+            : lightRecoveryEndNormalized;
+        float minimumEnd = ResolveRecoveryMoveUnlockNormalized(attack) + 0.025f;
+        return Mathf.Clamp(Mathf.Max(configured, minimumEnd), 0f, 0.995f);
     }
 
     private void SafeSetLayerWeight(int layerIndex, float weight01)

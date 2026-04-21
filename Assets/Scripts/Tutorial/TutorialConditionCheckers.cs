@@ -178,6 +178,9 @@ public class TutorialAttackConditionChecker : TutorialConditionChecker
 
     int _lightHits;
     int _heavyHits;
+    int _lastAttackSequenceId;
+    int _lastAttackerInstanceId;
+    float _lastHitRealtime = float.NegativeInfinity;
 
     public void ConfigureRuntime(TrainingDummyController[] dummies, int lightHits, int heavyHits)
     {
@@ -190,6 +193,9 @@ public class TutorialAttackConditionChecker : TutorialConditionChecker
     {
         _lightHits = 0;
         _heavyHits = 0;
+        _lastAttackSequenceId = 0;
+        _lastAttackerInstanceId = 0;
+        _lastHitRealtime = float.NegativeInfinity;
 
         if (observedDummies == null || observedDummies.Length == 0)
         {
@@ -223,6 +229,9 @@ public class TutorialAttackConditionChecker : TutorialConditionChecker
         if (!IsRunning)
             return;
 
+        if (IsDuplicateHit(info))
+            return;
+
         if (info.attackKind == TutorialAttackKind.Light)
             _lightHits = Mathf.Min(requiredLightHits, _lightHits + 1);
         else if (info.attackKind == TutorialAttackKind.Heavy)
@@ -239,6 +248,29 @@ public class TutorialAttackConditionChecker : TutorialConditionChecker
     {
         return $"\uc57d\uacf5 {_lightHits}/{requiredLightHits}  \uac15\uacf5 {_heavyHits}/{requiredHeavyHits}";
     }
+
+    bool IsDuplicateHit(TutorialCombatHitInfo info)
+    {
+        int attackSequenceId = info.payload.attackSequenceId;
+        int attackerInstanceId = info.payload.attacker != null ? info.payload.attacker.root.GetInstanceID() : 0;
+        if (attackSequenceId > 0)
+        {
+            if (attackSequenceId == _lastAttackSequenceId && attackerInstanceId == _lastAttackerInstanceId)
+                return true;
+
+            _lastAttackSequenceId = attackSequenceId;
+            _lastAttackerInstanceId = attackerInstanceId;
+            _lastHitRealtime = Time.realtimeSinceStartup;
+            return false;
+        }
+
+        float now = Time.realtimeSinceStartup;
+        if (now - _lastHitRealtime <= 0.08f)
+            return true;
+
+        _lastHitRealtime = now;
+        return false;
+    }
 }
 
 [DisallowMultipleComponent]
@@ -251,6 +283,8 @@ public class TutorialComboConditionChecker : TutorialConditionChecker
 
     int _hitStreak;
     float _lastHitTime = float.NegativeInfinity;
+    int _lastAttackSequenceId;
+    int _lastAttackerInstanceId;
 
     public void ConfigureRuntime(TrainingDummyController[] dummies, int comboDepth, int streakCount, float streakWindow)
     {
@@ -264,6 +298,8 @@ public class TutorialComboConditionChecker : TutorialConditionChecker
     {
         _hitStreak = 0;
         _lastHitTime = float.NegativeInfinity;
+        _lastAttackSequenceId = 0;
+        _lastAttackerInstanceId = 0;
 
         if (observedDummies == null || observedDummies.Length == 0)
         {
@@ -297,6 +333,9 @@ public class TutorialComboConditionChecker : TutorialConditionChecker
         if (!IsRunning)
             return;
 
+        if (IsDuplicateHit(info))
+            return;
+
         if (Time.time - _lastHitTime <= fallbackWindow)
             _hitStreak++;
         else
@@ -315,6 +354,21 @@ public class TutorialComboConditionChecker : TutorialConditionChecker
     string BuildProgressText(int currentDepth)
     {
         return $"\uc5f0\uc18d \ud0c0\uaca9 {currentDepth}/{requiredComboDepth}";
+    }
+
+    bool IsDuplicateHit(TutorialCombatHitInfo info)
+    {
+        int attackSequenceId = info.payload.attackSequenceId;
+        int attackerInstanceId = info.payload.attacker != null ? info.payload.attacker.root.GetInstanceID() : 0;
+        if (attackSequenceId <= 0)
+            return false;
+
+        if (attackSequenceId == _lastAttackSequenceId && attackerInstanceId == _lastAttackerInstanceId)
+            return true;
+
+        _lastAttackSequenceId = attackSequenceId;
+        _lastAttackerInstanceId = attackerInstanceId;
+        return false;
     }
 }
 
@@ -573,10 +627,14 @@ public class TutorialHealConditionChecker : TutorialConditionChecker
 public class TutorialUltimateConditionChecker : TutorialConditionChecker
 {
     [SerializeField] private TutorialPlayerRuntimeBridge playerBridge;
+    [SerializeField] private UltimateTargetSimple ultimateTarget;
+    bool _ultimateStarted;
+    bool _ultimateDamageApplied;
 
-    public void ConfigureRuntime(TutorialPlayerRuntimeBridge bridge)
+    public void ConfigureRuntime(TutorialPlayerRuntimeBridge bridge, UltimateTargetSimple target = null)
     {
         playerBridge = bridge;
+        ultimateTarget = target;
     }
 
     protected override void OnBeginChecking(TutorialStepDefinition step)
@@ -587,19 +645,44 @@ public class TutorialUltimateConditionChecker : TutorialConditionChecker
             return;
         }
 
+        _ultimateStarted = false;
+        _ultimateDamageApplied = false;
         playerBridge.FillUltimateGauge();
         playerBridge.UltimateStarted += HandleUltimateStarted;
+        playerBridge.UltimateEnded += HandleUltimateEnded;
+        if (ultimateTarget != null && ultimateTarget.OnUltimateDamageApplied != null)
+            ultimateTarget.OnUltimateDamageApplied.AddListener(HandleUltimateDamageApplied);
     }
 
     protected override void OnEndChecking()
     {
         if (playerBridge != null)
+        {
             playerBridge.UltimateStarted -= HandleUltimateStarted;
+            playerBridge.UltimateEnded -= HandleUltimateEnded;
+        }
+
+        if (ultimateTarget != null && ultimateTarget.OnUltimateDamageApplied != null)
+            ultimateTarget.OnUltimateDamageApplied.RemoveListener(HandleUltimateDamageApplied);
     }
 
     void HandleUltimateStarted()
     {
-        Complete("\uad81\uadf9\uae30 \ubc1c\ub3d9");
+        _ultimateStarted = true;
+        ReportProgress("\uad81\uadf9\uae30 \uc5f0\ucd9c \uc9c4\ud589 \uc911");
+    }
+
+    void HandleUltimateEnded()
+    {
+        _ultimateStarted = true;
+        Complete("\uad81\uadf9\uae30 \uc644\ub8cc");
+    }
+
+    void HandleUltimateDamageApplied(int _)
+    {
+        _ultimateDamageApplied = true;
+        if (_ultimateStarted)
+            ReportProgress("\uad81\uadf9\uae30 \ud0c0\uaca9 \ud655\uc778");
     }
 }
 

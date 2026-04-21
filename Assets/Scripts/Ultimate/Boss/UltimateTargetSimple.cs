@@ -42,6 +42,11 @@ public class UltimateTargetSimple : MonoBehaviour, IUltimateTarget
 
     void Awake()
     {
+        if (OnUltimateDamageApplied == null)
+            OnUltimateDamageApplied = new UnityEvent<int>();
+        if (OnDied == null)
+            OnDied = new UnityEvent();
+
         if (!audioSource)
         {
             audioSource = gameObject.AddComponent<AudioSource>();

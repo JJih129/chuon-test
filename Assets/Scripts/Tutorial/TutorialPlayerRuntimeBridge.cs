@@ -25,6 +25,7 @@ public class TutorialPlayerRuntimeBridge : MonoBehaviour
     public event UnityAction DodgeStarted;
     public event UnityAction AmpouleUsed;
     public event UnityAction UltimateStarted;
+    public event UnityAction UltimateEnded;
     public event UnityAction<int, int> HealthChanged;
     public event UnityAction<int, int> AmpouleChanged;
 
@@ -234,6 +235,8 @@ public class TutorialPlayerRuntimeBridge : MonoBehaviour
 
         if (playerUltimateController != null)
             playerUltimateController.OnUltimateStarted += HandleUltimateStarted;
+        if (playerUltimateController != null)
+            playerUltimateController.OnUltimateEnded += HandleUltimateEnded;
 
         if (playerHealth != null)
             playerHealth.OnDamaged += HandleDamaged;
@@ -263,6 +266,8 @@ public class TutorialPlayerRuntimeBridge : MonoBehaviour
 
         if (playerUltimateController != null)
             playerUltimateController.OnUltimateStarted -= HandleUltimateStarted;
+        if (playerUltimateController != null)
+            playerUltimateController.OnUltimateEnded -= HandleUltimateEnded;
 
         if (playerHealth != null)
             playerHealth.OnDamaged -= HandleDamaged;
@@ -317,6 +322,11 @@ public class TutorialPlayerRuntimeBridge : MonoBehaviour
     void HandleUltimateStarted()
     {
         UltimateStarted?.Invoke();
+    }
+
+    void HandleUltimateEnded()
+    {
+        UltimateEnded?.Invoke();
     }
 
     void HandleDamaged(int amount)

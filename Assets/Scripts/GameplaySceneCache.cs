@@ -30,13 +30,29 @@ public static class GameplaySceneCache
 
     public static Camera ResolveMainCamera()
     {
+        Camera taggedMainCamera = Camera.main;
+        if (_mainCamera != null)
+        {
+            bool cachedInvalid =
+                _mainCamera.transform == null ||
+                !_mainCamera.isActiveAndEnabled ||
+                !_mainCamera.gameObject.activeInHierarchy;
+
+            if (cachedInvalid || (taggedMainCamera != null && taggedMainCamera != _mainCamera))
+            {
+                _mainCamera = null;
+                _mainCameraTransform = null;
+                _mainCameraShake = null;
+            }
+        }
+
         if (_mainCamera != null)
             return _mainCamera;
 
         if (!CanResolve(ref _nextMainCameraResolveAt))
             return null;
 
-        _mainCamera = Camera.main;
+        _mainCamera = taggedMainCamera != null ? taggedMainCamera : Camera.main;
         _mainCameraTransform = _mainCamera != null ? _mainCamera.transform : null;
         _mainCameraShake = _mainCamera != null ? _mainCamera.GetComponent<CameraShake>() : null;
         return _mainCamera;
@@ -44,6 +60,14 @@ public static class GameplaySceneCache
 
     public static Transform ResolveMainCameraTransform()
     {
+        if (_mainCameraTransform != null &&
+            (_mainCameraTransform.gameObject == null || !_mainCameraTransform.gameObject.activeInHierarchy))
+        {
+            _mainCamera = null;
+            _mainCameraTransform = null;
+            _mainCameraShake = null;
+        }
+
         if (_mainCameraTransform != null)
             return _mainCameraTransform;
 

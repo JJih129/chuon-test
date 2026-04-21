@@ -33,6 +33,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [SerializeField, Min(0f)] private float dangerTargetMarkerOffsetY = 0.03f;
 
     [Header("Visual")]
+    [SerializeField] private GameObject hitEffectPrefab;
     [SerializeField] private string emissionProperty = "_EmissionColor";
     [SerializeField] private Color idleEmission = Color.black;
     [SerializeField] private Color hitEmission = new Color(1f, 0.85f, 0.2f, 1f);
@@ -66,6 +67,8 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [SerializeField] private bool debugLogs;
 
     float _lastHitTime = float.NegativeInfinity;
+    int _lastAttackSequenceId;
+    int _lastAttackerInstanceId;
     float _currentHealth;
     Coroutine _attackLoop;
     Coroutine _hitReaction;
@@ -146,6 +149,11 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         SetEmission(idleEmission);
     }
 
+    public void ConfigureHitEffectRuntime(GameObject runtimeHitEffectPrefab)
+    {
+        hitEffectPrefab = runtimeHitEffectPrefab;
+    }
+
     public void ConfigureWorldMarker(TutorialWorldMarker runtimeMarker)
     {
         worldMarker = runtimeMarker;
@@ -172,6 +180,9 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         _hasActiveProfile = false;
         _adaptiveFailureCount = 0;
         _attackResumeRealtime = 0f;
+        _lastAttackSequenceId = 0;
+        _lastAttackerInstanceId = 0;
+        _lastHitTime = float.NegativeInfinity;
 
         if (stepProfiles != null)
         {
@@ -212,12 +223,31 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     public void ReceiveHit(HitPayload payload)
     {
-        if (!_hasActiveProfile || Time.time - _lastHitTime < hitEventCooldown)
+        if (!_hasActiveProfile)
+            return;
+
+        int attackerInstanceId = payload.attacker != null ? payload.attacker.root.GetInstanceID() : 0;
+        bool hasAttackSequence = payload.attackSequenceId > 0;
+        if (hasAttackSequence &&
+            payload.attackSequenceId == _lastAttackSequenceId &&
+            attackerInstanceId == _lastAttackerInstanceId)
+        {
+            return;
+        }
+
+        if (!hasAttackSequence && Time.time - _lastHitTime < hitEventCooldown)
             return;
 
         _lastHitTime = Time.time;
+        if (hasAttackSequence)
+        {
+            _lastAttackSequenceId = payload.attackSequenceId;
+            _lastAttackerInstanceId = attackerInstanceId;
+        }
+
         CombatRewardUtility.TryGrantBasicAttackGauge(payload.attacker);
         PlayHitReaction();
+        SpawnHitEffect(payload);
 
         if (_activeProfile != null && _activeProfile.useHealth && !_activeProfile.invulnerable)
             _currentHealth = Mathf.Max(0f, _currentHealth - payload.damage);
@@ -232,6 +262,17 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
         if (debugLogs)
             Debug.Log($"[TrainingDummyController] {name} hit. role={role} kind={hitInfo.attackKind} combo={hitInfo.comboDepth}", this);
+    }
+
+    void SpawnHitEffect(HitPayload payload)
+    {
+        if (hitEffectPrefab == null)
+            return;
+
+        Quaternion rotation = payload.hitDirection.sqrMagnitude > 0.0001f
+            ? Quaternion.LookRotation(payload.hitDirection, Vector3.up)
+            : Quaternion.identity;
+        TransientVfxPool.Spawn(hitEffectPrefab, payload.hitPoint, rotation, null, 1.2f);
     }
 
     IEnumerator CoAttackLoop(TutorialStepType stepType)

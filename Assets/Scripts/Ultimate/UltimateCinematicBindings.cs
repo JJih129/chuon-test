@@ -49,4 +49,48 @@ public sealed class UltimateCinematicBindings : MonoBehaviour
     public Transform Shot04LookAt => shot04LookAt;
     public Transform Shot05Pos => shot05Pos;
     public Transform Shot05LookAt => shot05LookAt;
+
+    public void ConfigureRuntime(
+        Transform runtimePlayerRoot,
+        Animator runtimePlayerAnimator,
+        Transform runtimePlayerVisualRoot,
+        Transform runtimeSwordCloseAnchor,
+        Transform runtimeWalkoutFacingAnchor,
+        Transform runtimeSlashStormCenter,
+        Transform runtimeTargetRoot,
+        Transform runtimeTargetCenter,
+        Transform runtimeTargetExplosionAnchor,
+        Transform runtimeTargetCineHoldAnchor,
+        Transform runtimeShot01Pos,
+        Transform runtimeShot01LookAt,
+        Transform runtimeShot02Pos,
+        Transform runtimeShot02LookAt,
+        Transform runtimeShot03Pos,
+        Transform runtimeShot03LookAt,
+        Transform runtimeShot04Pos,
+        Transform runtimeShot04LookAt,
+        Transform runtimeShot05Pos,
+        Transform runtimeShot05LookAt)
+    {
+        playerRoot = runtimePlayerRoot;
+        playerAnimator = runtimePlayerAnimator;
+        playerVisualRoot = runtimePlayerVisualRoot;
+        swordCloseAnchor = runtimeSwordCloseAnchor;
+        walkoutFacingAnchor = runtimeWalkoutFacingAnchor;
+        slashStormCenter = runtimeSlashStormCenter;
+        targetRoot = runtimeTargetRoot;
+        targetCenter = runtimeTargetCenter;
+        targetExplosionAnchor = runtimeTargetExplosionAnchor;
+        targetCineHoldAnchor = runtimeTargetCineHoldAnchor;
+        shot01Pos = runtimeShot01Pos;
+        shot01LookAt = runtimeShot01LookAt;
+        shot02Pos = runtimeShot02Pos;
+        shot02LookAt = runtimeShot02LookAt;
+        shot03Pos = runtimeShot03Pos;
+        shot03LookAt = runtimeShot03LookAt;
+        shot04Pos = runtimeShot04Pos;
+        shot04LookAt = runtimeShot04LookAt;
+        shot05Pos = runtimeShot05Pos;
+        shot05LookAt = runtimeShot05LookAt;
+    }
 }

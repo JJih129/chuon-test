@@ -320,4 +320,25 @@ public sealed class UltimateSkillController : MonoBehaviour
                 this);
         }
     }
+
+    public void ConfigureRuntimeModern(
+        PlayerUltimateController runtimePrimaryController,
+        UltimateSequenceData runtimeSequenceData,
+        UltimateCinematicController runtimeCinematicController,
+        UltimateTargetBinder runtimeTargetBinder,
+        UltimateHitProcessor runtimeHitProcessor,
+        UltimateVFXPresenter runtimeVfxPresenter)
+    {
+        primaryController = runtimePrimaryController;
+        useCodeDrivenSequence = true;
+        sequenceData = runtimeSequenceData;
+        cinematicController = runtimeCinematicController;
+        targetBinder = runtimeTargetBinder;
+        hitProcessor = runtimeHitProcessor;
+        vfxPresenter = runtimeVfxPresenter;
+        director = null;
+        ultimateTimelineAsset = null;
+        allowLegacyDirectorFallback = false;
+        SyncPrimaryControllerBindings();
+    }
 }

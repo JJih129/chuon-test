@@ -15,6 +15,13 @@ public sealed class UltimateCameraSessionController : MonoBehaviour
     public CinemachineBrain Brain => brain;
     public CinemachineVirtualCameraBase[] SequenceCameras => sequenceCameras;
 
+    public void ConfigureRuntime(GameObject runtimeCameraRigRoot, CinemachineBrain runtimeBrain, CinemachineVirtualCameraBase[] runtimeSequenceCameras)
+    {
+        cameraRigRoot = runtimeCameraRigRoot;
+        brain = runtimeBrain;
+        sequenceCameras = runtimeSequenceCameras;
+    }
+
     void Awake()
     {
         if (brain == null)

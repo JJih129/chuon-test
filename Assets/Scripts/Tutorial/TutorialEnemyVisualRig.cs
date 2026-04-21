@@ -5,6 +5,7 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
 {
     const string DefaultVisualRootName = "VisualRoot";
     const string DefaultLockPivotName = "LockPivot";
+    const string DefaultLockOnProxyName = "LockOnProxy";
     const string DefaultRuntimeVisualName = "RuntimeVisual";
 
     [SerializeField] Transform visualRoot;
@@ -12,9 +13,12 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
     [SerializeField] Renderer primaryRenderer;
     [SerializeField] Transform lockPivot;
     [SerializeField] Transform firePoint;
+    [SerializeField] Transform lockOnProxy;
     [SerializeField] bool instantiateVisualPrefabAtRuntime = true;
     [SerializeField] bool disableRootRenderersWhenUsingVisualPrefab = true;
     [SerializeField, Range(0f, 1f)] float lockPivotHeightBias = 0.6f;
+    [SerializeField] bool createLockOnProxyCollider = true;
+    [SerializeField, Min(0.2f)] float lockOnProxyRadius = 1.15f;
     [SerializeField] Vector3 visualLocalPosition = Vector3.zero;
     [SerializeField] Vector3 visualLocalEuler = Vector3.zero;
     [SerializeField] Vector3 visualLocalScale = Vector3.one;
@@ -50,6 +54,7 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
         EnsureVisualInstance();
         ResolvePrimaryRenderer();
         EnsureLockPivot();
+        EnsureLockOnProxy();
     }
 
     void EnsureReferencesOnly()
@@ -76,6 +81,13 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
             Transform existingLockPivot = transform.Find(DefaultLockPivotName);
             if (existingLockPivot != null)
                 lockPivot = existingLockPivot;
+        }
+
+        if (lockOnProxy == null)
+        {
+            Transform existingLockOnProxy = transform.Find(DefaultLockOnProxyName);
+            if (existingLockOnProxy != null)
+                lockOnProxy = existingLockOnProxy;
         }
 
         ResolvePrimaryRenderer();
@@ -147,6 +159,36 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
 
         lockPivot.position = pivotPosition;
         lockPivot.rotation = Quaternion.identity;
+    }
+
+    void EnsureLockOnProxy()
+    {
+        if (!createLockOnProxyCollider)
+            return;
+
+        if (lockOnProxy == null)
+        {
+            GameObject proxyObject = new GameObject(DefaultLockOnProxyName);
+            lockOnProxy = proxyObject.transform;
+            lockOnProxy.SetParent(transform, false);
+        }
+
+        if (lockPivot != null)
+            lockOnProxy.position = lockPivot.position;
+        else
+            lockOnProxy.position = transform.position + Vector3.up * 1.1f;
+
+        lockOnProxy.rotation = Quaternion.identity;
+        lockOnProxy.localScale = Vector3.one;
+        lockOnProxy.gameObject.layer = gameObject.layer;
+
+        SphereCollider proxyCollider = lockOnProxy.GetComponent<SphereCollider>();
+        if (proxyCollider == null)
+            proxyCollider = lockOnProxy.gameObject.AddComponent<SphereCollider>();
+
+        proxyCollider.isTrigger = true;
+        proxyCollider.radius = lockOnProxyRadius;
+        proxyCollider.center = Vector3.zero;
     }
 
     static Transform FindChildRecursive(Transform root, string targetName)

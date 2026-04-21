@@ -62,9 +62,18 @@ public sealed class UltimateCinematicController : MonoBehaviour
     bool _cleanupCompleted = true;
     bool _gameplayDamageCommitted;
     bool _cachedPlayerPoseValid;
+    bool _cachedVisualRootPoseValid;
+    bool _cachedAnimationTargetPoseValid;
     bool _suppressDirectorStoppedCallback;
     Vector3 _cachedPlayerWorldPosition;
     Quaternion _cachedPlayerWorldRotation = Quaternion.identity;
+    Vector3 _cachedVisualRootLocalPosition;
+    Quaternion _cachedVisualRootLocalRotation = Quaternion.identity;
+    Vector3 _cachedVisualRootLocalScale = Vector3.one;
+    Transform _cachedAnimationTargetTransform;
+    Vector3 _cachedAnimationTargetLocalPosition;
+    Quaternion _cachedAnimationTargetLocalRotation = Quaternion.identity;
+    Vector3 _cachedAnimationTargetLocalScale = Vector3.one;
 
     void Awake()
     {
@@ -112,6 +121,64 @@ public sealed class UltimateCinematicController : MonoBehaviour
     void OnDestroy()
     {
         CleanupIfNeeded("OnDestroy");
+    }
+
+    public void ConfigureRuntime(
+        PlayableDirector runtimePlayableDirector,
+        SignalReceiver runtimeSignalReceiver,
+        UltimateCinematicBindings runtimeBindings,
+        UltimateTargetBinder runtimeTargetBinder,
+        UltimateHitProcessor runtimeHitProcessor,
+        UltimateVFXPresenter runtimeVfxPresenter,
+        UltimateCameraSessionController runtimeCameraSession,
+        SlashStormVfxController runtimeSlashStormVfx,
+        ExplosionVfxController runtimeExplosionVfx,
+        UltimateEnemyCinematicState runtimeEnemyCinematicState,
+        GameObject runtimePlayerVisualRoot,
+        Renderer[] runtimePlayerRenderers,
+        GameObject runtimePlayerGhostHelper,
+        SignalAsset runtimeSigCameraSessionBegin,
+        SignalAsset runtimeSigDrawPoseStart,
+        SignalAsset runtimeSigCloseUpStart,
+        SignalAsset runtimeSigDrawSlashRelease,
+        SignalAsset runtimeSigSlashStormStart,
+        SignalAsset runtimeSigSlashStormSustainStart,
+        SignalAsset runtimeSigPlayerHideForStorm,
+        SignalAsset runtimeSigPlayerShowForWalkout,
+        SignalAsset runtimeSigWalkoutStart,
+        SignalAsset runtimeSigGameplayCommitDamage,
+        SignalAsset runtimeSigExplosionPrepare,
+        SignalAsset runtimeSigFinalExplosion,
+        SignalAsset runtimeSigCameraSessionEnd,
+        SignalAsset runtimeSigGameplayRestore)
+    {
+        playableDirector = runtimePlayableDirector;
+        signalReceiver = runtimeSignalReceiver;
+        bindings = runtimeBindings;
+        targetBinder = runtimeTargetBinder;
+        hitProcessor = runtimeHitProcessor;
+        vfxPresenter = runtimeVfxPresenter;
+        cameraSession = runtimeCameraSession;
+        slashStormVfx = runtimeSlashStormVfx;
+        explosionVfx = runtimeExplosionVfx;
+        enemyCinematicState = runtimeEnemyCinematicState;
+        playerVisualRoot = runtimePlayerVisualRoot;
+        playerRenderers = runtimePlayerRenderers;
+        playerGhostHelper = runtimePlayerGhostHelper;
+        sigCameraSessionBegin = runtimeSigCameraSessionBegin;
+        sigDrawPoseStart = runtimeSigDrawPoseStart;
+        sigCloseUpStart = runtimeSigCloseUpStart;
+        sigDrawSlashRelease = runtimeSigDrawSlashRelease;
+        sigSlashStormStart = runtimeSigSlashStormStart;
+        sigSlashStormSustainStart = runtimeSigSlashStormSustainStart;
+        sigPlayerHideForStorm = runtimeSigPlayerHideForStorm;
+        sigPlayerShowForWalkout = runtimeSigPlayerShowForWalkout;
+        sigWalkoutStart = runtimeSigWalkoutStart;
+        sigGameplayCommitDamage = runtimeSigGameplayCommitDamage;
+        sigExplosionPrepare = runtimeSigExplosionPrepare;
+        sigFinalExplosion = runtimeSigFinalExplosion;
+        sigCameraSessionEnd = runtimeSigCameraSessionEnd;
+        sigGameplayRestore = runtimeSigGameplayRestore;
     }
 
     public bool Play(PlayerUltimateController owner, UltimateSequenceData data)
@@ -818,6 +885,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
     void CacheInitialPlayerPose()
     {
         _cachedPlayerPoseValid = false;
+        _cachedVisualRootPoseValid = false;
+        _cachedAnimationTargetPoseValid = false;
+        _cachedAnimationTargetTransform = null;
 
         if (bindings == null || bindings.PlayerRoot == null)
             return;
@@ -825,6 +895,24 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _cachedPlayerWorldPosition = bindings.PlayerRoot.position;
         _cachedPlayerWorldRotation = bindings.PlayerRoot.rotation;
         _cachedPlayerPoseValid = true;
+
+        if (bindings.PlayerVisualRoot != null)
+        {
+            _cachedVisualRootLocalPosition = bindings.PlayerVisualRoot.localPosition;
+            _cachedVisualRootLocalRotation = bindings.PlayerVisualRoot.localRotation;
+            _cachedVisualRootLocalScale = bindings.PlayerVisualRoot.localScale;
+            _cachedVisualRootPoseValid = true;
+        }
+
+        Animator animationTarget = ResolveTimelineAnimationTarget();
+        if (animationTarget != null)
+        {
+            _cachedAnimationTargetTransform = animationTarget.transform;
+            _cachedAnimationTargetLocalPosition = animationTarget.transform.localPosition;
+            _cachedAnimationTargetLocalRotation = animationTarget.transform.localRotation;
+            _cachedAnimationTargetLocalScale = animationTarget.transform.localScale;
+            _cachedAnimationTargetPoseValid = true;
+        }
     }
 
     void RestoreInitialPlayerPoseIfNeeded()
@@ -834,6 +922,27 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
         Vector3 lookTarget = _cachedPlayerWorldPosition + (_cachedPlayerWorldRotation * Vector3.forward);
         targetBinder.SnapPlayerTo(_cachedPlayerWorldPosition, lookTarget);
+
+        if (_cachedVisualRootPoseValid && bindings.PlayerVisualRoot != null)
+        {
+            bindings.PlayerVisualRoot.localPosition = _cachedVisualRootLocalPosition;
+            bindings.PlayerVisualRoot.localRotation = _cachedVisualRootLocalRotation;
+            bindings.PlayerVisualRoot.localScale = _cachedVisualRootLocalScale;
+        }
+
+        Animator animationTarget = ResolveTimelineAnimationTarget();
+        if (_cachedAnimationTargetPoseValid && _cachedAnimationTargetTransform != null)
+        {
+            _cachedAnimationTargetTransform.localPosition = _cachedAnimationTargetLocalPosition;
+            _cachedAnimationTargetTransform.localRotation = _cachedAnimationTargetLocalRotation;
+            _cachedAnimationTargetTransform.localScale = _cachedAnimationTargetLocalScale;
+        }
+
+        if (animationTarget != null)
+        {
+            animationTarget.Rebind();
+            animationTarget.Update(0f);
+        }
     }
 
     void CleanupIfNeeded(string reason)
@@ -901,6 +1010,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _boundTarget = null;
         _gameplayDamageCommitted = false;
         _cachedPlayerPoseValid = false;
+        _cachedVisualRootPoseValid = false;
+        _cachedAnimationTargetPoseValid = false;
+        _cachedAnimationTargetTransform = null;
 
     }
 

@@ -1353,7 +1353,7 @@ MonoBehaviour:
   dodgeSpeed: 8.4
   dodgeDistance: 12
   dodgeDuration: 0.4
-  dodgeCooldown: 0.08
+  dodgeCooldown: 1.5
   sideStepOnPerfectDodge: 1
   perfectDodgeRewindNormalizedTime: 0.28
   openPerfectDodgeWindowOnDodgeStart: 1

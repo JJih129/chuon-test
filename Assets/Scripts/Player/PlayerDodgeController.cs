@@ -45,7 +45,7 @@ public class PlayerDodgeController : MonoBehaviour
     [SerializeField, Range(4f, 28f)] float dodgeSpeed = 18f;
     [SerializeField, Range(1f, 12f)] float dodgeDistance = 5f;
     [SerializeField, Range(0.05f, 0.6f)] float dodgeDuration = 0.25f;
-    [SerializeField, Range(0f, 1f)] float dodgeCooldown = 0f;
+    [SerializeField, Range(0f, 3f)] float dodgeCooldown = 1.5f;
 
     [Header("Perfect Dodge Redirect")]
     [SerializeField] bool sideStepOnPerfectDodge = true;
@@ -79,9 +79,13 @@ public class PlayerDodgeController : MonoBehaviour
     [SerializeField] string dodgeStateName = "Base Layer.Dodge_Roll";
     [SerializeField, Range(0f, 0.08f)] float dodgeStateTransitionDuration = 0.02f;
     [SerializeField, Range(0f, 0.2f)] float dodgeStateStartNormalizedTime = 0f;
+    [SerializeField] bool waitForDodgeAnimationEnd = true;
+    [SerializeField, Range(0.9f, 1.1f)] float dodgeAnimationEndNormalizedTime = 0.98f;
+    [SerializeField, Range(0f, 0.4f)] float dodgeAnimationEndGraceSeconds = 0.18f;
 
     [Header("Move Lock")]
     [SerializeField] bool lockMoveDuringDodge = true;
+    [SerializeField] bool blockInputsDuringDodge = true;
     [SerializeField] bool zeroVelocityOnDodge = true;
     [SerializeField] bool disableRootMotionOnDodge = false;
     [SerializeField] bool useDirectionalRootMotionDodge = true;
@@ -125,6 +129,7 @@ public class PlayerDodgeController : MonoBehaviour
     bool _hasCachedAnimatorRootMotionBeforeDodge;
     float _smoothedRootMotionDodgeSpeed;
     float _smoothedRootMotionDodgeSpeedVelocity;
+    float _dodgeEarliestEndTime;
 
     void Reset()
     {
@@ -155,7 +160,7 @@ public class PlayerDodgeController : MonoBehaviour
         cdTimer -= Time.unscaledDeltaTime;
         UpdateDirectionMemory();
 
-        if (IsInputBlocked())
+        if (IsInputBlocked() && !isDodging)
         {
             ClearBufferedDodgeRequest();
             if (isDodging)
@@ -194,9 +199,13 @@ public class PlayerDodgeController : MonoBehaviour
         isDodging = true;
         elapsed = 0f;
         cdTimer = dodgeCooldown;
+        _dodgeEarliestEndTime = Time.unscaledTime + Mathf.Max(0.01f, dodgeDuration);
 
         if (lockMoveDuringDodge && moveLocker != null)
             moveLocker.Lock("DODGE", dodgeDuration, zeroVelocityOnDodge, disableRootMotionOnDodge);
+
+        if (blockInputsDuringDodge && inputBlocker != null)
+            inputBlocker.SetBlocked(true);
 
         if (useDirectionalRootMotionDodge && animator != null)
         {
@@ -262,16 +271,20 @@ public class PlayerDodgeController : MonoBehaviour
             cc.Move(dodgeDir * instantSpeed * Time.deltaTime);
         }
 
-        if (elapsed >= dodgeDuration)
+        if (elapsed >= dodgeDuration && CanFinishDodge())
             EndDodge();
     }
 
     void EndDodge()
     {
         isDodging = false;
+        _dodgeEarliestEndTime = float.NegativeInfinity;
 
         if (lockMoveDuringDodge && moveLocker != null)
             moveLocker.Unlock("DODGE");
+
+        if (blockInputsDuringDodge && inputBlocker != null)
+            inputBlocker.SetBlocked(false);
 
         if (animator != null && _hasCachedAnimatorRootMotionBeforeDodge)
         {
@@ -796,6 +809,43 @@ public class PlayerDodgeController : MonoBehaviour
     bool IsInputBlocked()
     {
         return inputBlocker != null && inputBlocker.IsBlocked;
+    }
+
+    bool CanFinishDodge()
+    {
+        if (!waitForDodgeAnimationEnd || animator == null || dodgeStateHash == 0)
+            return true;
+
+        float extraWaitDeadline = _dodgeEarliestEndTime + Mathf.Max(0f, dodgeAnimationEndGraceSeconds);
+        if (Time.unscaledTime >= extraWaitDeadline)
+            return true;
+
+        AnimatorStateInfo currentState = animator.GetCurrentAnimatorStateInfo(0);
+        if (IsMatchingDodgeState(currentState))
+            return Mathf.Repeat(currentState.normalizedTime, 1f) >= dodgeAnimationEndNormalizedTime;
+
+        if (animator.IsInTransition(0))
+        {
+            AnimatorStateInfo nextState = animator.GetNextAnimatorStateInfo(0);
+            if (IsMatchingDodgeState(nextState))
+                return false;
+        }
+
+        return true;
+    }
+
+    bool IsMatchingDodgeState(AnimatorStateInfo stateInfo)
+    {
+        if (dodgeStateHash != 0 && stateInfo.fullPathHash == dodgeStateHash)
+            return true;
+
+        return !string.IsNullOrWhiteSpace(dodgeStateName) && stateInfo.IsName(dodgeStateName);
+    }
+
+    void OnDisable()
+    {
+        if (blockInputsDuringDodge && inputBlocker != null)
+            inputBlocker.SetBlocked(false);
     }
 
 #if UNITY_EDITOR
