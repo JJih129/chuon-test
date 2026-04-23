@@ -571,9 +571,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     [SerializeField, Min(0f)] private float minimumPostAttackIdleDuration = 5.0f;
     [SerializeField] private bool useCombatIdleStrafe = true;
     [SerializeField, Range(0.1f, 1f)] private float combatIdleStrafeSpeedMultiplier = 0.42f;
+    [SerializeField, Range(0.1f, 1f)] private float combatIdleApproachSpeedMultiplier = 0.34f;
     [SerializeField] private float combatIdleDesiredDistance = 2.6f;
+    [SerializeField] private float combatIdleApproachThreshold = 4.4f;
     [SerializeField] private float combatIdleDistanceTolerance = 0.45f;
     [SerializeField] private float combatIdleFacingTurnSpeed = 540f;
+    [SerializeField, Range(0.1f, 1.5f)] private float combatIdleOrbitBias = 0.9f;
+    [SerializeField, Range(0f, 1.5f)] private float combatIdleRadialCorrectionWeight = 0.65f;
+    [SerializeField, Min(0.1f)] private float combatIdleStrafeSideHoldMin = 0.9f;
+    [SerializeField, Min(0.1f)] private float combatIdleStrafeSideHoldMax = 1.8f;
+    [SerializeField, Range(0f, 1f)] private float combatIdleStrafeSideSwapChance = 0.32f;
     [SerializeField, Min(0f)] private float combatIdlePreRetreatPause = 1.0f;
     [SerializeField, Min(0f)] private float combatIdlePostRetreatPause = 1.0f;
     [SerializeField] private bool useCombatIdleRetreatWhenTooClose = true;
@@ -682,16 +689,29 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     [SerializeField] private float chaseDirectionRefreshInterval = 1f / 12f;
 
     private static readonly int AnimParam_MoveSpeed = Animator.StringToHash("MoveSpeed");
+    private static readonly int AnimParam_MoveX = Animator.StringToHash("MoveX");
+    private static readonly int AnimParam_MoveY = Animator.StringToHash("MoveY");
+    private static readonly int AnimParam_IsCombatStrafing = Animator.StringToHash("IsCombatStrafing");
     private static readonly int AnimParam_IsBreak   = Animator.StringToHash("IsBreak");
     private static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
+    private static readonly int AnimParam_DodgeBack = Animator.StringToHash("Dodge_Back");
+    private static readonly int AnimParam_QuickshiftB = Animator.StringToHash("Quickshift_B");
 
     private float _moveBlend; // 0~1
+    private float _moveXBlend;
+    private float _moveYBlend;
     private float _lastAppliedMoveBlend = float.NaN;
+    private float _lastAppliedMoveX = float.NaN;
+    private float _lastAppliedMoveY = float.NaN;
     private Vector3 _cachedDetourDirection;
     private float _cachedDetourUntil;
     private Vector3 _cachedChaseDesiredDirection;
     private Vector3 _cachedChaseDirection;
     private float _nextChaseDirectionRefreshAt;
+    private bool _hasMoveXParam;
+    private bool _hasMoveYParam;
+    private bool _hasCombatStrafingParam;
+    private bool _combatStrafeAnimActive;
 
     [Header("공격 패턴 목록 (한글 설명)")]
     [Tooltip("보스가 사용할 수 있는 모든 공격 패턴 리스트")]
@@ -734,6 +754,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     private int _parryStunTriggerHash;
     private int _parryStunStateHash;
     private bool _hasParryStunTrigger;
+    private bool _hasDodgeBackTrigger;
+    private bool _hasQuickshiftBTrigger;
     private bool _parryStunUsedAnimatorFreezeFallback;
     private float _parryStunCachedAnimatorSpeed = 1f;
 
@@ -767,7 +789,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     [Range(0f, 1f)] [SerializeField] private float minimumBackstepClearanceRatio = 0.45f;
 
     [Tooltip("백스텝 애니메이션 트리거 이름 (Animator 트리거 파라미터와 동일하게 설정)")]
-    public string backstepAnimTriggerName = "Backstep";
+    public string backstepAnimTriggerName = "Quickshift_B";
 
     [Tooltip("백스텝 중 뒤로 빠지는 시간(초). 루트 모션 사용 시 0으로 두고 애니메이션만 재생 가능")]
     public float backstepDuration = 0.6f;
@@ -780,6 +802,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     private float _backstepCooldownTimer;
     private float _closePressureStartedAt = float.NegativeInfinity;
+    private float _combatIdleStrafeSign = -1f;
+    private float _combatIdleStrafeSideUntil = float.NegativeInfinity;
     readonly RaycastHit[] _movementSweepHits = new RaycastHit[16];
     readonly List<AttackPattern> _patternCandidatesCache = new List<AttackPattern>(16);
     readonly List<AttackPattern> _followUpCandidatesCache = new List<AttackPattern>(16);
@@ -1371,6 +1395,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (_isUltimateVictim)
             return;
 
+        RefreshGameplayPlayerTargetAfterRecovery();
         SetState(BossState.Detect);
     }
 
@@ -1540,6 +1565,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (bossAnimator == null || string.IsNullOrEmpty(triggerName))
             return;
 
+        SetCombatStrafeAnimation(false);
+
         // 1) 공격 패턴 트리거 전부 Reset
         if (allPatterns != null)
         {
@@ -1552,7 +1579,18 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
         // 2) 백스텝 트리거 Reset
         if (!string.IsNullOrEmpty(backstepAnimTriggerName))
-            bossAnimator.ResetTrigger(backstepAnimTriggerName);
+        {
+            if (backstepAnimTriggerName == "Dodge_Back" && _hasDodgeBackTrigger)
+                bossAnimator.ResetTrigger(backstepAnimTriggerName);
+            else if (backstepAnimTriggerName == "Quickshift_B" && _hasQuickshiftBTrigger)
+                bossAnimator.ResetTrigger(backstepAnimTriggerName);
+        }
+
+        if (_hasDodgeBackTrigger)
+            bossAnimator.ResetTrigger("Dodge_Back");
+
+        if (_hasQuickshiftBTrigger)
+            bossAnimator.ResetTrigger("Quickshift_B");
 
         // 3) 이번에 쓸 트리거만 Set
         bossAnimator.SetTrigger(triggerName);
@@ -1568,17 +1606,46 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         _parryStunTriggerHash = string.IsNullOrWhiteSpace(parryStunTriggerName) ? 0 : Animator.StringToHash(parryStunTriggerName);
         _parryStunStateHash = string.IsNullOrWhiteSpace(parryStunStateName) ? 0 : Animator.StringToHash(parryStunStateName);
         _hasParryStunTrigger = false;
+        _hasDodgeBackTrigger = false;
+        _hasQuickshiftBTrigger = false;
+        _hasMoveXParam = false;
+        _hasMoveYParam = false;
+        _hasCombatStrafingParam = false;
 
-        if (bossAnimator == null || bossAnimator.runtimeAnimatorController == null || _parryStunTriggerHash == 0)
+        if (bossAnimator == null || bossAnimator.runtimeAnimatorController == null)
             return;
 
         AnimatorControllerParameter[] parameters = bossAnimator.parameters;
         for (int i = 0; i < parameters.Length; i++)
         {
             AnimatorControllerParameter parameter = parameters[i];
-            if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.nameHash == _parryStunTriggerHash)
+            if (parameter.type == AnimatorControllerParameterType.Trigger)
             {
-                _hasParryStunTrigger = true;
+                if (_parryStunTriggerHash != 0 && parameter.nameHash == _parryStunTriggerHash)
+                    _hasParryStunTrigger = true;
+
+                if (parameter.nameHash == AnimParam_DodgeBack)
+                    _hasDodgeBackTrigger = true;
+
+                if (parameter.nameHash == AnimParam_QuickshiftB)
+                    _hasQuickshiftBTrigger = true;
+            }
+            else if (parameter.type == AnimatorControllerParameterType.Float)
+            {
+                if (parameter.nameHash == AnimParam_MoveX)
+                    _hasMoveXParam = true;
+
+                if (parameter.nameHash == AnimParam_MoveY)
+                    _hasMoveYParam = true;
+            }
+            else if (parameter.type == AnimatorControllerParameterType.Bool)
+            {
+                if (parameter.nameHash == AnimParam_IsCombatStrafing)
+                    _hasCombatStrafingParam = true;
+            }
+
+            if (_hasParryStunTrigger && _hasDodgeBackTrigger && _hasQuickshiftBTrigger && _hasMoveXParam && _hasMoveYParam && _hasCombatStrafingParam)
+            {
                 break;
             }
         }
@@ -1858,7 +1925,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             Vector3 delta = dir * (moveSpeed * moveSpeedMultiplier * Time.deltaTime);
             ApplyMovementDelta(delta);
 
-            UpdateMoveAnimation(moveSpeedMultiplier);
+            UpdateMoveAnimation(moveSpeedMultiplier, dir, false);
             yield return null;
         }
     }
@@ -1869,7 +1936,15 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         _pendingCombatIdleDuration = -1f;
 
         if (ShouldTriggerCombatIdleRetreat())
+        {
+            if (combatIdlePreRetreatPause > 0.01f)
+                yield return StartCoroutine(Co_CombatIdlePause(combatIdlePreRetreatPause));
+
             yield return StartCoroutine(Co_CombatIdleRetreat());
+
+            if (combatIdlePostRetreatPause > 0.01f)
+                yield return StartCoroutine(Co_CombatIdlePause(combatIdlePostRetreatPause));
+        }
 
         t = Mathf.Max(t, minimumPostAttackIdleDuration);
         while (t > 0f && !_isDead)
@@ -1884,6 +1959,18 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
         if (!_isDead)
             SetState(BossState.Detect);
+    }
+
+    IEnumerator Co_CombatIdlePause(float duration)
+    {
+        float elapsed = 0f;
+        while (elapsed < duration && !_isDead)
+        {
+            RotateTowardsPlayer(Time.deltaTime, Mathf.Max(180f, combatIdleFacingTurnSpeed));
+            UpdateMoveAnimation(0f);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
     }
 
     IEnumerator Co_HandleBreak()
@@ -2199,15 +2286,34 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             look,
             Mathf.Max(60f, combatIdleFacingTurnSpeed) * Time.deltaTime);
 
-        Vector3 left = -transform.right;
+        RefreshCombatIdleStrafeDirection();
+        Vector3 lateral = transform.right * _combatIdleStrafeSign;
         float desiredDistance = Mathf.Max(0.5f, combatIdleDesiredDistance);
         float radialError = distance - desiredDistance;
-        Vector3 drift = Vector3.zero;
+        float tolerance = Mathf.Max(0.05f, combatIdleDistanceTolerance);
+        float absRadialError = Mathf.Abs(radialError);
+        Vector3 moveDir;
+        float speed01;
 
-        if (Mathf.Abs(radialError) > Mathf.Max(0.05f, combatIdleDistanceTolerance))
-            drift = -forward * Mathf.Sign(radialError) * Mathf.Clamp01(Mathf.Abs(radialError));
+        if (distance >= Mathf.Max(desiredDistance + tolerance, combatIdleApproachThreshold))
+        {
+            Vector3 arcApproach = (forward * 0.78f) + (lateral * 0.48f);
+            moveDir = arcApproach;
+            speed01 = Mathf.Clamp01(combatIdleApproachSpeedMultiplier);
+        }
+        else
+        {
+            Vector3 drift = Vector3.zero;
+            if (absRadialError > tolerance)
+            {
+                float correction = Mathf.Clamp01((absRadialError - tolerance) / Mathf.Max(0.1f, desiredDistance));
+                drift = -forward * Mathf.Sign(radialError) * correction * Mathf.Max(0f, combatIdleRadialCorrectionWeight);
+            }
 
-        Vector3 moveDir = left + drift * 0.65f;
+            moveDir = (lateral * Mathf.Max(0.1f, combatIdleOrbitBias)) + drift;
+            speed01 = Mathf.Clamp01(combatIdleStrafeSpeedMultiplier);
+        }
+
         moveDir.y = 0f;
         if (moveDir.sqrMagnitude <= 0.0001f)
         {
@@ -2216,11 +2322,24 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         }
 
         moveDir.Normalize();
-        float speed01 = Mathf.Clamp01(combatIdleStrafeSpeedMultiplier);
         Vector3 delta = moveDir * (moveSpeed * speed01 * Time.deltaTime);
         ApplyMovementDelta(delta);
-        UpdateMoveAnimation(speed01);
+        UpdateMoveAnimation(speed01, moveDir, true);
         return true;
+    }
+
+    void RefreshCombatIdleStrafeDirection()
+    {
+        if (Time.time < _combatIdleStrafeSideUntil)
+            return;
+
+        bool shouldSwap = _combatIdleStrafeSign == 0f || UnityEngine.Random.value < combatIdleStrafeSideSwapChance;
+        if (shouldSwap)
+            _combatIdleStrafeSign = _combatIdleStrafeSign >= 0f ? -1f : 1f;
+
+        float holdMin = Mathf.Max(0.1f, combatIdleStrafeSideHoldMin);
+        float holdMax = Mathf.Max(holdMin, combatIdleStrafeSideHoldMax);
+        _combatIdleStrafeSideUntil = Time.time + UnityEngine.Random.Range(holdMin, holdMax);
     }
 
     bool ShouldTriggerCombatIdleRetreat()
@@ -2253,8 +2372,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
         FaceToPlayerInstant();
 
-        if (!string.IsNullOrEmpty(combatIdleRetreatTriggerName))
-            PlayAnimTrigger(combatIdleRetreatTriggerName);
+        string retreatTrigger = ResolveBackstepTriggerName(combatIdleRetreatTriggerName);
+        if (!string.IsNullOrEmpty(retreatTrigger))
+            PlayAnimTrigger(retreatTrigger);
 
         float elapsed = 0f;
         Vector3 backDir = -transform.forward;
@@ -2481,7 +2601,6 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         _isUltimateVictim = false;
         _hasUltimateVictimAnchor = false;
         RestoreUltimateVictimWorldPose();
-        EnsureGameplayPlayerTarget(forceRefresh: true);
 
         if (rb != null)
         {
@@ -2501,6 +2620,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             bossAnimator.speed = _ultimateVictimAnimatorSpeed;
             _cachedUltimateVictimAnimatorState = false;
         }
+
+        RefreshGameplayPlayerTargetAfterRecovery();
 
         if (_isDead)
         {
@@ -2527,6 +2648,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         UpdateMoveAnimation(0f);
         _pendingCombatIdleDuration = Mathf.Max(Mathf.Max(0f, combatIdleTime), Mathf.Max(0f, ultimateVictimRecoveryDuration));
         SetState(BossState.CombatIdle, true);
+    }
+
+    void RefreshGameplayPlayerTargetAfterRecovery()
+    {
+        EnsureGameplayPlayerTarget(forceRefresh: true);
+        FaceToPlayerInstant();
     }
 
     void CacheUltimateVictimWorldPose()
@@ -2919,8 +3046,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (attackHitbox != null)
             attackHitbox.DeactivateWindow();
 
-        if (!string.IsNullOrEmpty(backstepAnimTriggerName))
-            PlayAnimTrigger(backstepAnimTriggerName);
+        string retreatTrigger = ResolveBackstepTriggerName(backstepAnimTriggerName);
+        if (!string.IsNullOrEmpty(retreatTrigger))
+            PlayAnimTrigger(retreatTrigger);
 
         float elapsed = 0f;
         Vector3 backDir = -transform.forward;
@@ -2949,6 +3077,37 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             elapsed += stepDeltaTime;
             yield return null;
         }
+    }
+
+    string ResolveBackstepTriggerName(string configuredTrigger)
+    {
+        CacheParryStunAnimatorHooks();
+
+        if (!string.IsNullOrWhiteSpace(configuredTrigger))
+        {
+            if (string.Equals(configuredTrigger, "Quickshift_B", StringComparison.OrdinalIgnoreCase) && _hasQuickshiftBTrigger)
+                return configuredTrigger;
+
+            if (string.Equals(configuredTrigger, "Dodge_Back", StringComparison.OrdinalIgnoreCase) && _hasDodgeBackTrigger)
+                return configuredTrigger;
+
+            if (!string.Equals(configuredTrigger, "Backstep", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(configuredTrigger, "Quickshift_B", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(configuredTrigger, "Dodge_Back", StringComparison.OrdinalIgnoreCase))
+                return configuredTrigger;
+        }
+
+        if (_hasQuickshiftBTrigger)
+            return "Quickshift_B";
+
+        if (_hasDodgeBackTrigger)
+            return "Dodge_Back";
+
+        if (!string.IsNullOrWhiteSpace(combatIdleRetreatTriggerName) &&
+            !string.Equals(combatIdleRetreatTriggerName, "Backstep", StringComparison.OrdinalIgnoreCase))
+            return combatIdleRetreatTriggerName;
+
+        return string.IsNullOrWhiteSpace(configuredTrigger) ? "Dodge_Back" : configuredTrigger;
     }
 
     // ==================== 패턴 선택 ====================
@@ -3109,13 +3268,54 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     void UpdateMoveAnimation(float target01)
     {
+        UpdateMoveAnimation(target01, Vector3.zero, false);
+    }
+
+    void UpdateMoveAnimation(float target01, Vector3 worldMoveDirection)
+    {
+        UpdateMoveAnimation(target01, worldMoveDirection, true);
+    }
+
+    void UpdateMoveAnimation(float target01, Vector3 worldMoveDirection, bool useDirectionalBlend)
+    {
         if (bossAnimator == null) return;
 
         target01 = Mathf.Clamp01(target01);
+        bool useCombatStrafe = useDirectionalBlend && target01 > 0.0001f && worldMoveDirection.sqrMagnitude > 0.0001f;
+        SetCombatStrafeAnimation(useCombatStrafe);
 
         _moveBlend = Mathf.Lerp(
             _moveBlend,
             target01,
+            Time.deltaTime / Mathf.Max(0.0001f, moveAnimDamp)
+        );
+
+        Vector2 targetDirectionalBlend = Vector2.zero;
+        if (target01 > 0.0001f)
+        {
+            if (useCombatStrafe)
+            {
+                Vector3 localMoveDirection = transform.InverseTransformDirection(worldMoveDirection.normalized);
+                Vector2 planarDirection = new Vector2(localMoveDirection.x, localMoveDirection.z);
+                if (planarDirection.sqrMagnitude > 0.0001f)
+                    targetDirectionalBlend = planarDirection.normalized * target01;
+            }
+            else
+            {
+                // 일반 추적 이동은 플레이어 일반 이동처럼 정면 이동 위주로 보이게 유지한다.
+                targetDirectionalBlend = new Vector2(0f, target01);
+            }
+        }
+
+        _moveXBlend = Mathf.Lerp(
+            _moveXBlend,
+            targetDirectionalBlend.x,
+            Time.deltaTime / Mathf.Max(0.0001f, moveAnimDamp)
+        );
+
+        _moveYBlend = Mathf.Lerp(
+            _moveYBlend,
+            targetDirectionalBlend.y,
             Time.deltaTime / Mathf.Max(0.0001f, moveAnimDamp)
         );
 
@@ -3124,6 +3324,35 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             _lastAppliedMoveBlend = _moveBlend;
             bossAnimator.SetFloat(AnimParam_MoveSpeed, _moveBlend);
         }
+
+        if (_hasMoveXParam && (float.IsNaN(_lastAppliedMoveX) || Mathf.Abs(_lastAppliedMoveX - _moveXBlend) > 0.0025f))
+        {
+            _lastAppliedMoveX = _moveXBlend;
+            bossAnimator.SetFloat(AnimParam_MoveX, _moveXBlend);
+        }
+
+        if (_hasMoveYParam && (float.IsNaN(_lastAppliedMoveY) || Mathf.Abs(_lastAppliedMoveY - _moveYBlend) > 0.0025f))
+        {
+            _lastAppliedMoveY = _moveYBlend;
+            bossAnimator.SetFloat(AnimParam_MoveY, _moveYBlend);
+        }
+    }
+
+    void SetCombatStrafeAnimation(bool active)
+    {
+        if (!_hasCombatStrafingParam || bossAnimator == null || _combatStrafeAnimActive == active)
+            return;
+
+        _combatStrafeAnimActive = active;
+        bossAnimator.SetBool(AnimParam_IsCombatStrafing, active);
+    }
+
+    public void PlayStrafeFootstepLeft()
+    {
+    }
+
+    public void PlayStrafeFootstepRight()
+    {
     }
 
     Vector3 GetChaseDirection(Vector3 toPlayer)
