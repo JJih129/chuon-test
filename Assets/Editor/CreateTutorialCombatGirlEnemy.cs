@@ -108,17 +108,17 @@ public static class CreateTutorialCombatGirlEnemy
             dummySo.FindProperty("maxAnimationHitWaitSeconds").floatValue = 2.2f;
             dummySo.FindProperty("useAttackLunge").boolValue = true;
             dummySo.FindProperty("attackLungeStartNormalizedTime").floatValue = 0.04f;
-            dummySo.FindProperty("attackLungeEndNormalizedTime").floatValue = 0.18f;
-            dummySo.FindProperty("attackLungeSpeed").floatValue = 12f;
-            dummySo.FindProperty("attackLungeStopDistance").floatValue = 1.7f;
-            dummySo.FindProperty("attackLungeMaxDistance").floatValue = 4.2f;
+            dummySo.FindProperty("attackLungeEndNormalizedTime").floatValue = 0.30f;
+            dummySo.FindProperty("attackLungeSpeed").floatValue = 15f;
+            dummySo.FindProperty("attackLungeStopDistance").floatValue = 1.25f;
+            dummySo.FindProperty("attackLungeMaxDistance").floatValue = 7.5f;
             dummySo.FindProperty("parryAssistLeadSeconds").floatValue = 0.05f;
             dummySo.FindProperty("freezeForFirstParrySuccess").boolValue = true;
             dummySo.FindProperty("forcedParryFreezeNormalizedTime").floatValue = 0.12f;
             dummySo.FindProperty("forcedParryTimeScale").floatValue = 0.02f;
             dummySo.FindProperty("forcedParryWindowSeconds").floatValue = 0.75f;
-            dummySo.FindProperty("meleeHitboxCenter").vector3Value = new Vector3(0f, 1.05f, 1.08f);
-            dummySo.FindProperty("meleeHitboxSize").vector3Value = new Vector3(1.25f, 1.35f, 1.45f);
+            dummySo.FindProperty("meleeHitboxCenter").vector3Value = new Vector3(0f, 1.05f, 1.28f);
+            dummySo.FindProperty("meleeHitboxSize").vector3Value = new Vector3(1.35f, 1.35f, 1.85f);
             ConfigureProfiles(dummySo.FindProperty("stepProfiles"));
             dummySo.ApplyModifiedPropertiesWithoutUndo();
 
@@ -215,7 +215,7 @@ public static class CreateTutorialCombatGirlEnemy
         profile.FindPropertyRelative("attackInterval").floatValue = interval;
         profile.FindPropertyRelative("telegraphDuration").floatValue = telegraph;
         profile.FindPropertyRelative("damage").floatValue = 8f;
-        profile.FindPropertyRelative("hitRange").floatValue = 2.6f;
+        profile.FindPropertyRelative("hitRange").floatValue = 3.2f;
         profile.FindPropertyRelative("canParry").boolValue = canParry;
         profile.FindPropertyRelative("canPerfectDodge").boolValue = canPerfectDodge;
         profile.FindPropertyRelative("unblockable").boolValue = unblockable;

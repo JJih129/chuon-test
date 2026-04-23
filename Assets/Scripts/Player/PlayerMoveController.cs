@@ -55,7 +55,6 @@ public class PlayerMoveController : MonoBehaviour
     [SerializeField, Range(0.1f, 1f)] private float lockOnFwdMul = 0.82f;
     [SerializeField, Range(0.1f, 1f)] private float lockOnBackMul = 0.62f;
     [SerializeField, Range(0.1f, 1f)] private float lockOnStrafeMul = 0.72f;
-    [SerializeField] private bool lockOnUsesCameraRelativeMovement = true;
 
     // ─────────[⑤ 중력]─────────
     [Header("⑤ 중력")]
@@ -176,19 +175,9 @@ public class PlayerMoveController : MonoBehaviour
 
         // 4. 방향 및 회전 계산
         bool locked = playerLockOn && playerLockOn.IsLocked;
-        Vector3 fwd, right;
-
-        if (locked && !lockOnUsesCameraRelativeMovement)
-        {
-            fwd = Flat(playerRoot.forward);
-            right = Flat(playerRoot.right);
-        }
-        else
-        {
-            Transform cam = ResolveMovementCameraTransform();
-            fwd = Flat(cam.forward);
-            right = Flat(cam.right);
-        }
+        Transform cam = ResolveMovementCameraTransform();
+        Vector3 fwd = Flat(cam.forward);
+        Vector3 right = Flat(cam.right);
 
         Vector3 wishDir = (right * _smoothedMoveInput.x + fwd * _smoothedMoveInput.y);
         if (wishDir.sqrMagnitude > 1e-6f) wishDir.Normalize();

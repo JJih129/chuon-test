@@ -87,10 +87,10 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [Header("Attack Lunge")]
     [SerializeField] private bool useAttackLunge = true;
     [SerializeField, Range(0f, 1f)] private float attackLungeStartNormalizedTime = 0.04f;
-    [SerializeField, Range(0f, 1f)] private float attackLungeEndNormalizedTime = 0.18f;
-    [SerializeField, Min(0f)] private float attackLungeSpeed = 12f;
-    [SerializeField, Min(0.2f)] private float attackLungeStopDistance = 1.7f;
-    [SerializeField, Min(0f)] private float attackLungeMaxDistance = 4.2f;
+    [SerializeField, Range(0f, 1f)] private float attackLungeEndNormalizedTime = 0.30f;
+    [SerializeField, Min(0f)] private float attackLungeSpeed = 15f;
+    [SerializeField, Min(0.2f)] private float attackLungeStopDistance = 1.25f;
+    [SerializeField, Min(0f)] private float attackLungeMaxDistance = 7.5f;
 
     [Header("Parry Timing Assist")]
     [SerializeField] private bool enableParryTimingAssist = true;
@@ -99,6 +99,8 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [SerializeField, Min(0.05f)] private float parryAssistDuration = 0.85f;
     [SerializeField] private string parryAssistSpeaker = "PARRY WINDOW";
     [SerializeField] private string parryAssistText = "<color=#66F6FF>Parry Now</color>  |  E";
+    [SerializeField] private string dodgeAssistSpeaker = "DODGE WINDOW";
+    [SerializeField] private string dodgeAssistText = "<color=#66F6FF>Shift</color>";
 
     [Header("Forced Parry Tutorial")]
     [SerializeField] private bool freezeForFirstParrySuccess = true;
@@ -107,6 +109,11 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [SerializeField, Min(0.05f)] private float forcedParryWindowSeconds = 0.75f;
     [SerializeField] private string forcedParrySpeaker = "PARRY TRAINING";
     [SerializeField] private string forcedParryText = "<color=#66F6FF>E</color>  패링";
+
+    [Header("Forced Perfect Dodge Tutorial")]
+    [SerializeField] private bool freezeForFirstPerfectDodgeSuccess = true;
+    [SerializeField, Range(0f, 1f)] private float forcedPerfectDodgeFreezeNormalizedTime = 0.12f;
+    [SerializeField, Min(0.05f)] private float forcedPerfectDodgeWindowSeconds = 0.75f;
 
     [Header("Hit Tracking")]
     [SerializeField, Min(0f)] private float hitEventCooldown = 0.08f;
@@ -134,6 +141,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     bool _localSlowMotionActive;
     float _attackLungeMovedDistance;
     bool _forcedParryPromptActive;
+    bool _forcedPerfectDodgePromptActive;
     bool _forcedParrySucceeded;
     float _forcedParryPreviousTimeScale = 1f;
     float _forcedParryPreviousFixedDeltaTime = 0.02f;
@@ -290,6 +298,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         RestoreForcedParryFreezeIfNeeded();
         _forcedParrySucceeded = playerBridge != null && playerBridge.ParryCount > 0;
         _forcedParryPromptActive = false;
+        _forcedPerfectDodgePromptActive = false;
 
         if (stepProfiles != null)
         {
@@ -509,6 +518,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         float elapsed = 0f;
         float hitNormalized = Mathf.Clamp01(meleeHitNormalizedTime);
         float forcedFreezeNormalized = Mathf.Clamp01(Mathf.Min(forcedParryFreezeNormalizedTime, hitNormalized));
+        float forcedPerfectDodgeNormalized = Mathf.Clamp01(Mathf.Min(forcedPerfectDodgeFreezeNormalizedTime, hitNormalized));
         yield return null;
 
         while (_hasActiveProfile && elapsed < maxAnimationHitWaitSeconds)
@@ -541,9 +551,16 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
                     yield break;
                 }
 
-                if (!assistTriggered && ShouldShowParryTimingAssist() && normalizedTime >= assistNormalizedTime)
+                if (!forcedFreezeHandled && ShouldUseForcedPerfectDodgeFreeze() && normalizedTime >= forcedPerfectDodgeNormalized)
                 {
-                    TriggerParryTimingAssist();
+                    forcedFreezeHandled = true;
+                    yield return CoForcedPerfectDodgePrompt();
+                    yield break;
+                }
+
+                if (!assistTriggered && ShouldShowDefenseTimingAssist() && normalizedTime >= assistNormalizedTime)
+                {
+                    TriggerDefenseTimingAssist();
                     assistTriggered = true;
                 }
 
@@ -607,6 +624,16 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
                _activeProfile.canParry;
     }
 
+    bool ShouldUseForcedPerfectDodgeFreeze()
+    {
+        return freezeForFirstPerfectDodgeSuccess &&
+               playerBridge != null &&
+               playerBridge.PerfectDodgeCount <= 0 &&
+               _activeProfile != null &&
+               _activeProfile.stepType == TutorialStepType.PerfectDodge &&
+               _activeProfile.canPerfectDodge;
+    }
+
     IEnumerator CoForcedParryPrompt()
     {
         _forcedParryPromptActive = true;
@@ -632,6 +659,31 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         _forcedParryPromptActive = false;
     }
 
+    IEnumerator CoForcedPerfectDodgePrompt()
+    {
+        _forcedPerfectDodgePromptActive = true;
+        TriggerForcedParryFreeze();
+
+        TutorialHintUIBridge hintBridge = ResolveHintBridge();
+        if (hintBridge != null)
+            hintBridge.ShowTimingCue(dodgeAssistText, dodgeAssistSpeaker, 999f);
+
+        while (_hasActiveProfile && playerBridge != null && playerBridge.PerfectDodgeCount <= 0)
+        {
+            if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift))
+            {
+                playerBridge.TryOpenTutorialPerfectDodgeWindow(forcedPerfectDodgeWindowSeconds);
+                break;
+            }
+
+            yield return null;
+        }
+
+        hintBridge?.HideTimingCue();
+        RestoreForcedParryFreezeIfNeeded();
+        _forcedPerfectDodgePromptActive = false;
+    }
+
     void TriggerForcedParryFreeze()
     {
         _forcedParryPreviousTimeScale = Time.timeScale;
@@ -648,7 +700,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     void RestoreForcedParryFreezeIfNeeded()
     {
-        if (!_forcedParryPromptActive)
+        if (!_forcedParryPromptActive && !_forcedPerfectDodgePromptActive)
             return;
 
         Time.timeScale = _forcedParryPreviousTimeScale;
@@ -661,7 +713,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     IEnumerator CoWaitForMeleeHitDelayWithAssist()
     {
         float delay = Mathf.Max(0f, meleeHitDelay);
-        if (!ShouldShowParryTimingAssist())
+        if (!ShouldShowDefenseTimingAssist())
         {
             if (delay > 0f)
                 yield return new WaitForSeconds(delay);
@@ -673,10 +725,15 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         if (beforeCue > 0f)
             yield return new WaitForSeconds(beforeCue);
 
-        TriggerParryTimingAssist();
+        TriggerDefenseTimingAssist();
 
         if (lead > 0f)
             yield return new WaitForSeconds(lead);
+    }
+
+    bool ShouldShowDefenseTimingAssist()
+    {
+        return ShouldShowParryTimingAssist() || ShouldShowPerfectDodgeTimingAssist();
     }
 
     bool ShouldShowParryTimingAssist()
@@ -687,11 +744,24 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
                _activeProfile.canParry;
     }
 
-    void TriggerParryTimingAssist()
+    bool ShouldShowPerfectDodgeTimingAssist()
+    {
+        return enableParryTimingAssist &&
+               _activeProfile != null &&
+               _activeProfile.stepType == TutorialStepType.PerfectDodge &&
+               _activeProfile.canPerfectDodge;
+    }
+
+    void TriggerDefenseTimingAssist()
     {
         TutorialHintUIBridge hintBridge = ResolveHintBridge();
         if (hintBridge != null)
-            hintBridge.ShowTimingCue(parryAssistText, parryAssistSpeaker, parryAssistDuration);
+        {
+            if (ShouldShowPerfectDodgeTimingAssist())
+                hintBridge.ShowTimingCue(dodgeAssistText, dodgeAssistSpeaker, parryAssistDuration);
+            else
+                hintBridge.ShowTimingCue(parryAssistText, parryAssistSpeaker, parryAssistDuration);
+        }
 
         TimeScaleController timeScaleController = TimeScaleController.Instance;
         if (timeScaleController != null)

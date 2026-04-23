@@ -3,6 +3,10 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+#if UNITY_EDITOR
+using System.IO;
+using UnityEditor;
+#endif
 
 [DisallowMultipleComponent]
 public class TutorialHintUIBridge : MonoBehaviour
@@ -30,6 +34,7 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private Vector2 comboPanelSize = new Vector2(680f, 500f);
     [SerializeField] private Vector2 timingCuePanelAnchoredPosition = new Vector2(0f, 92f);
     [SerializeField] private Vector2 timingCuePanelSize = new Vector2(760f, 112f);
+    [SerializeField] private Vector2 keyCueSize = new Vector2(168f, 168f);
 
     [Header("Runtime Style")]
     [SerializeField] private Color dialoguePanelColor = new Color(0.03f, 0.07f, 0.10f, 0.88f);
@@ -41,9 +46,12 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private Color guideBodyColor = new Color(0.90f, 0.97f, 1f, 0.96f);
     [SerializeField] private Color questTitleColor = new Color(0.88f, 0.97f, 1f, 0.98f);
     [SerializeField] private Color questBodyColor = new Color(0.82f, 0.92f, 0.98f, 0.96f);
+    [SerializeField] private Color keyCueGlowColor = new Color(0.22f, 0.92f, 1f, 0.42f);
 
     [Header("Behaviour")]
     [SerializeField] private string defaultSpeaker = "EGO";
+    [SerializeField] private Sprite parryKeySprite;
+    [SerializeField] private Sprite dodgeKeySprite;
 
     CanvasGroup _legacyDialogueGroup;
     CanvasGroup _legacyQuestPanelGroup;
@@ -56,7 +64,11 @@ public class TutorialHintUIBridge : MonoBehaviour
     CanvasGroup _timingCueGroup;
     RectTransform _timingCueRect;
     TextMeshProUGUI _timingCueText;
+    Image _timingCueBackground;
     Image _timingCueFill;
+    Image _timingCueFillBack;
+    Image _timingCueKeyImage;
+    Image _timingCueKeyGlow;
     string _currentGuideBody;
     string _currentGuideSpeaker;
     bool _guideTextVisible;
@@ -192,6 +204,14 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     IEnumerator CoTimingCue(string body, string speaker, float duration)
     {
+        Sprite keyCueSprite = ResolveKeyCueSprite(body, speaker);
+        if (keyCueSprite != null)
+        {
+            yield return CoKeySpriteCue(duration, keyCueSprite);
+            _timingCueRoutine = null;
+            yield break;
+        }
+
         if (_timingCueGroup == null || _timingCueText == null)
         {
             ShowGuideText(body, speaker);
@@ -207,6 +227,7 @@ public class TutorialHintUIBridge : MonoBehaviour
         string resolvedSpeaker = string.IsNullOrWhiteSpace(speaker) ? defaultSpeaker : speaker;
 
         _timingCueText.text = $"<size=72%>{resolvedSpeaker}</size>\n{body}";
+        SetTimingTextMode(true);
         _timingCueGroup.alpha = 0f;
         _timingCueGroup.gameObject.SetActive(true);
         if (_timingCueFill != null)
@@ -241,6 +262,48 @@ public class TutorialHintUIBridge : MonoBehaviour
             _timingCueRect.localScale = Vector3.one;
 
         _timingCueRoutine = null;
+    }
+
+    IEnumerator CoKeySpriteCue(float duration, Sprite keySprite)
+    {
+        if (_timingCueGroup == null || _timingCueKeyImage == null)
+            yield break;
+
+        if (keySprite == null)
+            yield break;
+
+        SetTimingTextMode(false);
+        _timingCueKeyImage.sprite = keySprite;
+        if (_timingCueKeyGlow != null)
+            _timingCueKeyGlow.sprite = keySprite;
+        _timingCueGroup.alpha = 0f;
+        _timingCueGroup.gameObject.SetActive(true);
+
+        float total = Mathf.Max(0.05f, duration);
+        float fadeIn = Mathf.Min(0.08f, total * 0.25f);
+        float elapsed = 0f;
+        while (elapsed < total)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float alpha = elapsed < fadeIn ? Mathf.Clamp01(elapsed / fadeIn) : 1f;
+            float pulse = 1f + Mathf.Sin(Time.unscaledTime * 14f) * 0.075f;
+            float glowPulse = 1.16f + Mathf.Sin(Time.unscaledTime * 14f) * 0.12f;
+
+            _timingCueGroup.alpha = alpha;
+            _timingCueKeyImage.rectTransform.localScale = new Vector3(pulse, pulse, 1f);
+            if (_timingCueKeyGlow != null)
+            {
+                _timingCueKeyGlow.rectTransform.localScale = new Vector3(glowPulse, glowPulse, 1f);
+                _timingCueKeyGlow.color = new Color(keyCueGlowColor.r, keyCueGlowColor.g, keyCueGlowColor.b, keyCueGlowColor.a * alpha);
+            }
+
+            yield return null;
+        }
+
+        _timingCueGroup.alpha = 0f;
+        _timingCueKeyImage.rectTransform.localScale = Vector3.one;
+        if (_timingCueKeyGlow != null)
+            _timingCueKeyGlow.rectTransform.localScale = Vector3.one;
     }
 
     public void ShowStepCompleted(string stepTitle)
@@ -412,12 +475,13 @@ public class TutorialHintUIBridge : MonoBehaviour
 
         _timingCueGroup = panelGroup;
         _timingCueRect = panelGroup.GetComponent<RectTransform>();
+        _timingCueBackground = panelGroup.GetComponent<Image>();
         _timingCueGroup.gameObject.SetActive(true);
 
         EnsureAccent(panelGroup.transform, "TopAccent", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 6f));
 
-        Image fillBack = CreateImage(panelGroup.transform, "TimingFillBack", new Color(0.12f, 0.18f, 0.22f, 0.84f));
-        ConfigureRect(fillBack.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(-56f, 8f));
+        _timingCueFillBack = CreateImage(panelGroup.transform, "TimingFillBack", new Color(0.12f, 0.18f, 0.22f, 0.84f));
+        ConfigureRect(_timingCueFillBack.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(-56f, 8f));
 
         _timingCueFill = CreateImage(panelGroup.transform, "TimingFill", accentColor);
         _timingCueFill.type = Image.Type.Filled;
@@ -429,6 +493,93 @@ public class TutorialHintUIBridge : MonoBehaviour
         ApplyTextStyle(_timingCueText, 30f, FontStyles.Bold, timingCueTextColor, TextAlignmentOptions.Center);
         _timingCueText.enableWordWrapping = false;
         ConfigureRect(_timingCueText.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(0f, 8f), new Vector2(-48f, -24f));
+
+        _timingCueKeyGlow = CreateImage(panelGroup.transform, "ParryKeyGlow", keyCueGlowColor);
+        _timingCueKeyGlow.preserveAspect = true;
+        ConfigureRect(_timingCueKeyGlow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, keyCueSize * 1.28f);
+
+        _timingCueKeyImage = CreateImage(panelGroup.transform, "ParryKeyIcon", Color.white);
+        _timingCueKeyImage.preserveAspect = true;
+        ConfigureRect(_timingCueKeyImage.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, keyCueSize);
+
+        SetTimingTextMode(true);
+    }
+
+    void SetTimingTextMode(bool textMode)
+    {
+        SetGraphicEnabled(_timingCueBackground, textMode);
+        SetGraphicEnabled(_timingCueFillBack, textMode);
+        SetGraphicEnabled(_timingCueFill, textMode);
+        if (_timingCueText != null)
+            _timingCueText.enabled = textMode;
+        SetGraphicEnabled(_timingCueKeyGlow, !textMode);
+        SetGraphicEnabled(_timingCueKeyImage, !textMode);
+    }
+
+    bool ShouldUseParryKeyCue(string body, string speaker)
+    {
+        return ContainsIgnoreCase(body, "Parry") ||
+               ContainsIgnoreCase(speaker, "PARRY") ||
+               ContainsIgnoreCase(body, "패링");
+    }
+
+    bool ShouldUseDodgeKeyCue(string body, string speaker)
+    {
+        return ContainsIgnoreCase(body, "Dodge") ||
+               ContainsIgnoreCase(body, "Shift") ||
+               ContainsIgnoreCase(speaker, "DODGE") ||
+               ContainsIgnoreCase(body, "회피");
+    }
+
+    static bool ContainsIgnoreCase(string value, string token)
+    {
+        return !string.IsNullOrEmpty(value) &&
+               value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    Sprite ResolveKeyCueSprite(string body, string speaker)
+    {
+        if (ShouldUseParryKeyCue(body, speaker))
+            return ResolveKeySprite(ref parryKeySprite, "E");
+
+        if (ShouldUseDodgeKeyCue(body, speaker))
+            return ResolveKeySprite(ref dodgeKeySprite, "Shift");
+
+        return null;
+    }
+
+    Sprite ResolveKeySprite(ref Sprite keySprite, string filePrefix)
+    {
+        if (keySprite != null)
+            return keySprite;
+
+#if UNITY_EDITOR
+        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/UIAsset" });
+        for (int i = 0; i < guids.Length; i++)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+            if (string.IsNullOrEmpty(path) || !Path.GetFileNameWithoutExtension(path).StartsWith(filePrefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            keySprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (keySprite != null)
+                return keySprite;
+
+            Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (texture != null)
+            {
+                keySprite = Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
+                return keySprite;
+            }
+        }
+#endif
+        return null;
+    }
+
+    static void SetGraphicEnabled(Graphic graphic, bool enabled)
+    {
+        if (graphic != null)
+            graphic.enabled = enabled;
     }
 
     Canvas ResolveRuntimeCanvas()

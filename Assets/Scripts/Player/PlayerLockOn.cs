@@ -24,9 +24,17 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
     [SerializeField] private bool useLegacyInput = true;
     [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
     [SerializeField] private KeyCode toggleKeyAlt = KeyCode.Mouse2;
+    [SerializeField, Range(10f, 180f)] private float targetSwitchFOV = 160f;
+    [SerializeField, Min(0.05f)] private float holdToUnlockDuration = 0.35f;
 
     [Header("Camera")]
     [SerializeField] private LockOnCameraManager cameraMgr;
+
+    [Header("Target Indicator")]
+    [SerializeField] private bool showTargetIndicator = true;
+    [SerializeField] private Color targetIndicatorColor = new Color(1f, 0.04f, 0.02f, 0.95f);
+    [SerializeField, Min(8f)] private float targetIndicatorSize = 24f;
+    [SerializeField] private Vector3 targetIndicatorOffset = new Vector3(0f, 0.55f, 0f);
 
     [Header("Retention")]
     [SerializeField] private bool autoUnlockWhenTargetDisabled = true;
@@ -65,6 +73,10 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
     Vector3 _lastMaintainCheckTargetPos;
     bool _cachedMaintainable = true;
     bool _hasMaintainCheckSample;
+    LockOnTargetIndicator _targetIndicator;
+    float _lockInputPressedAt;
+    bool _lockInputTracking;
+    bool _lockInputHoldConsumed;
 
     readonly Collider[] _overlapHits = new Collider[OverlapBufferSize];
     readonly Transform[] _uniqueRoots = new Transform[UniqueRootBufferSize];
@@ -96,6 +108,12 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         EnsureCameraManagerResolved();
     }
 
+    void OnDestroy()
+    {
+        if (_targetIndicator != null)
+            Destroy(_targetIndicator.gameObject);
+    }
+
     void Update()
     {
         if (!_cam)
@@ -104,19 +122,8 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         if (_lockModeActive)
             TickLockedTarget();
 
-        if (useLegacyInput && (Input.GetKeyDown(toggleKey) || Input.GetKeyDown(toggleKeyAlt)))
-        {
-            if (IsLocked)
-            {
-                Unlock();
-            }
-            else
-            {
-                Transform enemyRoot = FindBestTarget(null, true, lockOnFOV);
-                if (enemyRoot)
-                    LockTo(enemyRoot);
-            }
-        }
+        if (useLegacyInput)
+            HandleLockInput();
     }
 
     public void LockTo(Transform enemyRoot)
@@ -146,6 +153,8 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
         if (!_timelineOwnsCamera)
             RefreshCameraTarget();
+
+        RefreshTargetIndicator();
     }
 
     public void Unlock()
@@ -160,6 +169,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         _cachedMaintainable = true;
         _facingDriver?.RefreshTickState();
         cameraMgr?.EndLockOn();
+        RefreshTargetIndicator();
     }
 
     public bool TryAutoLock()
@@ -194,6 +204,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         _hasMaintainCheckSample = false;
         _cachedMaintainable = true;
         _facingDriver?.RefreshTickState();
+        RefreshTargetIndicator();
 
         if (cameraMgr == null)
             return;
@@ -229,6 +240,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         }
 
         _facingDriver?.RefreshTickState();
+        RefreshTargetIndicator();
 
         if (cameraMgr == null)
             return;
@@ -240,6 +252,92 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         }
 
         cameraMgr.EndLockOn(false);
+    }
+
+    bool TrySwitchTarget()
+    {
+        Transform nextRoot = FindNearestSwitchTarget(_currentTargetRoot);
+        if (!nextRoot)
+            nextRoot = FindBestTarget(_currentTargetRoot, false, targetSwitchFOV);
+
+        if (!nextRoot || nextRoot == _currentTargetRoot)
+            return false;
+
+        LockTo(nextRoot);
+        return true;
+    }
+
+    void HandleLockInput()
+    {
+        if (IsLockInputDown())
+        {
+            _lockInputTracking = true;
+            _lockInputHoldConsumed = false;
+            _lockInputPressedAt = Time.unscaledTime;
+        }
+
+        if (_lockInputTracking && !_lockInputHoldConsumed && IsLockInputHeld())
+        {
+            if (Time.unscaledTime - _lockInputPressedAt >= holdToUnlockDuration)
+            {
+                _lockInputHoldConsumed = true;
+                if (IsLocked)
+                    Unlock();
+            }
+        }
+
+        if (!_lockInputTracking)
+            return;
+
+        if (IsLockInputUp())
+        {
+            float heldDuration = Time.unscaledTime - _lockInputPressedAt;
+            if (!_lockInputHoldConsumed && heldDuration >= holdToUnlockDuration)
+            {
+                _lockInputHoldConsumed = true;
+                if (IsLocked)
+                    Unlock();
+            }
+
+            bool wasTap = !_lockInputHoldConsumed && heldDuration < holdToUnlockDuration;
+            _lockInputTracking = false;
+
+            if (wasTap)
+                HandleLockTap();
+        }
+        else if (!IsLockInputHeld())
+        {
+            _lockInputTracking = false;
+        }
+    }
+
+    void HandleLockTap()
+    {
+        if (IsLocked)
+        {
+            if (!TrySwitchTarget())
+                Unlock();
+            return;
+        }
+
+        Transform enemyRoot = FindBestTarget(null, true, lockOnFOV);
+        if (enemyRoot)
+            LockTo(enemyRoot);
+    }
+
+    bool IsLockInputDown()
+    {
+        return Input.GetKeyDown(toggleKey) || Input.GetKeyDown(toggleKeyAlt);
+    }
+
+    bool IsLockInputHeld()
+    {
+        return Input.GetKey(toggleKey) || Input.GetKey(toggleKeyAlt);
+    }
+
+    bool IsLockInputUp()
+    {
+        return Input.GetKeyUp(toggleKey) || Input.GetKeyUp(toggleKeyAlt);
     }
 
     public void GiveCameraControlToTimeline(bool give)
@@ -301,7 +399,10 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
         if (autoRetargetOnLost)
         {
-            Transform replacement = FindBestTarget(_currentTargetRoot, false, autoRetargetFOV);
+            Transform replacement = FindNearestSwitchTarget(_currentTargetRoot);
+            if (!replacement)
+                replacement = FindBestTarget(_currentTargetRoot, false, autoRetargetFOV);
+
             if (replacement)
             {
                 LockTo(replacement);
@@ -364,6 +465,37 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
         cameraMgr.RefreshLockOnTarget(CurrentTarget);
         cameraMgr.StartLockOn(CurrentTarget);
+    }
+
+    void RefreshTargetIndicator()
+    {
+        if (!showTargetIndicator || CurrentTarget == null)
+        {
+            if (_targetIndicator != null)
+                _targetIndicator.SetTarget(null);
+            return;
+        }
+
+        EnsureTargetIndicator();
+        if (_targetIndicator == null)
+            return;
+
+        _targetIndicator.Configure(
+            GameplaySceneCache.ResolveMainCamera(),
+            GameplaySceneCache.ResolveCanvas(),
+            targetIndicatorColor,
+            targetIndicatorSize,
+            targetIndicatorOffset);
+        _targetIndicator.SetTarget(CurrentTarget);
+    }
+
+    void EnsureTargetIndicator()
+    {
+        if (_targetIndicator != null)
+            return;
+
+        GameObject indicatorObject = new GameObject("RuntimeLockOnTargetIndicator", typeof(RectTransform));
+        _targetIndicator = indicatorObject.AddComponent<LockOnTargetIndicator>();
     }
 
     void EnsureCameraManagerResolved()
@@ -442,6 +574,70 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
             if (score < bestScore)
             {
                 bestScore = score;
+                bestRoot = root;
+            }
+        }
+
+        return bestRoot;
+    }
+
+    Transform FindNearestSwitchTarget(Transform excludedRoot)
+    {
+        Vector3 origin = _playerPivot != null ? _playerPivot.position : transform.position;
+        int hitCount = Physics.OverlapSphereNonAlloc(
+            origin,
+            lockOnRange,
+            _overlapHits,
+            ResolveTargetSearchMask(),
+            QueryTriggerInteraction.Collide);
+
+        float bestSqrDistance = float.MaxValue;
+        Transform bestRoot = null;
+        int uniqueCount = 0;
+        float maxSqrDistance = lockOnRange * lockOnRange;
+        Transform cameraTransform = _cam != null ? _cam : GameplaySceneCache.ResolveMainCameraTransform();
+
+        for (int i = 0; i < hitCount; i++)
+        {
+            Collider col = _overlapHits[i];
+            if (col == null)
+                continue;
+
+            Transform root = ResolveLockOnTargetRoot(col);
+            if (!root || root == excludedRoot || !root.gameObject.activeInHierarchy)
+                continue;
+
+            bool duplicate = false;
+            for (int j = 0; j < uniqueCount; j++)
+            {
+                if (_uniqueRoots[j] == root)
+                {
+                    duplicate = true;
+                    break;
+                }
+            }
+
+            if (duplicate)
+                continue;
+
+            if (uniqueCount < _uniqueRoots.Length)
+                _uniqueRoots[uniqueCount++] = root;
+
+            Vector3 aimPoint = GetLockAimPoint(root);
+            float sqrDistance = (aimPoint - origin).sqrMagnitude;
+            if (sqrDistance > maxSqrDistance)
+                continue;
+
+            if (obstacleMask.value != 0)
+            {
+                Vector3 lineStart = cameraTransform != null ? cameraTransform.position : origin;
+                if (Physics.Linecast(lineStart, aimPoint, obstacleMask, QueryTriggerInteraction.Ignore))
+                    continue;
+            }
+
+            if (sqrDistance < bestSqrDistance)
+            {
+                bestSqrDistance = sqrDistance;
                 bestRoot = root;
             }
         }

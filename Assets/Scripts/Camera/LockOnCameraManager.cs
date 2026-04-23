@@ -835,13 +835,13 @@ public class LockOnCameraManager : MonoBehaviour
 
         if (useCustomTransformLockOnRig)
         {
-            _customRigInitialized = false;
-            ApplyCustomTransformLockOnRig(true);
+            ApplyCustomTransformLockOnRig(false);
             return;
         }
 
-        UpdateFollowAnchor(true);
-        UpdateLookAnchor(true);
+        ApplyDynamicLockOnFraming(false);
+        UpdateFollowAnchor(false);
+        UpdateLookAnchor(false);
         EnsureLockOnCameraBindings();
     }
 

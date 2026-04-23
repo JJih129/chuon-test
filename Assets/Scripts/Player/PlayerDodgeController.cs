@@ -245,6 +245,24 @@ public class PlayerDodgeController : MonoBehaviour
             elapsed = rewindTime;
     }
 
+    public bool TryStartTutorialDodge()
+    {
+        if (isDodging)
+            return true;
+
+        if (IsInputBlocked())
+            return false;
+
+        ClearBufferedDodgeRequest();
+        cdTimer = 0f;
+
+        if (!CanStartDodge(true))
+            return false;
+
+        StartDodge();
+        return true;
+    }
+
     void TickDodge()
     {
         float duration = Mathf.Max(0.01f, dodgeDuration);

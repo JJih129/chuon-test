@@ -151,6 +151,16 @@ public class TutorialPlayerRuntimeBridge : MonoBehaviour
         return guardController.IsParryWindowOpen;
     }
 
+    public bool TryOpenTutorialPerfectDodgeWindow(float seconds)
+    {
+        if (perfectDodgeController == null)
+            return false;
+
+        dodgeController?.TryStartTutorialDodge();
+        perfectDodgeController.PerfectDodgeWindow_Open(Mathf.Max(0.05f, seconds));
+        return perfectDodgeController.IsWindowOpen;
+    }
+
     public void FillUltimateGauge()
     {
         playerUltimateController?.FillGaugeForDebug();
