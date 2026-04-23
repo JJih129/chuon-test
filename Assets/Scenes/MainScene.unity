@@ -2335,8 +2335,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21586838, y: 0.0056551415, z: 0.0012502659, w: 0.9764054}
-  m_LocalPosition: {x: -0.63125485, y: -1.0770034, z: -22.500652}
+  m_LocalRotation: {x: -0.21472122, y: 0.00565617, z: 0.0012435259, w: 0.9766582}
+  m_LocalPosition: {x: -0.6313046, y: -1.0641565, z: -22.505426}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -25427,7 +25427,7 @@ Transform:
   m_GameObject: {fileID: 1408991141}
   serializedVersion: 2
   m_LocalRotation: {x: -0.066721, y: 0.9231552, z: -0.3290949, w: -0.18716136}
-  m_LocalPosition: {x: 1.3719575, y: 0, z: -0.043419838}
+  m_LocalPosition: {x: 1.3719577, y: 0, z: -0.043418884}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -32239,9 +32239,16 @@ MonoBehaviour:
   minimumPostAttackIdleDuration: 2.15
   useCombatIdleStrafe: 1
   combatIdleStrafeSpeedMultiplier: 0.42
+  combatIdleApproachSpeedMultiplier: 0.34
   combatIdleDesiredDistance: 2.6
+  combatIdleApproachThreshold: 4.4
   combatIdleDistanceTolerance: 0.45
   combatIdleFacingTurnSpeed: 540
+  combatIdleOrbitBias: 0.9
+  combatIdleRadialCorrectionWeight: 0.65
+  combatIdleStrafeSideHoldMin: 0.9
+  combatIdleStrafeSideHoldMax: 1.8
+  combatIdleStrafeSideSwapChance: 0.32
   combatIdlePreRetreatPause: 1
   combatIdlePostRetreatPause: 1
   useCombatIdleRetreatWhenTooClose: 1
@@ -32291,7 +32298,17 @@ MonoBehaviour:
   stoppingDistance: 1.5
   attackCommitDistanceBuffer: 0.28
   moveSlowdownDistance: 1.75
+  debugSwordWaveLogs: 1
+  pressureEngageDistance: 4.6
+  pressureReleaseDistance: 5.4
+  moveArcSideHoldRange: {x: 0.9, y: 1.8}
+  moveArcStrength: 0.38
   closeApproachSpeedMultiplier: 0.38
+  useDirectSwordWaveBranch: 1
+  swordWaveDirectMinRange: 3.2
+  swordWaveDirectMaxRange: 18
+  swordWaveDirectCooldown: 3.2
+  swordWaveDirectChargeTime: 1.15
   chaseTurnSpeed: 360
   closeChaseTurnSpeed: 540
   closeChaseTurnDistance: 1.8
@@ -32329,6 +32346,13 @@ MonoBehaviour:
     recoveryTime: 0.78
     punishWindowDuration: 0.42
     punishDamageMultiplier: 1.06
+    firesSwordWaveProjectile: 0
+    swordWaveFireDelay: 0.12
+    swordWaveSpeed: 12
+    swordWaveLifeTime: 1.4
+    swordWaveWidth: 1.15
+    swordWaveHeight: 0.55
+    swordWaveLength: 1.9
     hitboxExpandedPadding: 0
     hitboxMeshPaddingScale: 0
     hitboxScanInterval: 0
@@ -32368,6 +32392,13 @@ MonoBehaviour:
     recoveryTime: 0.92
     punishWindowDuration: 0.58
     punishDamageMultiplier: 1.12
+    firesSwordWaveProjectile: 0
+    swordWaveFireDelay: 0.12
+    swordWaveSpeed: 12
+    swordWaveLifeTime: 1.4
+    swordWaveWidth: 1.15
+    swordWaveHeight: 0.55
+    swordWaveLength: 1.9
     hitboxExpandedPadding: 0
     hitboxMeshPaddingScale: 0
     hitboxScanInterval: 0.12
@@ -32407,6 +32438,13 @@ MonoBehaviour:
     recoveryTime: 1.45
     punishWindowDuration: 1.35
     punishDamageMultiplier: 1.48
+    firesSwordWaveProjectile: 0
+    swordWaveFireDelay: 0.12
+    swordWaveSpeed: 12
+    swordWaveLifeTime: 1.4
+    swordWaveWidth: 1.15
+    swordWaveHeight: 0.55
+    swordWaveLength: 1.9
     hitboxExpandedPadding: 0
     hitboxMeshPaddingScale: 0
     hitboxScanInterval: 0
@@ -32446,6 +32484,13 @@ MonoBehaviour:
     recoveryTime: 1.18
     punishWindowDuration: 0.82
     punishDamageMultiplier: 1.24
+    firesSwordWaveProjectile: 0
+    swordWaveFireDelay: 0.12
+    swordWaveSpeed: 12
+    swordWaveLifeTime: 1.4
+    swordWaveWidth: 1.15
+    swordWaveHeight: 0.55
+    swordWaveLength: 1.9
     hitboxExpandedPadding: 0
     hitboxMeshPaddingScale: 0
     hitboxScanInterval: 0
@@ -32485,6 +32530,13 @@ MonoBehaviour:
     recoveryTime: 1.02
     punishWindowDuration: 0.56
     punishDamageMultiplier: 1.05
+    firesSwordWaveProjectile: 0
+    swordWaveFireDelay: 0.12
+    swordWaveSpeed: 12
+    swordWaveLifeTime: 1.4
+    swordWaveWidth: 1.15
+    swordWaveHeight: 0.55
+    swordWaveLength: 1.9
     hitboxExpandedPadding: 0
     hitboxMeshPaddingScale: 0
     hitboxScanInterval: 0
@@ -32524,6 +32576,13 @@ MonoBehaviour:
     recoveryTime: 1.12
     punishWindowDuration: 0.72
     punishDamageMultiplier: 1.18
+    firesSwordWaveProjectile: 0
+    swordWaveFireDelay: 0.12
+    swordWaveSpeed: 12
+    swordWaveLifeTime: 1.4
+    swordWaveWidth: 1.15
+    swordWaveHeight: 0.55
+    swordWaveLength: 1.9
     hitboxExpandedPadding: 0
     hitboxMeshPaddingScale: 0
     hitboxScanInterval: 0
@@ -32536,6 +32595,52 @@ MonoBehaviour:
     preferredFollowUpTelegraph: 0
     minPhase: 2
     maxPhase: 3
+  - patternName: SwordWave
+    animTriggerName: Attack_F
+    isParryable: 0
+    canPerfectDodge: 1
+    canGuard: 1
+    isUnblockable: 0
+    causesGuardBreak: 0
+    damageAmount: 18
+    telegraphType: 3
+    telegraphLeadTime: 0.18
+    telegraphLabel: 
+    timingStyle: 2
+    extraHoldDelay: 0
+    secondaryTelegraphSuffix: HOLD
+    usePreAttackPoseWhenNotParryable: 0
+    preAttackPoseTriggerName: 
+    preAttackPoseDuration: 0
+    preAttackPoseLabel: 
+    cooldown: 4.25
+    currentCooldown: 0
+    weight: 2.25
+    minRange: 3.2
+    maxRange: 18
+    forbiddenAfter: 
+    recoveryTime: 1.05
+    punishWindowDuration: 0.95
+    punishDamageMultiplier: 1.2
+    firesSwordWaveProjectile: 1
+    swordWaveFireDelay: 0.03
+    swordWaveSpeed: 12.5
+    swordWaveLifeTime: 1.35
+    swordWaveWidth: 1.1
+    swordWaveHeight: 0.52
+    swordWaveLength: 1.85
+    hitboxExpandedPadding: 0
+    hitboxMeshPaddingScale: 0
+    hitboxScanInterval: 0
+    hitboxOneShotWindow: 0
+    allowFollowUpChain: 0
+    followUpChance: 0
+    followUpMaxDistance: 0
+    followUpDelay: 0
+    forcedFollowUpPattern: 
+    preferredFollowUpTelegraph: 0
+    minPhase: 0
+    maxPhase: 0
   snapRotationToPlayerOnAttack: 1
   preAttackRotateTime: 0
   preAttackRotateSpeed: 720

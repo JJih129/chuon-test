@@ -115,6 +115,15 @@ public class AttackPattern
     [Tooltip("빈틈 시간 동안 받는 피해 배수. 1 이하면 텔레그래프 타입 기본값 사용.")]
     public float punishDamageMultiplier = 1f;
 
+    [Header("Ranged Sword Wave")]
+    public bool firesSwordWaveProjectile = false;
+    [Min(0f)] public float swordWaveFireDelay = 0.03f;
+    [Min(0.1f)] public float swordWaveSpeed = 12f;
+    [Min(0.1f)] public float swordWaveLifeTime = 1.4f;
+    [Min(0.1f)] public float swordWaveWidth = 1.15f;
+    [Min(0.1f)] public float swordWaveHeight = 0.55f;
+    [Min(0.2f)] public float swordWaveLength = 1.9f;
+
     [Header("Hitbox Tuning")]
     public float hitboxExpandedPadding = 0f;
 
@@ -317,6 +326,11 @@ public class AttackPattern
             default:
                 return 1.10f;
         }
+    }
+
+    public bool ResolveFiresSwordWaveProjectile()
+    {
+        return firesSwordWaveProjectile;
     }
 
     public float ResolveHitboxExpandedPadding(float fallback)
@@ -664,9 +678,27 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     [Tooltip("근거리에서 감속을 시작할 거리. stoppingDistance보다 커야 자연스럽게 접근합니다.")]
     [SerializeField] private float moveSlowdownDistance = 1.75f;
+    [SerializeField] private bool debugSwordWaveLogs = true;
+
+    [Header("Pressure Bands")]
+    [Tooltip("이 거리보다 가까우면 바로 직선 추적 대신 중립 압박/공전으로 전환합니다.")]
+    [SerializeField] private float pressureEngageDistance = 4.6f;
+    [Tooltip("중립 압박 상태에서 이 거리보다 멀어지면 다시 추적 이동으로 복귀합니다.")]
+    [SerializeField] private float pressureReleaseDistance = 5.4f;
+    [Tooltip("추적 이동 중 좌우 한쪽 성향을 유지하는 시간.")]
+    [SerializeField] private Vector2 moveArcSideHoldRange = new Vector2(0.9f, 1.8f);
+    [Tooltip("직선 추적 대신 호를 그리며 접근할 때 섞는 측면 비율.")]
+    [Range(0f, 1f)] [SerializeField] private float moveArcStrength = 0.38f;
 
     [Tooltip("감속 구간에서도 유지할 최소 접근 속도 비율.")]
     [Range(0.15f, 1f)] [SerializeField] private float closeApproachSpeedMultiplier = 0.38f;
+
+    [Header("Direct Sword Wave")]
+    [SerializeField] private bool useDirectSwordWaveBranch = true;
+    [SerializeField] private float swordWaveDirectMinRange = 3.2f;
+    [SerializeField] private float swordWaveDirectMaxRange = 18f;
+    [SerializeField] private float swordWaveDirectCooldown = 5.4f;
+    [SerializeField] private float swordWaveDirectChargeTime = 1.15f;
 
     [Tooltip("일반 추적 중 회전 속도(도/초).")]
     [SerializeField] private float chaseTurnSpeed = 360f;
@@ -712,6 +744,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     private bool _hasMoveYParam;
     private bool _hasCombatStrafingParam;
     private bool _combatStrafeAnimActive;
+    private float _moveArcSign = 1f;
+    private float _moveArcSideUntil = float.NegativeInfinity;
 
     [Header("공격 패턴 목록 (한글 설명)")]
     [Tooltip("보스가 사용할 수 있는 모든 공격 패턴 리스트")]
@@ -804,6 +838,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     private float _closePressureStartedAt = float.NegativeInfinity;
     private float _combatIdleStrafeSign = -1f;
     private float _combatIdleStrafeSideUntil = float.NegativeInfinity;
+    private AttackPattern _pendingImmediateAttackPattern;
+    private float _nextDirectSwordWaveAt;
+    private float _directSwordWaveReadySince = float.NegativeInfinity;
     readonly RaycastHit[] _movementSweepHits = new RaycastHit[16];
     readonly List<AttackPattern> _patternCandidatesCache = new List<AttackPattern>(16);
     readonly List<AttackPattern> _followUpCandidatesCache = new List<AttackPattern>(16);
@@ -814,6 +851,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     int _recentPatternWriteIndex;
     int _recentPatternRecordedCount;
     int _lastPatternCooldownSyncFrame = -1;
+    BossReferences _bossReferences;
 
     [Header("사망시 오브젝트 정리 (한글 설명)")]
     [Tooltip("보스 사망 시 자동으로 오브젝트를 파괴할지 여부")]
@@ -846,13 +884,13 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     void Awake()
     {
         AssignDefaultPreAttackPoseClipIfNeeded();
-        BossReferences bossReferences = GetComponent<BossReferences>();
-        if (bossAnimator == null && bossReferences != null && bossReferences.MainAnimator != null)
-            bossAnimator = bossReferences.MainAnimator;
-        if (attackHitbox == null && bossReferences != null && bossReferences.AttackHitbox != null)
-            attackHitbox = bossReferences.AttackHitbox;
-        if (patternVisuals == null && bossReferences != null && bossReferences.PatternVisuals != null)
-            patternVisuals = bossReferences.PatternVisuals;
+        _bossReferences = GetComponent<BossReferences>();
+        if (bossAnimator == null && _bossReferences != null && _bossReferences.MainAnimator != null)
+            bossAnimator = _bossReferences.MainAnimator;
+        if (attackHitbox == null && _bossReferences != null && _bossReferences.AttackHitbox != null)
+            attackHitbox = _bossReferences.AttackHitbox;
+        if (patternVisuals == null && _bossReferences != null && _bossReferences.PatternVisuals != null)
+            patternVisuals = _bossReferences.PatternVisuals;
         if (groundTelegraph == null)
             groundTelegraph = GetComponentInChildren<BossGroundTelegraph>(true);
         if (groundTelegraph == null)
@@ -885,6 +923,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             breakController.OnBreakExit.AddListener(OnBreakExit);
         }
 
+        EnsureDefaultSwordWavePattern();
         RebuildPatternLookup();
         RefreshPatternCooldownState();
         EnsureGameplayPlayerTarget(forceRefresh: true);
@@ -893,7 +932,77 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     void OnValidate()
     {
         AssignDefaultPreAttackPoseClipIfNeeded();
+        EnsureDefaultSwordWavePattern();
         RebuildPatternLookup();
+    }
+
+    void EnsureDefaultSwordWavePattern()
+    {
+        if (allPatterns == null)
+            allPatterns = new List<AttackPattern>();
+
+        for (int i = 0; i < allPatterns.Count; i++)
+        {
+            AttackPattern existing = allPatterns[i];
+            if (existing == null)
+                continue;
+
+            if (existing.firesSwordWaveProjectile ||
+                string.Equals(existing.patternName, "SwordWave", StringComparison.OrdinalIgnoreCase))
+            {
+                existing.patternName = "SwordWave";
+                existing.animTriggerName = "Attack_F";
+                existing.telegraphType = AttackTelegraphType.Dodge;
+                existing.timingStyle = AttackTimingStyle.Delayed;
+                existing.damageAmount = Mathf.Max(existing.damageAmount, 18);
+                existing.cooldown = Mathf.Max(2.5f, existing.cooldown);
+                existing.weight = Mathf.Max(2.25f, existing.weight);
+                existing.minRange = 3.2f;
+                existing.maxRange = Mathf.Max(18f, existing.maxRange);
+                existing.canPerfectDodge = true;
+                existing.canGuard = true;
+                existing.isUnblockable = false;
+                existing.causesGuardBreak = false;
+                existing.recoveryTime = Mathf.Max(1.05f, existing.recoveryTime);
+                existing.punishWindowDuration = Mathf.Max(0.95f, existing.punishWindowDuration);
+                existing.punishDamageMultiplier = Mathf.Max(1.2f, existing.punishDamageMultiplier);
+                existing.firesSwordWaveProjectile = true;
+                existing.swordWaveFireDelay = 0.03f;
+                existing.swordWaveSpeed = Mathf.Max(12.5f, existing.swordWaveSpeed);
+                existing.swordWaveLifeTime = Mathf.Max(1.35f, existing.swordWaveLifeTime);
+                existing.swordWaveWidth = Mathf.Max(1.1f, existing.swordWaveWidth);
+                existing.swordWaveHeight = Mathf.Max(0.52f, existing.swordWaveHeight);
+                existing.swordWaveLength = Mathf.Max(1.85f, existing.swordWaveLength);
+                return;
+            }
+        }
+
+        allPatterns.Add(new AttackPattern
+        {
+            patternName = "SwordWave",
+            animTriggerName = "Attack_F",
+            telegraphType = AttackTelegraphType.Dodge,
+            timingStyle = AttackTimingStyle.Delayed,
+            damageAmount = 18,
+            cooldown = 3.4f,
+            weight = 2.25f,
+            minRange = 3.2f,
+            maxRange = 18f,
+            canPerfectDodge = true,
+            canGuard = true,
+            isUnblockable = false,
+            causesGuardBreak = false,
+            recoveryTime = 1.05f,
+            punishWindowDuration = 0.95f,
+            punishDamageMultiplier = 1.2f,
+            firesSwordWaveProjectile = true,
+            swordWaveFireDelay = 0.03f,
+            swordWaveSpeed = 12.5f,
+            swordWaveLifeTime = 1.35f,
+            swordWaveWidth = 1.1f,
+            swordWaveHeight = 0.52f,
+            swordWaveLength = 1.85f
+        });
     }
 
     void Start()
@@ -1229,6 +1338,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             return;
 
         if (!useCollisionAwareRootMotion || currentState != BossState.Attack)
+            return;
+
+        if (_currentPattern != null && _currentPattern.ResolveFiresSwordWaveProjectile())
             return;
 
         Vector3 delta = bossAnimator.deltaPosition;
@@ -1741,6 +1853,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         return Mathf.Max(stoppingDistance, stoppingDistance + attackCommitDistanceBuffer);
     }
 
+    float ResolvePressureEngageDistance()
+    {
+        return Mathf.Max(ResolveAttackDecisionDistance() + 0.35f, pressureEngageDistance);
+    }
+
+    float ResolvePressureReleaseDistance()
+    {
+        return Mathf.Max(ResolvePressureEngageDistance() + 0.25f, pressureReleaseDistance);
+    }
+
     float ResolveApproachSpeedMultiplier(float distanceToPlayer)
     {
         float minSpeed = Mathf.Clamp(closeApproachSpeedMultiplier, 0.15f, 1f);
@@ -1848,6 +1970,30 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         return HasBackstepClearance();
     }
 
+    void RefreshMoveArcDirection()
+    {
+        if (Time.time < _moveArcSideUntil)
+            return;
+
+        _moveArcSign = _moveArcSign >= 0f ? -1f : 1f;
+        float holdMin = Mathf.Max(0.1f, moveArcSideHoldRange.x);
+        float holdMax = Mathf.Max(holdMin, moveArcSideHoldRange.y);
+        _moveArcSideUntil = Time.time + UnityEngine.Random.Range(holdMin, holdMax);
+    }
+
+    Vector3 ResolveArcApproachDirection(Vector3 toPlayer)
+    {
+        if (toPlayer.sqrMagnitude <= 0.0001f)
+            return Vector3.zero;
+
+        Vector3 forward = toPlayer.normalized;
+        RefreshMoveArcDirection();
+        Vector3 lateral = Vector3.Cross(Vector3.up, forward) * _moveArcSign;
+        Vector3 desired = (forward * Mathf.Max(0.1f, 1f - moveArcStrength)) + (lateral * Mathf.Clamp01(moveArcStrength));
+        desired.y = 0f;
+        return desired.sqrMagnitude <= 0.0001f ? forward : desired.normalized;
+    }
+
     // ==================== 상태별 코루틴 ====================
 
     IEnumerator Co_HandleIntroIdle()
@@ -1879,10 +2025,21 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         UpdateClosePressureState(distance);
         UpdateMoveAnimation(0f);
 
-        if (distance > ResolveAttackDecisionDistance())
-            SetState(BossState.Move);
-        else
+        float attackDistance = ResolveAttackDecisionDistance();
+        float pressureDistance = ResolvePressureEngageDistance();
+        if (TryStartDirectSwordWaveAttack(distance, "Detect"))
+            yield break;
+
+        bool hasPatternAtDistance = distance > attackDistance && HasExecutablePatternAtDistance(distance);
+
+        if (distance <= attackDistance)
             SetState(BossState.Attack);
+        else if (hasPatternAtDistance)
+            SetState(BossState.Attack);
+        else if (distance <= pressureDistance)
+            SetState(BossState.CombatIdle);
+        else
+            SetState(BossState.Move);
     }
 
     IEnumerator Co_HandleMove()
@@ -1904,6 +2061,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             float distance = toPlayer.magnitude;
             UpdateClosePressureState(distance);
 
+            if (TryStartDirectSwordWaveAttack(distance, "Move"))
+                yield break;
+
             float attackDecisionDistance = ResolveAttackDecisionDistance();
             if (distance <= attackDecisionDistance)
             {
@@ -1912,7 +2072,24 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
                 yield break;
             }
 
+            if (HasExecutablePatternAtDistance(distance))
+            {
+                UpdateMoveAnimation(0f);
+                SetState(BossState.Attack);
+                yield break;
+            }
+
+            if (distance <= ResolvePressureEngageDistance())
+            {
+                UpdateMoveAnimation(0f);
+                SetState(BossState.CombatIdle);
+                yield break;
+            }
+
             Vector3 dir = GetChaseDirection(toPlayer);
+            if (distance <= ResolvePressureReleaseDistance())
+                dir = ResolveArcApproachDirection(toPlayer);
+
             if (dir.sqrMagnitude > 0.0001f)
             {
                 Quaternion look = Quaternion.LookRotation(dir);
@@ -1949,6 +2126,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         t = Mathf.Max(t, minimumPostAttackIdleDuration);
         while (t > 0f && !_isDead)
         {
+            EnsureGameplayPlayerTarget();
+            if (playerTarget != null)
+            {
+                float distance = Vector3.Distance(transform.position, playerTarget.position);
+                if (TryStartDirectSwordWaveAttack(distance, "CombatIdle"))
+                    yield break;
+            }
+
             t -= Time.deltaTime;
             if (!TryApplyCombatIdleStrafe())
                 UpdateMoveAnimation(0f);
@@ -2036,7 +2221,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             yield break;
         }
 
-        AttackPattern pattern = _queuedFollowUpPattern != null ? _queuedFollowUpPattern : SelectPattern(distance);
+        AttackPattern pattern = _pendingImmediateAttackPattern != null
+            ? _pendingImmediateAttackPattern
+            : (_queuedFollowUpPattern != null ? _queuedFollowUpPattern : SelectPattern(distance));
+        _pendingImmediateAttackPattern = null;
         _queuedFollowUpPattern = null;
         _queuedFollowUpDelay = 0f;
         if (pattern == null)
@@ -2146,6 +2334,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
         if (!string.IsNullOrEmpty(pattern.animTriggerName))
             PlayAnimTrigger(pattern.animTriggerName);
+
+        if (pattern.ResolveFiresSwordWaveProjectile())
+        {
+            float projectileDamage = Mathf.Max(0f, pattern.damageAmount * Mathf.Max(0f, outgoingDamageMultiplier));
+            StartCoroutine(Co_FireSwordWaveProjectile(pattern, projectileDamage, canParry, canPerfectDodge, canGuard, isUnblockable, causesGuardBreak));
+        }
 
         LogState($"[BossFSM] Attack 패턴 실행: {pattern.patternName} ({pattern.animTriggerName})");
 
@@ -2342,6 +2536,65 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         _combatIdleStrafeSideUntil = Time.time + UnityEngine.Random.Range(holdMin, holdMax);
     }
 
+    IEnumerator Co_FireSwordWaveProjectile(
+        AttackPattern pattern,
+        float damage,
+        bool canParry,
+        bool canPerfectDodge,
+        bool canGuard,
+        bool isUnblockable,
+        bool causesGuardBreak)
+    {
+        if (pattern == null)
+            yield break;
+
+        float delay = Mathf.Max(0f, pattern.swordWaveFireDelay);
+        if (delay > 0.001f)
+            yield return new WaitForSeconds(delay);
+
+        if (_isDead || currentState != BossState.Attack)
+            yield break;
+
+        Transform spawnAnchor = null;
+        if (_bossReferences != null)
+            spawnAnchor = _bossReferences.AttackHitboxSocket != null ? _bossReferences.AttackHitboxSocket : _bossReferences.VfxPivot;
+
+        Vector3 origin = spawnAnchor != null
+            ? spawnAnchor.position + (transform.forward * 0.35f)
+            : transform.position + (transform.forward * 1.15f) + Vector3.up * 1.15f;
+
+        Vector3 forward = playerTarget != null
+            ? (playerTarget.position + Vector3.up * 0.9f) - origin
+            : transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude <= 0.0001f)
+            forward = transform.forward;
+
+        Quaternion rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
+
+        GameObject projectileObject = new GameObject("BossSwordWaveProjectile");
+        projectileObject.transform.SetPositionAndRotation(origin, rotation);
+        projectileObject.layer = gameObject.layer;
+
+        if (debugSwordWaveLogs)
+            Debug.Log($"[BossSwordWave] spawned origin={origin} forward={(rotation * Vector3.forward)} speed={pattern.swordWaveSpeed:0.00}", this);
+
+        BossSwordWaveProjectile projectile = projectileObject.AddComponent<BossSwordWaveProjectile>();
+        projectile.Configure(
+            transform,
+            damage,
+            Mathf.Max(0.1f, pattern.swordWaveSpeed),
+            Mathf.Max(0.1f, pattern.swordWaveLifeTime),
+            Mathf.Max(0.1f, pattern.swordWaveWidth),
+            Mathf.Max(0.1f, pattern.swordWaveHeight),
+            Mathf.Max(0.2f, pattern.swordWaveLength),
+            canParry,
+            canPerfectDodge,
+            canGuard,
+            causesGuardBreak,
+            isUnblockable);
+    }
+
     bool ShouldTriggerCombatIdleRetreat()
     {
         if (!useCombatIdleRetreatWhenTooClose || playerTarget == null)
@@ -2422,6 +2675,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     void ClearQueuedFollowUp()
     {
+        _pendingImmediateAttackPattern = null;
         _queuedFollowUpPattern = null;
         _queuedFollowUpDelay = 0f;
         _followUpChainDepth = 0;
@@ -3119,6 +3373,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (allPatterns == null || allPatterns.Count == 0)
             return null;
 
+        if (TryGetExecutableSwordWavePattern(distanceToPlayer, out AttackPattern swordWavePattern))
+            return swordWavePattern;
+
         List<AttackPattern> candidates = _patternCandidatesCache;
         candidates.Clear();
 
@@ -3129,11 +3386,186 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
                 candidates.Add(p);
         }
 
+        if (distanceToPlayer >= ResolvePressureEngageDistance())
+        {
+            AttackPattern rangedPriority = SelectPreferredRangedPattern(candidates);
+            if (rangedPriority != null)
+                return rangedPriority;
+        }
+
         AttackPattern selected = SelectWeightedPattern(candidates);
         if (selected != null)
             return selected;
 
         return SelectFallbackPattern(distanceToPlayer);
+    }
+
+    bool TryGetExecutableSwordWavePattern(float distanceToPlayer, out AttackPattern swordWavePattern)
+    {
+        swordWavePattern = null;
+
+        if (allPatterns == null || allPatterns.Count == 0)
+            return false;
+
+        for (int i = 0; i < allPatterns.Count; i++)
+        {
+            AttackPattern pattern = allPatterns[i];
+            if (pattern == null || !pattern.firesSwordWaveProjectile)
+                continue;
+
+            if (!pattern.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
+                continue;
+
+            swordWavePattern = pattern;
+            if (debugSwordWaveLogs)
+                Debug.Log($"[BossSwordWave] selected distance={distanceToPlayer:0.00} pattern={pattern.patternName} trigger={pattern.animTriggerName}", this);
+            return true;
+        }
+
+        return false;
+    }
+
+    AttackPattern GetOrCreateSwordWavePattern()
+    {
+        if (allPatterns == null)
+            allPatterns = new List<AttackPattern>();
+
+        for (int i = 0; i < allPatterns.Count; i++)
+        {
+            AttackPattern pattern = allPatterns[i];
+            if (pattern == null)
+                continue;
+
+            if (pattern.firesSwordWaveProjectile ||
+                string.Equals(pattern.patternName, "SwordWave", StringComparison.OrdinalIgnoreCase))
+            {
+                pattern.firesSwordWaveProjectile = true;
+                pattern.patternName = "SwordWave";
+                pattern.animTriggerName = "Attack_F";
+                pattern.minRange = Mathf.Min(pattern.minRange <= 0f ? swordWaveDirectMinRange : pattern.minRange, swordWaveDirectMinRange);
+                pattern.maxRange = Mathf.Max(pattern.maxRange, swordWaveDirectMaxRange);
+                return pattern;
+            }
+        }
+
+        EnsureDefaultSwordWavePattern();
+        return allPatterns != null && allPatterns.Count > 0 ? allPatterns[allPatterns.Count - 1] : null;
+    }
+
+    bool TryStartDirectSwordWaveAttack(float distanceToPlayer, string sourceState)
+    {
+        if (!useDirectSwordWaveBranch || _isDead || currentState == BossState.Attack)
+            return false;
+
+        float meleeCommitDistance = ResolveAttackDecisionDistance() + 0.2f;
+        if (distanceToPlayer <= meleeCommitDistance)
+        {
+            _directSwordWaveReadySince = float.NegativeInfinity;
+            return false;
+        }
+
+        float minRange = Mathf.Max(0f, swordWaveDirectMinRange);
+        float maxRange = Mathf.Max(minRange + 0.1f, swordWaveDirectMaxRange);
+        if (distanceToPlayer < minRange || distanceToPlayer > maxRange)
+        {
+            _directSwordWaveReadySince = float.NegativeInfinity;
+            return false;
+        }
+
+        bool canPressureCast =
+            currentState == BossState.CombatIdle ||
+            (currentState == BossState.Move && distanceToPlayer >= ResolvePressureReleaseDistance());
+
+        if (!canPressureCast)
+        {
+            _directSwordWaveReadySince = float.NegativeInfinity;
+            return false;
+        }
+
+        if (_directSwordWaveReadySince < 0f)
+            _directSwordWaveReadySince = Time.time;
+
+        if (Time.time < _nextDirectSwordWaveAt)
+            return false;
+
+        if (Time.time < _directSwordWaveReadySince + Mathf.Max(0f, swordWaveDirectChargeTime))
+            return false;
+
+        AttackPattern swordWavePattern = GetOrCreateSwordWavePattern();
+        if (swordWavePattern == null)
+            return false;
+
+        _pendingImmediateAttackPattern = swordWavePattern;
+        _nextDirectSwordWaveAt = Time.time + Mathf.Max(0.1f, swordWaveDirectCooldown);
+        _directSwordWaveReadySince = float.NegativeInfinity;
+        UpdateMoveAnimation(0f);
+
+        Debug.Log($"[BossSwordWave] direct-start source={sourceState} distance={distanceToPlayer:0.00}", this);
+        SetState(BossState.Attack);
+        return true;
+    }
+
+    bool TryStartSwordWaveAttack(float distanceToPlayer, string sourceState)
+    {
+        if (!TryGetExecutableSwordWavePattern(distanceToPlayer, out AttackPattern swordWavePattern))
+            return false;
+
+        _pendingImmediateAttackPattern = swordWavePattern;
+        UpdateMoveAnimation(0f);
+
+        if (debugSwordWaveLogs)
+            Debug.Log($"[BossSwordWave] force-attack source={sourceState} distance={distanceToPlayer:0.00}", this);
+
+        SetState(BossState.Attack);
+        return true;
+    }
+
+    bool HasExecutablePatternAtDistance(float distanceToPlayer)
+    {
+        SyncPatternCooldowns();
+
+        if (allPatterns == null || allPatterns.Count == 0)
+            return false;
+
+        if (TryGetExecutableSwordWavePattern(distanceToPlayer, out _))
+            return true;
+
+        for (int i = 0; i < allPatterns.Count; i++)
+        {
+            AttackPattern pattern = allPatterns[i];
+            if (pattern == null)
+                continue;
+
+            if (pattern.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
+                return true;
+        }
+
+        return false;
+    }
+
+    AttackPattern SelectPreferredRangedPattern(List<AttackPattern> candidates)
+    {
+        if (candidates == null || candidates.Count == 0)
+            return null;
+
+        AttackPattern best = null;
+        float bestWeight = float.MinValue;
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            AttackPattern candidate = candidates[i];
+            if (candidate == null || !candidate.firesSwordWaveProjectile)
+                continue;
+
+            float score = Mathf.Max(0.01f, candidate.weight * ResolvePhasePatternWeightMultiplier(candidate, false));
+            if (score <= bestWeight)
+                continue;
+
+            bestWeight = score;
+            best = candidate;
+        }
+
+        return best;
     }
 
     AttackPattern SelectFallbackPattern(float distanceToPlayer)
