@@ -11,6 +11,7 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
     [SerializeField] private Animator anim;
     [SerializeField] private PlayerGuardController guard;
     [SerializeField] private PerfectDodgeController perfectDodge;
+    [SerializeField] private PlayerDodgeController dodgeController;
     [SerializeField] private ParryFeedbackController feedback;
 
     [Header("Animator Parameters")]
@@ -22,6 +23,7 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
     [Range(0f, 1f)]
     [SerializeField] private float chipDamageMul = 0.10f;
     [SerializeField] private bool suppressHitAnimWhenGuarding = true;
+    [SerializeField] private bool invulnerableWhileDodging = true;
 
     [Header("Debug")]
     [SerializeField] private bool debugLogs = false;
@@ -36,6 +38,7 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
                 : GetComponentInChildren<Animator>();
         if (!guard) guard = GetComponent<PlayerGuardController>();
         if (!perfectDodge) perfectDodge = GetComponent<PerfectDodgeController>();
+        if (!dodgeController) dodgeController = GetComponent<PlayerDodgeController>();
         if (!feedback) feedback = GetComponent<ParryFeedbackController>();
         RefreshAnimatorParameterCache();
     }
@@ -94,6 +97,13 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
                     $"[PerfectDodge] SUCCESS attacker={(payload.attacker ? payload.attacker.name : "null")} hitPoint={payload.hitPoint}",
                     this);
             }
+            return;
+        }
+
+        if (invulnerableWhileDodging && dodgeController != null && dodgeController.IsDodging)
+        {
+            if (debugLogs)
+                Debug.Log("[PlayerDamageReceiver] Dodge invulnerability ignored hit.", this);
             return;
         }
 

@@ -12,6 +12,7 @@ public class GuardLocomotionAnimator : MonoBehaviour
     [SerializeField] private CharacterController characterController;
     [SerializeField] private Rigidbody rigidbodyRef;
     [SerializeField] private Transform velocitySource;
+    [SerializeField] private PlayerMoveController moveController;
 
     [Header("② 파라미터 이름")]
     [SerializeField] private string p_IsGuarding = "IsGuarding";
@@ -58,6 +59,7 @@ public class GuardLocomotionAnimator : MonoBehaviour
             : GetComponentInChildren<Animator>();
         if (!movementBasis) movementBasis = transform;
         if (!velocitySource) velocitySource = movementBasis;
+        if (!moveController) moveController = GetComponent<PlayerMoveController>();
 
         if (useCameraAsBasis && !cameraTransform && autoAssignMainCamera && Camera.main)
             cameraTransform = Camera.main.transform; // [추가]
@@ -80,6 +82,9 @@ public class GuardLocomotionAnimator : MonoBehaviour
         }
 
         Vector3 v = GetWorldVelocity();
+        bool hasMoveInput = HasMoveInput();
+        if (!hasMoveInput)
+            v = Vector3.zero;
         float spd = v.magnitude;
 
         Transform basis = (useCameraAsBasis && cameraTransform) ? cameraTransform : movementBasis;
@@ -120,7 +125,7 @@ public class GuardLocomotionAnimator : MonoBehaviour
 
     void ApplyAnimatorValues(float speedValue, float xValue, float yValue)
     {
-        if (hSpd != 0 && ShouldWriteAnimatorValue(_lastSpeedValue, speedValue))
+        if (hSpd != 0 && ShouldWriteAnimatorValue(hSpd, _lastSpeedValue, speedValue))
         {
             animator.SetFloat(hSpd, speedValue, dampTime, Time.deltaTime);
             _lastSpeedValue = speedValue;
@@ -129,22 +134,25 @@ public class GuardLocomotionAnimator : MonoBehaviour
         if (!use2DBlend)
             return;
 
-        if (hX != 0 && ShouldWriteAnimatorValue(_lastXValue, xValue))
+        if (hX != 0 && ShouldWriteAnimatorValue(hX, _lastXValue, xValue))
         {
             animator.SetFloat(hX, xValue, dampTime, Time.deltaTime);
             _lastXValue = xValue;
         }
 
-        if (hY != 0 && ShouldWriteAnimatorValue(_lastYValue, yValue))
+        if (hY != 0 && ShouldWriteAnimatorValue(hY, _lastYValue, yValue))
         {
             animator.SetFloat(hY, yValue, dampTime, Time.deltaTime);
             _lastYValue = yValue;
         }
     }
 
-    static bool ShouldWriteAnimatorValue(float cached, float next)
+    bool ShouldWriteAnimatorValue(int hash, float cached, float next)
     {
-        return float.IsNaN(cached) || Mathf.Abs(cached - next) > AnimatorWriteEpsilon;
+        if (float.IsNaN(cached) || Mathf.Abs(cached - next) > AnimatorWriteEpsilon)
+            return true;
+
+        return animator != null && Mathf.Abs(animator.GetFloat(hash) - next) > AnimatorWriteEpsilon;
     }
 
     Vector3 GetWorldVelocity()
@@ -162,5 +170,17 @@ public class GuardLocomotionAnimator : MonoBehaviour
         prevPos = p; hasPrev = true;
         vel.y = 0f;
         return vel;
+    }
+
+    bool HasMoveInput()
+    {
+        if (moveController != null)
+            return moveController.CurrentMoveInput.sqrMagnitude > deadZone * deadZone;
+
+        if (!useLegacyInputFallback)
+            return true;
+
+        Vector2 input = new Vector2(Input.GetAxisRaw(axisX), Input.GetAxisRaw(axisY));
+        return input.sqrMagnitude > deadZone * deadZone;
     }
 }

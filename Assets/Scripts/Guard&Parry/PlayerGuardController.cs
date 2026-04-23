@@ -390,6 +390,25 @@ public class PlayerGuardController : MonoBehaviour
         CloseParryWindow();
     }
 
+    public bool ForceOpenTutorialParryWindow(float seconds)
+    {
+        if (!enablePerfectGuard)
+            return false;
+
+        _parryAttemptActive = true;
+        _parrySuccessPendingClose = false;
+        _parrySpamPenaltyStacks = 0;
+        _lastParryAttemptStartedRealtime = float.NegativeInfinity;
+        _parryUsesRealtimeClock = useRealtimeParryWindow;
+
+        float now = ResolveParryClockTime();
+        _parryActivateAt = now;
+        _parryOpen = true;
+        _parryCloseAt = now + Mathf.Max(0.05f, seconds);
+        _parryRecoveryUntilRealtime = float.NegativeInfinity;
+        return true;
+    }
+
     public void CloseParryWindow()
     {
         CloseParryWindowInternal(countAsFailure: true);

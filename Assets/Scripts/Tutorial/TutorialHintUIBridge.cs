@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -27,10 +28,14 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private Vector2 objectivePanelSize = new Vector2(680f, 236f);
     [SerializeField] private Vector2 comboPanelAnchoredPosition = new Vector2(32f, -160f);
     [SerializeField] private Vector2 comboPanelSize = new Vector2(680f, 500f);
+    [SerializeField] private Vector2 timingCuePanelAnchoredPosition = new Vector2(0f, 92f);
+    [SerializeField] private Vector2 timingCuePanelSize = new Vector2(760f, 112f);
 
     [Header("Runtime Style")]
     [SerializeField] private Color dialoguePanelColor = new Color(0.03f, 0.07f, 0.10f, 0.88f);
     [SerializeField] private Color objectivePanelColor = new Color(0.03f, 0.07f, 0.10f, 0.88f);
+    [SerializeField] private Color timingCuePanelColor = new Color(0.02f, 0.05f, 0.07f, 0.92f);
+    [SerializeField] private Color timingCueTextColor = new Color(0.96f, 1f, 1f, 1f);
     [SerializeField] private Color accentColor = new Color(0.22f, 0.86f, 1f, 0.96f);
     [SerializeField] private Color speakerColor = new Color(0.36f, 0.94f, 1f, 1f);
     [SerializeField] private Color guideBodyColor = new Color(0.90f, 0.97f, 1f, 0.96f);
@@ -47,6 +52,14 @@ public class TutorialHintUIBridge : MonoBehaviour
     RectTransform _runtimeHudRoot;
     CanvasGroup _runtimeHudGroup;
     TMP_FontAsset _preferredFontAsset;
+    Coroutine _timingCueRoutine;
+    CanvasGroup _timingCueGroup;
+    RectTransform _timingCueRect;
+    TextMeshProUGUI _timingCueText;
+    Image _timingCueFill;
+    string _currentGuideBody;
+    string _currentGuideSpeaker;
+    bool _guideTextVisible;
 
     public CanvasGroup QuestPanelGroup => questPanelGroup;
     public TextMeshProUGUI QuestTitleText => questTitleText;
@@ -129,6 +142,9 @@ public class TutorialHintUIBridge : MonoBehaviour
     public void ShowGuideText(string body, string speaker = null)
     {
         EnsureRuntimeHud();
+        _currentGuideBody = body;
+        _currentGuideSpeaker = speaker;
+        _guideTextVisible = !string.IsNullOrWhiteSpace(body);
 
         if (dialogueGroup != null)
             dialogueGroup.alpha = string.IsNullOrWhiteSpace(body) ? 0f : 1f;
@@ -142,8 +158,89 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     public void HideGuideText()
     {
+        _currentGuideBody = string.Empty;
+        _currentGuideSpeaker = null;
+        _guideTextVisible = false;
+
         if (dialogueGroup != null)
             dialogueGroup.alpha = 0f;
+    }
+
+    public void ShowTimingCue(string body, string speaker, float duration)
+    {
+        EnsureRuntimeHud();
+
+        if (_timingCueRoutine != null)
+            StopCoroutine(_timingCueRoutine);
+
+        _timingCueRoutine = StartCoroutine(CoTimingCue(body, speaker, duration));
+    }
+
+    public void HideTimingCue()
+    {
+        if (_timingCueRoutine != null)
+        {
+            StopCoroutine(_timingCueRoutine);
+            _timingCueRoutine = null;
+        }
+
+        if (_timingCueGroup != null)
+            _timingCueGroup.alpha = 0f;
+        if (_timingCueRect != null)
+            _timingCueRect.localScale = Vector3.one;
+    }
+
+    IEnumerator CoTimingCue(string body, string speaker, float duration)
+    {
+        if (_timingCueGroup == null || _timingCueText == null)
+        {
+            ShowGuideText(body, speaker);
+            yield return new WaitForSecondsRealtime(Mathf.Max(0.05f, duration));
+            HideGuideText();
+            _timingCueRoutine = null;
+            yield break;
+        }
+
+        float total = Mathf.Max(0.05f, duration);
+        float fadeIn = Mathf.Min(0.08f, total * 0.25f);
+        float fadeOut = Mathf.Min(0.12f, total * 0.35f);
+        string resolvedSpeaker = string.IsNullOrWhiteSpace(speaker) ? defaultSpeaker : speaker;
+
+        _timingCueText.text = $"<size=72%>{resolvedSpeaker}</size>\n{body}";
+        _timingCueGroup.alpha = 0f;
+        _timingCueGroup.gameObject.SetActive(true);
+        if (_timingCueFill != null)
+            _timingCueFill.fillAmount = 1f;
+
+        float elapsed = 0f;
+        while (elapsed < total)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float normalized = Mathf.Clamp01(elapsed / total);
+            float alpha = 1f;
+            if (elapsed < fadeIn)
+                alpha = Mathf.Clamp01(elapsed / fadeIn);
+            else if (elapsed > total - fadeOut)
+                alpha = Mathf.Clamp01((total - elapsed) / fadeOut);
+
+            _timingCueGroup.alpha = alpha;
+            if (_timingCueRect != null)
+            {
+                float pulse = 1f + Mathf.Sin(normalized * Mathf.PI) * 0.045f;
+                _timingCueRect.localScale = new Vector3(pulse, pulse, 1f);
+            }
+
+            if (_timingCueFill != null)
+                _timingCueFill.fillAmount = 1f - normalized;
+
+            yield return null;
+        }
+
+        _timingCueGroup.alpha = 0f;
+        if (_timingCueRect != null)
+            _timingCueRect.localScale = Vector3.one;
+
+        _timingCueRoutine = null;
     }
 
     public void ShowStepCompleted(string stepTitle)
@@ -220,6 +317,7 @@ public class TutorialHintUIBridge : MonoBehaviour
         CreateDialoguePanel();
         CreateObjectivePanel();
         CreateComboPanel();
+        CreateTimingCuePanel();
     }
 
     void CreateDialoguePanel()
@@ -297,6 +395,40 @@ public class TutorialHintUIBridge : MonoBehaviour
         panelGroup.blocksRaycasts = false;
 
         comboGuidePanel = panelObject;
+    }
+
+    void CreateTimingCuePanel()
+    {
+        CanvasGroup panelGroup = CreatePanelGroup(
+            "TimingCuePanel",
+            _runtimeHudRoot,
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
+            timingCuePanelAnchoredPosition,
+            timingCuePanelSize,
+            timingCuePanelColor);
+        panelGroup.alpha = 0f;
+
+        _timingCueGroup = panelGroup;
+        _timingCueRect = panelGroup.GetComponent<RectTransform>();
+        _timingCueGroup.gameObject.SetActive(true);
+
+        EnsureAccent(panelGroup.transform, "TopAccent", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 6f));
+
+        Image fillBack = CreateImage(panelGroup.transform, "TimingFillBack", new Color(0.12f, 0.18f, 0.22f, 0.84f));
+        ConfigureRect(fillBack.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(-56f, 8f));
+
+        _timingCueFill = CreateImage(panelGroup.transform, "TimingFill", accentColor);
+        _timingCueFill.type = Image.Type.Filled;
+        _timingCueFill.fillMethod = Image.FillMethod.Horizontal;
+        _timingCueFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+        ConfigureRect(_timingCueFill.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 14f), new Vector2(-56f, 8f));
+
+        _timingCueText = EnsureText(panelGroup.transform, "TimingText");
+        ApplyTextStyle(_timingCueText, 30f, FontStyles.Bold, timingCueTextColor, TextAlignmentOptions.Center);
+        _timingCueText.enableWordWrapping = false;
+        ConfigureRect(_timingCueText.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(0f, 8f), new Vector2(-48f, -24f));
     }
 
     Canvas ResolveRuntimeCanvas()
@@ -382,6 +514,16 @@ public class TutorialHintUIBridge : MonoBehaviour
         Image accentImage = accentObject.GetComponent<Image>();
         accentImage.color = accentColor;
         accentImage.raycastTarget = false;
+    }
+
+    Image CreateImage(Transform parent, string objectName, Color color)
+    {
+        GameObject imageObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        imageObject.transform.SetParent(parent, false);
+        Image image = imageObject.GetComponent<Image>();
+        image.color = color;
+        image.raycastTarget = false;
+        return image;
     }
 
     TextMeshProUGUI EnsureText(Transform parent, string objectName)

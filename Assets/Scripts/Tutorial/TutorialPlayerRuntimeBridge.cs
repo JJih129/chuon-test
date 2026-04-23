@@ -142,6 +142,15 @@ public class TutorialPlayerRuntimeBridge : MonoBehaviour
         return Time.realtimeSinceStartup - _lastDodgeRealtime <= Mathf.Max(0.01f, realtimeWindow);
     }
 
+    public bool TryOpenTutorialParryWindow(float seconds)
+    {
+        if (guardController == null)
+            return false;
+
+        guardController.ForceOpenTutorialParryWindow(Mathf.Max(0.05f, seconds));
+        return guardController.IsParryWindowOpen;
+    }
+
     public void FillUltimateGauge()
     {
         playerUltimateController?.FillGaugeForDebug();

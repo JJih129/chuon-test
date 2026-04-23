@@ -34,6 +34,13 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     [Header("Visual")]
     [SerializeField] private GameObject hitEffectPrefab;
+    [SerializeField] private Animator visualAnimator;
+    [SerializeField] private string idleAnimationState = "Idle";
+    [SerializeField] private string moveAnimationState = "Run";
+    [SerializeField] private string attackAnimationState = "Attack1";
+    [SerializeField] private string hitAnimationState = "Hit1";
+    [SerializeField] private string dieAnimationState = "Die";
+    [SerializeField, Range(0f, 0.25f)] private float animationCrossFadeSeconds = 0.05f;
     [SerializeField] private string emissionProperty = "_EmissionColor";
     [SerializeField] private Color idleEmission = Color.black;
     [SerializeField] private Color hitEmission = new Color(1f, 0.85f, 0.2f, 1f);
@@ -62,6 +69,45 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [SerializeField, Min(0f)] private float parriedRecoveryDelay = 0.28f;
     [SerializeField, Min(0f)] private float perfectDodgeRecoveryDelay = 0.36f;
 
+    [Header("Melee Tracking")]
+    [SerializeField] private bool trackPlayerDuringLoopAttack = true;
+    [SerializeField, Min(0.5f)] private float desiredMeleeDistance = 2.3f;
+    [SerializeField, Min(0f)] private float chaseMoveSpeed = 1.8f;
+    [SerializeField, Min(0f)] private float chaseTurnSpeed = 540f;
+    [SerializeField, Min(0f)] private float maxChaseBeforeAttackSeconds = 1.2f;
+    [SerializeField] private AttackHitbox meleeAttackHitbox;
+    [SerializeField, Min(0f)] private float meleeHitDelay = 0.22f;
+    [SerializeField, Min(0.02f)] private float meleeHitWindow = 0.32f;
+    [SerializeField] private bool useAnimationHitTiming = true;
+    [SerializeField, Range(0f, 1f)] private float meleeHitNormalizedTime = 0.16f;
+    [SerializeField, Min(0.1f)] private float maxAnimationHitWaitSeconds = 2.2f;
+    [SerializeField] private Vector3 meleeHitboxCenter = new Vector3(0f, 1.05f, 0.95f);
+    [SerializeField] private Vector3 meleeHitboxSize = new Vector3(1.15f, 1.35f, 1.15f);
+
+    [Header("Attack Lunge")]
+    [SerializeField] private bool useAttackLunge = true;
+    [SerializeField, Range(0f, 1f)] private float attackLungeStartNormalizedTime = 0.04f;
+    [SerializeField, Range(0f, 1f)] private float attackLungeEndNormalizedTime = 0.18f;
+    [SerializeField, Min(0f)] private float attackLungeSpeed = 12f;
+    [SerializeField, Min(0.2f)] private float attackLungeStopDistance = 1.7f;
+    [SerializeField, Min(0f)] private float attackLungeMaxDistance = 4.2f;
+
+    [Header("Parry Timing Assist")]
+    [SerializeField] private bool enableParryTimingAssist = true;
+    [SerializeField, Min(0f)] private float parryAssistLeadSeconds = 0.05f;
+    [SerializeField, Range(0.05f, 1f)] private float parryAssistTimeScale = 0.35f;
+    [SerializeField, Min(0.05f)] private float parryAssistDuration = 0.85f;
+    [SerializeField] private string parryAssistSpeaker = "PARRY WINDOW";
+    [SerializeField] private string parryAssistText = "<color=#66F6FF>Parry Now</color>  |  E";
+
+    [Header("Forced Parry Tutorial")]
+    [SerializeField] private bool freezeForFirstParrySuccess = true;
+    [SerializeField, Range(0f, 1f)] private float forcedParryFreezeNormalizedTime = 0.12f;
+    [SerializeField, Range(0f, 1f)] private float forcedParryTimeScale = 0.02f;
+    [SerializeField, Min(0.05f)] private float forcedParryWindowSeconds = 0.75f;
+    [SerializeField] private string forcedParrySpeaker = "PARRY TRAINING";
+    [SerializeField] private string forcedParryText = "<color=#66F6FF>E</color>  패링";
+
     [Header("Hit Tracking")]
     [SerializeField, Min(0f)] private float hitEventCooldown = 0.08f;
     [SerializeField] private bool debugLogs;
@@ -73,6 +119,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     Coroutine _attackLoop;
     Coroutine _hitReaction;
     Coroutine _defenseReaction;
+    string _currentVisualState;
     Vector3 _initialScale;
     MaterialPropertyBlock _propertyBlock;
     MaterialPropertyBlock _markerPropertyBlock;
@@ -80,6 +127,17 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     bool _hasActiveProfile;
     int _adaptiveFailureCount;
     float _attackResumeRealtime;
+    TutorialHintUIBridge _hintBridge;
+    Coroutine _localParrySlowMotion;
+    float _localSlowPreviousScale = 1f;
+    float _localSlowPreviousFixedDeltaTime = 0.02f;
+    bool _localSlowMotionActive;
+    float _attackLungeMovedDistance;
+    bool _forcedParryPromptActive;
+    bool _forcedParrySucceeded;
+    float _forcedParryPreviousTimeScale = 1f;
+    float _forcedParryPreviousFixedDeltaTime = 0.02f;
+    float _forcedParryPreviousAnimatorSpeed = 1f;
     readonly Dictionary<TutorialProjectile, AttackSnapshot> _projectileSnapshots = new Dictionary<TutorialProjectile, AttackSnapshot>();
 
     struct AttackSnapshot
@@ -106,6 +164,8 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             primaryRenderer = GetComponentInChildren<Renderer>(true);
         if (worldMarker == null)
             worldMarker = GetComponentInChildren<TutorialWorldMarker>(true);
+        if (visualAnimator == null)
+            visualAnimator = GetComponentInChildren<Animator>(true);
         if (projectileSpawnPoint == null)
             projectileSpawnPoint = attackOrigin != null ? attackOrigin : transform;
 
@@ -114,6 +174,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         _markerPropertyBlock = new MaterialPropertyBlock();
         EnsureDangerIndicator();
         EnsureDangerTargetMarker();
+        EnsureMeleeAttackHitbox();
         SetEmission(idleEmission);
     }
 
@@ -122,7 +183,10 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         StopVisualReactions();
         HideDangerIndicator();
         HideDangerTargetMarker();
-        worldMarker?.SetVisible(false);
+        if (worldMarker != null)
+            worldMarker.SetVisible(false);
+        RestoreLocalSlowMotionIfNeeded();
+        RestoreForcedParryFreezeIfNeeded();
         ClearPendingProjectiles();
     }
 
@@ -146,6 +210,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         _initialScale = transform.localScale;
         EnsureDangerIndicator();
         EnsureDangerTargetMarker();
+        EnsureMeleeAttackHitbox();
         SetEmission(idleEmission);
     }
 
@@ -169,6 +234,45 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             RuntimeObjectPool.Prewarm(projectilePrefab, projectilePrewarmCount);
     }
 
+    void EnsureMeleeAttackHitbox()
+    {
+        if (meleeAttackHitbox != null)
+            return;
+
+        Transform existing = transform.Find("TutorialMeleeAttackHitbox");
+        GameObject hitboxObject = existing != null
+            ? existing.gameObject
+            : new GameObject("TutorialMeleeAttackHitbox");
+        hitboxObject.transform.SetParent(transform, false);
+        hitboxObject.transform.localPosition = Vector3.zero;
+        hitboxObject.transform.localRotation = Quaternion.identity;
+        hitboxObject.transform.localScale = Vector3.one;
+
+        BoxCollider box = hitboxObject.GetComponent<BoxCollider>();
+        if (box == null)
+            box = hitboxObject.AddComponent<BoxCollider>();
+        box.isTrigger = true;
+        box.center = meleeHitboxCenter;
+        box.size = meleeHitboxSize;
+        box.enabled = false;
+
+        meleeAttackHitbox = hitboxObject.GetComponent<AttackHitbox>();
+        if (meleeAttackHitbox == null)
+            meleeAttackHitbox = hitboxObject.AddComponent<AttackHitbox>();
+
+        meleeAttackHitbox.attackerRoot = transform;
+        meleeAttackHitbox.hitEachReceiverOncePerActivation = true;
+        meleeAttackHitbox.useOneShotWindow = true;
+        meleeAttackHitbox.oneShotWindow = meleeHitWindow;
+        meleeAttackHitbox.useExpandedHitDetection = true;
+        meleeAttackHitbox.expandedPadding = 0.08f;
+        meleeAttackHitbox.useSweepHitDetection = true;
+        if (playerTarget != null)
+            meleeAttackHitbox.hitLayers = 1 << playerTarget.gameObject.layer;
+
+        meleeAttackHitbox.DeactivateWindow();
+    }
+
     public void SetRuntimeProfiles(params TrainingDummyStepProfile[] profiles)
     {
         stepProfiles = profiles;
@@ -183,6 +287,9 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         _lastAttackSequenceId = 0;
         _lastAttackerInstanceId = 0;
         _lastHitTime = float.NegativeInfinity;
+        RestoreForcedParryFreezeIfNeeded();
+        _forcedParrySucceeded = playerBridge != null && playerBridge.ParryCount > 0;
+        _forcedParryPromptActive = false;
 
         if (stepProfiles != null)
         {
@@ -207,6 +314,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         if (!_hasActiveProfile || _activeProfile == null)
             return;
 
+        PlayIdleAnimation();
         _currentHealth = _activeProfile.useHealth ? Mathf.Max(1f, _activeProfile.damage * 6f) : 99999f;
         SetEmission(_activeProfile.stateColor);
         if (parryMarkerObject != null)
@@ -246,11 +354,16 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         }
 
         CombatRewardUtility.TryGrantBasicAttackGauge(payload.attacker);
+        PlayHitAnimation();
         PlayHitReaction();
         SpawnHitEffect(payload);
 
         if (_activeProfile != null && _activeProfile.useHealth && !_activeProfile.invulnerable)
+        {
             _currentHealth = Mathf.Max(0f, _currentHealth - payload.damage);
+            if (_currentHealth <= 0f)
+                PlayDieAnimation();
+        }
 
         TutorialCombatHitInfo hitInfo = default;
         hitInfo.payload = payload;
@@ -284,11 +397,12 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             while (_hasActiveProfile && Time.realtimeSinceStartup < _attackResumeRealtime)
                 yield return null;
 
-            Vector3 attackTargetPoint = GetAttackTargetPoint();
+            yield return CoApproachPlayerForMelee();
             SetEmission(_activeProfile.canParry ? hitEmission : _activeProfile.stateColor);
-            ShowDangerIndicator(attackTargetPoint, _activeProfile);
-            yield return new WaitForSeconds(GetAdjustedTelegraphDuration());
-            ExecuteAttack(attackTargetPoint);
+            ShowDangerIndicator(GetAttackTargetPoint(), _activeProfile);
+            yield return CoTelegraphDelay(GetAdjustedTelegraphDuration());
+            yield return CoExecuteAttackWindow(GetAttackTargetPoint());
+            PlayIdleAnimation();
             SetEmission(_activeProfile.stateColor);
             HideDangerIndicator();
             HideDangerTargetMarker();
@@ -308,6 +422,9 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
         if (_activeProfile.useProjectileAttack && TryFireProjectile(snapshot, lockedTargetPoint))
             return;
+
+        StartCoroutine(CoApplyMeleeHitboxAttack(snapshot));
+        return;
 
         Vector3 source = attackOrigin != null ? attackOrigin.position : transform.position;
         Vector3 targetPos = lockedTargetPoint;
@@ -356,12 +473,441 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             Debug.Log($"[TrainingDummyController] {name} attack resolved: {result}", this);
     }
 
+    IEnumerator CoExecuteAttackWindow(Vector3 lockedTargetPoint)
+    {
+        if (playerTarget == null || playerBridge == null)
+        {
+            AttackResolved?.Invoke(this, TrainingDummyAttackResult.Missed);
+            yield break;
+        }
+
+        AttackSnapshot snapshot = CaptureAttackSnapshot();
+
+        if (_activeProfile.useProjectileAttack && TryFireProjectile(snapshot, lockedTargetPoint))
+            yield break;
+
+        PlayAttackAnimation();
+        FacePlayerForMelee();
+        _attackLungeMovedDistance = 0f;
+        yield return CoWaitForMeleeHitTimingWithAssist();
+
+        yield return CoApplyMeleeHitboxAttack(snapshot);
+    }
+
+    IEnumerator CoWaitForMeleeHitTimingWithAssist()
+    {
+        if (!useAnimationHitTiming || visualAnimator == null || string.IsNullOrWhiteSpace(attackAnimationState))
+        {
+            yield return CoWaitForMeleeHitDelayWithAssist();
+            yield break;
+        }
+
+        int attackStateHash = Animator.StringToHash(attackAnimationState);
+        bool assistTriggered = false;
+        bool sawAttackState = false;
+        bool forcedFreezeHandled = false;
+        float elapsed = 0f;
+        float hitNormalized = Mathf.Clamp01(meleeHitNormalizedTime);
+        float forcedFreezeNormalized = Mathf.Clamp01(Mathf.Min(forcedParryFreezeNormalizedTime, hitNormalized));
+        yield return null;
+
+        while (_hasActiveProfile && elapsed < maxAnimationHitWaitSeconds)
+        {
+            AnimatorStateInfo stateInfo = visualAnimator.GetCurrentAnimatorStateInfo(0);
+            bool inAttackState = stateInfo.shortNameHash == attackStateHash;
+            if (!inAttackState && visualAnimator.IsInTransition(0))
+            {
+                AnimatorStateInfo nextStateInfo = visualAnimator.GetNextAnimatorStateInfo(0);
+                if (nextStateInfo.shortNameHash == attackStateHash)
+                {
+                    stateInfo = nextStateInfo;
+                    inAttackState = true;
+                }
+            }
+
+            if (inAttackState)
+            {
+                sawAttackState = true;
+                float normalizedTime = Mathf.Clamp01(stateInfo.normalizedTime);
+                float stateLength = Mathf.Max(0.01f, stateInfo.length);
+                float assistNormalizedTime = Mathf.Clamp01(hitNormalized - (parryAssistLeadSeconds / stateLength));
+
+                UpdateAttackLunge(normalizedTime);
+
+                if (!forcedFreezeHandled && ShouldUseForcedParryFreeze() && normalizedTime >= forcedFreezeNormalized)
+                {
+                    forcedFreezeHandled = true;
+                    yield return CoForcedParryPrompt();
+                    yield break;
+                }
+
+                if (!assistTriggered && ShouldShowParryTimingAssist() && normalizedTime >= assistNormalizedTime)
+                {
+                    TriggerParryTimingAssist();
+                    assistTriggered = true;
+                }
+
+                if (normalizedTime >= hitNormalized)
+                    yield break;
+            }
+            else if (sawAttackState)
+            {
+                break;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (sawAttackState)
+            yield break;
+
+        yield return CoWaitForMeleeHitDelayWithAssist();
+    }
+
+    void UpdateAttackLunge(float normalizedTime)
+    {
+        if (!useAttackLunge || playerTarget == null || attackLungeSpeed <= 0f)
+            return;
+
+        float start = Mathf.Clamp01(attackLungeStartNormalizedTime);
+        float end = Mathf.Clamp01(Mathf.Max(start, attackLungeEndNormalizedTime));
+        if (normalizedTime < start || normalizedTime > end)
+            return;
+
+        if (attackLungeMaxDistance > 0f && _attackLungeMovedDistance >= attackLungeMaxDistance)
+            return;
+
+        Vector3 toPlayer = playerTarget.position - transform.position;
+        toPlayer.y = 0f;
+        float distance = toPlayer.magnitude;
+        if (distance <= attackLungeStopDistance || distance <= 0.001f)
+            return;
+
+        Vector3 direction = toPlayer / distance;
+        RotateToward(direction);
+
+        float remainingDistance = Mathf.Max(0f, distance - attackLungeStopDistance);
+        float maxByLungeBudget = attackLungeMaxDistance > 0f
+            ? Mathf.Max(0f, attackLungeMaxDistance - _attackLungeMovedDistance)
+            : remainingDistance;
+        float step = Mathf.Min(remainingDistance, maxByLungeBudget, attackLungeSpeed * Time.deltaTime);
+        transform.position += direction * step;
+        _attackLungeMovedDistance += step;
+    }
+
+    bool ShouldUseForcedParryFreeze()
+    {
+        return freezeForFirstParrySuccess &&
+               !_forcedParrySucceeded &&
+               playerBridge != null &&
+               playerBridge.ParryCount <= 0 &&
+               _activeProfile != null &&
+               _activeProfile.stepType == TutorialStepType.Parry &&
+               _activeProfile.canParry;
+    }
+
+    IEnumerator CoForcedParryPrompt()
+    {
+        _forcedParryPromptActive = true;
+        TriggerForcedParryFreeze();
+
+        TutorialHintUIBridge hintBridge = ResolveHintBridge();
+        if (hintBridge != null)
+            hintBridge.ShowTimingCue(forcedParryText, forcedParrySpeaker, 999f);
+
+        while (_hasActiveProfile && playerBridge != null && playerBridge.ParryCount <= 0)
+        {
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                playerBridge.TryOpenTutorialParryWindow(forcedParryWindowSeconds);
+                break;
+            }
+
+            yield return null;
+        }
+
+        hintBridge?.HideTimingCue();
+        RestoreForcedParryFreezeIfNeeded();
+        _forcedParryPromptActive = false;
+    }
+
+    void TriggerForcedParryFreeze()
+    {
+        _forcedParryPreviousTimeScale = Time.timeScale;
+        _forcedParryPreviousFixedDeltaTime = Time.fixedDeltaTime;
+        Time.timeScale = Mathf.Clamp(forcedParryTimeScale, 0f, 1f);
+        Time.fixedDeltaTime = 0.02f * Mathf.Max(Time.timeScale, 0.0001f);
+
+        if (visualAnimator != null)
+        {
+            _forcedParryPreviousAnimatorSpeed = visualAnimator.speed;
+            visualAnimator.speed = 0f;
+        }
+    }
+
+    void RestoreForcedParryFreezeIfNeeded()
+    {
+        if (!_forcedParryPromptActive)
+            return;
+
+        Time.timeScale = _forcedParryPreviousTimeScale;
+        Time.fixedDeltaTime = _forcedParryPreviousFixedDeltaTime;
+
+        if (visualAnimator != null)
+            visualAnimator.speed = _forcedParryPreviousAnimatorSpeed;
+    }
+
+    IEnumerator CoWaitForMeleeHitDelayWithAssist()
+    {
+        float delay = Mathf.Max(0f, meleeHitDelay);
+        if (!ShouldShowParryTimingAssist())
+        {
+            if (delay > 0f)
+                yield return new WaitForSeconds(delay);
+            yield break;
+        }
+
+        float lead = Mathf.Clamp(parryAssistLeadSeconds, 0f, delay);
+        float beforeCue = delay - lead;
+        if (beforeCue > 0f)
+            yield return new WaitForSeconds(beforeCue);
+
+        TriggerParryTimingAssist();
+
+        if (lead > 0f)
+            yield return new WaitForSeconds(lead);
+    }
+
+    bool ShouldShowParryTimingAssist()
+    {
+        return enableParryTimingAssist &&
+               _activeProfile != null &&
+               _activeProfile.stepType == TutorialStepType.Parry &&
+               _activeProfile.canParry;
+    }
+
+    void TriggerParryTimingAssist()
+    {
+        TutorialHintUIBridge hintBridge = ResolveHintBridge();
+        if (hintBridge != null)
+            hintBridge.ShowTimingCue(parryAssistText, parryAssistSpeaker, parryAssistDuration);
+
+        TimeScaleController timeScaleController = TimeScaleController.Instance;
+        if (timeScaleController != null)
+        {
+            timeScaleController.SetSlowMotion(parryAssistTimeScale, parryAssistDuration);
+            return;
+        }
+
+        if (_localParrySlowMotion != null)
+            StopCoroutine(_localParrySlowMotion);
+        _localParrySlowMotion = StartCoroutine(CoLocalParrySlowMotion());
+    }
+
+    TutorialHintUIBridge ResolveHintBridge()
+    {
+        if (_hintBridge != null)
+            return _hintBridge;
+
+        _hintBridge = FindObjectOfType<TutorialHintUIBridge>(true);
+        return _hintBridge;
+    }
+
+    IEnumerator CoLocalParrySlowMotion()
+    {
+        _localSlowPreviousScale = Time.timeScale;
+        _localSlowPreviousFixedDeltaTime = Time.fixedDeltaTime;
+        _localSlowMotionActive = true;
+        Time.timeScale = Mathf.Clamp(parryAssistTimeScale, 0.05f, 1f);
+        Time.fixedDeltaTime = 0.02f * Time.timeScale;
+
+        yield return new WaitForSecondsRealtime(parryAssistDuration);
+
+        RestoreLocalSlowMotionIfNeeded();
+        _localParrySlowMotion = null;
+    }
+
+    void RestoreLocalSlowMotionIfNeeded()
+    {
+        if (!_localSlowMotionActive)
+            return;
+
+        if (Mathf.Abs(Time.timeScale - parryAssistTimeScale) <= 0.05f)
+        {
+            Time.timeScale = _localSlowPreviousScale;
+            Time.fixedDeltaTime = _localSlowPreviousFixedDeltaTime;
+        }
+
+        _localSlowMotionActive = false;
+    }
+
+    IEnumerator CoApplyMeleeHitboxAttack(AttackSnapshot snapshot)
+    {
+        EnsureMeleeAttackHitbox();
+        if (meleeAttackHitbox == null)
+        {
+            AttackResolved?.Invoke(this, TrainingDummyAttackResult.Missed);
+            yield break;
+        }
+
+        FacePlayerForMelee();
+        meleeAttackHitbox.Configure(
+            _activeProfile != null ? _activeProfile.damage : 8f,
+            _activeProfile != null && _activeProfile.canParry,
+            _activeProfile == null || !_activeProfile.unblockable,
+            _activeProfile != null && _activeProfile.unblockable,
+            false,
+            transform);
+        meleeAttackHitbox.canPerfectDodge = _activeProfile != null && _activeProfile.canPerfectDodge;
+        meleeAttackHitbox.attackSequenceId++;
+        meleeAttackHitbox.ActivateWindow();
+
+        yield return new WaitForSeconds(meleeHitWindow);
+
+        meleeAttackHitbox.DeactivateWindow();
+        TrainingDummyAttackResult result = ClassifyAttackResult(snapshot, false);
+        if (result == TrainingDummyAttackResult.Parried)
+            _forcedParrySucceeded = true;
+        AttackResolved?.Invoke(this, result);
+        UpdateAdaptiveAssist(result);
+        PlayDefenseResultReaction(result);
+
+        if (debugLogs)
+            Debug.Log($"[TrainingDummyController] {name} melee attack resolved: {result}", this);
+    }
+
     void PlayHitReaction()
     {
         if (_hitReaction != null)
             StopCoroutine(_hitReaction);
 
         _hitReaction = StartCoroutine(CoHitReaction());
+    }
+
+    IEnumerator CoApproachPlayerForMelee()
+    {
+        if (!ShouldUseMeleeTracking())
+            yield break;
+
+        float elapsed = 0f;
+        while (_hasActiveProfile && elapsed < maxChaseBeforeAttackSeconds)
+        {
+            if (!MoveTowardPlayerForMelee())
+                yield break;
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+    }
+
+    IEnumerator CoTelegraphDelay(float duration)
+    {
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            FacePlayerForMelee();
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+    }
+
+    bool MoveTowardPlayerForMelee()
+    {
+        if (!ShouldUseMeleeTracking())
+            return false;
+
+        Vector3 toPlayer = playerTarget.position - transform.position;
+        toPlayer.y = 0f;
+        float distance = toPlayer.magnitude;
+        if (distance <= 0.001f)
+            return false;
+
+        Vector3 direction = toPlayer / distance;
+        RotateToward(direction);
+
+        float stopDistance = Mathf.Max(0.5f, desiredMeleeDistance);
+        if (distance <= stopDistance)
+            return false;
+
+        PlayMoveAnimation();
+        float step = Mathf.Min(distance - stopDistance, chaseMoveSpeed * Time.deltaTime);
+        transform.position += direction * step;
+        return true;
+    }
+
+    void FacePlayerForMelee()
+    {
+        if (!ShouldUseMeleeTracking())
+            return;
+
+        Vector3 toPlayer = playerTarget.position - transform.position;
+        toPlayer.y = 0f;
+        if (toPlayer.sqrMagnitude <= 0.0001f)
+            return;
+
+        RotateToward(toPlayer.normalized);
+    }
+
+    bool ShouldUseMeleeTracking()
+    {
+        return trackPlayerDuringLoopAttack &&
+               playerTarget != null &&
+               _activeProfile != null &&
+               !_activeProfile.useProjectileAttack;
+    }
+
+    void RotateToward(Vector3 direction)
+    {
+        if (direction.sqrMagnitude <= 0.0001f)
+            return;
+
+        Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, chaseTurnSpeed * Time.deltaTime);
+    }
+
+    void PlayIdleAnimation()
+    {
+        PlayVisualState(idleAnimationState);
+    }
+
+    void PlayMoveAnimation()
+    {
+        PlayVisualState(moveAnimationState);
+    }
+
+    void PlayAttackAnimation()
+    {
+        PlayVisualState(attackAnimationState);
+    }
+
+    void PlayHitAnimation()
+    {
+        PlayVisualState(hitAnimationState);
+    }
+
+    void PlayDieAnimation()
+    {
+        PlayVisualState(dieAnimationState);
+    }
+
+    void PlayVisualState(string stateName)
+    {
+        if (visualAnimator == null || string.IsNullOrWhiteSpace(stateName))
+            return;
+
+        if (string.Equals(_currentVisualState, stateName, System.StringComparison.Ordinal))
+            return;
+
+        int stateHash = Animator.StringToHash(stateName);
+        if (!visualAnimator.HasState(0, stateHash))
+            return;
+
+        _currentVisualState = stateName;
+        if (animationCrossFadeSeconds > 0f)
+            visualAnimator.CrossFadeInFixedTime(stateName, animationCrossFadeSeconds, 0, 0f);
+        else
+            visualAnimator.Play(stateName, 0, 0f);
     }
 
     IEnumerator CoHitReaction()

@@ -55,6 +55,7 @@ public class PlayerMoveController : MonoBehaviour
     [SerializeField, Range(0.1f, 1f)] private float lockOnFwdMul = 0.82f;
     [SerializeField, Range(0.1f, 1f)] private float lockOnBackMul = 0.62f;
     [SerializeField, Range(0.1f, 1f)] private float lockOnStrafeMul = 0.72f;
+    [SerializeField] private bool lockOnUsesCameraRelativeMovement = true;
 
     // ─────────[⑤ 중력]─────────
     [Header("⑤ 중력")]
@@ -177,22 +178,14 @@ public class PlayerMoveController : MonoBehaviour
         bool locked = playerLockOn && playerLockOn.IsLocked;
         Vector3 fwd, right;
 
-        if (locked) // 락온 상태: 타겟 중심 이동
+        if (locked && !lockOnUsesCameraRelativeMovement)
         {
             fwd = Flat(playerRoot.forward);
             right = Flat(playerRoot.right);
         }
-        else // 일반 상태: 카메라 기준 이동
+        else
         {
-            Transform cam = cameraTransform;
-            if (cam == null)
-            {
-                cam = GameplaySceneCache.ResolveMainCameraTransform();
-                if (cam != null)
-                    cameraTransform = cam;
-                else
-                    cam = playerRoot;
-            }
+            Transform cam = ResolveMovementCameraTransform();
             fwd = Flat(cam.forward);
             right = Flat(cam.right);
         }
@@ -356,6 +349,21 @@ public class PlayerMoveController : MonoBehaviour
         return guardController && guardController.IsGuardMovementActive;
     }
 
+    Transform ResolveMovementCameraTransform()
+    {
+        Transform resolved = GameplaySceneCache.ResolveMainCameraTransform();
+        if (IsValidBasisTransform(resolved))
+        {
+            cameraTransform = resolved;
+            return resolved;
+        }
+
+        if (IsValidBasisTransform(cameraTransform))
+            return cameraTransform;
+
+        return playerRoot != null ? playerRoot : transform;
+    }
+
     void MoveWithGravity(Vector3 vXZ)
     {
         if (_cc == null || !_cc.enabled)
@@ -376,6 +384,11 @@ public class PlayerMoveController : MonoBehaviour
     }
 
     static Vector3 Flat(Vector3 v) { v.y = 0f; return v.sqrMagnitude > 0.0001f ? v.normalized : Vector3.forward; }
+
+    static bool IsValidBasisTransform(Transform candidate)
+    {
+        return candidate != null && candidate.gameObject.activeInHierarchy;
+    }
 
     static Vector3 MoveTowardsXZ(Vector3 cur, Vector3 tgt, float acc, float dec, float dt)
     {

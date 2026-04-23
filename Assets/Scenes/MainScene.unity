@@ -2335,8 +2335,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21270806, y: 0.0056591495, z: 0.0012319601, w: 0.97709864}
-  m_LocalPosition: {x: -0.6314063, y: -1.0415927, z: -22.513737}
+  m_LocalRotation: {x: -0.21586838, y: 0.0056551415, z: 0.0012502659, w: 0.9764054}
+  m_LocalPosition: {x: -0.63125485, y: -1.0770034, z: -22.500652}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -22470,6 +22470,10 @@ PrefabInstance:
       propertyPath: attackHitboxes.Array.data[0]
       value: 
       objectReference: {fileID: 1632515188}
+    - target: {fileID: 794500035358795120, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
+      propertyPath: targetRenderer
+      value: 
+      objectReference: {fileID: 710249374}
     - target: {fileID: 3519338472619700357, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
       propertyPath: m_Materials.Array.data[0]
       value: 
@@ -25423,7 +25427,7 @@ Transform:
   m_GameObject: {fileID: 1408991141}
   serializedVersion: 2
   m_LocalRotation: {x: -0.066721, y: 0.9231552, z: -0.3290949, w: -0.18716136}
-  m_LocalPosition: {x: 1.3719577, y: 0, z: -0.043418884}
+  m_LocalPosition: {x: 1.3719575, y: 0, z: -0.043419838}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

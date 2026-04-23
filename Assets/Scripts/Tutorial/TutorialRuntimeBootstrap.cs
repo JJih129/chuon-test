@@ -10,6 +10,7 @@ using UnityEngine.Timeline;
 public class TutorialRuntimeBootstrap : MonoBehaviour
 {
     const string TutorialScenePath = "Assets/Scenes/Tutorial.unity";
+    const string CombatGirlEnemyPrefabPath = "Assets/Prefabs/Tutorial/TutorialCombatGirlEnemy.prefab";
 
     TutorialFlowController _flowController;
     TutorialHintUIBridge _hintBridge;
@@ -104,8 +105,9 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (movementGoalZone != null)
             movementGoalZone.ConfigureRuntime(player.transform, "Player", true);
 
+        GameObject guardDummyObject = CreateCombatGirlGuardDummy(droneObject);
         TrainingDummyController attackDummy = ConfigureAttackDummy(player, attackDummyObject);
-        TrainingDummyController guardDummy = ConfigureGuardDummy(player, droneObject, guardProjectilePrefab);
+        TrainingDummyController guardDummy = ConfigureGuardDummy(player, guardDummyObject, null);
         ConfigureTutorialModernUltimate(player, attackDummyObject, mainCamera);
         TutorialZoneTrigger exitZone = BuildExitZone(sceneMoveObject, player.transform);
 
@@ -308,6 +310,46 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         return controller;
     }
 
+    GameObject CreateCombatGirlGuardDummy(GameObject legacyDrone)
+    {
+        GameObject prefab = ResolveCombatGirlEnemyPrefab();
+        if (prefab == null)
+            return legacyDrone;
+
+        Vector3 position = legacyDrone != null ? legacyDrone.transform.position : new Vector3(3f, 0f, 4f);
+        position = ProjectToGround(position);
+        Quaternion rotation = legacyDrone != null ? legacyDrone.transform.rotation : Quaternion.identity;
+        Transform parent = legacyDrone != null ? legacyDrone.transform.parent : null;
+
+        if (legacyDrone != null)
+            legacyDrone.SetActive(false);
+
+        GameObject instance = Instantiate(prefab, position, rotation, parent);
+        instance.name = "TutorialGuardCombatGirlEnemy";
+        instance.SetActive(true);
+        return instance;
+    }
+
+    static Vector3 ProjectToGround(Vector3 position)
+    {
+        Vector3 origin = position + Vector3.up * 4f;
+        if (Physics.Raycast(origin, Vector3.down, out RaycastHit hit, 12f, ~0, QueryTriggerInteraction.Ignore))
+            position.y = hit.point.y;
+        else
+            position.y = 0f;
+
+        return position;
+    }
+
+    GameObject ResolveCombatGirlEnemyPrefab()
+    {
+#if UNITY_EDITOR
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(CombatGirlEnemyPrefabPath);
+#else
+        return Resources.Load<GameObject>("Tutorial/TutorialCombatGirlEnemy");
+#endif
+    }
+
     TrainingDummyController ConfigureGuardDummy(GameObject player, GameObject dummyObject, GameObject projectilePrefab)
     {
         if (dummyObject == null)
@@ -341,11 +383,12 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
                 stepType = TutorialStepType.Guard,
                 active = true,
                 loopAttack = true,
-                useProjectileAttack = true,
+                useProjectileAttack = false,
                 initialDelay = 0.8f,
                 attackInterval = 2.4f,
                 telegraphDuration = 1.05f,
                 damage = 8f,
+                hitRange = 2.35f,
                 projectileSpeed = 10.5f,
                 projectileLifeTime = 2.2f,
                 countProjectileMissAsDodge = false,
@@ -371,11 +414,12 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
                 stepType = TutorialStepType.Parry,
                 active = true,
                 loopAttack = true,
-                useProjectileAttack = true,
+                useProjectileAttack = false,
                 initialDelay = 0.7f,
                 attackInterval = 2.6f,
                 telegraphDuration = 1.0f,
                 damage = 8f,
+                hitRange = 2.35f,
                 projectileSpeed = 11.5f,
                 projectileLifeTime = 2.2f,
                 countProjectileMissAsDodge = false,
@@ -401,11 +445,12 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
                 stepType = TutorialStepType.Dodge,
                 active = true,
                 loopAttack = true,
-                useProjectileAttack = true,
+                useProjectileAttack = false,
                 initialDelay = 0.7f,
                 attackInterval = 2.4f,
                 telegraphDuration = 0.9f,
                 damage = 8f,
+                hitRange = 2.35f,
                 projectileSpeed = 12.5f,
                 projectileLifeTime = 2.4f,
                 countProjectileMissAsDodge = true,
@@ -431,11 +476,12 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
                 stepType = TutorialStepType.PerfectDodge,
                 active = true,
                 loopAttack = true,
-                useProjectileAttack = true,
+                useProjectileAttack = false,
                 initialDelay = 0.7f,
                 attackInterval = 2.5f,
                 telegraphDuration = 0.95f,
                 damage = 8f,
+                hitRange = 2.35f,
                 projectileSpeed = 13.0f,
                 projectileLifeTime = 2.4f,
                 countProjectileMissAsDodge = true,
@@ -782,17 +828,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             false,
             6f);
 
-        TutorialComboConditionChecker comboChecker = gameObject.AddComponent<TutorialComboConditionChecker>();
-        comboChecker.ConfigureRuntime(new[] { attackDummy }, 3, 3, 1.15f);
-        comboChecker.ConfigureRuntimeReminders(
-            new[]
-            {
-                Guide(EGOGuideMessageType.FailureAssist, "\ub04a\uae30\uba74 \ucc98\uc74c\ubd80\ud130\ub2e4. \ub9ac\ub4ec \uc788\uac8c \uc5f0\uc18d \uc785\ub825\ud574.", 2.1f)
-            },
-            4.5f,
-            true,
-            6f);
-
         TutorialGuardConditionChecker guardChecker = gameObject.AddComponent<TutorialGuardConditionChecker>();
         guardChecker.ConfigureRuntime(_playerBridge, 1);
         guardChecker.ConfigureRuntimeReminders(
@@ -897,22 +932,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             new[] { attackChecker },
             Guide(EGOGuideMessageType.Briefing, "\uba3c\uc800 \ubca0\uc5b4. \uc57d\uacf5\uacfc \uac15\uacf5\uc744 \uac01\uac01 10\ud68c\uc529 \ubc18\ubcf5\ud574 \uac10\uac01\uc744 \ub9de\ucdb0.", 2.5f),
             Guide(EGOGuideMessageType.Success, "\ud0c0\uaca9 \uac10\uac01 \ud655\uc778 \uc644\ub8cc.", 1.8f),
-            new[] { attackDummy != null ? attackDummy.gameObject : null },
-            null,
-            null,
-            null,
-            true,
-            "\uacf5\uaca9 \ubc30\uce58\ud45c",
-            DefaultComboGuideText));
-
-        steps.Add(CreateStep(
-            "combo",
-            TutorialStepType.Combo,
-            "\ud750\ub984\uc744 \uc774\uc5b4\uac00",
-            "\uc88c\uce21 \uc0c1\ub2e8 \ubc30\uce58\ud45c\ub97c \ubcf4\uace0 \uc5f0\uc18d \ud0c0\uaca9\ud574",
-            new[] { comboChecker },
-            Guide(EGOGuideMessageType.Briefing, "\ub04a\uc9c0 \ub9d0\uace0 \uc5f0\uc18d \uc785\ub825\uc73c\ub85c \ud750\ub984\uc744 \uc774\uc5b4.", 2.2f),
-            Guide(EGOGuideMessageType.Success, "\uc88b\uc544. \uc774 \ud15c\ud3ec\uba74 \uc2e4\uc804\uc5d0\uc11c\ub3c4 \uadf8\ub300\ub85c \uc774\uc5b4\uc9c4\ub2e4.", 2.1f),
             new[] { attackDummy != null ? attackDummy.gameObject : null },
             null,
             null,

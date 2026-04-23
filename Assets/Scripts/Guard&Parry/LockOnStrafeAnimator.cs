@@ -72,7 +72,8 @@ public class LockOnStrafeAnimator : MonoBehaviour
         if (!animator)
             return;
 
-        bool active = playerLockOn != null && playerLockOn.IsLocked && (guardController == null || !guardController.IsGuarding);
+        bool guardActive = guardController != null && guardController.IsGuardMovementActive;
+        bool active = playerLockOn != null && playerLockOn.IsLocked && !guardActive;
 
         if (hIsLockOn != 0)
             animator.SetBool(hIsLockOn, active);
@@ -86,7 +87,7 @@ public class LockOnStrafeAnimator : MonoBehaviour
             return;
         }
 
-        Vector3 velocity = GetWorldVelocity();
+        Vector3 velocity = HasMoveInput() ? GetWorldVelocity() : Vector3.zero;
         float speed = velocity.magnitude;
 
         Transform basis = movementBasis != null ? movementBasis : transform;
@@ -123,7 +124,7 @@ public class LockOnStrafeAnimator : MonoBehaviour
 
     void ApplyAnimatorValues(float speedValue, float xValue, float yValue)
     {
-        if (hSpeed != 0 && ShouldWriteAnimatorValue(_lastSpeedValue, speedValue))
+        if (hSpeed != 0 && ShouldWriteAnimatorValue(hSpeed, _lastSpeedValue, speedValue))
         {
             animator.SetFloat(hSpeed, speedValue, dampTime, Time.deltaTime);
             _lastSpeedValue = speedValue;
@@ -132,22 +133,25 @@ public class LockOnStrafeAnimator : MonoBehaviour
         if (!write2DBlend)
             return;
 
-        if (hX != 0 && ShouldWriteAnimatorValue(_lastXValue, xValue))
+        if (hX != 0 && ShouldWriteAnimatorValue(hX, _lastXValue, xValue))
         {
             animator.SetFloat(hX, xValue, dampTime, Time.deltaTime);
             _lastXValue = xValue;
         }
 
-        if (hY != 0 && ShouldWriteAnimatorValue(_lastYValue, yValue))
+        if (hY != 0 && ShouldWriteAnimatorValue(hY, _lastYValue, yValue))
         {
             animator.SetFloat(hY, yValue, dampTime, Time.deltaTime);
             _lastYValue = yValue;
         }
     }
 
-    static bool ShouldWriteAnimatorValue(float cached, float next)
+    bool ShouldWriteAnimatorValue(int hash, float cached, float next)
     {
-        return float.IsNaN(cached) || Mathf.Abs(cached - next) > AnimatorWriteEpsilon;
+        if (float.IsNaN(cached) || Mathf.Abs(cached - next) > AnimatorWriteEpsilon)
+            return true;
+
+        return animator != null && Mathf.Abs(animator.GetFloat(hash) - next) > AnimatorWriteEpsilon;
     }
 
     Vector3 GetWorldVelocity()
@@ -173,5 +177,13 @@ public class LockOnStrafeAnimator : MonoBehaviour
         _hasPrev = true;
         velocity.y = 0f;
         return velocity;
+    }
+
+    bool HasMoveInput()
+    {
+        if (moveController == null)
+            return true;
+
+        return moveController.CurrentMoveInput.sqrMagnitude > deadZone * deadZone;
     }
 }

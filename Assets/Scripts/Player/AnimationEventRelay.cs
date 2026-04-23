@@ -12,6 +12,7 @@ public class AnimationEventRelay : MonoBehaviour
     [SerializeField] AudioClip[] runFootstepClips;
     [SerializeField] AudioClip[] strafeFootstepClips;
     [SerializeField] bool useVelocityDrivenFootsteps = true;
+    [SerializeField] bool requireMoveInputForFootsteps = true;
     [SerializeField, Range(0.05f, 1f)] float minMoveSpeedForFootsteps = 0.2f;
     [SerializeField, Range(0.05f, 1f)] float minStepInterval = 0.26f;
     [SerializeField, Range(0.1f, 1.5f)] float maxStepInterval = 0.46f;
@@ -75,6 +76,9 @@ public class AnimationEventRelay : MonoBehaviour
     void PlayFootstepInternal(FootstepMotion motion, FootstepSide side)
     {
         if (footstepSource == null)
+            return;
+
+        if (!CanPlayFootstep())
             return;
 
         float now = Time.time;
@@ -168,10 +172,10 @@ public class AnimationEventRelay : MonoBehaviour
             footstepSource = GetComponent<AudioSource>();
 
         if (_moveController == null)
-            _moveController = GetComponent<PlayerMoveController>();
+            _moveController = GetComponentInParent<PlayerMoveController>();
 
         if (_characterController == null)
-            _characterController = GetComponent<CharacterController>();
+            _characterController = GetComponentInParent<CharacterController>();
     }
 
     void Update()
@@ -192,13 +196,13 @@ public class AnimationEventRelay : MonoBehaviour
         if (_moveController == null)
             return;
 
-        float speed = _moveController.CurrentPlanarVelocity.magnitude;
-        if (speed < minMoveSpeedForFootsteps)
+        if (!CanPlayFootstep())
         {
             _nextFootstepAt = 0f;
             return;
         }
 
+        float speed = _moveController.CurrentPlanarVelocity.magnitude;
         float now = Time.time;
         if (_nextFootstepAt > now)
             return;
@@ -208,5 +212,19 @@ public class AnimationEventRelay : MonoBehaviour
         float cadence01 = Mathf.Clamp01(speed / Mathf.Max(0.01f, maxSpeedForCadence));
         float interval = Mathf.Lerp(maxStepInterval, minStepInterval, cadence01);
         _nextFootstepAt = now + interval;
+    }
+
+    bool CanPlayFootstep()
+    {
+        if (_characterController != null && !_characterController.isGrounded)
+            return false;
+
+        if (_moveController == null)
+            return true;
+
+        if (requireMoveInputForFootsteps && _moveController.CurrentMoveInput.sqrMagnitude <= 0.0004f)
+            return false;
+
+        return _moveController.CurrentPlanarVelocity.magnitude >= minMoveSpeedForFootsteps;
     }
 }
