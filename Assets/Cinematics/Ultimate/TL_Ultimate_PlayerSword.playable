@@ -236,7 +236,7 @@ MonoBehaviour:
   m_Clips:
   - m_Version: 1
     m_Start: 0
-    m_ClipIn: 0.5125000476837158
+    m_ClipIn: 0.006833333522081375
     m_Asset: {fileID: 397879654993580408}
     m_Duration: 2.500000238418579
     m_TimeScale: 1
@@ -574,9 +574,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 030f85c3f73729f4f976f66ffb23b875, type: 3}
-  m_Name: AnimationPlayableAsset of Sp_Idle_Ultimate
+  m_Name: AnimationPlayableAsset of Sp_Idle_IntroPose
   m_EditorClassIdentifier: 
-  m_Clip: {fileID: 7400000, guid: c9221b11d190c7d449c4dc7537108f8e, type: 2}
+  m_Clip: {fileID: 0}
   m_Position: {x: 0, y: 0, z: 0}
   m_EulerAngles: {x: 0, y: 0, z: 0}
   m_UseTrackMatchFields: 1

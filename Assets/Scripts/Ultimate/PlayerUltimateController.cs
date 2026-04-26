@@ -5,6 +5,21 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Playables;
 
+public enum UltimateActivationBlockReason
+{
+    None,
+    AlreadyRunning,
+    InputBlocked,
+    GaugeNotReady,
+    Staggered,
+    Airborne,
+    Attacking,
+    Guarding,
+    Dodging,
+    TargetUnavailable,
+    SequenceStartFailed
+}
+
 public class PlayerUltimateController : MonoBehaviour
 {
     [Header("Gauge")]
@@ -93,19 +108,19 @@ public class PlayerUltimateController : MonoBehaviour
     [Tooltip("Animator trigger played during the walk-out section.")]
     public string scriptedWalkTrigger = "Ultimate_Walk";
     [Tooltip("Number of repeated slash hits before the final strike.")]
-    public int scriptedMultiHitCount = 7;
+    public int scriptedMultiHitCount = 4;
     [Tooltip("Unscaled time spent on the opening sword close-up.")]
     public float scriptedCloseupDuration = 0.32f;
     [Tooltip("Unscaled time spent transitioning to the wide shot.")]
-    public float scriptedWideDuration = 0.45f;
+    public float scriptedWideDuration = 0.72f;
     [Tooltip("Unscaled delay between each repeated slash hit.")]
-    public float scriptedHitInterval = 0.11f;
+    public float scriptedHitInterval = 0.17f;
     [Tooltip("Hold time after the finisher before the walk-out starts.")]
     public float scriptedFinisherHold = 0.35f;
     [Tooltip("Unscaled time spent on the final walk-out shot.")]
     public float scriptedWalkOutDuration = 1.05f;
     [Tooltip("Distance between the player and the target during the slash section.")]
-    public float scriptedStrikeDistance = 1.45f;
+    public float scriptedStrikeDistance = 1.62f;
     [Tooltip("Distance between the player and the target during the final setup.")]
     public float scriptedFinisherDistance = 1.1f;
     [Tooltip("How far in front of the player the victim boss is staged during the cinematic.")]
@@ -119,13 +134,13 @@ public class PlayerUltimateController : MonoBehaviour
     [Tooltip("Forward offset applied to the player base position on the ultimate stage.")]
     public float scriptedStagePlayerForwardOffset = 0.55f;
     [Tooltip("Distance used for the player's orbiting slash position on the ultimate stage.")]
-    public float scriptedStageStrikeDistance = 2.2f;
+    public float scriptedStageStrikeDistance = 1.85f;
     [Tooltip("Distance used for the player's finishing position on the ultimate stage.")]
     public float scriptedStageFinisherDistance = 1.65f;
     [Tooltip("How far in front of the player the sword close-up camera should sit.")]
     public float scriptedCloseupDistance = 0.65f;
     [Tooltip("How far back the wide shot camera should be placed.")]
-    public float scriptedWideDistance = 5.4f;
+    public float scriptedWideDistance = 4.45f;
     [Tooltip("How far in front of the player the walk-out camera should be placed.")]
     public float scriptedWalkCameraDistance = 2.8f;
     [Tooltip("Vertical offset applied to the walk-out camera.")]
@@ -149,12 +164,17 @@ public class PlayerUltimateController : MonoBehaviour
     public Action OnUltimateStarted;
     public Action OnUltimateEnded;
     public Action<float, float, bool> OnGaugeChanged;
+    public Action<UltimateActivationBlockReason, string> OnActivationRejected;
+    public Action<UltimateSequencePhase, string> OnUltimatePhaseChanged;
 
     public float Gauge { get; private set; }
     public bool IsCinematic => _isCinematic;
     public bool IsGaugeReady => gaugeMax > 0f && Gauge >= gaugeMax - 0.0001f;
     public bool DidApplyInputBlockThisCinematic { get; private set; }
     public bool DidFreezeWorldTimeThisCinematic { get; private set; }
+    public UltimateActivationBlockReason LastActivationBlockReason { get; private set; } = UltimateActivationBlockReason.None;
+    public string LastActivationBlockMessage { get; private set; } = string.Empty;
+    public UltimateSequencePhase CurrentUltimatePhase { get; private set; } = UltimateSequencePhase.None;
 
     bool _isCinematic;
     float _cachedTimeScale = 1f;
@@ -280,53 +300,67 @@ public class PlayerUltimateController : MonoBehaviour
 
     public bool CanActivate(out string reason)
     {
+        return CanActivate(out reason, out _);
+    }
+
+    public bool CanActivate(out string reason, out UltimateActivationBlockReason blockReason)
+    {
         reason = string.Empty;
+        blockReason = UltimateActivationBlockReason.None;
 
         if (_isCinematic)
         {
             reason = "Ultimate cinematic is already running.";
+            blockReason = UltimateActivationBlockReason.AlreadyRunning;
             return false;
         }
 
         if (ignoreActivationWhenBlocked && _input != null && _input.IsBlocked)
         {
             reason = "Global input blocker is active.";
+            blockReason = UltimateActivationBlockReason.InputBlocked;
             return false;
         }
 
         if (Gauge < gaugeMax)
         {
             reason = "Ultimate gauge is not full.";
+            blockReason = UltimateActivationBlockReason.GaugeNotReady;
             return false;
         }
 
         if (blockWhenStaggered && IsPlayerStaggered())
         {
             reason = "Player is staggered.";
+            blockReason = UltimateActivationBlockReason.Staggered;
             return false;
         }
 
         if (!allowInAir && IsPlayerInAir())
         {
             reason = "Player is airborne.";
+            blockReason = UltimateActivationBlockReason.Airborne;
             return false;
         }
 
         if (blockWhenAttacking && IsPlayerAttacking())
         {
             reason = "Player is attacking.";
+            blockReason = UltimateActivationBlockReason.Attacking;
             return false;
         }
 
         if (blockWhenGuarding && IsPlayerGuarding())
         {
             reason = "Player is guarding.";
+            blockReason = UltimateActivationBlockReason.Guarding;
             return false;
         }
 
         if (blockWhenDodging && IsPlayerDodging())
         {
             reason = "Player is dodging.";
+            blockReason = UltimateActivationBlockReason.Dodging;
             return false;
         }
 
@@ -390,23 +424,53 @@ public class PlayerUltimateController : MonoBehaviour
 
     public bool TryActivate()
     {
-        if (!CanActivate(out _))
+        if (!CanActivate(out string reason, out UltimateActivationBlockReason blockReason))
+        {
+            NotifyActivationRejected(blockReason, reason);
             return false;
+        }
 
         if (_ultimateSkillController == null)
             _ultimateSkillController = GetComponent<UltimateSkillController>();
 
         if (_ultimateSkillController != null && _ultimateSkillController.UseModernSequence)
-            return _ultimateSkillController.TryPlayModernUltimate(this);
+        {
+            bool started = _ultimateSkillController.TryPlayModernUltimate(this);
+            if (!started)
+            {
+                bool hasTarget = TryResolveUltimateTarget(out _, out _);
+                NotifyActivationRejected(
+                    hasTarget ? UltimateActivationBlockReason.SequenceStartFailed : UltimateActivationBlockReason.TargetUnavailable,
+                    hasTarget ? "Ultimate sequence failed to start." : "No valid ultimate target.");
+            }
+            return started;
+        }
 
         if (useScriptedSequence && !allowDirectorFallbackWhenScriptedUnavailable &&
             !TryResolveUltimateTarget(out _, out _))
         {
+            NotifyActivationRejected(UltimateActivationBlockReason.TargetUnavailable, "No valid ultimate target.");
             return false;
         }
 
         StartCoroutine(Co_Cinematic());
         return true;
+    }
+
+    void NotifyActivationRejected(UltimateActivationBlockReason blockReason, string message)
+    {
+        LastActivationBlockReason = blockReason;
+        LastActivationBlockMessage = message ?? string.Empty;
+        OnActivationRejected?.Invoke(blockReason, LastActivationBlockMessage);
+    }
+
+    public void NotifyUltimatePhaseChanged(UltimateSequencePhase phase, string context = null)
+    {
+        if (CurrentUltimatePhase == phase)
+            return;
+
+        CurrentUltimatePhase = phase;
+        OnUltimatePhaseChanged?.Invoke(phase, context ?? string.Empty);
     }
 
     public bool TryBeginExternalCinematicSession(
@@ -511,6 +575,7 @@ public class PlayerUltimateController : MonoBehaviour
         _externalSessionRestoreCamera = false;
 
         OnUltimateEnded?.Invoke();
+        NotifyUltimatePhaseChanged(UltimateSequencePhase.None, "Ended");
         _isCinematic = false;
     }
 
@@ -699,6 +764,7 @@ public class PlayerUltimateController : MonoBehaviour
         _lockOn?.GiveCameraControlToTimeline(true);
 
         OnUltimateStarted?.Invoke();
+        NotifyUltimatePhaseChanged(UltimateSequencePhase.PreCast, "Legacy");
         screenFX?.PlayChargeIn();
 
         if (director != null && shouldTouchLegacyDirector)
@@ -769,6 +835,7 @@ public class PlayerUltimateController : MonoBehaviour
             if (lockInputDuringCinematic) _input?.BlockAll(false);
 
             OnUltimateEnded?.Invoke();
+            NotifyUltimatePhaseChanged(UltimateSequencePhase.None, "Ended");
             _isCinematic = false;
         }
     }
@@ -996,7 +1063,7 @@ public class PlayerUltimateController : MonoBehaviour
         Vector3 finisherLookTarget = activeStage != null && activeStage.VictimAnchor != null
             ? activeStage.VictimAnchor.position + Vector3.up * 0.8f
             : targetFocus + Vector3.up * 0.8f;
-        Vector3 finisherPosCam = finisherLookTarget - finisherDir * 2.6f + Vector3.Cross(Vector3.up, finisherDir) * 1.1f + Vector3.up * 0.35f;
+        Vector3 finisherPosCam = finisherLookTarget - finisherDir * 5.35f + Vector3.Cross(Vector3.up, finisherDir) * 2.35f + Vector3.up * 1.75f;
         Quaternion finisherRot = Quaternion.LookRotation((finisherLookTarget - finisherPosCam).normalized, Vector3.up);
         if (TryGetStageShotPose(activeStage != null ? activeStage.FinisherShotAnchor : null, out Vector3 stagedFinisherPos, out Quaternion stagedFinisherRot))
         {

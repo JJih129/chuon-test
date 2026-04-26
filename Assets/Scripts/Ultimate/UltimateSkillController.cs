@@ -126,7 +126,7 @@ public sealed class UltimateSkillController : MonoBehaviour
         ResolveReferences(true);
         SyncPrimaryControllerBindings();
 
-        UltimateSequenceData resolvedData = sequenceData != null ? sequenceData : GetRuntimeFallbackData();
+        UltimateSequenceData resolvedData = sequenceData != null ? PrepareRuntimeSequenceData(sequenceData) : GetRuntimeFallbackData();
         if (cinematicController != null && cinematicController.Play(owner, resolvedData))
         {
             if (debugLog)
@@ -274,6 +274,7 @@ public sealed class UltimateSkillController : MonoBehaviour
         }
 
         PatchMissingCinematicClips(_runtimeFallbackData);
+        _runtimeFallbackData.ApplyReferenceCinematicStyle();
         return _runtimeFallbackData;
     }
 
@@ -288,6 +289,7 @@ public sealed class UltimateSkillController : MonoBehaviour
         }
 
         PatchMissingCinematicClips(_runtimeFallbackData);
+        _runtimeFallbackData.ApplyReferenceCinematicStyle();
         return _runtimeFallbackData;
     }
 

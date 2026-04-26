@@ -33,6 +33,9 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     [SerializeField] bool parentToAnchor = false;
     [SerializeField] float defaultFallbackLifetime = 0.9f;
     [SerializeField] bool useProceduralSwordTrail = true;
+    [SerializeField] Material drakkarTrailMaterial;
+    [SerializeField] Texture2D drakkarMeleeTrailTexture;
+    [SerializeField] Texture2D drakkarWideTrailTexture;
 
     [Header("패턴별 검기")]
     [SerializeField] PatternSlashVfxEntry[] patternSlashVfx = Array.Empty<PatternSlashVfxEntry>();
@@ -53,8 +56,10 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     [Header("디버그")]
     [SerializeField] bool debugLog = false;
 
-    BossSwordTrailRibbon _proceduralTrailRibbon;
+    DrakkarSwordTrailDriver _proceduralTrailDriver;
     Material _proceduralTrailMaterial;
+    Material _proceduralMeleeTrailMaterial;
+    Material _proceduralWideTrailMaterial;
     Transform _resolvedSwordTrailAnchor;
     Transform _resolvedSwordTrailBaseAnchor;
     readonly Dictionary<string, PatternSlashVfxEntry> _entryByPatternName = new Dictionary<string, PatternSlashVfxEntry>(StringComparer.OrdinalIgnoreCase);
@@ -107,8 +112,8 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
 
     public void StopCurrentPatternSlash()
     {
-        if (_proceduralTrailRibbon != null)
-            _proceduralTrailRibbon.Stop();
+        if (_proceduralTrailDriver != null)
+            _proceduralTrailDriver.End();
     }
 
     void Awake()
@@ -121,6 +126,10 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     {
         if (_proceduralTrailMaterial != null)
             Destroy(_proceduralTrailMaterial);
+        if (_proceduralMeleeTrailMaterial != null)
+            Destroy(_proceduralMeleeTrailMaterial);
+        if (_proceduralWideTrailMaterial != null)
+            Destroy(_proceduralWideTrailMaterial);
     }
 
 #if UNITY_EDITOR
@@ -177,9 +186,7 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         if (_resolvedSwordTrailAnchor != null)
             return _resolvedSwordTrailAnchor;
 
-        Transform swordVisual = bossReferences != null ? bossReferences.AttackHitboxSourceVisual : null;
-        if (swordVisual == null && bossReferences != null)
-            swordVisual = bossReferences.AttackHitboxSocket;
+        Transform swordVisual = FindBestSwordVisualTransform();
         if (swordVisual == null)
             swordVisual = ResolveSpawnAnchor();
         if (swordVisual == null)
@@ -194,9 +201,7 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         if (_resolvedSwordTrailBaseAnchor != null)
             return _resolvedSwordTrailBaseAnchor;
 
-        Transform swordVisual = bossReferences != null ? bossReferences.AttackHitboxSourceVisual : null;
-        if (swordVisual == null && bossReferences != null)
-            swordVisual = bossReferences.AttackHitboxSocket;
+        Transform swordVisual = FindBestSwordVisualTransform();
         if (swordVisual == null)
             swordVisual = ResolveSpawnAnchor();
         if (swordVisual == null)
@@ -204,6 +209,61 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
 
         _resolvedSwordTrailBaseAnchor = CreateSwordBaseAnchor(swordVisual);
         return _resolvedSwordTrailBaseAnchor;
+    }
+
+    Transform FindBestSwordVisualTransform()
+    {
+        Transform socket = bossReferences != null ? bossReferences.AttackHitboxSocket : null;
+        Transform searchRoot = bossReferences != null && bossReferences.VisualRoot != null
+            ? bossReferences.VisualRoot
+            : transform;
+
+        Renderer[] renderers = searchRoot.GetComponentsInChildren<Renderer>(true);
+        Transform best = null;
+        float bestScore = float.NegativeInfinity;
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            Transform candidate = renderer.transform;
+            if (!TryGetLocalMeshBounds(candidate, out Bounds localBounds))
+                continue;
+
+            string lowerName = candidate.name.ToLowerInvariant();
+            if (lowerName.Contains("body") || lowerName.Contains("clothes") || lowerName.Contains("face") || lowerName.Contains("hair"))
+                continue;
+
+            Vector3 size = localBounds.size;
+            float maxAxis = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+            float minAxis = Mathf.Min(size.x, Mathf.Min(size.y, size.z));
+            if (maxAxis <= 0.05f || minAxis <= 0.0001f)
+                continue;
+
+            float slenderness = maxAxis / minAxis;
+            if (slenderness < 3f)
+                continue;
+
+            float score = slenderness * 10f - size.sqrMagnitude;
+            if (socket != null)
+                score -= Vector3.Distance(candidate.position, socket.position) * 4f;
+
+            if (lowerName.Contains("sword") || lowerName.Contains("katana") || lowerName.Contains("blade") || lowerName.Contains("weapon"))
+                score += 50f;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+
+        if (best != null)
+            return best;
+
+        return bossReferences != null ? bossReferences.AttackHitboxSourceVisual : null;
     }
 
     Transform CreateSwordTipAnchor(Transform swordVisual)
@@ -289,23 +349,19 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     void EnableProceduralTrail(Transform baseAnchor, Transform tipAnchor)
     {
         EnsureProceduralTrail(baseAnchor);
-        if (_proceduralTrailRibbon == null)
+        if (_proceduralTrailDriver == null)
             return;
 
-        if (_cachedStartWidthScale < 0f || _cachedEndWidthScale < 0f)
-            ResolveDynamicTrailWidthScales(tipAnchor, out _cachedStartWidthScale, out _cachedEndWidthScale);
+        Material trailMaterial = ResolveDrakkarTrailMaterial();
+        if (trailMaterial == null)
+            return;
 
-        _proceduralTrailRibbon.Configure(
+        _proceduralTrailDriver.Configure(
             baseAnchor,
             tipAnchor,
-            _proceduralTrailMaterial,
-            trailTime,
-            trailMinVertexDistance,
-            _cachedStartWidthScale,
-            _cachedEndWidthScale,
-            trailStartColor,
-            trailEndColor);
-        _proceduralTrailRibbon.Begin();
+            trailMaterial,
+            gameObject.layer);
+        _proceduralTrailDriver.Begin();
     }
 
     void ResolveDynamicTrailWidthScales(Transform trailAnchor, out float startWidthScale, out float endWidthScale)
@@ -352,23 +408,126 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
 
     void EnsureProceduralTrail(Transform trailAnchor)
     {
-        if (_proceduralTrailRibbon != null || trailAnchor == null)
+        if (_proceduralTrailDriver != null || trailAnchor == null)
             return;
-
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader == null)
-            return;
-
-        _proceduralTrailMaterial = new Material(shader);
-        _proceduralTrailMaterial.name = "BossAttackTrailRuntime";
-        _proceduralTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
 
         GameObject trailObject = new GameObject("RuntimeBossAttackRibbon");
-        trailObject.hideFlags = HideFlags.HideAndDontSave;
         trailObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
         trailObject.transform.localScale = Vector3.one;
 
-        _proceduralTrailRibbon = trailObject.AddComponent<BossSwordTrailRibbon>();
+        _proceduralTrailDriver = trailObject.AddComponent<DrakkarSwordTrailDriver>();
+    }
+
+    Material ResolveDrakkarTrailMaterial()
+    {
+        if (drakkarTrailMaterial != null)
+            return drakkarTrailMaterial;
+
+#if UNITY_EDITOR
+        string triggerName = bossController != null ? bossController.CurrentPatternTriggerName : string.Empty;
+        string patternName = bossController != null ? bossController.CurrentPatternName : string.Empty;
+        bool useWideMaterial = string.Equals(triggerName, "Attack_F", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(patternName, "SwordWave", StringComparison.OrdinalIgnoreCase);
+
+        string materialPath = useWideMaterial
+            ? "Assets/Effects/Trail/MAT_BossTrail_Wide.mat"
+            : "Assets/Effects/Trail/MAT_BossTrail_Melee.mat";
+        Material authoredMaterial = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+        if (authoredMaterial != null)
+            return authoredMaterial;
+#endif
+
+        EnsureDefaultDrakkarTextures();
+
+        string runtimeTriggerName = bossController != null ? bossController.CurrentPatternTriggerName : string.Empty;
+        string runtimePatternName = bossController != null ? bossController.CurrentPatternName : string.Empty;
+        bool useWide = string.Equals(runtimeTriggerName, "Attack_F", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(runtimePatternName, "SwordWave", StringComparison.OrdinalIgnoreCase);
+
+        if (useWide && drakkarWideTrailTexture != null)
+        {
+            _proceduralWideTrailMaterial = GetOrCreateDrakkarTrailMaterial(
+                _proceduralWideTrailMaterial,
+                drakkarWideTrailTexture,
+                "BossAttackTrailWideRuntime");
+            return _proceduralWideTrailMaterial;
+        }
+
+        if (drakkarMeleeTrailTexture != null)
+        {
+            _proceduralMeleeTrailMaterial = GetOrCreateDrakkarTrailMaterial(
+                _proceduralMeleeTrailMaterial,
+                drakkarMeleeTrailTexture,
+                "BossAttackTrailMeleeRuntime");
+            return _proceduralMeleeTrailMaterial;
+        }
+
+#if UNITY_EDITOR
+        _proceduralTrailMaterial = AssetDatabase.LoadAssetAtPath<Material>(
+            "Assets/Drakkar/GameUtils/VISUALS/Trails/DrakkarTrails Examples/Assets/Trail Blue Alpha.mat");
+#endif
+
+        if (_proceduralTrailMaterial == null)
+        {
+            Shader shader = Shader.Find("Trail Shader Alpha") ?? Shader.Find("Sprites/Default");
+            if (shader == null)
+                return null;
+
+            _proceduralTrailMaterial = new Material(shader);
+            _proceduralTrailMaterial.name = "BossAttackTrailRuntime";
+            _proceduralTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
+
+            ConfigureDrakkarTrailMaterial(_proceduralTrailMaterial, Texture2D.whiteTexture);
+        }
+
+        return _proceduralTrailMaterial;
+    }
+
+    Material GetOrCreateDrakkarTrailMaterial(Material current, Texture2D texture, string materialName)
+    {
+        if (current != null)
+            return current;
+
+        Shader shader = Shader.Find("Trail Shader Alpha") ?? Shader.Find("Sprites/Default");
+        if (shader == null || texture == null)
+            return null;
+
+        current = new Material(shader);
+        current.name = materialName;
+        current.hideFlags = HideFlags.HideAndDontSave;
+        ConfigureDrakkarTrailMaterial(current, texture);
+        return current;
+    }
+
+    void ConfigureDrakkarTrailMaterial(Material material, Texture texture)
+    {
+        if (material == null)
+            return;
+
+        if (material.HasProperty("_Color1"))
+            material.SetColor("_Color1", ForceVisibleTrailAlpha(trailStartColor));
+        if (material.HasProperty("_Color2"))
+            material.SetColor("_Color2", ForceVisibleTrailAlpha(trailEndColor));
+        if (material.HasProperty("_Texture"))
+            material.SetTexture("_Texture", texture);
+        if (material.HasProperty("_Power"))
+            material.SetFloat("_Power", 8f);
+    }
+
+    static Color ForceVisibleTrailAlpha(Color color)
+    {
+        color.a = 1f;
+        return color;
+    }
+
+    void EnsureDefaultDrakkarTextures()
+    {
+#if UNITY_EDITOR
+        if (drakkarMeleeTrailTexture == null)
+            drakkarMeleeTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_player_heavy.png");
+        if (drakkarWideTrailTexture == null)
+            drakkarWideTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_ultimate_wide.png");
+#endif
     }
 
     static bool TryGetLocalMeshBounds(Transform target, out Bounds bounds)

@@ -36,10 +36,15 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [SerializeField] GameObject defaultHitRangeVfxPrefab;
     [SerializeField] GameObject defaultWeaponTrailVfxPrefab;
     [SerializeField] bool useProceduralTrailFallback = true;
+    [SerializeField] bool useDrakkarTrailFallback = true;
     [SerializeField] bool useWeaponSocketForTrail = true;
     [SerializeField] bool preferSwordMeshTrailAnchor = true;
     [SerializeField] float defaultFallbackLifetime = 0.25f;
     [SerializeField] float minRespawnGap = 0.03f;
+    [SerializeField] Material drakkarTrailMaterial;
+    [SerializeField] Texture2D drakkarLightTrailTexture;
+    [SerializeField] Texture2D drakkarHeavyTrailTexture;
+    [SerializeField] Texture2D drakkarWideTrailTexture;
 
     [Header("프로시저럴 트레일")]
     [SerializeField] Color trailStartColor = new Color(1f, 0.32f, 0.28f, 0.95f);
@@ -71,8 +76,11 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     AttackInput _currentInput;
     int _currentComboDepth;
     float _lastSpawnTime = float.NegativeInfinity;
-    BossSwordTrailRibbon _proceduralTrailRibbon;
+    DrakkarSwordTrailDriver _proceduralTrailDriver;
     Material _proceduralTrailMaterial;
+    Material _proceduralLightTrailMaterial;
+    Material _proceduralHeavyTrailMaterial;
+    Material _proceduralWideTrailMaterial;
     Transform _activeTrailBaseAnchor;
     Transform _activeTrailTipAnchor;
     Transform _resolvedSwordBaseAnchor;
@@ -112,6 +120,12 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     {
         if (_proceduralTrailMaterial != null)
             Destroy(_proceduralTrailMaterial);
+        if (_proceduralLightTrailMaterial != null)
+            Destroy(_proceduralLightTrailMaterial);
+        if (_proceduralHeavyTrailMaterial != null)
+            Destroy(_proceduralHeavyTrailMaterial);
+        if (_proceduralWideTrailMaterial != null)
+            Destroy(_proceduralWideTrailMaterial);
 
         if (_proceduralRangeFlashMaterial != null)
             Destroy(_proceduralRangeFlashMaterial);
@@ -146,7 +160,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         _currentInput = input;
 
         AutoWire();
-        if (ShouldUseProceduralTrailFallback(attackData))
+        if (useDrakkarTrailFallback || ShouldUseProceduralTrailFallback(attackData))
             EnableProceduralTrail();
     }
 
@@ -184,7 +198,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         if (entry.weaponTrailVfxPrefab != null || defaultWeaponTrailVfxPrefab != null)
             SpawnWeaponTrail(entry, trailAnchor);
-        else if (ShouldUseProceduralTrailFallback())
+        if (useDrakkarTrailFallback || ShouldUseProceduralTrailFallback())
             EnableProceduralTrail();
 
         GameObject rangePrefab = entry.hitRangeVfxPrefab != null ? entry.hitRangeVfxPrefab : defaultHitRangeVfxPrefab;
@@ -304,59 +318,46 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (!ResolveTrailAnchors(out Transform baseAnchor, out Transform tipAnchor))
             return;
 
+        if (!useDrakkarTrailFallback)
+            return;
+
         EnsureProceduralTrail(baseAnchor);
-        if (_proceduralTrailRibbon == null)
+        if (_proceduralTrailDriver == null)
             return;
 
         _activeTrailBaseAnchor = baseAnchor;
         _activeTrailTipAnchor = tipAnchor;
 
-        if (_cachedStartWidthScale < 0f || _cachedEndWidthScale < 0f)
-            ResolveDynamicTrailWidthScales(tipAnchor, out _cachedStartWidthScale, out _cachedEndWidthScale);
+        Material trailMaterial = ResolveDrakkarTrailMaterial();
+        if (trailMaterial == null)
+            return;
 
-        _proceduralTrailRibbon.Configure(
+        _proceduralTrailDriver.Configure(
             baseAnchor,
             tipAnchor,
-            _proceduralTrailMaterial,
-            trailTime,
-            trailMinVertexDistance,
-            _cachedStartWidthScale,
-            _cachedEndWidthScale,
-            trailStartColor,
-            trailEndColor);
-        _proceduralTrailRibbon.Begin();
+            trailMaterial,
+            gameObject.layer);
+        _proceduralTrailDriver.Begin();
     }
 
     void DisableProceduralTrail()
     {
-        if (_proceduralTrailRibbon == null)
+        if (_proceduralTrailDriver == null)
             return;
 
-        _proceduralTrailRibbon.Stop();
+        _proceduralTrailDriver.End();
     }
 
     void EnsureProceduralTrail(Transform baseAnchor)
     {
-        if (_proceduralTrailRibbon != null || baseAnchor == null)
+        if (_proceduralTrailDriver != null || baseAnchor == null)
             return;
 
-        if (_proceduralTrailMaterial == null)
-        {
-            Shader shader = Shader.Find("Sprites/Default");
-            if (shader == null)
-                return;
-
-            _proceduralTrailMaterial = new Material(shader);
-            _proceduralTrailMaterial.name = "PlayerAttackTrailRuntime";
-            _proceduralTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
-        }
-
         GameObject trailObject = new GameObject("RuntimeAttackTrail");
-        trailObject.hideFlags = HideFlags.HideAndDontSave;
         trailObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
         trailObject.transform.localScale = Vector3.one;
 
-        _proceduralTrailRibbon = trailObject.AddComponent<BossSwordTrailRibbon>();
+        _proceduralTrailDriver = trailObject.AddComponent<DrakkarSwordTrailDriver>();
         _activeTrailBaseAnchor = baseAnchor;
     }
 
@@ -403,6 +404,131 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     static Vector3 Abs(Vector3 value)
     {
         return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
+    }
+
+    Material ResolveDrakkarTrailMaterial()
+    {
+        if (drakkarTrailMaterial != null)
+            return drakkarTrailMaterial;
+
+#if UNITY_EDITOR
+        if (_currentComboDepth >= 4)
+        {
+            Material wideMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Effects/Trail/MAT_PlayerTrail_Wide.mat");
+            if (wideMat != null)
+                return wideMat;
+        }
+
+        if (_currentInput == AttackInput.Heavy)
+        {
+            Material heavyMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Effects/Trail/MAT_PlayerTrail_Heavy.mat");
+            if (heavyMat != null)
+                return heavyMat;
+        }
+
+        Material lightMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Effects/Trail/MAT_PlayerTrail_Light.mat");
+        if (lightMat != null)
+            return lightMat;
+#endif
+
+        EnsureDefaultDrakkarTextures();
+
+        bool useWide = _currentComboDepth >= 4;
+        if (useWide && drakkarWideTrailTexture != null)
+        {
+            _proceduralWideTrailMaterial = GetOrCreateDrakkarTrailMaterial(
+                _proceduralWideTrailMaterial,
+                drakkarWideTrailTexture,
+                "PlayerAttackTrailWideRuntime");
+            return _proceduralWideTrailMaterial;
+        }
+
+        if (_currentInput == AttackInput.Heavy && drakkarHeavyTrailTexture != null)
+        {
+            _proceduralHeavyTrailMaterial = GetOrCreateDrakkarTrailMaterial(
+                _proceduralHeavyTrailMaterial,
+                drakkarHeavyTrailTexture,
+                "PlayerAttackTrailHeavyRuntime");
+            return _proceduralHeavyTrailMaterial;
+        }
+
+        if (drakkarLightTrailTexture != null)
+        {
+            _proceduralLightTrailMaterial = GetOrCreateDrakkarTrailMaterial(
+                _proceduralLightTrailMaterial,
+                drakkarLightTrailTexture,
+                "PlayerAttackTrailLightRuntime");
+            return _proceduralLightTrailMaterial;
+        }
+
+#if UNITY_EDITOR
+        _proceduralTrailMaterial = AssetDatabase.LoadAssetAtPath<Material>(
+            "Assets/Drakkar/GameUtils/VISUALS/Trails/DrakkarTrails Examples/Assets/Trail Red 3 Alpha.mat");
+#endif
+
+        if (_proceduralTrailMaterial == null)
+        {
+            Shader shader = Shader.Find("Trail Shader Alpha") ?? Shader.Find("Sprites/Default");
+            if (shader == null)
+                return null;
+
+            _proceduralTrailMaterial = new Material(shader);
+            _proceduralTrailMaterial.name = "PlayerAttackTrailRuntime";
+            _proceduralTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
+
+            ConfigureDrakkarTrailMaterial(_proceduralTrailMaterial, Texture2D.whiteTexture);
+        }
+
+        return _proceduralTrailMaterial;
+    }
+
+    Material GetOrCreateDrakkarTrailMaterial(Material current, Texture2D texture, string materialName)
+    {
+        if (current != null)
+            return current;
+
+        Shader shader = Shader.Find("Trail Shader Alpha") ?? Shader.Find("Sprites/Default");
+        if (shader == null || texture == null)
+            return null;
+
+        current = new Material(shader);
+        current.name = materialName;
+        current.hideFlags = HideFlags.HideAndDontSave;
+        ConfigureDrakkarTrailMaterial(current, texture);
+        return current;
+    }
+
+    void ConfigureDrakkarTrailMaterial(Material material, Texture texture)
+    {
+        if (material == null)
+            return;
+
+        if (material.HasProperty("_Color1"))
+            material.SetColor("_Color1", ForceVisibleTrailAlpha(trailStartColor));
+        if (material.HasProperty("_Color2"))
+            material.SetColor("_Color2", ForceVisibleTrailAlpha(trailEndColor));
+        if (material.HasProperty("_Texture"))
+            material.SetTexture("_Texture", texture);
+        if (material.HasProperty("_Power"))
+            material.SetFloat("_Power", 8f);
+    }
+
+    static Color ForceVisibleTrailAlpha(Color color)
+    {
+        color.a = 1f;
+        return color;
+    }
+
+    void EnsureDefaultDrakkarTextures()
+    {
+#if UNITY_EDITOR
+        if (drakkarLightTrailTexture == null)
+            drakkarLightTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_player_light.png");
+        if (drakkarHeavyTrailTexture == null)
+            drakkarHeavyTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_player_heavy.png");
+        if (drakkarWideTrailTexture == null)
+            drakkarWideTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_ultimate_wide.png");
+#endif
     }
 
     void ShowProceduralRangeFlash(AttackVfxEntry entry, AttackHitbox hitbox)
@@ -500,13 +626,6 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (swordTransform == null)
             return null;
 
-        SkinnedMeshRenderer skinned = swordTransform.GetComponent<SkinnedMeshRenderer>();
-        if (skinned != null && skinned.rootBone != null)
-        {
-            _resolvedSwordTrailAnchor = CreateSkinnedSwordTrailAnchor(swordTransform, skinned);
-            return _resolvedSwordTrailAnchor;
-        }
-
         _resolvedSwordTrailAnchor = CreateSwordTipAnchor(swordTransform);
         return _resolvedSwordTrailAnchor;
     }
@@ -520,13 +639,6 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (swordTransform == null)
             return null;
 
-        SkinnedMeshRenderer skinned = swordTransform.GetComponent<SkinnedMeshRenderer>();
-        if (skinned != null && skinned.rootBone != null)
-        {
-            _resolvedSwordBaseAnchor = CreateSkinnedSwordBaseAnchor(swordTransform, skinned);
-            return _resolvedSwordBaseAnchor;
-        }
-
         _resolvedSwordBaseAnchor = CreateSwordBaseAnchor(swordTransform);
         return _resolvedSwordBaseAnchor;
     }
@@ -537,14 +649,25 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             ? playerReferences.VisualRoot
             : transform;
 
-        Transform byName = FindChildRecursive(searchRoot, "Object002");
-        if (byName != null)
-            return byName;
+        Transform object002 = FindChildRecursive(searchRoot, "Object002");
+        if (object002 != null)
+            return object002;
+
+        Transform weaponSocket = weaponSocketOverride != null
+            ? weaponSocketOverride
+            : playerReferences != null ? playerReferences.WeaponSocket : null;
+
+        Transform bestByHeuristic = FindBestSwordLikeTransform(searchRoot, weaponSocket);
+        if (bestByHeuristic != null)
+            return bestByHeuristic;
 
         string[] preferredNames =
         {
             "sword",
+            "katana",
+            "blade",
             "weapon_r",
+            "weapon",
             "sword_holder",
             "9CG_Sword(Clone)"
         };
@@ -556,7 +679,72 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
                 return candidate;
         }
 
+        Transform object009 = FindChildRecursive(searchRoot, "Object009");
+        if (LooksLikeSwordMesh(object009))
+            return object009;
+
         return null;
+    }
+
+    Transform FindBestSwordLikeTransform(Transform searchRoot, Transform weaponSocket)
+    {
+        if (searchRoot == null)
+            return null;
+
+        Renderer[] renderers = searchRoot.GetComponentsInChildren<Renderer>(true);
+        Transform best = null;
+        float bestScore = float.NegativeInfinity;
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            Transform candidate = renderer.transform;
+            if (!TryGetLocalMeshBounds(candidate, out Bounds localBounds))
+                continue;
+
+            string lowerName = candidate.name.ToLowerInvariant();
+            if (lowerName.Contains("body") || lowerName.Contains("clothes") || lowerName.Contains("face") || lowerName.Contains("hair"))
+                continue;
+
+            Vector3 size = localBounds.size;
+            float maxAxis = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+            float minAxis = Mathf.Min(size.x, Mathf.Min(size.y, size.z));
+            if (maxAxis <= 0.05f || minAxis <= 0.0001f)
+                continue;
+
+            float slenderness = maxAxis / minAxis;
+            if (slenderness < 3f)
+                continue;
+
+            float score = slenderness * 10f - size.sqrMagnitude;
+            if (weaponSocket != null)
+                score -= Vector3.Distance(candidate.position, weaponSocket.position) * 4f;
+
+            if (lowerName.Contains("sword") || lowerName.Contains("katana") || lowerName.Contains("blade") || lowerName.Contains("weapon"))
+                score += 50f;
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    bool LooksLikeSwordMesh(Transform candidate)
+    {
+        if (candidate == null || !TryGetLocalMeshBounds(candidate, out Bounds localBounds))
+            return false;
+
+        Vector3 size = localBounds.size;
+        float maxAxis = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
+        float minAxis = Mathf.Min(size.x, Mathf.Min(size.y, size.z));
+        return maxAxis > 0.05f && minAxis > 0.0001f && (maxAxis / minAxis) >= 3f;
     }
 
     Transform CreateSwordTipAnchor(Transform swordTransform)
@@ -639,87 +827,6 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         anchor.localRotation = Quaternion.identity;
         anchor.localScale = Vector3.one;
         return anchor;
-    }
-
-    Transform CreateSkinnedSwordTrailAnchor(Transform swordTransform, SkinnedMeshRenderer skinned)
-    {
-        const string anchorName = "RuntimeSwordTrailAnchor";
-        Transform rootBone = skinned != null ? skinned.rootBone : null;
-        if (rootBone == null)
-            return CreateSwordTipAnchor(swordTransform);
-
-        Transform existing = rootBone.Find(anchorName);
-        if (existing != null)
-            return existing;
-
-        Vector3 worldPosition = ResolveSkinnedSwordTipWorldPosition(swordTransform, rootBone);
-
-        GameObject anchorObject = new GameObject(anchorName);
-        Transform anchor = anchorObject.transform;
-        anchor.SetParent(rootBone, false);
-        anchor.position = worldPosition;
-        anchor.rotation = rootBone.rotation;
-        anchor.localScale = Vector3.one;
-        return anchor;
-    }
-
-    Transform CreateSkinnedSwordBaseAnchor(Transform swordTransform, SkinnedMeshRenderer skinned)
-    {
-        const string anchorName = "RuntimeSwordBaseAnchor";
-        Transform rootBone = skinned != null ? skinned.rootBone : null;
-        if (rootBone == null)
-            return CreateSwordBaseAnchor(swordTransform);
-
-        Transform existing = rootBone.Find(anchorName);
-        if (existing != null)
-            return existing;
-
-        Vector3 worldPosition = rootBone.position;
-
-        GameObject anchorObject = new GameObject(anchorName);
-        Transform anchor = anchorObject.transform;
-        anchor.SetParent(rootBone, false);
-        anchor.position = worldPosition;
-        anchor.rotation = rootBone.rotation;
-        anchor.localScale = Vector3.one;
-        return anchor;
-    }
-
-    Vector3 ResolveSkinnedSwordTipWorldPosition(Transform swordTransform, Transform rootBone)
-    {
-        if (swordTransform == null || rootBone == null || !TryGetLocalMeshBounds(swordTransform, out Bounds localBounds))
-            return rootBone != null ? rootBone.position : transform.position;
-
-        Vector3 size = localBounds.size;
-        int axis = 0;
-        if (size.y > size.x && size.y >= size.z)
-            axis = 1;
-        else if (size.z > size.x && size.z >= size.y)
-            axis = 2;
-
-        Vector3 localMin = localBounds.center;
-        Vector3 localMax = localBounds.center;
-        switch (axis)
-        {
-            case 1:
-                localMin.y = localBounds.min.y - swordBaseBackwardPadding;
-                localMax.y = localBounds.max.y + swordTipForwardPadding;
-                break;
-            case 2:
-                localMin.z = localBounds.min.z - swordBaseBackwardPadding;
-                localMax.z = localBounds.max.z + swordTipForwardPadding;
-                break;
-            default:
-                localMin.x = localBounds.min.x - swordBaseBackwardPadding;
-                localMax.x = localBounds.max.x + swordTipForwardPadding;
-                break;
-        }
-
-        Vector3 worldMin = swordTransform.TransformPoint(localMin);
-        Vector3 worldMax = swordTransform.TransformPoint(localMax);
-        float minDistance = Vector3.Distance(rootBone.position, worldMin);
-        float maxDistance = Vector3.Distance(rootBone.position, worldMax);
-        return maxDistance >= minDistance ? worldMax : worldMin;
     }
 
     static bool TryGetLocalMeshBounds(Transform target, out Bounds bounds)

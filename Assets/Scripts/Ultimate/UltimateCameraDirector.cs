@@ -192,7 +192,8 @@ public sealed class UltimateCameraDirector : MonoBehaviour
                 focusBlend = Mathf.Max(focusBlend, _currentShot.orbitFocusBias);
 
             focusPoint = Vector3.Lerp(playerAnchor, targetAnchor, focusBlend) + Vector3.up * _currentShot.lookHeightOffset;
-            desiredPosition = playerAnchor + basis * _currentShot.cameraLocalOffset;
+            Vector3 cameraOrigin = _currentShot.anchorCameraOnTarget ? targetAnchor : playerAnchor;
+            desiredPosition = cameraOrigin + basis * _currentShot.cameraLocalOffset;
             desiredPosition = ResolveOccludedCameraPosition(focusPoint, desiredPosition);
             desiredRotation = Quaternion.LookRotation((focusPoint - desiredPosition).normalized, Vector3.up);
         }

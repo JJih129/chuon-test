@@ -2335,8 +2335,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21472122, y: 0.00565617, z: 0.0012435259, w: 0.9766582}
-  m_LocalPosition: {x: -0.6313046, y: -1.0641565, z: -22.505426}
+  m_LocalRotation: {x: -0.21271378, y: 0.0056587276, z: 0.0012319031, w: 0.9770974}
+  m_LocalPosition: {x: -0.63140035, y: -1.0417378, z: -22.513676}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -7942,7 +7942,7 @@ PlayableDirector:
     - cc12481579d259f4b95ebed52346efdb: {fileID: 1615706240}
     - f98066ca0a8016f4fa7333fff459c4b6: {fileID: 2019237297}
     - f2889726ea4144b48af5db8ba6184214: {fileID: 1518694912}
-    - 052e7ba1e4c4c174189478faf0d10da1: {fileID: 1615706240}
+    - 052e7ba1e4c4c174189478faf0d10da1: {fileID: 1518694912}
     - 47a04eb6e0157794fad9ef84b1ef8ca4: {fileID: 1420635680}
     - c62f6b2180465794a9224d4c373a1f25: {fileID: 1496251062}
 --- !u!114 &410452539
@@ -17100,7 +17100,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 5000
-  field of view: 40
+  field of view: 46.335373
   orthographic: 0
   orthographic size: 10
   m_Depth: -1
@@ -17126,8 +17126,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.044941403, y: 0.9370925, z: -0.320221, w: 0.13151622}
-  m_LocalPosition: {x: -1.121028, y: 2.6908677, z: -12.363102}
+  m_LocalRotation: {x: -0.21271351, y: 0.005658723, z: 0.0012319005, w: 0.97709745}
+  m_LocalPosition: {x: -0.56197345, y: 0.091225386, z: -16.520185}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -42524,6 +42524,9 @@ MonoBehaviour:
   parentToAnchor: 0
   defaultFallbackLifetime: 0.9
   useProceduralSwordTrail: 1
+  drakkarTrailMaterial: {fileID: 0}
+  drakkarMeleeTrailTexture: {fileID: 0}
+  drakkarWideTrailTexture: {fileID: 0}
   patternSlashVfx:
   - patternName: a
     animTriggerName: Attack_A

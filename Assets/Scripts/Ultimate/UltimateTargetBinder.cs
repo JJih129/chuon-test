@@ -308,7 +308,8 @@ public sealed class UltimateTargetBinder : MonoBehaviour
             return PlayerRoot.position + PlayerRoot.forward * 2f + Vector3.up * fallbackTargetAimHeight;
 
         Vector3 targetRootPosition = targetRoot.position;
-        if (_hasCachedAimPoint &&
+        if (!_sequenceActive &&
+            _hasCachedAimPoint &&
             _cachedAimTargetRoot == targetRoot &&
             Mathf.Approximately(_cachedAimBottomToCenterRatio, bottomToCenterRatio) &&
             Mathf.Approximately(_cachedAimVerticalOffset, verticalOffset) &&

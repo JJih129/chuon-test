@@ -391,8 +391,7 @@ public static class UltimateCinematicSetupUtility
         CreateShotClip(camTrack, director, "SHOT_Intro", introCam, shot01Start, shot02Start - shot01Start);
         CreateShotClip(camTrack, director, "SHOT_CloseUp", closeCam, shot02Start, shot03Start - shot02Start);
         CreateShotClip(camTrack, director, "SHOT_SlashStorm", stormCam, shot03Start, shot04Start - shot03Start);
-        CreateShotClip(camTrack, director, "SHOT_Walkout", walkoutCam, shot04Start, shot05Start - shot04Start);
-        CreateShotClip(camTrack, director, "SHOT_Explosion", explosionCam, shot05Start, cameraSessionEndTime - shot05Start);
+        CreateShotClip(camTrack, director, "SHOT_Walkout", walkoutCam, shot04Start, cameraSessionEndTime - shot04Start);
 
         CreateSignal(signalTrack, shot01Start, signals["Sig_CameraSessionBegin"]);
         CreateSignal(signalTrack, shot01Start + 0.02d, signals["Sig_DrawPoseStart"]);

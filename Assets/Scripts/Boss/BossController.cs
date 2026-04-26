@@ -778,6 +778,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     private Vector3 _ultimateVictimOriginalPosition;
     private Quaternion _ultimateVictimOriginalRotation = Quaternion.identity;
     private bool _hasUltimateVictimOriginalPose;
+    private Transform _ultimateVictimVisualRoot;
+    private Vector3 _ultimateVictimVisualLocalPosition;
+    private Quaternion _ultimateVictimVisualLocalRotation = Quaternion.identity;
+    private Vector3 _ultimateVictimVisualLocalScale = Vector3.one;
+    private float _ultimateVictimVisualGroundOffsetY;
+    private bool _hasUltimateVictimVisualPose;
     private Vector3 _ultimateVictimAnchorPosition;
     private Quaternion _ultimateVictimAnchorRotation = Quaternion.identity;
     private bool _hasUltimateVictimAnchor;
@@ -2924,6 +2930,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         }
 
         _hasUltimateVictimOriginalPose = true;
+        _ultimateVictimVisualRoot = ResolveUltimateVictimVisualRoot();
+        _hasUltimateVictimVisualPose = false;
+        if (_ultimateVictimVisualRoot != null && _ultimateVictimVisualRoot != transform)
+        {
+            _ultimateVictimVisualLocalPosition = _ultimateVictimVisualRoot.localPosition;
+            _ultimateVictimVisualLocalRotation = _ultimateVictimVisualRoot.localRotation;
+            _ultimateVictimVisualLocalScale = _ultimateVictimVisualRoot.localScale;
+            _ultimateVictimVisualGroundOffsetY = _ultimateVictimVisualRoot.position.y - _ultimateVictimOriginalPosition.y;
+            _hasUltimateVictimVisualPose = true;
+        }
     }
 
     void RestoreUltimateVictimWorldPose()
@@ -2942,6 +2958,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             rb.rotation = _ultimateVictimOriginalRotation;
         }
 
+        RestoreUltimateVictimVisualPose();
         _hasUltimateVictimOriginalPose = false;
     }
 
@@ -2953,13 +2970,52 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (!_isUltimateVictim || !_hasUltimateVictimAnchor)
             return;
 
-        transform.SetPositionAndRotation(_ultimateVictimAnchorPosition, _ultimateVictimAnchorRotation);
-
-        if (rb != null)
+        if (_hasUltimateVictimOriginalPose)
         {
-            rb.position = _ultimateVictimAnchorPosition;
-            rb.rotation = _ultimateVictimAnchorRotation;
+            transform.SetPositionAndRotation(_ultimateVictimOriginalPosition, _ultimateVictimOriginalRotation);
+            if (rb != null)
+            {
+                rb.position = _ultimateVictimOriginalPosition;
+                rb.rotation = _ultimateVictimOriginalRotation;
+            }
         }
+
+        if (_ultimateVictimVisualRoot != null && _ultimateVictimVisualRoot != transform)
+        {
+            Vector3 visualPosition = _ultimateVictimAnchorPosition;
+            visualPosition.y = _ultimateVictimOriginalPosition.y + _ultimateVictimVisualGroundOffsetY;
+            _ultimateVictimVisualRoot.SetPositionAndRotation(visualPosition, _ultimateVictimAnchorRotation);
+        }
+        else
+        {
+            transform.SetPositionAndRotation(_ultimateVictimAnchorPosition, _ultimateVictimAnchorRotation);
+            if (rb != null)
+            {
+                rb.position = _ultimateVictimAnchorPosition;
+                rb.rotation = _ultimateVictimAnchorRotation;
+            }
+        }
+    }
+
+    Transform ResolveUltimateVictimVisualRoot()
+    {
+        if (_bossReferences != null && _bossReferences.VisualRoot != null)
+            return _bossReferences.VisualRoot;
+
+        Transform visual = transform.Find("VisualRoot");
+        return visual != null ? visual : transform;
+    }
+
+    void RestoreUltimateVictimVisualPose()
+    {
+        if (!_hasUltimateVictimVisualPose || _ultimateVictimVisualRoot == null)
+            return;
+
+        _ultimateVictimVisualRoot.localPosition = _ultimateVictimVisualLocalPosition;
+        _ultimateVictimVisualRoot.localRotation = _ultimateVictimVisualLocalRotation;
+        _ultimateVictimVisualRoot.localScale = _ultimateVictimVisualLocalScale;
+        _hasUltimateVictimVisualPose = false;
+        _ultimateVictimVisualRoot = null;
     }
 
     void EnsureGameplayPlayerTarget(bool forceRefresh = false)

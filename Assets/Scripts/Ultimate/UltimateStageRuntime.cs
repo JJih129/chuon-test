@@ -310,7 +310,7 @@ public class UltimateStageRuntime : MonoBehaviour
         SetShotPose(shotWideAnchor, focusPoint - stageForward * 5.2f + side * 2.15f + Vector3.up * 1.36f, focusPoint);
         SetShotPose(shotSlashLeftAnchor, focusPoint - stageForward * 3.55f - side * 2.05f + Vector3.up * 1.08f, focusPoint);
         SetShotPose(shotSlashRightAnchor, focusPoint - stageForward * 3.55f + side * 2.05f + Vector3.up * 1.08f, focusPoint);
-        SetShotPose(shotFinisherAnchor, victimWorld - stageForward * 2.5f + side * 1.25f + Vector3.up * 1.02f, victimWorld + Vector3.up * 0.95f);
+        SetShotPose(shotFinisherAnchor, victimWorld - stageForward * 4.6f + side * 2.15f + Vector3.up * 1.9f, victimWorld + Vector3.up * 1.15f);
         SetShotPose(shotWalkOutAnchor, walkOutWorld - walkDirection * 2.7f + Vector3.up * 1.46f - side * 0.25f, walkOutWorld + Vector3.up * 1.22f);
     }
 
