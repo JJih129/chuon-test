@@ -22496,15 +22496,15 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: 14e5b85958df77c4e82e8505350e59b8, type: 2}
     - target: {fileID: 9217704258761649807, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.55969906
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9217704258761649807, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.009132385
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9217704258761649807, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -16.32352
+      value: -22
       objectReference: {fileID: 0}
     - target: {fileID: 9217704258761649807, guid: 6d932f72e17ab7241a24205310b92519, type: 3}
       propertyPath: m_LocalRotation.w
@@ -35900,7 +35900,7 @@ MonoBehaviour:
     m_LegacyHeadingDefinition: -1
     m_LegacyVelocityFilterStrength: -1
   m_XAxis:
-    Value: 0
+    Value: 180
     m_SpeedMode: 0
     m_MaxSpeed: 360
     m_AccelTime: 0.1

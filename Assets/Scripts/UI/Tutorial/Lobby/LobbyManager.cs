@@ -75,6 +75,14 @@ public class LobbyManager : MonoBehaviour
     int _totalEnemyCount;
     int _currentDeadEnemy;
 
+    [Header("Lobby Drone Motion")]
+    [SerializeField] bool useAerialLobbyDroneMotion = true;
+    [SerializeField, Range(0.8f, 2f)] float lobbyDroneMoveSpeedMultiplier = 1.28f;
+    [SerializeField, Range(0.45f, 1f)] float lobbyDroneDistanceMultiplier = 0.72f;
+    [SerializeField, Range(0f, 0.5f)] float lobbyDroneStrafeBoost = 0.28f;
+    [SerializeField, Range(0f, 1f)] float lobbyDroneHoverAmplitude = 0.34f;
+    [SerializeField, Range(0.3f, 3f)] float lobbyDroneHoverFrequency = 1.55f;
+
     [Header("Elevator")]
     public GameObject elevatorPanel;
     public string nextSceneName = "MainScene";
@@ -99,10 +107,16 @@ public class LobbyManager : MonoBehaviour
     [Range(0.05f, 1f)] public float elevatorSyncDelay = 0.45f;
 
     [Header("Elevator Door")]
+    public Transform elevatorCabinRoot;
     public Transform doorLeft;
     public Transform doorRight;
     public float doorOpenHeight = 4f;
     public float doorOpenSpeed = 2f;
+    [Min(0.1f)] public float doorCloseSpeed = 0.8f;
+    [Min(0f)] public float elevatorLowerDistance = 5f;
+    [Min(0.1f)] public float elevatorLowerDuration = 2.6f;
+    [Range(0f, 1.5f)] public float elevatorFadeDelay = 1.25f;
+    public bool parentPlayerToElevatorDuringDescent = true;
 
     [Header("Guide / Triggers")]
     public GuidePathSystem guideSystem;
@@ -111,6 +125,11 @@ public class LobbyManager : MonoBehaviour
     public Transform[] pathWaypoints;
     public LobbyPresentationController presentationController;
 
+    [Header("Elevator Boarding Gate")]
+    [SerializeField] bool requireBoardCenterBeforeTransition = true;
+    [SerializeField, Min(0.1f)] float boardCenterRequiredRadius = 1.05f;
+    [SerializeField] Vector3 boardCenterLocalOffset = Vector3.zero;
+
     [Header("Atmosphere")]
     [TextArea] public string routeSuspicionLine = "\ub204\uad70\uac00 \uba3c\uc800 \uc774 \uae38\uc744 \uc5f4\uc5b4\ub1a8\uc5b4. \uc548\uc804\ud558\ub2e4\uace0 \uac00\uc815\ud558\uc9c0 \ub9c8.";
     [Range(0.5f, 4f)] public float routeSuspicionDelay = 2.2f;
@@ -118,6 +137,19 @@ public class LobbyManager : MonoBehaviour
     [Header("Typing")]
     [Range(0.01f, 0.2f)] public float textTypingSpeed = 0.05f;
     [SerializeField] bool debugLogs = false;
+
+    [Header("Input Lock")]
+    [SerializeField] bool lockInputDuringArrivalIntro = true;
+    [SerializeField] bool lockInputDuringPostCombatBrief = true;
+    [SerializeField] bool lockInputDuringElevatorBrief = true;
+
+    [Header("Flow Persistence")]
+    [SerializeField] bool skipDroneEncounterAfterFirstClear = true;
+
+    [Header("Start Facing")]
+    [SerializeField] bool applyPlayerStartFacingYaw = true;
+    [SerializeField] bool faceCameraForwardOnStart = true;
+    [SerializeField] float playerStartYawOffset = 180f;
 
     readonly List<Transform> _activeWaypoints = new List<Transform>();
     bool _isDoorReached;
@@ -133,6 +165,13 @@ public class LobbyManager : MonoBehaviour
     LobbyFlowPhase _currentPhase;
     readonly List<DroneController> _activeLobbyDrones = new List<DroneController>();
     int _combatEscalationStage;
+    IInputBlocker _playerInputBlocker;
+    bool _lobbyInputLocked;
+    static bool s_droneEncounterClearedThisSession;
+    bool _doorPoseCached;
+    Vector3 _doorLeftClosedLocalPosition;
+    Vector3 _doorRightClosedLocalPosition;
+    bool _startFacingApplied;
 
     public bool IsDoorReached => _isDoorReached;
     public bool IsBoarded => _isBoarded;
@@ -175,13 +214,22 @@ public class LobbyManager : MonoBehaviour
         ConfigurePresentationController();
         ConfigureCombatCoachController();
         ConfigureObjectivePanelController();
+        StartCoroutine(CoApplyPlayerStartFacingYawDelayed());
         _fromTutorialTransition = TutorialSceneTransitionState.ConsumeTutorialToLobby();
         SetPhase(LobbyFlowPhase.Arrival);
         StartCoroutine(SequenceArrival());
     }
 
+    void OnDisable()
+    {
+        SetLobbyInputLocked(false);
+    }
+
     IEnumerator SequenceArrival()
     {
+        SetLobbyInputLocked(lockInputDuringArrivalIntro);
+        bool skipEncounter = ShouldSkipDroneEncounter();
+
         if (_fromTutorialTransition)
         {
             yield return StartCoroutine(PlayDialogue("EGO", "\uc2dc\ubbac\ub808\uc774\uc158 \ub9c1\ud06c \ud574\uc81c. \uc2e4\uc804 \uc804\ud22c\ub97c \uc2dc\uc791\ud55c\ub2e4.", 2.1f));
@@ -190,21 +238,34 @@ public class LobbyManager : MonoBehaviour
 
         yield return StartCoroutine(PlayDialogue("ChuOn", "\uc5ec\uae30\uac00 \uce68\ud22c \uc9c0\uc810\uc778\uac00.", 2f));
 
-        if (alertOverlay != null)
-            alertOverlay.DOFade(0.3f, 0.5f).SetLoops(6, LoopType.Yoyo);
+        if (skipEncounter)
+        {
+            yield return StartCoroutine(PlayDialogue("EGO", "\ub85c\ube44 \ubcf4\uc548 \uc2e0\ud638\ub294 \uc774\ubbf8 \uc815\ub9ac\ub410\uc5b4. \uc2b9\uac15\uae30\ub85c \uac00.", 1.8f));
+        }
+        else
+        {
+            if (alertOverlay != null)
+                alertOverlay.DOFade(0.3f, 0.5f).SetLoops(6, LoopType.Yoyo);
 
-        yield return StartCoroutine(PlayDialogue("System", "\uce68\uc785\uc790 \uac10\uc9c0. \uc804\ud22c \ud504\ub85c\ud1a0\ucf5c \uae30\ub3d9.", 3f));
-        yield return StartCoroutine(PlayDialogue("EGO", "\uc6b0\ud68c \uacbd\ub85c\ub294 \uc5c6\uc5b4. \uba3c\uc800 \uc815\ub9ac\ud558\uace0 \uc774\ub3d9\ud574.", 2.5f));
-        yield return StartCoroutine(PlayDialogue("ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
+            yield return StartCoroutine(PlayDialogue("System", "\uce68\uc785\uc790 \uac10\uc9c0. \uc804\ud22c \ud504\ub85c\ud1a0\ucf5c \uae30\ub3d9.", 3f));
+            yield return StartCoroutine(PlayDialogue("EGO", "\uc6b0\ud68c \uacbd\ub85c\ub294 \uc5c6\uc5b4. \uba3c\uc800 \uc815\ub9ac\ud558\uace0 \uc774\ub3d9\ud574.", 2.5f));
+            yield return StartCoroutine(PlayDialogue("ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
+        }
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
 
-        StartCoroutine(SequenceCombat());
+        SetLobbyInputLocked(false);
+
+        if (skipEncounter)
+            StartCoroutine(SequenceRouteGuide(false));
+        else
+            StartCoroutine(SequenceCombat());
     }
 
     IEnumerator SequenceCombat()
     {
+        SetLobbyInputLocked(false);
         SetPhase(LobbyFlowPhase.Combat);
         _currentDeadEnemy = 0;
         _combatEscalationStage = 0;
@@ -239,6 +300,7 @@ public class LobbyManager : MonoBehaviour
         yield return new WaitUntil(() => _currentDeadEnemy >= _totalEnemyCount);
         yield return new WaitForSeconds(1f);
         CombatCompleted?.Invoke();
+        s_droneEncounterClearedThisSession = true;
         StartCoroutine(SequencePostCombat());
     }
 
@@ -284,6 +346,8 @@ public class LobbyManager : MonoBehaviour
                 controller.target = playerTransform;
                 controller.SetLightweightSimulation(useLightweightLobbyDroneSimulation, lightweightLobbyDroneTickInterval);
                 controller.SetAttackTelegraph(droneAttackTelegraphLeadTime);
+                controller.SetAerialCombatMotion(useAerialLobbyDroneMotion, lobbyDroneHoverAmplitude, lobbyDroneHoverFrequency);
+                controller.SetCombatMovementProfile(lobbyDroneMoveSpeedMultiplier, lobbyDroneDistanceMultiplier, lobbyDroneStrafeBoost);
                 controller.enabled = true;
                 controller.SetInitialFireDelay(ResolveLobbyDroneInitialFireDelay(i, role));
                 RegisterActiveLobbyDrone(controller);
@@ -770,14 +834,29 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator SequencePostCombat()
     {
+        yield return StartCoroutine(SequenceRouteGuide(true));
+    }
+
+    IEnumerator SequenceRouteGuide(bool fromCombat)
+    {
+        SetLobbyInputLocked(lockInputDuringPostCombatBrief);
         SetPhase(LobbyFlowPhase.Route);
-        UpdateQuestUI("\uad50\uc804 \uc885\ub8cc", "\ubaa8\ub4e0 \uc801 \uc2e0\ud638 \uc81c\uac70.");
+        UpdateQuestUI(
+            fromCombat ? "\uad50\uc804 \uc885\ub8cc" : "\uacbd\ub85c \ud655\uc778",
+            fromCombat ? "\ubaa8\ub4e0 \uc801 \uc2e0\ud638 \uc81c\uac70." : "\uc2b9\uac15\uae30 \uacbd\ub85c\uac00 \uc774\ubbf8 \uc5f4\ub824 \uc788\ub2e4.");
         _isDoorReached = false;
 
         yield return new WaitForSeconds(0.5f);
-        yield return StartCoroutine(PlayDialogue("EGO", "\uc88b\uc544. \uacbd\ub85c\uac00 \uc5f4\ub838\uc5b4. \uc2b9\uac15\uae30\ub85c \uc774\ub3d9\ud574.", 2f));
-        yield return StartCoroutine(PlayDialogue("ChuOn", "\ub05d\uae4c\uc9c0 \uae34\uc7a5 \ud480\uc9c0 \ub9c8.", 1.5f));
-        yield return StartCoroutine(PlayDialogue("EGO", routeSuspicionLine, routeSuspicionDelay));
+        if (fromCombat)
+        {
+            yield return StartCoroutine(PlayDialogue("EGO", "\uc88b\uc544. \uacbd\ub85c\uac00 \uc5f4\ub838\uc5b4. \uc2b9\uac15\uae30\ub85c \uc774\ub3d9\ud574.", 2f));
+            yield return StartCoroutine(PlayDialogue("ChuOn", "\ub05d\uae4c\uc9c0 \uae34\uc7a5 \ud480\uc9c0 \ub9c8.", 1.5f));
+            yield return StartCoroutine(PlayDialogue("EGO", routeSuspicionLine, routeSuspicionDelay));
+        }
+        else
+        {
+            yield return StartCoroutine(PlayDialogue("EGO", "\ubcf4\uc548 \uc815\ub9ac \uc644\ub8cc. \uc2b9\uac15\uae30 \ub9c1\ud06c\ub85c \uc774\ub3d9\ud574.", 1.8f));
+        }
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
@@ -806,8 +885,68 @@ public class LobbyManager : MonoBehaviour
         if (presentationController != null)
             presentationController.ShowApproachMarker();
 
+        SetLobbyInputLocked(false);
         yield return new WaitUntil(() => _isDoorReached);
         StartCoroutine(SequenceAtElevator());
+    }
+
+    bool ShouldSkipDroneEncounter()
+    {
+        return skipDroneEncounterAfterFirstClear && s_droneEncounterClearedThisSession;
+    }
+
+    void ApplyPlayerStartFacingYawOnce()
+    {
+        if (_startFacingApplied || !applyPlayerStartFacingYaw || Mathf.Abs(playerStartYawOffset) <= 0.001f)
+            return;
+
+        Transform facingRoot = ResolvePlayerFacingRoot();
+        if (facingRoot == null)
+            return;
+
+        facingRoot.rotation = ResolveStartFacingRotation(facingRoot.rotation);
+        _startFacingApplied = true;
+    }
+
+    IEnumerator CoApplyPlayerStartFacingYawDelayed()
+    {
+        ApplyPlayerStartFacingYawOnce();
+
+        if (_startFacingApplied)
+            yield break;
+
+        yield return null;
+        ApplyPlayerStartFacingYawOnce();
+    }
+
+    Transform ResolvePlayerFacingRoot()
+    {
+        GameObject player = GameObject.FindWithTag("Player");
+        if (player == null)
+            return null;
+
+        PlayerReferences references = player.GetComponent<PlayerReferences>();
+        if (references != null && references.PlayerRoot != null)
+            return references.PlayerRoot;
+
+        return player.transform;
+    }
+
+    Quaternion ResolveStartFacingRotation(Quaternion fallbackRotation)
+    {
+        if (faceCameraForwardOnStart)
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera != null)
+            {
+                Vector3 forward = mainCamera.transform.forward;
+                forward.y = 0f;
+                if (forward.sqrMagnitude > 0.0001f)
+                    return Quaternion.LookRotation(forward.normalized, Vector3.up);
+            }
+        }
+
+        return Quaternion.AngleAxis(playerStartYawOffset, Vector3.up) * fallbackRotation;
     }
 
     public void OnWaypointReached(Transform reachedPoint)
@@ -843,6 +982,7 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator SequenceAtElevator()
     {
+        SetLobbyInputLocked(lockInputDuringElevatorBrief);
         SetPhase(LobbyFlowPhase.Board);
         OpenDoor(doorLeft);
         OpenDoor(doorRight);
@@ -858,13 +998,17 @@ public class LobbyManager : MonoBehaviour
         if (guideSystem != null && triggerBoard != null)
             guideSystem.ShowPath(triggerBoard);
 
+        if (elevatorPanel != null)
+            elevatorPanel.SetActive(false);
+
         _isBoarded = false;
+        SetLobbyInputLocked(false);
         yield return new WaitUntil(() => _isBoarded);
 
         if (guideSystem != null)
             guideSystem.HidePath();
 
-        StartCoroutine(SequenceInside());
+        StartCoroutine(CoBoardElevatorTransition());
     }
 
     void OpenDoor(Transform door)
@@ -872,67 +1016,132 @@ public class LobbyManager : MonoBehaviour
         if (door == null)
             return;
 
+        CacheDoorClosedPoseIfNeeded();
+
         Collider collider = door.GetComponent<Collider>();
         if (collider != null)
             collider.isTrigger = true;
 
-        Vector3 localPosition = door.localPosition;
-        door.DOLocalMoveY(localPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
+        Vector3 closedPosition = GetClosedDoorLocalPosition(door);
+        door.DOLocalMoveY(closedPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
     }
 
-    public void OnEnterElevator()
+    void CloseDoor(Transform door)
     {
+        if (door == null)
+            return;
+
+        CacheDoorClosedPoseIfNeeded();
+
+        Vector3 closedPosition = GetClosedDoorLocalPosition(door);
+        door.DOKill();
+        door.DOLocalMoveY(closedPosition.y, doorCloseSpeed).SetEase(Ease.InOutQuad);
+
+        Collider collider = door.GetComponent<Collider>();
+        if (collider != null)
+            collider.isTrigger = false;
+    }
+
+    void CacheDoorClosedPoseIfNeeded()
+    {
+        if (_doorPoseCached)
+            return;
+
+        _doorLeftClosedLocalPosition = doorLeft != null ? doorLeft.localPosition : Vector3.zero;
+        _doorRightClosedLocalPosition = doorRight != null ? doorRight.localPosition : Vector3.zero;
+        _doorPoseCached = true;
+    }
+
+    Vector3 GetClosedDoorLocalPosition(Transform door)
+    {
+        if (door == doorLeft)
+            return _doorLeftClosedLocalPosition;
+
+        if (door == doorRight)
+            return _doorRightClosedLocalPosition;
+
+        return door != null ? door.localPosition : Vector3.zero;
+    }
+
+    Transform ResolveElevatorCabinRoot()
+    {
+        if (elevatorCabinRoot != null)
+            return elevatorCabinRoot;
+
+        if (doorLeft != null && doorRight != null)
+        {
+            Transform common = FindCommonAncestor(doorLeft, doorRight);
+            if (common != null)
+                return common;
+        }
+
+        if (doorLeft != null && doorLeft.parent != null)
+            return doorLeft.parent;
+
+        if (doorRight != null && doorRight.parent != null)
+            return doorRight.parent;
+
+        return triggerBoard != null ? triggerBoard : null;
+    }
+
+    static Transform FindCommonAncestor(Transform a, Transform b)
+    {
+        if (a == null || b == null)
+            return null;
+
+        Transform cursor = a;
+        while (cursor != null)
+        {
+            if (b.IsChildOf(cursor))
+                return cursor;
+
+            cursor = cursor.parent;
+        }
+
+        return null;
+    }
+
+    Transform ResolvePlayerSceneRootTransform()
+    {
+        GameObject player = GameObject.FindWithTag("Player");
+        return player != null ? player.transform : null;
+    }
+
+    public bool OnEnterElevator()
+    {
+        if (_isElevatorTransitioning)
+            return false;
+
+        if (_isBoarded)
+            return true;
+
+        if (!IsPlayerAtElevatorBoardCenter())
+            return false;
+
         _isBoarded = true;
 
         if (presentationController != null)
             presentationController.HideObjectiveMarker();
-    }
-
-    IEnumerator SequenceInside()
-    {
-        SetPhase(LobbyFlowPhase.Elevator);
-        yield return StartCoroutine(PlayDialogue("EGO", elevatorThreatLine, 2f));
-        yield return StartCoroutine(PlayDialogue("ChuOn", elevatorResponseLine, 1.9f));
-        yield return StartCoroutine(PlayDialogue("EGO", elevatorInstructionLine, 2.1f));
-
-        if (dialogueGroup != null)
-            dialogueGroup.DOFade(0f, 0.5f);
-
-        UpdateQuestUI("\uc811\uc18d \ub178\ub4dc", "\ud328\ub110\uc744 \uc870\uc791\ud574 \ub2e4\uc74c \uce35\uc73c\ub85c \uc774\ub3d9\ud574.");
-
-        ShowTransientQuestCue(
-            elevatorThreatCueTitle,
-            elevatorThreatCueDescription,
-            elevatorThreatCueHold,
-            true);
 
         if (elevatorPanel != null)
-        {
-            elevatorPanel.SetActive(true);
-            elevatorPanel.transform.DOPunchScale(Vector3.one * 0.2f, 0.5f);
+            elevatorPanel.SetActive(false);
 
-            BaseInteractable elevatorInteractable = elevatorPanel.GetComponent<BaseInteractable>();
-            if (elevatorInteractable != null && !string.IsNullOrWhiteSpace(elevatorPromptText))
-                elevatorInteractable.promptText = elevatorPromptText;
-        }
+        return true;
+    }
 
-        if (presentationController != null)
-        {
-            presentationController.ShowElevatorPanelGuide();
-            presentationController.PulseElevatorInteractable();
-        }
+    bool IsPlayerAtElevatorBoardCenter()
+    {
+        if (!requireBoardCenterBeforeTransition || triggerBoard == null)
+            return true;
 
-        if (elevatorPanelCueDelay > 0f)
-            yield return new WaitForSeconds(elevatorPanelCueDelay);
+        Transform playerRoot = ResolvePlayerSceneRootTransform();
+        if (playerRoot == null)
+            return false;
 
-        if (presentationController != null)
-            presentationController.PulseElevatorInteractable();
-
-        ShowTransientQuestCue(
-            elevatorPanelCueTitle,
-            elevatorPanelCueDescription,
-            elevatorPanelCueHold,
-            false);
+        Vector3 center = triggerBoard.TransformPoint(boardCenterLocalOffset);
+        Vector3 toPlayer = playerRoot.position - center;
+        toPlayer.y = 0f;
+        return toPlayer.sqrMagnitude <= boardCenterRequiredRadius * boardCenterRequiredRadius;
     }
 
     public void OnInteractElevator()
@@ -940,30 +1149,68 @@ public class LobbyManager : MonoBehaviour
         if (_isElevatorTransitioning)
             return;
 
+        StartCoroutine(CoBoardElevatorTransition());
+    }
+
+    IEnumerator CoBoardElevatorTransition()
+    {
+        if (_isElevatorTransitioning)
+            yield break;
+
         _isElevatorTransitioning = true;
+        SetLobbyInputLocked(true);
+        SetPhase(LobbyFlowPhase.Elevator);
 
         if (presentationController != null)
         {
+            presentationController.HideObjectiveMarker();
             presentationController.HideElevatorPanelGuide();
-            presentationController.PulseElevatorInteractable();
         }
 
         if (elevatorPanel != null)
-        {
-            BaseInteractable elevatorInteractable = elevatorPanel.GetComponent<BaseInteractable>();
-            if (elevatorInteractable != null)
-                elevatorInteractable.promptText = elevatorSyncPromptText;
+            elevatorPanel.SetActive(false);
 
-            elevatorPanel.transform.DOPunchScale(Vector3.one * 0.14f, 0.28f);
+        UpdateQuestUI("\uc2b9\uac15\uae30 \ud558\uac15", "\ubcf4\uc2a4 \uad6c\uc5ed\uc73c\ub85c \uc774\ub3d9 \uc911.");
+        ShowTransientQuestCue(elevatorSyncCueTitle, "\uc2b9\uac15\uae30 \uc911\uc559 \ud0d1\uc2b9 \ud655\uc778. \ud558\uac15\uc744 \uc2dc\uc791\ud55c\ub2e4.", elevatorSyncCueHold, false);
+
+        CloseDoor(doorLeft);
+        CloseDoor(doorRight);
+        yield return new WaitForSeconds(Mathf.Max(0.05f, doorCloseSpeed));
+
+        Transform cabinRoot = ResolveElevatorCabinRoot();
+        Transform playerRoot = ResolvePlayerSceneRootTransform();
+        Transform originalPlayerParent = null;
+
+        if (parentPlayerToElevatorDuringDescent && cabinRoot != null && playerRoot != null && !playerRoot.IsChildOf(cabinRoot))
+        {
+            originalPlayerParent = playerRoot.parent;
+            playerRoot.SetParent(cabinRoot, true);
         }
 
-        ShowTransientQuestCue(
-            elevatorSyncCueTitle,
-            elevatorSyncCueDescription,
-            elevatorSyncCueHold,
-            false);
+        if (cabinRoot != null && elevatorLowerDistance > 0f)
+        {
+            cabinRoot.DOKill();
+            Vector3 targetPosition = cabinRoot.position + Vector3.down * elevatorLowerDistance;
+            cabinRoot.DOMove(targetPosition, elevatorLowerDuration).SetEase(Ease.InOutSine);
+        }
 
-        StartCoroutine(CoTransitionFromElevator());
+        if (elevatorFadeDelay > 0f)
+            yield return new WaitForSeconds(elevatorFadeDelay);
+
+        TutorialSceneTransitionState.MarkLobbyToMain();
+
+        if (SceneFader.Instance != null)
+        {
+            SceneFader.Instance.FadeOutAndLoadScene(nextSceneName);
+            yield break;
+        }
+
+        yield return new WaitForSeconds(Mathf.Max(0.05f, elevatorLowerDuration - elevatorFadeDelay));
+
+        if (originalPlayerParent != null && playerRoot != null)
+            playerRoot.SetParent(originalPlayerParent, true);
+
+        SceneManager.LoadScene(nextSceneName);
     }
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
@@ -1070,6 +1317,41 @@ public class LobbyManager : MonoBehaviour
         _objectivePanelController.ConfigureRuntime(this);
     }
 
+    void SetLobbyInputLocked(bool locked)
+    {
+        if (_lobbyInputLocked == locked)
+            return;
+
+        IInputBlocker inputBlocker = ResolvePlayerInputBlocker();
+        if (inputBlocker == null)
+            return;
+
+        inputBlocker.BlockAll(locked);
+        _lobbyInputLocked = locked;
+    }
+
+    IInputBlocker ResolvePlayerInputBlocker()
+    {
+        if (_playerInputBlocker != null)
+        {
+            UnityEngine.Object cachedObject = _playerInputBlocker as UnityEngine.Object;
+            if (cachedObject != null)
+                return _playerInputBlocker;
+
+            _playerInputBlocker = null;
+        }
+
+        GameObject player = GameObject.FindWithTag("Player");
+        if (player == null)
+            return null;
+
+        _playerInputBlocker = player.GetComponent<IInputBlocker>();
+        if (_playerInputBlocker == null)
+            _playerInputBlocker = player.AddComponent<SimpleInputBlocker>();
+
+        return _playerInputBlocker;
+    }
+
     IEnumerator CoShowTransientQuestCue(string title, string description, float holdDuration, bool flashAlert)
     {
         ShowQuestPanel();
@@ -1109,27 +1391,6 @@ public class LobbyManager : MonoBehaviour
         }
 
         _transientQuestCueRoutine = null;
-    }
-
-    IEnumerator CoTransitionFromElevator()
-    {
-        if (!string.IsNullOrWhiteSpace(elevatorSyncLine))
-            yield return StartCoroutine(PlayDialogue("EGO", elevatorSyncLine, Mathf.Min(0.45f, elevatorSyncCueHold)));
-
-        if (dialogueGroup != null)
-            dialogueGroup.DOFade(0f, 0.15f);
-
-        yield return new WaitForSeconds(Mathf.Max(0.05f, elevatorSyncDelay));
-
-        TutorialSceneTransitionState.MarkLobbyToMain();
-
-        if (SceneFader.Instance != null)
-        {
-            SceneFader.Instance.FadeOutAndLoadScene(nextSceneName);
-            yield break;
-        }
-
-        SceneManager.LoadScene(nextSceneName);
     }
 
     void SetPhase(LobbyFlowPhase phase)

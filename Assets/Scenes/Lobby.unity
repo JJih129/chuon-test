@@ -526,8 +526,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.23996796, y: 0.0000064758574, z: 0.0000016007715, w: 0.97078085}
-  m_LocalPosition: {x: 0.61991966, y: -1.4257147, z: 6.896187}
+  m_LocalRotation: {x: -0.70090926, y: 0.0000047567655, z: 0.0000046744603, w: 0.71325046}
+  m_LocalPosition: {x: 0.61999327, y: -5.29223, z: 12.417252}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -3030,6 +3030,12 @@ MonoBehaviour:
   escalationStageOneTelegraphScale: 0.9
   escalationStageTwoTelegraphScale: 0.8
   showEscalationQuestCue: 1
+  useAerialLobbyDroneMotion: 1
+  lobbyDroneMoveSpeedMultiplier: 1.28
+  lobbyDroneDistanceMultiplier: 0.72
+  lobbyDroneStrafeBoost: 0.28
+  lobbyDroneHoverAmplitude: 0.34
+  lobbyDroneHoverFrequency: 1.55
   elevatorPanel: {fileID: 1245720330}
   nextSceneName: MainScene
   elevatorThreatLine: "\uBE44\uC0C1 \uACBD\uB85C \uC804\uC6A9 \uC2B9\uAC15\uAE30\uC57C.
@@ -3055,10 +3061,16 @@ MonoBehaviour:
   elevatorPanelCueDelay: 1.05
   elevatorSyncCueHold: 0.85
   elevatorSyncDelay: 0.45
+  elevatorCabinRoot: {fileID: 0}
   doorLeft: {fileID: 2115223467}
   doorRight: {fileID: 195919008}
   doorOpenHeight: 4
   doorOpenSpeed: 2
+  doorCloseSpeed: 0.8
+  elevatorLowerDistance: 5
+  elevatorLowerDuration: 1.35
+  elevatorFadeDelay: 0.35
+  parentPlayerToElevatorDuringDescent: 1
   guideSystem: {fileID: 1266794279}
   triggerApproach: {fileID: 1631026504}
   triggerBoard: {fileID: 132624437}
@@ -3066,11 +3078,21 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   presentationController: {fileID: 0}
+  requireBoardCenterBeforeTransition: 1
+  boardCenterRequiredRadius: 1.05
+  boardCenterLocalOffset: {x: 0, y: 0, z: 0}
   routeSuspicionLine: "\uB204\uAD70\uAC00 \uBA3C\uC800 \uC774 \uAE38\uC744 \uC5F4\uC5B4\uB1A8\uC5B4.
     \uC548\uC804\uD558\uB2E4\uACE0 \uAC00\uC815\uD558\uC9C0 \uB9C8."
   routeSuspicionDelay: 2.2
   textTypingSpeed: 0.0362
   debugLogs: 0
+  lockInputDuringArrivalIntro: 1
+  lockInputDuringPostCombatBrief: 1
+  lockInputDuringElevatorBrief: 1
+  skipDroneEncounterAfterFirstClear: 1
+  applyPlayerStartFacingYaw: 1
+  faceCameraForwardOnStart: 1
+  playerStartYawOffset: 180
 --- !u!4 &900875287
 Transform:
   m_ObjectHideFlags: 0

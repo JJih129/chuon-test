@@ -193,13 +193,13 @@ public class FreeLookCamera : MonoBehaviour
             ApplyPose();
     }
 
-    public void SnapBehindPlayer(float? overridePitch = null)
+    public void SnapBehindPlayer(float? overridePitch = null, float yawOffset = 0f)
     {
         AutoResolveReferences();
         if (player == null)
             return;
 
-        float snappedYaw = NormalizeAngle(player.eulerAngles.y);
+        float snappedYaw = NormalizeAngle(player.eulerAngles.y + yawOffset);
         float snappedPitch = overridePitch.HasValue ? Mathf.Clamp(overridePitch.Value, minY, maxY) : pitch;
 
         if (IsUsingLegacyFreeLook())

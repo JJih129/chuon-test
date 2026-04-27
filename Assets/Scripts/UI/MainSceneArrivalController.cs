@@ -21,6 +21,32 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] private AttackTelegraphType arrivalTelegraphType = AttackTelegraphType.Guard;
     [SerializeField] private AttackTelegraphType threatTelegraphType = AttackTelegraphType.Danger;
 
+    [Header("Elevator Arrival")]
+    [SerializeField] bool playElevatorArrivalOnSceneStart = true;
+    [SerializeField] Transform elevatorArrivalAnchor;
+    [SerializeField] GameObject closedElevatorDoorVisual;
+    [SerializeField] GameObject openElevatorDoorVisual;
+    [SerializeField] bool useExplicitElevatorArrivalPosition = true;
+    [SerializeField] Vector3 elevatorArrivalWorldPosition = new Vector3(0f, 0f, -22f);
+    [SerializeField] Vector3 elevatorArrivalWorldOffset = Vector3.zero;
+    [SerializeField] bool useExplicitElevatorArrivalRotation = true;
+    [SerializeField] bool faceBossOnElevatorArrival = true;
+    [SerializeField] float elevatorArrivalYaw = 0f;
+    [SerializeField] bool snapCameraBehindPlayerOnElevatorArrival = true;
+    [SerializeField] float elevatorArrivalCameraPitch = 8f;
+    [SerializeField] float elevatorArrivalCameraYawOffset = 180f;
+    [SerializeField, Min(0.5f)] float elevatorArrivalCameraDistance = 4.2f;
+    [SerializeField] float elevatorArrivalCameraHeight = 1.25f;
+    [SerializeField, Min(0f)] float elevatorDoorClosedHold = 0.9f;
+    [SerializeField, Min(0f)] float elevatorDoorOpenHold = 0.75f;
+    [SerializeField] string elevatorArrivedMessage = "\uc2b9\uac15\uae30 \uc815\ucc29";
+    [SerializeField] string elevatorDoorOpenMessage = "\uc804\ud22c \uad6c\uc5ed \uc811\uc18d";
+
+    [Header("Start Facing")]
+    [SerializeField] bool applyPlayerStartFacingYaw = true;
+    [SerializeField] bool faceCameraForwardOnStart = true;
+    [SerializeField] float playerStartYawOffset = 180f;
+
     [Header("Encounter Coach")]
     [SerializeField] private string firstDefenseCoachMessage = "\uccab \uad50\ud658\uc740 \uc0b4\uc544\ub0a8\ub294 \ucabd\uc774 \uc6b0\uc120\uc774\uc57c";
     [SerializeField] private string firstPunishCoachMessage = "\ube48\ud2c8\uc774 \uc5f4\ub838\ub2e4. \uc9e7\uac8c \ub123\uace0 \ube60\uc838";
@@ -44,6 +70,9 @@ public class MainSceneArrivalController : MonoBehaviour
     bool _phaseThreeCoachShown;
     bool _breakCoachShown;
     bool _ultimateReadyCoachShown;
+    bool _startFacingApplied;
+    IInputBlocker _inputBlocker;
+    bool _arrivalInputLocked;
 
     public bool IsLobbyTransitionActive => _fromLobbyTransition;
 
@@ -64,9 +93,8 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void OnEnable()
     {
-        _fromLobbyTransition = TutorialSceneTransitionState.ConsumeLobbyToMain();
-        if (!_fromLobbyTransition)
-            return;
+        bool enteredFromLobby = TutorialSceneTransitionState.ConsumeLobbyToMain();
+        _fromLobbyTransition = enteredFromLobby || playElevatorArrivalOnSceneStart;
 
         _firstDefenseCoachShown = false;
         _firstPunishCoachShown = false;
@@ -80,12 +108,16 @@ public class MainSceneArrivalController : MonoBehaviour
             StopCoroutine(_arrivalRoutine);
 
         RefreshSubscriptions();
-        _arrivalRoutine = StartCoroutine(CoPlayArrivalSequence());
+        if (playElevatorArrivalOnSceneStart || enteredFromLobby)
+            _arrivalRoutine = StartCoroutine(CoPlayArrivalSequence());
+        else
+            StartCoroutine(CoApplyPlayerStartFacingYawDelayed());
     }
 
     void OnDisable()
     {
         ReleaseSubscriptions();
+        SetArrivalInputLocked(false);
 
         if (_arrivalRoutine == null)
             return;
@@ -123,6 +155,9 @@ public class MainSceneArrivalController : MonoBehaviour
         if (playerHud == null)
             yield break;
 
+        if (playElevatorArrivalOnSceneStart)
+            yield return StartCoroutine(CoPlayElevatorArrivalIntro());
+
         if (arrivalDelay > 0f)
             yield return new WaitForSeconds(arrivalDelay);
 
@@ -141,7 +176,309 @@ public class MainSceneArrivalController : MonoBehaviour
             playerHud.ShowRuntimeTelegraphMessage(threatMessage, threatTelegraphType, threatHold, true);
         }
 
+        SetArrivalInputLocked(false);
         _arrivalRoutine = null;
+    }
+
+    IEnumerator CoPlayElevatorArrivalIntro()
+    {
+        SetArrivalInputLocked(true);
+        CacheElevatorArrivalReferences();
+        PlacePlayerAtElevatorArrival();
+
+        if (closedElevatorDoorVisual != null)
+            closedElevatorDoorVisual.SetActive(true);
+        if (openElevatorDoorVisual != null)
+            openElevatorDoorVisual.SetActive(false);
+
+        if (!string.IsNullOrWhiteSpace(elevatorArrivedMessage))
+            playerHud.ShowRuntimeTelegraphMessage(elevatorArrivedMessage, AttackTelegraphType.Guard, Mathf.Max(0.4f, elevatorDoorClosedHold), false);
+
+        if (elevatorDoorClosedHold > 0f)
+            yield return new WaitForSeconds(elevatorDoorClosedHold);
+
+        if (closedElevatorDoorVisual != null)
+            closedElevatorDoorVisual.SetActive(false);
+        if (openElevatorDoorVisual != null)
+            openElevatorDoorVisual.SetActive(true);
+
+        if (!string.IsNullOrWhiteSpace(elevatorDoorOpenMessage))
+            playerHud.ShowRuntimeTelegraphMessage(elevatorDoorOpenMessage, AttackTelegraphType.Parry, Mathf.Max(0.4f, elevatorDoorOpenHold), false);
+
+        if (elevatorDoorOpenHold > 0f)
+            yield return new WaitForSeconds(elevatorDoorOpenHold);
+    }
+
+    void CacheElevatorArrivalReferences()
+    {
+        if (elevatorArrivalAnchor == null)
+        {
+            GameObject elevator = GameObject.Find("Elevator");
+            if (elevator != null)
+                elevatorArrivalAnchor = elevator.transform;
+        }
+
+        if (closedElevatorDoorVisual == null)
+            closedElevatorDoorVisual = GameObject.Find("closedoor (1)");
+
+        if (openElevatorDoorVisual == null)
+            openElevatorDoorVisual = GameObject.Find("opendoor (1)");
+    }
+
+    void PlacePlayerAtElevatorArrival()
+    {
+        Transform playerRoot = ResolvePlayerFacingRoot();
+        if (playerRoot == null)
+            return;
+
+        Vector3 basePosition = ResolveElevatorArrivalBasePosition(playerRoot.position) + elevatorArrivalWorldOffset;
+
+        Quaternion rotation = ResolveElevatorArrivalRotation(playerRoot);
+        SetPlayerWorldPose(playerRoot, basePosition, rotation);
+        SnapCameraBehindPlayer(playerRoot, true);
+        _startFacingApplied = true;
+    }
+
+    IEnumerator CoSnapCameraBehindPlayerDelayed()
+    {
+        yield return null;
+        SnapCameraBehindPlayer(ResolvePlayerFacingRoot(), false);
+
+        yield return new WaitForEndOfFrame();
+        SnapCameraBehindPlayer(ResolvePlayerFacingRoot(), false);
+    }
+
+    void SnapCameraBehindPlayer(Transform playerRoot, bool scheduleSecondSnap)
+    {
+        if (!snapCameraBehindPlayerOnElevatorArrival || playerRoot == null)
+            return;
+
+        FreeLookCamera freeLookCamera = FindObjectOfType<FreeLookCamera>(true);
+        if (freeLookCamera != null)
+        {
+            freeLookCamera.player = playerRoot;
+            freeLookCamera.distance = elevatorArrivalCameraDistance;
+            freeLookCamera.height = elevatorArrivalCameraHeight;
+            freeLookCamera.SnapBehindPlayer(elevatorArrivalCameraPitch, elevatorArrivalCameraYawOffset);
+            if (scheduleSecondSnap)
+                StartCoroutine(CoSnapCameraBehindPlayerDelayed());
+            return;
+        }
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+            return;
+
+        Quaternion yawRotation = Quaternion.Euler(0f, playerRoot.eulerAngles.y + elevatorArrivalCameraYawOffset, 0f);
+        Vector3 focusPoint = playerRoot.position + Vector3.up;
+        Vector3 cameraPosition = playerRoot.position + yawRotation * new Vector3(0f, 0f, -elevatorArrivalCameraDistance) + Vector3.up * elevatorArrivalCameraHeight;
+        mainCamera.transform.SetPositionAndRotation(
+            cameraPosition,
+            Quaternion.LookRotation(focusPoint - cameraPosition, Vector3.up));
+
+        if (scheduleSecondSnap)
+            StartCoroutine(CoSnapCameraBehindPlayerDelayed());
+    }
+
+    Quaternion ResolveElevatorArrivalRotation(Transform playerRoot)
+    {
+        if (faceBossOnElevatorArrival)
+        {
+            Transform bossRoot = ResolveBossRoot();
+            if (bossRoot != null && playerRoot != null)
+            {
+                Vector3 toBoss = bossRoot.position - playerRoot.position;
+                toBoss.y = 0f;
+                if (toBoss.sqrMagnitude > 0.0001f)
+                    return Quaternion.LookRotation(toBoss.normalized, Vector3.up);
+            }
+        }
+
+        return useExplicitElevatorArrivalRotation
+            ? Quaternion.Euler(0f, elevatorArrivalYaw, 0f)
+            : ResolveStartFacingRotation(playerRoot != null ? playerRoot.rotation : Quaternion.identity);
+    }
+
+    Transform ResolveBossRoot()
+    {
+        if (bossController != null)
+            return bossController.transform;
+
+        BossController runtimeBoss = FindObjectOfType<BossController>(true);
+        return runtimeBoss != null ? runtimeBoss.transform : null;
+    }
+
+    Vector3 ResolveElevatorArrivalBasePosition(Vector3 fallbackPosition)
+    {
+        if (useExplicitElevatorArrivalPosition)
+            return elevatorArrivalWorldPosition;
+
+        if (TryGetRendererBoundsCenter(closedElevatorDoorVisual, out Vector3 closedDoorCenter))
+            return closedDoorCenter;
+
+        if (TryGetRendererBoundsCenter(openElevatorDoorVisual, out Vector3 openDoorCenter))
+            return openDoorCenter;
+
+        if (closedElevatorDoorVisual != null)
+            return closedElevatorDoorVisual.transform.position;
+
+        if (openElevatorDoorVisual != null)
+            return openElevatorDoorVisual.transform.position;
+
+        if (elevatorArrivalAnchor != null)
+            return elevatorArrivalAnchor.position;
+
+        return fallbackPosition;
+    }
+
+    static bool TryGetRendererBoundsCenter(GameObject target, out Vector3 center)
+    {
+        center = Vector3.zero;
+        if (target == null)
+            return false;
+
+        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            return false;
+
+        Bounds bounds = default;
+        bool hasBounds = false;
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+                continue;
+            }
+
+            bounds.Encapsulate(renderer.bounds);
+        }
+
+        if (!hasBounds)
+            return false;
+
+        center = bounds.center;
+        return true;
+    }
+
+    static void SetPlayerWorldPose(Transform playerRoot, Vector3 position, Quaternion rotation)
+    {
+        CharacterController characterController = playerRoot.GetComponent<CharacterController>();
+        bool restoreCharacterController = characterController != null && characterController.enabled;
+        if (restoreCharacterController)
+            characterController.enabled = false;
+
+        playerRoot.SetPositionAndRotation(position, rotation);
+
+        if (restoreCharacterController)
+            characterController.enabled = true;
+    }
+
+    void ApplyPlayerStartFacingYawOnce()
+    {
+        if (_startFacingApplied || !applyPlayerStartFacingYaw || Mathf.Abs(playerStartYawOffset) <= 0.001f)
+            return;
+
+        Transform facingRoot = ResolvePlayerFacingRoot();
+        if (facingRoot == null)
+            return;
+
+        facingRoot.rotation = ResolveStartFacingRotation(facingRoot.rotation);
+        _startFacingApplied = true;
+    }
+
+    IEnumerator CoApplyPlayerStartFacingYawDelayed()
+    {
+        ApplyPlayerStartFacingYawOnce();
+
+        if (_startFacingApplied)
+            yield break;
+
+        yield return null;
+        ApplyPlayerStartFacingYawOnce();
+    }
+
+    Transform ResolvePlayerFacingRoot()
+    {
+        if (playerHealth != null)
+            return playerHealth.transform;
+
+        PlayerHealth runtimeHealth = FindObjectOfType<PlayerHealth>(true);
+        if (runtimeHealth != null)
+            return runtimeHealth.transform;
+
+        GameObject player = GameObject.FindWithTag("Player");
+        if (player == null)
+        {
+            PlayerReferences runtimeReferences = FindObjectOfType<PlayerReferences>(true);
+            if (runtimeReferences != null)
+                return runtimeReferences.PlayerRoot != null ? runtimeReferences.PlayerRoot : runtimeReferences.transform;
+
+            return null;
+        }
+
+        PlayerReferences references = player.GetComponent<PlayerReferences>();
+        if (references != null && references.PlayerRoot != null)
+            return references.PlayerRoot;
+
+        return player.transform;
+    }
+
+    void SetArrivalInputLocked(bool locked)
+    {
+        if (_arrivalInputLocked == locked)
+            return;
+
+        IInputBlocker inputBlocker = ResolveInputBlocker();
+        if (inputBlocker == null)
+            return;
+
+        inputBlocker.BlockAll(locked);
+        _arrivalInputLocked = locked;
+    }
+
+    IInputBlocker ResolveInputBlocker()
+    {
+        if (_inputBlocker != null)
+        {
+            UnityEngine.Object cachedObject = _inputBlocker as UnityEngine.Object;
+            if (cachedObject != null)
+                return _inputBlocker;
+
+            _inputBlocker = null;
+        }
+
+        Transform playerRoot = ResolvePlayerFacingRoot();
+        if (playerRoot == null)
+            return null;
+
+        _inputBlocker = playerRoot.GetComponent<IInputBlocker>();
+        if (_inputBlocker == null)
+            _inputBlocker = playerRoot.gameObject.AddComponent<SimpleInputBlocker>();
+
+        return _inputBlocker;
+    }
+
+    Quaternion ResolveStartFacingRotation(Quaternion fallbackRotation)
+    {
+        if (faceCameraForwardOnStart)
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera != null)
+            {
+                Vector3 forward = mainCamera.transform.forward;
+                forward.y = 0f;
+                if (forward.sqrMagnitude > 0.0001f)
+                    return Quaternion.LookRotation(forward.normalized, Vector3.up);
+            }
+        }
+
+        return Quaternion.AngleAxis(playerStartYawOffset, Vector3.up) * fallbackRotation;
     }
 
     void RefreshSubscriptions()

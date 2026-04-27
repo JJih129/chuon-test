@@ -55,8 +55,7 @@ public class LobbyTrigger : MonoBehaviour
         }
         else if (type == TriggerType.Board)
         {
-            LobbyManager.Instance.OnEnterElevator();
-            _isTriggered = true;
+            _isTriggered = LobbyManager.Instance.OnEnterElevator();
         }
     }
 }

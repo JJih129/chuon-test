@@ -40,6 +40,15 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     [SerializeField, Range(2f, 45f)] float fireFacingAngleThreshold = 12f;
     [SerializeField, Range(2f, 60f)] float telegraphFacingAngleThreshold = 22f;
 
+    [Header("Aerial Motion")]
+    [SerializeField] bool useAerialCombatMotion = true;
+    [SerializeField, Min(0f)] float hoverAmplitude = 0.28f;
+    [SerializeField, Min(0.1f)] float hoverFrequency = 1.35f;
+    [SerializeField, Range(0f, 35f)] float strafeBankAngle = 14f;
+    [SerializeField, Range(0f, 25f)] float movePitchAngle = 8f;
+    [SerializeField, Range(0.1f, 20f)] float visualTiltSharpness = 7f;
+    [SerializeField, Range(0.2f, 1.5f)] float closeOrbitDistanceMultiplier = 0.78f;
+
     [Header("Combat Role")]
     [SerializeField] DroneCombatRole combatRole = DroneCombatRole.Standard;
     [SerializeField] bool applyPerInstanceVariance = true;
@@ -110,6 +119,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     Vector3 _hitPushDirection;
     float _hitPushSpeed;
     float _hitPushDistanceRemaining;
+    float _baseHoverY;
+    float _hoverPhase;
+    Vector3 _lastMoveDirection;
+    Transform _tiltRoot;
+    Quaternion _tiltRootBaseLocalRotation = Quaternion.identity;
     bool _baseCombatTuningCached;
     float _baseMoveSpeed;
     float _baseStopDistance;
@@ -142,10 +156,13 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         CacheColliders();
         ResolveMovementCollider();
         _initialLocalScale = transform.localScale;
+        _baseHoverY = transform.position.y;
+        _hoverPhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
 
         CacheChildRenderers();
         if (droneRenderer == null)
             droneRenderer = ResolvePrimaryRenderer();
+        ResolveTiltRoot();
 
         InitializeRendererState();
         ApplyRendererPerformanceOverrides();
@@ -172,6 +189,9 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         _hitPushDirection = Vector3.zero;
         _hitPushSpeed = 0f;
         _hitPushDistanceRemaining = 0f;
+        _baseHoverY = transform.position.y;
+        _hoverPhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+        _lastMoveDirection = Vector3.zero;
         if (_deathRoutine != null)
         {
             StopCoroutine(_deathRoutine);
@@ -182,6 +202,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         CacheChildRenderers();
         CacheColliders();
         ResolveMovementCollider();
+        ResolveTiltRoot();
         RestoreDeathState();
         ApplyRendererPerformanceOverrides();
         ApplySimulationMode();
@@ -206,6 +227,24 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     {
         _attackTelegraphLeadTime = Mathf.Max(0f, leadTime);
         _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
+    }
+
+    public void SetAerialCombatMotion(bool enabled, float amplitude = -1f, float frequency = -1f)
+    {
+        useAerialCombatMotion = enabled;
+        if (amplitude >= 0f)
+            hoverAmplitude = amplitude;
+        if (frequency > 0f)
+            hoverFrequency = frequency;
+    }
+
+    public void SetCombatMovementProfile(float speedMultiplier, float stopDistanceMultiplier, float strafeMultiplierBoost)
+    {
+        moveSpeed *= Mathf.Max(0.1f, speedMultiplier);
+        stopDistance = Mathf.Max(1f, stopDistance * Mathf.Max(0.1f, stopDistanceMultiplier));
+        fireDistance = Mathf.Max(stopDistance + 2f, fireDistance * Mathf.Max(0.1f, stopDistanceMultiplier));
+        strafeSpeedMultiplier = Mathf.Clamp01(strafeSpeedMultiplier + strafeMultiplierBoost);
+        retreatSpeedMultiplier = Mathf.Clamp(retreatSpeedMultiplier + strafeMultiplierBoost * 0.5f, 0.1f, 1.3f);
     }
 
     public void SetLightweightSimulation(bool enabled, float tickInterval = 0.05f)
@@ -387,11 +426,22 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             Vector3 moveDirection = ResolveCombatMoveDirection(flatNormalized, distance);
             if (moveDirection.sqrMagnitude > 0.0001f)
             {
+                _lastMoveDirection = moveDirection;
                 float speedMultiplier = ResolveCombatMoveSpeedMultiplier(distance);
                 Vector3 moveStep = moveDirection * (moveSpeed * speedMultiplier * deltaTime);
                 MoveWithCollision(moveStep);
             }
+            else
+            {
+                _lastMoveDirection = Vector3.zero;
+            }
         }
+        else
+        {
+            _lastMoveDirection = Vector3.zero;
+        }
+
+        ApplyAerialMotion(deltaTime);
 
         if (TickHitReaction(deltaTime))
             return;
@@ -445,8 +495,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
         Vector3 strafe = Vector3.Cross(Vector3.up, toTargetNormalized) * _strafeSign;
         float radialBias = 0f;
+        float closeOrbitDistance = stopDistance * closeOrbitDistanceMultiplier;
         if (distanceToTarget > stopDistance + tolerance * 0.35f)
             radialBias = 0.2f;
+        else if (distanceToTarget < Mathf.Max(0.5f, closeOrbitDistance))
+            radialBias = -0.45f;
         else if (distanceToTarget < stopDistance - tolerance * 0.35f)
             radialBias = -0.2f;
 
@@ -505,6 +558,42 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         float minInterval = Mathf.Max(0.1f, minStrafeSwitchInterval);
         float maxInterval = Mathf.Max(minInterval, maxStrafeSwitchInterval);
         return UnityEngine.Random.Range(minInterval, maxInterval);
+    }
+
+    void ApplyAerialMotion(float deltaTime)
+    {
+        if (!useAerialCombatMotion)
+            return;
+
+        Vector3 position = transform.position;
+        float targetY = _baseHoverY;
+        if (hoverAmplitude > 0f)
+            targetY += Mathf.Sin((Time.time * hoverFrequency) + _hoverPhase) * hoverAmplitude;
+
+        position.y = Mathf.Lerp(position.y, targetY, 1f - Mathf.Exp(-deltaTime * 7f));
+        transform.position = position;
+
+        Transform tiltTarget = _tiltRoot != null ? _tiltRoot : transform;
+        Vector3 localMove = transform.InverseTransformDirection(_lastMoveDirection);
+        float bank = Mathf.Clamp(-localMove.x, -1f, 1f) * strafeBankAngle;
+        float pitch = Mathf.Clamp(localMove.z, -1f, 1f) * movePitchAngle;
+        Quaternion targetRotation = _tiltRootBaseLocalRotation * Quaternion.Euler(pitch, 0f, bank);
+        tiltTarget.localRotation = Quaternion.Slerp(
+            tiltTarget.localRotation,
+            targetRotation,
+            1f - Mathf.Exp(-deltaTime * visualTiltSharpness));
+    }
+
+    void ResolveTiltRoot()
+    {
+        if (_tiltRoot != null)
+            return;
+
+        if (droneRenderer != null && droneRenderer.transform != transform)
+        {
+            _tiltRoot = droneRenderer.transform;
+            _tiltRootBaseLocalRotation = _tiltRoot.localRotation;
+        }
     }
 
     bool TickHitReaction(float deltaTime)
