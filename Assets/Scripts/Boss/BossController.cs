@@ -1365,6 +1365,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     public void SetState(BossState newState, bool forceRestart = false)
     {
         if (_isDead) return;
+        if (_externalIntroPaused) return;
         if (currentState == newState && !forceRestart) return;
 
         if (newState == BossState.Detect || newState == BossState.Move || newState == BossState.Attack)
@@ -1431,6 +1432,32 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             return;
 
         Debug.LogWarning(message);
+    }
+
+    bool _externalIntroPaused;
+
+    public void SetExternalIntroPaused(bool paused)
+    {
+        if (_isDead || _externalIntroPaused == paused)
+            return;
+
+        _externalIntroPaused = paused;
+        if (paused)
+        {
+            if (_stateRoutine != null)
+            {
+                StopCoroutine(_stateRoutine);
+                _stateRoutine = null;
+            }
+
+            StopPreAttackPosePlayback();
+            HideGroundTelegraph();
+            UpdateMoveAnimation(0f);
+            SetCombatStrafeAnimation(false);
+            return;
+        }
+
+        SetState(BossState.Detect, true);
     }
 
     // ==================== 생존/브레이크 ====================
@@ -2558,7 +2585,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (delay > 0.001f)
             yield return new WaitForSeconds(delay);
 
-        if (_isDead || currentState != BossState.Attack)
+        if (_externalIntroPaused || _isDead || currentState != BossState.Attack)
             yield break;
 
         Transform spawnAnchor = null;
@@ -3510,7 +3537,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     bool TryStartDirectSwordWaveAttack(float distanceToPlayer, string sourceState)
     {
-        if (!useDirectSwordWaveBranch || _isDead || currentState == BossState.Attack)
+        if (!useDirectSwordWaveBranch || _externalIntroPaused || _isDead || currentState == BossState.Attack)
             return false;
 
         float meleeCommitDistance = ResolveAttackDecisionDistance() + 0.2f;
@@ -3563,6 +3590,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     bool TryStartSwordWaveAttack(float distanceToPlayer, string sourceState)
     {
+        if (_externalIntroPaused)
+            return false;
+
         if (!TryGetExecutableSwordWavePattern(distanceToPlayer, out AttackPattern swordWavePattern))
             return false;
 
