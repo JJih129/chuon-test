@@ -52,4 +52,12 @@ public static class TutorialSceneTransitionState
         s_fromCreditsToTitle = false;
         return value;
     }
+
+    public static void ClearAll()
+    {
+        s_fromTutorialToLobby = false;
+        s_fromLobbyToMain = false;
+        s_fromMainClear = false;
+        s_fromCreditsToTitle = false;
+    }
 }

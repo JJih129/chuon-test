@@ -1,7 +1,10 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameSceneBinder : MonoBehaviour
 {
+    const string MainSceneName = "MainScene";
+
     System.Collections.IEnumerator Start()
     {
         yield return null;
@@ -14,6 +17,9 @@ public class GameSceneBinder : MonoBehaviour
         var bossBreak = FindObjectOfType<BossBreakController>(true);
         var ultimate = FindObjectOfType<PlayerUltimateController>(true);
         if (hud && ph) hud.Bind(ph, pc, pg, boss);
+
+        if (SceneManager.GetActiveScene().name != MainSceneName)
+            yield break;
 
         var arrivalController = GetComponent<MainSceneArrivalController>();
         if (arrivalController == null)
