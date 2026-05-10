@@ -576,7 +576,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 030f85c3f73729f4f976f66ffb23b875, type: 3}
   m_Name: AnimationPlayableAsset of Sp_Idle_IntroPose
   m_EditorClassIdentifier: 
-  m_Clip: {fileID: 0}
+  m_Clip: {fileID: 7400000, guid: c3f16271c100901469d72794b167afe4, type: 2}
   m_Position: {x: 0, y: 0, z: 0}
   m_EulerAngles: {x: 0, y: 0, z: 0}
   m_UseTrackMatchFields: 1

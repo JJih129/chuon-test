@@ -64,6 +64,24 @@ public class PlayerMoveController : MonoBehaviour
     [Header("⑥ 애니 파라미터")]
     [SerializeField] private string p_Speed = "speed";
 
+    [Header("⑦ 정지 모션")]
+    [SerializeField] private bool useRunStartMotion = true;
+    [SerializeField] private string p_RunStartTrigger = "RunStart";
+    [SerializeField, Min(0.01f)] private float runStartMinSpeed = 0.25f;
+    [SerializeField] private bool useTurnStartMotion = true;
+    [SerializeField] private string p_TurnL90Trigger = "TurnL90";
+    [SerializeField] private string p_TurnR90Trigger = "TurnR90";
+    [SerializeField] private string p_TurnL180Trigger = "TurnL180";
+    [SerializeField] private string p_TurnR180Trigger = "TurnR180";
+    [SerializeField, Range(10f, 180f)] private float turnStartMinAngle = 55f;
+    [SerializeField, Range(90f, 180f)] private float turnStart180Angle = 135f;
+    [SerializeField, Min(0f)] private float turnStartCooldown = 0.2f;
+    [SerializeField] private bool useRunStopMotion = false;
+    [SerializeField] private string p_RunStopTrigger = "RunStop";
+    [SerializeField, Min(0.01f)] private float runStopMinSpeed = 0.35f;
+    [SerializeField, Min(0.05f)] private float runStopDuration = 0.45f;
+    [SerializeField, Min(0f)] private float runStopCooldown = 0.18f;
+
     // 내부 상태
     private CharacterController _cc;
     private Vector3 _velXZ;
@@ -79,6 +97,15 @@ public class PlayerMoveController : MonoBehaviour
     private Vector3 _currentWishDirection;
     private Vector3 _lastNonZeroMoveDirection;
     private Vector3 _smoothedRotationDirection;
+    private bool _runStopActive;
+    private bool _runStopCachedRootMotion;
+    private bool _runStopHasCachedRootMotion;
+    private float _runStopEndTime;
+    private float _nextRunStopAllowedTime;
+    private float _nextTurnStartAllowedTime;
+    private bool _wasMovingForRunStart;
+    private bool _wasMovingForRunStop;
+    private bool _runStopEligible;
 
     const float AnimSpeedWriteEpsilon = 0.0025f;
 
@@ -99,7 +126,11 @@ public class PlayerMoveController : MonoBehaviour
     }
 
     void OnEnable() { if (moveAction?.action != null) moveAction.action.Enable(); }
-    void OnDisable() { if (moveAction?.action != null) moveAction.action.Disable(); }
+    void OnDisable()
+    {
+        if (moveAction?.action != null) moveAction.action.Disable();
+        StopRunStopMotion();
+    }
 
     void Start()
     {
@@ -128,6 +159,7 @@ public class PlayerMoveController : MonoBehaviour
             _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
+            StopRunStopMotion();
             return;
         }
 
@@ -140,6 +172,7 @@ public class PlayerMoveController : MonoBehaviour
             _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
+            StopRunStopMotion();
             return;
         }
 
@@ -152,6 +185,7 @@ public class PlayerMoveController : MonoBehaviour
             _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
+            StopRunStopMotion();
             return;
         }
 
@@ -164,6 +198,7 @@ public class PlayerMoveController : MonoBehaviour
             _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             MoveWithGravity(Vector3.zero);
             SetAnimSpeed(0f);
+            StopRunStopMotion();
             return;
         }
 
@@ -229,6 +264,7 @@ public class PlayerMoveController : MonoBehaviour
         float animSpeed01 = _velXZ.sqrMagnitude <= 0.0001f
             ? 0f
             : Mathf.Clamp01(_velXZ.magnitude / Mathf.Max(0.01f, runSpeed));
+        UpdateRunStartMotion(animSpeed01);
         SetAnimSpeed(animSpeed01);
     }
 
@@ -248,6 +284,7 @@ public class PlayerMoveController : MonoBehaviour
             _currentWishDirection = Vector3.zero;
             _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
             SetAnimSpeed(0f);
+            StopRunStopMotion();
         }
     }
 
@@ -261,6 +298,7 @@ public class PlayerMoveController : MonoBehaviour
         _currentWishDirection = Vector3.zero;
         _smoothedRotationDirection = playerRoot != null ? Flat(playerRoot.forward) : Vector3.forward;
         SetAnimSpeed(0f);
+        StopRunStopMotion();
     }
 
     // 회피 종료 시 호출
@@ -406,6 +444,123 @@ public class PlayerMoveController : MonoBehaviour
 
         animator.SetFloat(p_Speed, spd01);
         _lastAnimSpeed = spd01;
+    }
+
+    void UpdateRunStopMotion(float speed01)
+    {
+        bool isMoving = speed01 > 0.05f || _currentMoveInput.sqrMagnitude > 0.0004f;
+        if (isMoving && speed01 >= runStopMinSpeed)
+            _runStopEligible = true;
+
+        bool shouldStop = useRunStopMotion
+            && !_runStopActive
+            && _wasMovingForRunStop
+            && !isMoving
+            && _runStopEligible
+            && Time.time >= _nextRunStopAllowedTime;
+
+        if (shouldStop)
+            PlayRunStopMotion();
+
+        if (isMoving && _runStopActive)
+            StopRunStopMotion();
+
+        _wasMovingForRunStop = isMoving;
+
+        if (_runStopActive && Time.time >= _runStopEndTime)
+            StopRunStopMotion();
+    }
+
+    void UpdateRunStartMotion(float speed01)
+    {
+        bool isMoving = speed01 >= runStartMinSpeed || _currentMoveInput.sqrMagnitude > 0.0004f;
+        if (useRunStartMotion && !_wasMovingForRunStart && isMoving)
+            PlayRunStartMotion();
+
+        _wasMovingForRunStart = isMoving;
+    }
+
+    void PlayRunStartMotion()
+    {
+        if (animator == null || string.IsNullOrEmpty(p_RunStartTrigger))
+            return;
+
+        animator.ResetTrigger(p_RunStartTrigger);
+        animator.SetTrigger(p_RunStartTrigger);
+    }
+
+    bool TryPlayTurnStartMotion()
+    {
+        if (!useTurnStartMotion || animator == null || playerRoot == null || _currentWishDirection.sqrMagnitude <= 0.0004f)
+            return false;
+        if (playerLockOn != null && playerLockOn.IsLocked)
+            return false;
+        if (Time.time < _nextTurnStartAllowedTime)
+            return false;
+
+        float signedAngle = Vector3.SignedAngle(Flat(playerRoot.forward), _currentWishDirection.normalized, Vector3.up);
+        float absAngle = Mathf.Abs(signedAngle);
+        if (absAngle < turnStartMinAngle)
+            return false;
+
+        string trigger = absAngle >= turnStart180Angle
+            ? (signedAngle < 0f ? p_TurnL180Trigger : p_TurnR180Trigger)
+            : (signedAngle < 0f ? p_TurnL90Trigger : p_TurnR90Trigger);
+
+        if (string.IsNullOrEmpty(trigger))
+            return false;
+
+        animator.ResetTrigger(trigger);
+        animator.SetTrigger(trigger);
+        _nextTurnStartAllowedTime = Time.time + turnStartCooldown;
+        return true;
+    }
+
+    void PlayRunStopMotion()
+    {
+        if (animator == null || string.IsNullOrEmpty(p_RunStopTrigger))
+            return;
+
+        StopRunStopMotion();
+
+        _runStopCachedRootMotion = animator.applyRootMotion;
+        _runStopHasCachedRootMotion = true;
+        animator.applyRootMotion = true;
+        animator.ResetTrigger(p_RunStopTrigger);
+        animator.SetTrigger(p_RunStopTrigger);
+        _runStopEndTime = Time.time + runStopDuration;
+        _nextRunStopAllowedTime = _runStopEndTime + runStopCooldown;
+        _runStopActive = true;
+        _runStopEligible = false;
+    }
+
+    void StopRunStopMotion()
+    {
+        _runStopActive = false;
+        if (animator != null && _runStopHasCachedRootMotion)
+            animator.applyRootMotion = _runStopCachedRootMotion;
+        _runStopHasCachedRootMotion = false;
+        ResetRunStopTracking();
+    }
+
+    void ResetRunStopTracking()
+    {
+        _wasMovingForRunStop = false;
+        _runStopEligible = false;
+    }
+
+    void OnAnimatorMove()
+    {
+        if (!_runStopActive || animator == null || _cc == null || !_cc.enabled)
+            return;
+
+        Vector3 delta = animator.deltaPosition;
+        delta.y = 0f;
+        if (delta.sqrMagnitude > 0.000001f)
+            _cc.Move(delta);
+
+        if (playerRoot != null)
+            playerRoot.rotation *= animator.deltaRotation;
     }
 
     bool IsInputBlocked()

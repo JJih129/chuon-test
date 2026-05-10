@@ -2148,9 +2148,17 @@ MonoBehaviour:
   playerLockOn: {fileID: 1023266476}
   distance: 2
   height: 2
+  focusHeight: 1.42
   mouseSensitivity: 2000
   minY: -30
   maxY: 60
+  stabilizeFollowTarget: 1
+  movingFocusSmoothTime: 0.1
+  idleFocusSmoothTime: 0.2
+  focusDeadZone: 0.12
+  maxFocusFollowSpeed: 40
+  manualYawSmoothTime: 0.035
+  manualPitchSmoothTime: 0.04
   autoAlignEnabled: 0
   autoAlignSpeed: 2.5
   alignDelay: 1
@@ -2246,7 +2254,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 95828440}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.10165894, y: -0.038401686, z: 0.0039271624, w: 0.9940701}
+  m_LocalRotation: {x: 0.0918118, y: -0.044804905, z: 0.0041352906, w: 0.99475926}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -2335,8 +2343,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21308722, y: -0.0024676502, z: -0.0005381869, w: 0.9770299}
-  m_LocalPosition: {x: 0.03125785, y: -1.0388647, z: -28.188004}
+  m_LocalRotation: {x: -0.21309096, y: -0.002469051, z: -0.00053850235, w: 0.97702914}
+  m_LocalPosition: {x: 0.031275526, y: -1.0389161, z: -28.187984}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -8964,6 +8972,81 @@ Transform:
   - {fileID: 1623137738}
   - {fileID: 1426861152}
   m_Father: {fileID: 142924088}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &469234258
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 469234260}
+  - component: {fileID: 469234259}
+  m_Layer: 0
+  m_Name: VCam_MainIntro_BossReveal
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &469234259
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 469234258}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Priority:
+    Enabled: 1
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
+  m_StreamingVersion: 20241001
+  m_LegacyPriority: 0
+  Target:
+    TrackingTarget: {fileID: 0}
+    LookAtTarget: {fileID: 0}
+    CustomLookAtTarget: 0
+  Lens:
+    FieldOfView: 40
+    OrthographicSize: 10
+    NearClipPlane: 0.1
+    FarClipPlane: 5000
+    Dutch: 0
+    ModeOverride: 0
+    PhysicalProperties:
+      GateFit: 2
+      SensorSize: {x: 21.946, y: 16.002}
+      LensShift: {x: 0, y: 0}
+      FocusDistance: 10
+      Iso: 200
+      ShutterSpeed: 0.005
+      Aperture: 16
+      BladeCount: 5
+      Curvature: {x: 2, y: 11}
+      BarrelClipping: 0.25
+      Anamorphism: 0
+  BlendHint: 0
+--- !u!4 &469234260
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 469234258}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.013256429, y: 0.19770114, z: -0.0026738357, w: 0.98016906}
+  m_LocalPosition: {x: -1.6227973, y: 1.35, z: 12.184714}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 902207463}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &474479057
 GameObject:
@@ -16018,12 +16101,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 1023266482}
-  forwardDistance: 2
-  heightOffset: 1
+  cameraReference: {fileID: 0}
+  forwardDistance: 1.15
+  heightOffset: 1.35
   lateralOffset: 0
-  followLerp: 0.15
+  followLerp: 0.08
+  followSmoothTime: 0.12
+  stationarySmoothTime: 0.22
+  recenterDeadZone: 0.18
+  maxFollowSpeed: 32
+  useCameraPlanarBasis: 1
   alignYawToTarget: 1
-  yawLerp: 0.15
+  yawLerp: 0.08
 --- !u!4 &894471296
 Transform:
   m_ObjectHideFlags: 0
@@ -16033,7 +16122,7 @@ Transform:
   m_GameObject: {fileID: 894471294}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -20}
+  m_LocalPosition: {x: 0, y: 1.35, z: -20.85}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -16135,6 +16224,335 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 900161823}
   m_CullTransparentMesh: 1
+--- !u!1 &902207460
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 902207463}
+  - component: {fileID: 902207461}
+  - component: {fileID: 902207462}
+  m_Layer: 0
+  m_Name: MainSceneIntroDirector
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!320 &902207461
+PlayableDirector:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 902207460}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_PlayableAsset: {fileID: 11400000, guid: 7d7ab8d285a942345b1dcb1eb7afed41, type: 2}
+  m_InitialState: 0
+  m_WrapMode: 2
+  m_DirectorUpdateMode: 1
+  m_InitialTime: 0
+  m_SceneBindings:
+  - key: {fileID: 0}
+    value: {fileID: 902207462}
+  - key: {fileID: 0}
+    value: {fileID: 902207462}
+  - key: {fileID: 0}
+    value: {fileID: 902207462}
+  - key: {fileID: 0}
+    value: {fileID: 963194233}
+  - key: {fileID: 0}
+    value: {fileID: 902207462}
+  - key: {fileID: 0}
+    value: {fileID: 963194233}
+  - key: {fileID: 0}
+    value: {fileID: 902207462}
+  - key: {fileID: 0}
+    value: {fileID: 963194233}
+  - key: {fileID: -8299648930299264291, guid: 7d7ab8d285a942345b1dcb1eb7afed41, type: 2}
+    value: {fileID: 902207462}
+  - key: {fileID: 6056399370908868564, guid: 7d7ab8d285a942345b1dcb1eb7afed41, type: 2}
+    value: {fileID: 963194233}
+  m_ExposedReferences:
+    m_References:
+    - MainIntro.SHOT_ElevatorExit.VCam_MainIntro_ElevatorExit: {fileID: 1320465489}
+    - MainIntro.SHOT_BossReveal.VCam_MainIntro_BossReveal: {fileID: 469234259}
+--- !u!114 &902207462
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 902207460}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e52de21a22b6dd44c9cc19f810c65059, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Events:
+    m_Signals:
+    - {fileID: 11400000, guid: 65664a32947835f449a2410aff0cf0dd, type: 2}
+    - {fileID: 11400000, guid: cf87ed71ee2c2854994dda4d5ff22b55, type: 2}
+    - {fileID: 11400000, guid: e0060b7f005eced40a9d41eadd5cb453, type: 2}
+    - {fileID: 11400000, guid: f54ba66365703b946a0a0675acf690e6, type: 2}
+    - {fileID: 11400000, guid: 493a6d2fc18e25d489a9bcc6ee48a033, type: 2}
+    - {fileID: 11400000, guid: d53f83b4b743c4d429ce5358ec34afae, type: 2}
+    - {fileID: 11400000, guid: 57b73241be2c9e3429f87c1e87f8d235, type: 2}
+    - {fileID: 11400000, guid: d3a2fdbfd62879c4eb26a348d487b5d6, type: 2}
+    - {fileID: 11400000, guid: 630598da28243e64591716d6bbd89858, type: 2}
+    - {fileID: 11400000, guid: 16093a14f78b7ef48bf099117a7fdbcc, type: 2}
+    - {fileID: 11400000, guid: 40ef42993c3256f469da42b76e726c1d, type: 2}
+    - {fileID: 11400000, guid: 897389a0f394f68419cd27a3976dbe3b, type: 2}
+    - {fileID: 11400000, guid: c04178306c8f92c49bf842a4a5c6ddc5, type: 2}
+    - {fileID: 11400000, guid: 4bf08846794b6914dbc2d2d333bf1d7c, type: 2}
+    - {fileID: 11400000, guid: a41d11abcf893264883cc3a5cf4a67d0, type: 2}
+    - {fileID: 11400000, guid: 5e4b3a85c37db944c8a163f8c38353a0, type: 2}
+    m_Events:
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroBegin
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineElevatorDoorOpen
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelinePlayerWalkOut
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineBossReveal
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineCombatStart
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine00
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine01
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine02
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine03
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine04
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine05
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine06
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine07
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine08
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroLine09
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+    - m_PersistentCalls:
+        m_Calls:
+        - m_Target: {fileID: 1340670547}
+          m_TargetAssemblyTypeName: MainSceneArrivalController, Assembly-CSharp
+          m_MethodName: TimelineIntroEnd
+          m_Mode: 0
+          m_Arguments:
+            m_ObjectArgument: {fileID: 0}
+            m_ObjectArgumentAssemblyTypeName: 
+            m_IntArgument: 0
+            m_FloatArgument: 0
+            m_StringArgument: 
+            m_BoolArgument: 0
+          m_CallState: 2
+--- !u!4 &902207463
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 902207460}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1320465488}
+  - {fileID: 469234260}
+  m_Father: {fileID: 1340670546}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &912002277
 GameObject:
   m_ObjectHideFlags: 0
@@ -17126,7 +17544,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.11967671, y: -0.038324624, z: 0.0046232645, w: 0.9920622}
+  m_LocalRotation: {x: 0.10982443, y: -0.04470896, z: 0.004945083, w: 0.9929327}
   m_LocalPosition: {x: 0.4621917, y: 2.7, z: -25.973207}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -17250,6 +17668,9 @@ MonoBehaviour:
   freeLook: {fileID: 1897136319}
   vcamProxy: {fileID: 99273691}
   brain: {fileID: 963194233}
+  playerLockOn: {fileID: 0}
+  allowGameplayWheelZoom: 0
+  disableDuringLockOn: 1
   onlyActiveVCam: 1
   step: 0.5
   invertScroll: 0
@@ -18320,6 +18741,9 @@ MonoBehaviour:
   playerReferences: {fileID: 1023266484}
   fallbackVfxRoot: {fileID: 0}
   debugLog: 0
+  finalExplosionImpactFramePrefab: {fileID: 7434498302926140362, guid: 66209373dd5e22140a220a74414d244b, type: 3}
+  finalExplosionImpactFrameScale: {x: 2.2, y: 2.2, z: 2.2}
+  finalExplosionImpactFrameLifetime: 0.4
 --- !u!114 &1023266515
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -23463,6 +23887,81 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1317118645}
   m_CullTransparentMesh: 1
+--- !u!1 &1320465487
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1320465488}
+  - component: {fileID: 1320465489}
+  m_Layer: 0
+  m_Name: VCam_MainIntro_ElevatorExit
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1320465488
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1320465487}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: 0.97632164, z: -0, w: 0.21632405}
+  m_LocalPosition: {x: -4.8, y: 1.25, z: -9.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 902207463}
+  m_LocalEulerAnglesHint: {x: -5.87, y: 133.2, z: 0}
+--- !u!114 &1320465489
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1320465487}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  Priority:
+    Enabled: 1
+    m_Value: 0
+  OutputChannel: 1
+  StandbyUpdate: 2
+  m_StreamingVersion: 20241001
+  m_LegacyPriority: 0
+  Target:
+    TrackingTarget: {fileID: 1023266482}
+    LookAtTarget: {fileID: 0}
+    CustomLookAtTarget: 0
+  Lens:
+    FieldOfView: 40
+    OrthographicSize: 10
+    NearClipPlane: 0.1
+    FarClipPlane: 5000
+    Dutch: 0
+    ModeOverride: 0
+    PhysicalProperties:
+      GateFit: 2
+      SensorSize: {x: 21.946, y: 16.002}
+      LensShift: {x: 0, y: 0}
+      FocusDistance: 10
+      Iso: 200
+      ShutterSpeed: 0.005
+      Aperture: 16
+      BladeCount: 5
+      Curvature: {x: 2, y: 11}
+      BarrelClipping: 0.25
+      Anamorphism: 0
+  BlendHint: 0
 --- !u!1 &1322105524
 GameObject:
   m_ObjectHideFlags: 0
@@ -24123,6 +24622,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1340670546}
   - component: {fileID: 1340670545}
+  - component: {fileID: 1340670547}
   m_Layer: 0
   m_Name: GameSceneBinder
   m_TagString: Untagged
@@ -24142,6 +24642,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 38a13a9a281579441a3e4b67a328862c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  elevatorIntroCameraLocalOffset: {x: -2, y: 1, z: 5.6}
+  elevatorIntroCameraLookOffset: {x: 0, y: 1.2, z: 0.8}
 --- !u!4 &1340670546
 Transform:
   m_ObjectHideFlags: 0
@@ -24154,9 +24656,223 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 902207463}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1340670547
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1340670544}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f676f79bfd6b1834d8f19aaa90c927b1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerHud: {fileID: 0}
+  bossController: {fileID: 0}
+  playerHealth: {fileID: 0}
+  bossBreakController: {fileID: 0}
+  playerUltimateController: {fileID: 0}
+  arrivalMessage: "\uC2E4\uC804 \uAD6C\uAC04 \uC9C4\uC785"
+  threatMessage: "\uACE0\uC704\uD5D8 \uBC18\uC751 \uAC10\uC9C0"
+  egoMessage: EGO SYNC
+  arrivalDelay: 0.45
+  arrivalHold: 0.72
+  threatHold: 0.82
+  betweenDelay: 0.26
+  arrivalTelegraphType: 2
+  threatTelegraphType: 4
+  useBossIntroTimeline: 1
+  preferPlayableDirectorBossIntro: 1
+  bossIntroDirector: {fileID: 902207461}
+  bossIntroSteps:
+  - speaker: EGO
+    text: "\uB3C4\uCC29\uD588\uC5B4, \uCD94\uC628. \uACA9\uB0A9\uACE0 \uCE35\uC774\uC57C."
+    hold: 1.8
+    delayAfter: 0.2
+    telegraphType: 2
+    dangerFeedback: 0
+    introEvent: 1
+  - speaker: "\uCD94\uC628"
+    text: "\uC77C\uBD80\uB7EC \uC5EC\uAE30\uB85C \uBCF4\uB0B8 \uAC74\uAC00."
+    hold: 1.6
+    delayAfter: 0.2
+    telegraphType: 0
+    dangerFeedback: 0
+    introEvent: 0
+  - speaker: EGO
+    text: "\uC774\uC0C1\uD574. \uBCF4\uC548\uB9DD\uC774 \uB108\uBB34 \uC870\uC6A9\uD574."
+    hold: 1.8
+    delayAfter: 0.2
+    telegraphType: 0
+    dangerFeedback: 0
+    introEvent: 0
+  - speaker: EGO
+    text: "\uC815\uC815\uD560\uAC8C. \uC774\uC81C \uC2DC\uB044\uB7EC\uC6CC\uC84C\uB124."
+    hold: 1.6
+    delayAfter: 0.2
+    telegraphType: 4
+    dangerFeedback: 1
+    introEvent: 2
+  - speaker: EGO
+    text: "\uC804\uBC29 \uACE0\uC5D0\uB108\uC9C0 \uBC18\uC751. \uC778\uAC04\uD615...
+      \uC544\uB2C8, \uC2E4\uD5D8\uCCB4\uC57C."
+    hold: 2.2
+    delayAfter: 0.2
+    telegraphType: 4
+    dangerFeedback: 1
+    introEvent: 3
+  - speaker: "\uCD94\uC628"
+    text: "\uB098\uB791 \uAC19\uC740 \uBD80\uB958\uB77C\uB294 \uAC74\uAC00."
+    hold: 1.7
+    delayAfter: 0.2
+    telegraphType: 0
+    dangerFeedback: 0
+    introEvent: 0
+  - speaker: EGO
+    text: "Type-D. \uB124 \uC774\uC804 \uC2E4\uD5D8 \uB370\uC774\uD130\uB97C \uAE30\uBC18\uC73C\uB85C
+      \uB9CC\uB4E0 \uBC29\uC5B4 \uAC1C\uCCB4\uC77C \uAC00\uB2A5\uC131\uC774 \uB192\uC544."
+    hold: 2.4
+    delayAfter: 0.2
+    telegraphType: 4
+    dangerFeedback: 0
+    introEvent: 0
+  - speaker: "\uCD94\uC628"
+    text: "\uADF8\uB7FC \uBCA0\uBA74 \uB418\uACA0\uB124."
+    hold: 1.5
+    delayAfter: 0.2
+    telegraphType: 1
+    dangerFeedback: 0
+    introEvent: 0
+  - speaker: EGO
+    text: "\uCD94\uC628, \uBA3C\uC800 \uC77D\uACE0 \uB4E4\uC5B4\uAC00. \uD798\uC73C\uB85C
+      \uBC00\uBA74 \uB124\uAC00 \uBA3C\uC800 \uBD80\uC11C\uC838."
+    hold: 2.2
+    delayAfter: 0.2
+    telegraphType: 2
+    dangerFeedback: 0
+    introEvent: 0
+  - speaker: "\uCD94\uC628"
+    text: "\uAC71\uC815 \uB9C8. \uB05D\uAE4C\uC9C0 \uBCA8 \uAC70\uC57C."
+    hold: 1.7
+    delayAfter: 0.2
+    telegraphType: 1
+    dangerFeedback: 0
+    introEvent: 4
+  introAudioSource: {fileID: 0}
+  elevatorOpenSfx: {fileID: 0}
+  alarmSfx: {fileID: 0}
+  bossIdentifySfx: {fileID: 0}
+  alarmSirenDuration: 1.85
+  alarmSirenPulseSpeed: 7.5
+  alarmSirenColor: {r: 1, g: 0.05, b: 0.02, a: 1}
+  alarmSirenMaxOverlayAlpha: 0.22
+  alarmSirenLightIntensity: 3.2
+  alarmSirenLightRange: 8
+  bossRevealDustPrefab: {fileID: 0}
+  bossRevealVfxAnchor: {fileID: 0}
+  spawnBossRevealDust: 0
+  useFallbackBossRevealDust: 1
+  useBossRevealCloseUp: 1
+  bossRevealCloseUpCamera: {fileID: 0}
+  bossRevealCloseUpPriority: 120
+  bossRevealCloseUpInactivePriority: -100
+  bossRevealCloseUpHold: 3.8
+  bossRevealCloseUpBlendIn: 0.55
+  bossRevealCloseUpBlendOut: 0.75
+  bossRevealCloseUpDistance: 3.4
+  bossRevealCloseUpSideOffset: 1.45
+  bossRevealCloseUpHeight: 1.35
+  bossRevealCloseUpLookHeight: 1.25
+  bossRevealCloseUpTracksMovingBoss: 1
+  useBossIntroHologram: 1
+  hideBossVisualUntilReveal: 1
+  moveBossFromHiddenStartOnReveal: 1
+  bossRevealWalkOutDistance: 5.5
+  bossRevealWalkOutDuration: 3.6
+  bossRevealWalkAnimationSpeed: 0.62
+  bossRevealWalkEndClip: {fileID: 0}
+  bossRevealWalkEndMaxDuration: 0.9
+  bossIntroHologramMaterial: {fileID: 0}
+  bossIntroHologramFadeIn: 0.2
+  bossIntroHologramHoldBeforeReveal: 2.25
+  bossIntroHologramRevealDuration: 0.95
+  bossIntroHologramColor: {r: 0, g: 0.65, b: 1, a: 0.34}
+  useBossIntroDialogueSubtitle: 1
+  introDialoguePresenter: {fileID: 0}
+  playElevatorArrivalOnSceneStart: 1
+  elevatorArrivalAnchor: {fileID: 0}
+  elevatorDoorController: {fileID: 0}
+  closedElevatorDoorVisual: {fileID: 0}
+  openElevatorDoorVisual: {fileID: 0}
+  elevatorGrillePanels: []
+  elevatorDoorPanels: []
+  useFallbackDoorPanelMotion: 1
+  useExplicitElevatorArrivalPosition: 1
+  elevatorArrivalWorldPosition: {x: 0, y: 0, z: -22}
+  elevatorArrivalWorldOffset: {x: 0, y: 0, z: 0}
+  useExplicitElevatorArrivalRotation: 1
+  faceBossOnElevatorArrival: 1
+  elevatorArrivalYaw: 0
+  snapCameraBehindPlayerOnElevatorArrival: 1
+  useElevatorIntroCinematicCamera: 1
+  elevatorIntroCinematicCamera: {fileID: 0}
+  elevatorIntroCinematicPriority: 130
+  elevatorIntroCinematicInactivePriority: -100
+  elevatorIntroCameraLocalOffset: {x: -3.2, y: 1.25, z: 9}
+  elevatorIntroCameraLookOffset: {x: 0, y: 1.25, z: 1.2}
+  elevatorArrivalCameraPitch: 8
+  elevatorArrivalCameraYawOffset: 180
+  elevatorArrivalCameraDistance: 4.2
+  elevatorArrivalCameraHeight: 1.25
+  elevatorDoorClosedHold: 0.9
+  elevatorDoorOpenHold: 0.75
+  elevatorGrilleOpenDuration: 0.85
+  elevatorDoorOpenDelayAfterGrille: 0.12
+  elevatorDoorOpenDuration: 1.1
+  elevatorDoorOpenLift: 4.2
+  walkPlayerOutAfterDoorOpen: 1
+  elevatorWalkOutDelay: 0.15
+  elevatorIntroHoldAfterWalkOut: 1.25
+  elevatorWalkOutDistance: 6.2
+  elevatorWalkOutDuration: 3
+  elevatorWalkOutAnimSpeed: 0.45
+  elevatorWalkOutSpeedParameter: speed
+  elevatorWalkStartClip: {fileID: 0}
+  elevatorWalkLoopClip: {fileID: 0}
+  elevatorWalkEndClip: {fileID: 0}
+  elevatorWalkStartMaxDuration: 0.65
+  elevatorWalkEndMaxDuration: 0.9
+  holdElevatorWalkEndPoseUntilInputUnlock: 1
+  elevatorWalkAnimationSpeed: 1
+  elevatorArrivedMessage: "\uC2B9\uAC15\uAE30 \uC815\uCC29"
+  elevatorDoorOpenMessage: "\uC804\uD22C \uAD6C\uC5ED \uC811\uC18D"
+  applyPlayerStartFacingYaw: 1
+  faceCameraForwardOnStart: 1
+  playerStartYawOffset: 180
+  firstDefenseCoachMessage: "\uCCAB \uAD50\uD658\uC740 \uC0B4\uC544\uB0A8\uB294 \uCABD\uC774
+    \uC6B0\uC120\uC774\uC57C"
+  firstPunishCoachMessage: "\uBE48\uD2C8\uC774 \uC5F4\uB838\uB2E4. \uC9E7\uAC8C \uB123\uACE0
+    \uBE60\uC838"
+  firstDamageCoachMessage: "\uBB34\uB9AC\uD558\uC9C0 \uB9C8. \uB2E4\uC74C \uD328\uD134\uC744
+    \uBA3C\uC800 \uC77D\uC5B4"
+  phaseTwoCoachMessage: "\uD398\uC774\uC988 2. \uACF5\uC138\uAC00 \uBE68\uB77C\uC9C4\uB2E4.
+    \uC751\uC218 \uD6C4 \uC9E7\uAC8C"
+  phaseThreeCoachMessage: "\uD398\uC774\uC988 3. \uBC84\uC11C\uD06C \uAD6C\uAC04\uC774\uC57C.
+    \uD328\uD134\uC744 \uB05D\uAE4C\uC9C0 \uBD10"
+  breakCoachMessage: "\uBE0C\uB808\uC774\uD06C\uB2E4. \uC9E7\uAC8C \uBAB0\uC544\uCE58\uACE0
+    \uAD81\uADF9\uAE30\uB97C \uACB9\uCCD0"
+  ultimateReadyMessage: "\uAD81\uADF9\uAE30 \uC900\uBE44 \uC644\uB8CC. \uBE0C\uB808\uC774\uD06C
+    \uD0C0\uC774\uBC0D\uC5D0 \uB9DE\uCDB0"
+  coachDelayAfterTelegraph: 0.14
+  coachHold: 0.72
+  phaseCoachDelay: 0.48
+  breakCoachHold: 0.84
+  ultimateReadyHold: 0.78
 --- !u!1 &1343383020
 GameObject:
   m_ObjectHideFlags: 0
@@ -25426,7 +26142,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1408991141}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.009013816, y: 0.9383373, z: -0.34473166, w: -0.024535026}
+  m_LocalRotation: {x: -0.004024776, y: 0.9754817, z: -0.21931438, w: -0.01790168}
   m_LocalPosition: {x: -0.35760233, y: 0, z: 7.97184}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -25494,7 +26210,7 @@ Transform:
   m_GameObject: {fileID: 1420635678}
   serializedVersion: 2
   m_LocalRotation: {x: -0.09721352, y: 0.89684755, z: -0.24583176, w: -0.35465595}
-  m_LocalPosition: {x: 0.34, y: 1.54, z: 0.8740946}
+  m_LocalPosition: {x: 0.34, y: 1.54, z: -21.44}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -26879,7 +27595,7 @@ Transform:
   m_GameObject: {fileID: 1496251060}
   serializedVersion: 2
   m_LocalRotation: {x: -0.057496533, y: 0.9133923, z: -0.13880892, w: -0.37833944}
-  m_LocalPosition: {x: 0.58, y: 1.44, z: 1.1123607}
+  m_LocalPosition: {x: 0.58, y: 1.44, z: -21.08}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -27539,7 +28255,7 @@ Transform:
   m_GameObject: {fileID: 1518694910}
   serializedVersion: 2
   m_LocalRotation: {x: -0.0012918292, y: 0.9979498, z: -0.060313143, w: -0.021374792}
-  m_LocalPosition: {x: 0.12, y: 1.48, z: 7.618539}
+  m_LocalPosition: {x: 0.12, y: 1.48, z: -19.15}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -28245,7 +28961,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1555217730}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.11967671, y: -0.038324628, z: 0.0046232645, w: 0.9920622}
+  m_LocalRotation: {x: 0.109824404, y: -0.044708952, z: 0.0049450826, w: 0.9929327}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -32309,10 +33025,23 @@ MonoBehaviour:
   swordWaveDirectMaxRange: 18
   swordWaveDirectCooldown: 3.2
   swordWaveDirectChargeTime: 1.15
+  noPatternFallbackAttackDelay: 0.65
   chaseTurnSpeed: 360
   closeChaseTurnSpeed: 540
   closeChaseTurnDistance: 1.8
   moveAnimDamp: 0.097
+  useRunStartMotion: 1
+  runStartTriggerName: RunStart
+  runStartMinMoveBlend: 0.25
+  useTurnStartMotion: 1
+  turnStartMinAngle: 55
+  turnStart180Angle: 135
+  turnStartCooldown: 0.2
+  useRunStopMotion: 0
+  runStopTriggerName: RunStop
+  runStopMinMoveBlend: 0.35
+  runStopDuration: 0.45
+  runStopCooldown: 0.18
   obstacleProbeDistance: 2.2
   obstacleProbeAngle: 35
   obstacleSideProbeAngle: 65
@@ -35979,11 +36708,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   player: {fileID: 1023266482}
   playerLockOn: {fileID: 1023266476}
-  distance: 4
-  height: 1.5
+  distance: 3.25
+  height: 1.34
+  focusHeight: 1.42
   mouseSensitivity: 3
   minY: -30
   maxY: 60
+  stabilizeFollowTarget: 1
+  movingFocusSmoothTime: 0.1
+  idleFocusSmoothTime: 0.2
+  focusDeadZone: 0.12
+  maxFocusFollowSpeed: 40
+  manualYawSmoothTime: 0.035
+  manualPitchSmoothTime: 0.04
   autoAlignEnabled: 0
   autoAlignSpeed: 2.5
   alignDelay: 1
@@ -36006,6 +36743,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   freeLook: {fileID: 1897136317}
+  playerLockOn: {fileID: 0}
+  allowGameplayWheelZoom: 0
+  disableDuringLockOn: 1
   step: 0.5
   invertScroll: 0
   minRadius: 2
@@ -38488,7 +39228,7 @@ Transform:
   m_GameObject: {fileID: 2019237295}
   serializedVersion: 2
   m_LocalRotation: {x: 0.0974996, y: 0.41132832, z: -0.04430568, w: 0.90517396}
-  m_LocalPosition: {x: -2.409699, y: 1.7408676, z: -16.443521}
+  m_LocalPosition: {x: -1.85, y: 1.75, z: -22.12}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -41061,7 +41801,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: 1, z: -0, w: -0.00023249697}
   m_LocalPosition: {x: -0.19, y: 0, z: 15.592}
-  m_LocalScale: {x: 0.4, y: 0.4, z: 0.4}
+  m_LocalScale: {x: 0.6, y: 0.6, z: 0.6}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 697599575}
@@ -42570,10 +43310,8 @@ MonoBehaviour:
     localEulerOffset: {x: 0, y: 0, z: 0}
     localScale: {x: 1.16, y: 1.16, z: 1.16}
     fallbackLifetime: 0.92
-  trailTime: 0.14
   trailStartWidth: 0.14
   trailEndWidth: 0.02
-  trailMinVertexDistance: 0.02
   trailStartColor: {r: 0.3, g: 1, b: 1, a: 0.95}
   trailEndColor: {r: 0.15, g: 0.7, b: 1, a: 0}
   swordTipForwardPadding: 0.04

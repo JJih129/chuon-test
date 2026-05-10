@@ -433,53 +433,9 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             return;
 
         StartCoroutine(CoApplyMeleeHitboxAttack(snapshot));
-        return;
-
-        Vector3 source = attackOrigin != null ? attackOrigin.position : transform.position;
-        Vector3 targetPos = lockedTargetPoint;
-        Vector2 source2D = new Vector2(source.x, source.z);
-        Vector2 target2D = new Vector2(targetPos.x, targetPos.z);
-
         // 실제 방어/패링/퍼펙트 회피 판정은 기존 PlayerDamageReceiver 쪽에 맡기고,
         // 더미는 공격 시점 전후의 플레이어 이벤트 변화만 읽어 결과를 분류한다.
-        if ((target2D - source2D).sqrMagnitude <= _activeProfile.hitRange * _activeProfile.hitRange)
-        {
-            IDamageReceiver receiver = playerTarget.GetComponent<IDamageReceiver>();
-            if (receiver == null)
-                receiver = playerTarget.GetComponentInParent<IDamageReceiver>();
-
-            if (receiver != null)
-            {
-                Vector3 hitDirection = (targetPos - source).sqrMagnitude > 0.0001f
-                    ? (targetPos - source).normalized
-                    : transform.forward;
-
-                HitPayload payload = new HitPayload
-                {
-                    attacker = transform,
-                    damage = _activeProfile.damage,
-                    hitDirection = hitDirection,
-                    hitPoint = targetPos,
-                    hitType = HitType.Normal,
-                    canParry = _activeProfile.canParry,
-                    canPerfectDodge = _activeProfile.canPerfectDodge,
-                    canGuard = !_activeProfile.unblockable,
-                    unblockable = _activeProfile.unblockable
-                };
-
-                receiver.ReceiveHit(payload);
-            }
-        }
-
         // 기존 전투 시스템 이벤트를 우선 신뢰하고, 아무 이벤트가 없을 때만 회피 추정으로 떨어진다.
-        TrainingDummyAttackResult result = ClassifyAttackResult(snapshot, false);
-
-        AttackResolved?.Invoke(this, result);
-        UpdateAdaptiveAssist(result);
-        PlayDefenseResultReaction(result);
-
-        if (debugLogs)
-            Debug.Log($"[TrainingDummyController] {name} attack resolved: {result}", this);
     }
 
     IEnumerator CoExecuteAttackWindow(Vector3 lockedTargetPoint)

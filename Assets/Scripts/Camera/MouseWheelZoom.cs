@@ -21,8 +21,11 @@ public class MouseWheelZoom : MonoBehaviour
     public FreeLookCamera freeLook;       // 선택: 락온 아닐 때 사용  // ref: FreeLookCamera.cs
     public VCamTransposerProxy vcamProxy; // 선택: 락온 경로 우선    // ref: VCamTransposerProxy.cs
     public CinemachineBrain brain;        // Main Camera에 있는 Brain
+    public PlayerLockOn playerLockOn;
 
     [Header("동작 옵션")]
+    public bool allowGameplayWheelZoom = false;
+    public bool disableDuringLockOn = true;
     public bool onlyActiveVCam = true;
     public float step = 0.5f;
     public bool invertScroll = false;
@@ -38,10 +41,18 @@ public class MouseWheelZoom : MonoBehaviour
     {
         if (!brain && Camera.main)
             brain = Camera.main.GetComponent<CinemachineBrain>();
+        if (!playerLockOn)
+            playerLockOn = GameplaySceneCache.ResolvePlayerLockOn();
     }
 
     void Update()
     {
+        if (!allowGameplayWheelZoom || Time.timeScale == 0f)
+            return;
+
+        if (disableDuringLockOn && playerLockOn != null && playerLockOn.IsLockedOn())
+            return;
+
         float wheel = Input.mouseScrollDelta.y;
         if (Mathf.Abs(wheel) < 0.01f) return;
         if (invertScroll) wheel = -wheel;

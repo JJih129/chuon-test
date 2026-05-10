@@ -1,55 +1,115 @@
-using UnityEngine;
+癤퓎sing UnityEngine;
 
-// ===== 변수 헤더(한글 설명) =====
-// 플레이어(타겟) 앞쪽에 "카메라가 바라볼 피벗"을 자동으로 위치시켜주는 보조 스크립트입니다.
-// - forwardDistance: 타겟 정면 앞으로 얼마나 둘지(미터)
-// - heightOffset: 타겟 기준 얼마나 높게 둘지(미터)
-// - lateralOffset: 좌/우로 얼마나 치울지(미터, +는 오른쪽, -는 왼쪽)
-// - followLerp: 따라붙는 속도(0=즉시 텔레포트, 1=매우 느림; 보통 0.1~0.3)
-// - alignYawToTarget: 피벗의 Yaw(수평 회전)를 타겟 정면으로 맞출지 여부
-// - yawLerp: Yaw 회전 보간 속도(0=즉시, 1=매우 느림)
 [ExecuteAlways]
 public class DynamicCamLookPivot : MonoBehaviour
 {
-    [Header("① 타겟(보통 Player)")]
+    [Header("Target")]
     public Transform target;
+    public Transform cameraReference;
 
-    [Header("② 오프셋(미터) | 전방/높이/좌우")]
-    public float forwardDistance = 2.0f;
-    public float heightOffset = 1.5f;
-    public float lateralOffset = 0.0f;
+    [Header("Composition")]
+    public float forwardDistance = 1.15f;
+    public float heightOffset = 1.35f;
+    public float lateralOffset = 0f;
 
-    [Header("③ 따라붙는 속도(0~1) | 0=즉시, 0.1~0.3 권장")]
-    [Range(0f, 1f)] public float followLerp = 0.15f;
+    [Header("Follow")]
+    [Range(0f, 1f)] public float followLerp = 0.08f;
+    [Min(0f)] public float followSmoothTime = 0.12f;
+    [Min(0f)] public float stationarySmoothTime = 0.22f;
+    [Min(0f)] public float recenterDeadZone = 0.18f;
+    [Min(0f)] public float maxFollowSpeed = 32f;
+    public bool useCameraPlanarBasis = true;
 
-    [Header("④ 회전 옵션 | 타겟 정면으로 Yaw 정렬")]
+    [Header("Yaw")]
     public bool alignYawToTarget = true;
-    [Range(0f, 1f)] public float yawLerp = 0.15f;
+    [Range(0f, 1f)] public float yawLerp = 0.08f;
+
+    Vector3 _followVelocity;
+    CharacterController _controller;
 
     void LateUpdate()
     {
-        if (!target) return;
+        if (target == null)
+            return;
 
-        // 목표 위치 계산
+        Vector3 forward = ResolveForward();
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+        if (right.sqrMagnitude <= 0.0001f)
+            right = target.right;
+        else
+            right.Normalize();
+
         Vector3 desired = target.position
-                        + target.forward * forwardDistance
-                        + target.right * lateralOffset
+                        + forward * forwardDistance
+                        + right * lateralOffset
                         + Vector3.up * heightOffset;
 
-        // 위치 보간
-        if (followLerp <= 0f || !Application.isPlaying)
-            transform.position = desired;
-        else
-            transform.position = Vector3.Lerp(transform.position, desired, 1f - Mathf.Pow(1f - followLerp, Time.deltaTime * 60f));
-
-        // 회전 보간(정면을 바라보게)
-        if (alignYawToTarget)
+        if (!Application.isPlaying || followLerp <= 0f)
         {
-            Quaternion desiredRot = Quaternion.LookRotation(target.forward, Vector3.up);
-            if (yawLerp <= 0f || !Application.isPlaying)
-                transform.rotation = desiredRot;
-            else
-                transform.rotation = Quaternion.Slerp(transform.rotation, desiredRot, 1f - Mathf.Pow(1f - yawLerp, Time.deltaTime * 60f));
+            transform.position = desired;
+            _followVelocity = Vector3.zero;
         }
+        else
+        {
+            Vector3 delta = desired - transform.position;
+            if (delta.sqrMagnitude <= recenterDeadZone * recenterDeadZone)
+                desired = transform.position;
+
+            float smoothTime = IsTargetMoving() ? followSmoothTime : stationarySmoothTime;
+            transform.position = Vector3.SmoothDamp(
+                transform.position,
+                desired,
+                ref _followVelocity,
+                Mathf.Max(0.0001f, smoothTime),
+                Mathf.Max(0.01f, maxFollowSpeed),
+                Time.deltaTime);
+        }
+
+        if (!alignYawToTarget)
+            return;
+
+        Quaternion desiredRotation = Quaternion.LookRotation(forward, Vector3.up);
+        if (!Application.isPlaying || yawLerp <= 0f)
+            transform.rotation = desiredRotation;
+        else
+            transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Pow(1f - yawLerp, Time.deltaTime * 60f));
+    }
+
+    Vector3 ResolveForward()
+    {
+        if (useCameraPlanarBasis)
+        {
+            if (cameraReference == null && Application.isPlaying && Camera.main != null)
+                cameraReference = Camera.main.transform;
+
+            if (cameraReference != null)
+            {
+                Vector3 cameraForward = cameraReference.forward;
+                cameraForward.y = 0f;
+                if (cameraForward.sqrMagnitude > 0.0001f)
+                    return cameraForward.normalized;
+            }
+        }
+
+        Vector3 targetForward = target.forward;
+        targetForward.y = 0f;
+        return targetForward.sqrMagnitude > 0.0001f ? targetForward.normalized : Vector3.forward;
+    }
+
+    bool IsTargetMoving()
+    {
+        if (_controller == null || (_controller.transform != target && !_controller.transform.IsChildOf(target)))
+        {
+            _controller = target.GetComponent<CharacterController>();
+            if (_controller == null)
+                _controller = target.GetComponentInParent<CharacterController>();
+        }
+
+        if (_controller == null)
+            return true;
+
+        Vector3 velocity = _controller.velocity;
+        velocity.y = 0f;
+        return velocity.sqrMagnitude > 0.04f;
     }
 }

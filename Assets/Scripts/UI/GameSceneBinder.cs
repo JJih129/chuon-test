@@ -1,9 +1,14 @@
 using UnityEngine;
+using UnityEngine.Playables;
 using UnityEngine.SceneManagement;
 
 public class GameSceneBinder : MonoBehaviour
 {
     const string MainSceneName = "MainScene";
+
+    [Header("Main Scene Elevator Intro Camera")]
+    [SerializeField] Vector3 elevatorIntroCameraLocalOffset = new Vector3(-3.2f, 1.25f, 9.0f);
+    [SerializeField] Vector3 elevatorIntroCameraLookOffset = new Vector3(0f, 1.25f, 1.2f);
 
     System.Collections.IEnumerator Start()
     {
@@ -25,6 +30,8 @@ public class GameSceneBinder : MonoBehaviour
         if (arrivalController == null)
             arrivalController = gameObject.AddComponent<MainSceneArrivalController>();
 
+        arrivalController.ConfigureElevatorIntroCamera(elevatorIntroCameraLocalOffset, elevatorIntroCameraLookOffset);
+        arrivalController.ConfigureBossIntroDirector(FindBossIntroDirector());
         arrivalController.ConfigureRuntime(hud, boss, ph, bossBreak, ultimate);
 
         var bossStatusController = GetComponent<MainSceneBossStatusController>();
@@ -72,5 +79,18 @@ public class GameSceneBinder : MonoBehaviour
             deathPresentationController = gameObject.AddComponent<MainSceneDeathPresentationController>();
 
         deathPresentationController.ConfigureRuntime(hud, ph, bossUiController);
+    }
+
+    static PlayableDirector FindBossIntroDirector()
+    {
+        PlayableDirector[] directors = FindObjectsOfType<PlayableDirector>(true);
+        for (int i = 0; i < directors.Length; i++)
+        {
+            PlayableDirector director = directors[i];
+            if (director != null && director.name.Contains("MainSceneIntro"))
+                return director;
+        }
+
+        return null;
     }
 }

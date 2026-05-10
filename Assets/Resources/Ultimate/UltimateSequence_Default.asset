@@ -26,23 +26,23 @@ MonoBehaviour:
     allowGracefulFinishIfTargetDies: 1
   timings:
     preCastDuration: 0.1
-    introPoseDuration: 0.56
-    dashDuration: 0.42
-    dashImpactNormalizedTime: 0.62
-    defaultMultiSlashInterval: 0.22
-    crackHoldDuration: 0.2
-    finalExplosionHoldDuration: 1.05
-    walkoutDuration: 1.18
-    recoverDuration: 0.18
+    introPoseDuration: 0.62
+    dashDuration: 0.24
+    dashImpactNormalizedTime: 0.48
+    defaultMultiSlashInterval: 0.16
+    crackHoldDuration: 0.16
+    finalExplosionHoldDuration: 0.34
+    walkoutDuration: 0.82
+    recoverDuration: 0.12
   movement:
     introDistance: 2.2
     introSideOffset: -0.15
-    dashEndDistance: 3.1
+    dashEndDistance: 1.45
     dashSideOffset: 0
-    dashTravelBias: 2.3
+    dashTravelBias: 1.75
     slashOrbitDistance: 1.45
-    walkoutDistance: 3.6
-    walkoutSideOffset: -0.2
+    walkoutDistance: 2.55
+    walkoutSideOffset: -0.45
     faceAwayOnWalkout: 1
   damage:
     dashSlashDamage: 220
@@ -52,23 +52,23 @@ MonoBehaviour:
     executionHealthThresholdNormalized: 0.2
   timeFx:
     useIntroSlow: 1
-    introTimeScale: 0.12
-    introSlowDuration: 0.04
+    introTimeScale: 0.16
+    introSlowDuration: 0.05
     useDashImpactSlow: 1
-    dashImpactTimeScale: 0.08
-    dashImpactSlowDuration: 0.03
+    dashImpactTimeScale: 0.05
+    dashImpactSlowDuration: 0.04
     useFinalExplosionSlow: 1
-    finalExplosionTimeScale: 0.06
-    finalExplosionSlowDuration: 0.05
+    finalExplosionTimeScale: 0.035
+    finalExplosionSlowDuration: 0.07
   impact:
-    dashShakeAmplitude: 0.11
-    dashShakeDuration: 0.08
-    slashShakeAmplitude: 0.035
-    slashShakeDuration: 0.045
-    crackShakeAmplitude: 0.06
-    crackShakeDuration: 0.08
-    finalShakeAmplitude: 0.18
-    finalShakeDuration: 0.16
+    dashShakeAmplitude: 0.14
+    dashShakeDuration: 0.09
+    slashShakeAmplitude: 0.05
+    slashShakeDuration: 0.05
+    crackShakeAmplitude: 0.08
+    crackShakeDuration: 0.1
+    finalShakeAmplitude: 0.24
+    finalShakeDuration: 0.2
   cinematicAnimation:
     introPoseClip: {fileID: 7400000, guid: c9221b11d190c7d449c4dc7537108f8e, type: 2}
     dashSlashClip: {fileID: 7400000, guid: f2c91788444039144b3029cb4bde2a9f, type: 2}
@@ -124,27 +124,27 @@ MonoBehaviour:
     beamSpawnHeightMin: 0.55
     beamSpawnHeightMax: 1.75
     beamFocusHeightOffset: 0.95
-    crackBeamCount: 3
-    finalConvergenceBeamCount: 6
+    crackBeamCount: 5
+    finalConvergenceBeamCount: 8
     finalBurstIntensityMultiplier: 1.45
     useDashScreenPulse: 1
-    useMultiSlashScreenPulse: 0
-    useAccentSlashFlash: 0
-    multiSlashPulseStrength: 0.18
-    multiSlashPulseDuration: 0.06
-    accentSlashFlashStrength: 0.32
-    accentSlashFlashDuration: 0.06
+    useMultiSlashScreenPulse: 1
+    useAccentSlashFlash: 1
+    multiSlashPulseStrength: 0.14
+    multiSlashPulseDuration: 0.045
+    accentSlashFlashStrength: 0.24
+    accentSlashFlashDuration: 0.05
     useSlashScreenCrackOverlay: 1
     useBurstScreenCrackOverlay: 1
     slashCrackBranchCount: 1
-    burstCrackLineCount: 6
-    screenCrackLifetime: 0.24
-    screenCrackWidth: 0.006
-    screenCrackLength: 0.18
+    burstCrackLineCount: 8
+    screenCrackLifetime: 0.28
+    screenCrackWidth: 0.01
+    screenCrackLength: 0.24
     screenCrackBranchAngle: 18
     screenCrackBranchScale: 0.42
-    screenCrackAlpha: 0.52
-    shardSpawnCount: 0
+    screenCrackAlpha: 0.62
+    shardSpawnCount: 4
     introPoseLifetime: 0.7
     dashSlashLifetime: 0.7
     crackLifetime: 0.9
@@ -323,36 +323,36 @@ MonoBehaviour:
   walkoutFallbackState: Base Layer.Locomotion
   animatorCrossFadeDuration: 0.08
   slashSteps:
-  - delay: 0.14
+  - delay: 0.15
     damageMultiplier: 1
     angle: -35
     distance: 1.4
     sideOffset: -0.2
     heightOffset: 0
     accentCrackPulse: 0
-  - delay: 0.24
-    damageMultiplier: 1
+  - delay: 0.14
+    damageMultiplier: 1.08
     angle: 25
     distance: 1.3
     sideOffset: 0.24
     heightOffset: 0
     accentCrackPulse: 0
-  - delay: 0.29
+  - delay: 0.15
     damageMultiplier: 1.15
     angle: -120
     distance: 1.6
     sideOffset: -0.45
     heightOffset: 0
     accentCrackPulse: 1
-  - delay: 0.34
-    damageMultiplier: 1.25
+  - delay: 0.18
+    damageMultiplier: 1.26
     angle: 115
     distance: 1.55
     sideOffset: 0.45
     heightOffset: 0
-    accentCrackPulse: 0
-  - delay: 0.39
-    damageMultiplier: 1.35
+    accentCrackPulse: 1
+  - delay: 0.22
+    damageMultiplier: 1.42
     angle: 180
     distance: 1.2
     sideOffset: 0

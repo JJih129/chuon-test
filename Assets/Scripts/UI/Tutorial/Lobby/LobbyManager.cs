@@ -344,6 +344,7 @@ public class LobbyManager : MonoBehaviour
                 DroneCombatRole role = i < rolePlan.Length ? rolePlan[i] : DroneCombatRole.Standard;
                 controller.SetCombatRole(role);
                 controller.target = playerTransform;
+                controller.SetCollisionAwareMovement(false);
                 controller.SetLightweightSimulation(useLightweightLobbyDroneSimulation, lightweightLobbyDroneTickInterval);
                 controller.SetAttackTelegraph(droneAttackTelegraphLeadTime);
                 controller.SetAerialCombatMotion(useAerialLobbyDroneMotion, lobbyDroneHoverAmplitude, lobbyDroneHoverFrequency);

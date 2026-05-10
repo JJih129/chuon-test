@@ -1,0 +1,12 @@
+fileFormatVersion: 2
+guid: 573a6e97d7094db48b5a4edd35b8904f
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures:
+  - _NoiseTexture: {fileID: 2800000, guid: 8afdc677c7625dd4787b04e561296204, type: 3}
+  - _LUTColor: {fileID: 2800000, guid: afc87740ac4ea9f40b7696708479c436, type: 3}
+  - _LUTCoreMask: {fileID: 2800000, guid: 5d854fd5fdd884c4996fe18d62ecbaba, type: 3}
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

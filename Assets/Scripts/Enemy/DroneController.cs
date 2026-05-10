@@ -167,12 +167,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         InitializeRendererState();
         ApplyRendererPerformanceOverrides();
 
-        if (target == null)
-        {
-            GameObject player = GameObject.FindWithTag("Player");
-            if (player != null)
-                target = player.transform;
-        }
+        ResolveTargetIfMissing();
     }
 
     void OnEnable()
@@ -207,6 +202,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         ApplyRendererPerformanceOverrides();
         ApplySimulationMode();
         ApplyRendererColor(_originalColor);
+        ResolveTargetIfMissing();
     }
 
     public void SetCombatRole(DroneCombatRole role, bool reapplyImmediately = true)
@@ -253,6 +249,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         lightweightTickInterval = Mathf.Max(0.016f, tickInterval);
         _nextLightweightTickAt = Time.time;
         ApplySimulationMode();
+    }
+
+    public void SetCollisionAwareMovement(bool enabled)
+    {
+        useCollisionAwareMovement = enabled;
     }
 
     void ApplySimulationMode()
@@ -405,6 +406,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     void TickMovementAndFire(float deltaTime)
     {
+        ResolveTargetIfMissing();
         if (target == null)
             return;
         if (_isDead)
@@ -417,13 +419,17 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         {
             float distance = Mathf.Sqrt(distanceSqr);
             Vector3 flatNormalized = flatDirection / distance;
-            Quaternion lookRotation = Quaternion.LookRotation(flatNormalized, Vector3.up);
+            Vector3 moveDirection = ResolveCombatMoveDirection(flatNormalized, distance);
+            Vector3 facingDirection = flatNormalized;
+            if (distance > fireDistance && moveDirection.sqrMagnitude > 0.0001f)
+                facingDirection = Vector3.Slerp(flatNormalized, moveDirection.normalized, 0.35f).normalized;
+
+            Quaternion lookRotation = Quaternion.LookRotation(facingDirection, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, lookRotation, turnSpeedDeg * deltaTime);
 
             if (TickHitReaction(deltaTime))
                 return;
 
-            Vector3 moveDirection = ResolveCombatMoveDirection(flatNormalized, distance);
             if (moveDirection.sqrMagnitude > 0.0001f)
             {
                 _lastMoveDirection = moveDirection;
@@ -560,6 +566,16 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         return UnityEngine.Random.Range(minInterval, maxInterval);
     }
 
+    void ResolveTargetIfMissing()
+    {
+        if (target != null)
+            return;
+
+        GameObject player = GameObject.FindWithTag("Player");
+        if (player != null)
+            target = player.transform;
+    }
+
     void ApplyAerialMotion(float deltaTime)
     {
         if (!useAerialCombatMotion)
@@ -584,9 +600,9 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             1f - Mathf.Exp(-deltaTime * visualTiltSharpness));
     }
 
-    void ResolveTiltRoot()
+    void ResolveTiltRoot(bool force = false)
     {
-        if (_tiltRoot != null)
+        if (!force && _tiltRoot != null)
             return;
 
         if (droneRenderer != null && droneRenderer.transform != transform)

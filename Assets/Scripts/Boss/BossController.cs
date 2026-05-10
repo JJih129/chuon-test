@@ -699,6 +699,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     [SerializeField] private float swordWaveDirectMaxRange = 18f;
     [SerializeField] private float swordWaveDirectCooldown = 5.4f;
     [SerializeField] private float swordWaveDirectChargeTime = 1.15f;
+    [SerializeField, Min(0f)] private float noPatternFallbackAttackDelay = 0.65f;
 
     [Tooltip("일반 추적 중 회전 속도(도/초).")]
     [SerializeField] private float chaseTurnSpeed = 360f;
@@ -712,6 +713,20 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     [Tooltip("Blend Tree로 전달할 MoveSpeed 보간 시간 (0에 가까울수록 즉각 반응)")]
     [Range(0.01f, 0.5f)]
     public float moveAnimDamp = 0.1f;
+
+    [Header("Stop Motion")]
+    [SerializeField] private bool useRunStartMotion = true;
+    [SerializeField] private string runStartTriggerName = "RunStart";
+    [SerializeField, Min(0.01f)] private float runStartMinMoveBlend = 0.25f;
+    [SerializeField] private bool useTurnStartMotion = true;
+    [SerializeField, Range(10f, 180f)] private float turnStartMinAngle = 55f;
+    [SerializeField, Range(90f, 180f)] private float turnStart180Angle = 135f;
+    [SerializeField, Min(0f)] private float turnStartCooldown = 0.2f;
+    [SerializeField] private bool useRunStopMotion = false;
+    [SerializeField] private string runStopTriggerName = "RunStop";
+    [SerializeField, Min(0.01f)] private float runStopMinMoveBlend = 0.35f;
+    [SerializeField, Min(0.05f)] private float runStopDuration = 0.45f;
+    [SerializeField, Min(0f)] private float runStopCooldown = 0.18f;
 
     [Header("Obstacle Avoidance")]
     [SerializeField] private float obstacleProbeDistance = 2.2f;
@@ -728,6 +743,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     private static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
     private static readonly int AnimParam_DodgeBack = Animator.StringToHash("Dodge_Back");
     private static readonly int AnimParam_QuickshiftB = Animator.StringToHash("Quickshift_B");
+    private static readonly int AnimParam_RunStart = Animator.StringToHash("RunStart");
+    private static readonly int AnimParam_RunStop = Animator.StringToHash("RunStop");
+    private static readonly int AnimParam_TurnL90 = Animator.StringToHash("TurnL90");
+    private static readonly int AnimParam_TurnR90 = Animator.StringToHash("TurnR90");
+    private static readonly int AnimParam_TurnL180 = Animator.StringToHash("TurnL180");
+    private static readonly int AnimParam_TurnR180 = Animator.StringToHash("TurnR180");
 
     private float _moveBlend; // 0~1
     private float _moveXBlend;
@@ -744,6 +765,15 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     private bool _hasMoveYParam;
     private bool _hasCombatStrafingParam;
     private bool _combatStrafeAnimActive;
+    private bool _runStopActive;
+    private bool _runStopCachedRootMotion;
+    private bool _runStopHasCachedRootMotion;
+    private float _runStopEndTime;
+    private float _nextRunStopAllowedTime;
+    private float _nextTurnStartAllowedTime;
+    private bool _wasMovingForRunStart;
+    private bool _wasMovingForRunStop;
+    private float _lastRunStopMoveBlend;
     private float _moveArcSign = 1f;
     private float _moveArcSideUntil = float.NegativeInfinity;
 
@@ -847,6 +877,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     private AttackPattern _pendingImmediateAttackPattern;
     private float _nextDirectSwordWaveAt;
     private float _directSwordWaveReadySince = float.NegativeInfinity;
+    private float _noPatternFallbackReadySince = float.NegativeInfinity;
     readonly RaycastHit[] _movementSweepHits = new RaycastHit[16];
     readonly List<AttackPattern> _patternCandidatesCache = new List<AttackPattern>(16);
     readonly List<AttackPattern> _followUpCandidatesCache = new List<AttackPattern>(16);
@@ -1020,6 +1051,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     void OnDestroy()
     {
+        StopRunStopMotion();
         StopPreAttackPosePlayback();
         _preAttackPoseClipSampler?.Dispose();
         _preAttackPoseClipSampler = null;
@@ -1343,6 +1375,20 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (_isUltimateVictim || _isDead || bossAnimator == null || !bossAnimator.applyRootMotion)
             return;
 
+        if (_runStopActive)
+        {
+            Vector3 stopDelta = bossAnimator.deltaPosition;
+            stopDelta.y = 0f;
+            if (stopDelta.sqrMagnitude > 0.000001f)
+                ApplyMovementDelta(stopDelta);
+
+            Quaternion stopDeltaRotation = bossAnimator.deltaRotation;
+            if (stopDeltaRotation != Quaternion.identity)
+                transform.rotation *= stopDeltaRotation;
+
+            return;
+        }
+
         if (!useCollisionAwareRootMotion || currentState != BossState.Attack)
             return;
 
@@ -1451,6 +1497,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             }
 
             StopPreAttackPosePlayback();
+            StopRunStopMotion();
             HideGroundTelegraph();
             UpdateMoveAnimation(0f);
             SetCombatStrafeAnimation(false);
@@ -1710,6 +1757,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (bossAnimator == null || string.IsNullOrEmpty(triggerName))
             return;
 
+        StopRunStopMotion();
         SetCombatStrafeAnimation(false);
 
         // 1) 공격 패턴 트리거 전부 Reset
@@ -2069,6 +2117,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             SetState(BossState.Attack);
         else if (hasPatternAtDistance)
             SetState(BossState.Attack);
+        else if (ShouldForceNoPatternFallbackAttack(distance, hasPatternAtDistance))
+            SetState(BossState.Attack);
         else if (distance <= pressureDistance)
             SetState(BossState.CombatIdle);
         else
@@ -2105,7 +2155,15 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
                 yield break;
             }
 
-            if (HasExecutablePatternAtDistance(distance))
+            bool hasPatternAtDistance = HasExecutablePatternAtDistance(distance);
+            if (hasPatternAtDistance)
+            {
+                UpdateMoveAnimation(0f);
+                SetState(BossState.Attack);
+                yield break;
+            }
+
+            if (ShouldForceNoPatternFallbackAttack(distance, hasPatternAtDistance))
             {
                 UpdateMoveAnimation(0f);
                 SetState(BossState.Attack);
@@ -2165,6 +2223,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
                 float distance = Vector3.Distance(transform.position, playerTarget.position);
                 if (TryStartDirectSwordWaveAttack(distance, "CombatIdle"))
                     yield break;
+
+                bool hasPatternAtDistance = HasExecutablePatternAtDistance(distance);
+                if (ShouldForceNoPatternFallbackAttack(distance, hasPatternAtDistance))
+                {
+                    UpdateMoveAnimation(0f);
+                    SetState(BossState.Attack);
+                    yield break;
+                }
             }
 
             t -= Time.deltaTime;
@@ -2206,6 +2272,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
     /// </summary>
     IEnumerator Co_PerformAttack()
     {
+        _noPatternFallbackReadySince = float.NegativeInfinity;
+
         float distance = 0f;
         EnsureGameplayPlayerTarget();
 
@@ -3449,6 +3517,32 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
 
     // ==================== 패턴 선택 ====================
 
+    bool ShouldForceNoPatternFallbackAttack(float distanceToPlayer, bool hasPatternAtDistance)
+    {
+        if (_externalIntroPaused || _isDead || currentState == BossState.Attack)
+        {
+            _noPatternFallbackReadySince = float.NegativeInfinity;
+            return false;
+        }
+
+        float attackDistance = ResolveAttackDecisionDistance();
+        float pressureDistance = ResolvePressureEngageDistance();
+        if (distanceToPlayer <= attackDistance || distanceToPlayer > pressureDistance || hasPatternAtDistance)
+        {
+            _noPatternFallbackReadySince = float.NegativeInfinity;
+            return false;
+        }
+
+        if (_noPatternFallbackReadySince < 0f)
+            _noPatternFallbackReadySince = Time.time;
+
+        bool ready = Time.time >= _noPatternFallbackReadySince + Mathf.Max(0f, noPatternFallbackAttackDelay);
+        if (ready)
+            LogState($"[BossFSM] No-pattern fallback attack. distance={distanceToPlayer:0.00}");
+
+        return ready;
+    }
+
     AttackPattern SelectPattern(float distanceToPlayer)
     {
         SyncPatternCooldowns();
@@ -3799,6 +3893,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
         if (bossAnimator == null) return;
 
         target01 = Mathf.Clamp01(target01);
+        UpdateRunStartMotion(target01, worldMoveDirection);
         bool useCombatStrafe = useDirectionalBlend && target01 > 0.0001f && worldMoveDirection.sqrMagnitude > 0.0001f;
         SetCombatStrafeAnimation(useCombatStrafe);
 
@@ -3854,6 +3949,103 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact
             _lastAppliedMoveY = _moveYBlend;
             bossAnimator.SetFloat(AnimParam_MoveY, _moveYBlend);
         }
+    }
+
+    void UpdateRunStopMotion(float target01)
+    {
+        if (!useRunStopMotion || bossAnimator == null || _isDead || _isUltimateVictim)
+        {
+            StopRunStopMotion();
+            _wasMovingForRunStop = target01 >= runStopMinMoveBlend;
+            _lastRunStopMoveBlend = target01;
+            return;
+        }
+
+        if (_runStopActive)
+        {
+            if (Time.time >= _runStopEndTime || target01 >= runStopMinMoveBlend)
+                StopRunStopMotion();
+        }
+
+        bool moving = target01 >= runStopMinMoveBlend;
+        if (_wasMovingForRunStop && !moving && _lastRunStopMoveBlend >= runStopMinMoveBlend && Time.time >= _nextRunStopAllowedTime)
+            PlayRunStopMotion();
+
+        _wasMovingForRunStop = moving;
+        _lastRunStopMoveBlend = target01;
+    }
+
+    void UpdateRunStartMotion(float target01, Vector3 worldMoveDirection)
+    {
+        bool moving = target01 >= runStartMinMoveBlend;
+        if (useRunStartMotion && bossAnimator != null && !_isDead && !_isUltimateVictim && !_wasMovingForRunStart && moving)
+            PlayRunStartMotion(worldMoveDirection);
+
+        _wasMovingForRunStart = moving;
+    }
+
+    void PlayRunStartMotion(Vector3 worldMoveDirection)
+    {
+        if (bossAnimator == null || string.IsNullOrEmpty(runStartTriggerName))
+            return;
+
+        if (TryPlayTurnStartMotion(worldMoveDirection))
+            return;
+
+        bossAnimator.ResetTrigger(AnimParam_RunStart);
+        bossAnimator.SetTrigger(AnimParam_RunStart);
+    }
+
+    bool TryPlayTurnStartMotion(Vector3 worldMoveDirection)
+    {
+        if (!useTurnStartMotion || bossAnimator == null || worldMoveDirection.sqrMagnitude <= 0.0004f || Time.time < _nextTurnStartAllowedTime)
+            return false;
+
+        float signedAngle = Vector3.SignedAngle(Flat(transform.forward), Flat(worldMoveDirection), Vector3.up);
+        float absAngle = Mathf.Abs(signedAngle);
+        if (absAngle < turnStartMinAngle)
+            return false;
+
+        int trigger = absAngle >= turnStart180Angle
+            ? (signedAngle < 0f ? AnimParam_TurnL180 : AnimParam_TurnR180)
+            : (signedAngle < 0f ? AnimParam_TurnL90 : AnimParam_TurnR90);
+
+        bossAnimator.ResetTrigger(trigger);
+        bossAnimator.SetTrigger(trigger);
+        _nextTurnStartAllowedTime = Time.time + turnStartCooldown;
+        return true;
+    }
+
+    static Vector3 Flat(Vector3 v)
+    {
+        v.y = 0f;
+        return v.sqrMagnitude > 0.0001f ? v.normalized : Vector3.forward;
+    }
+
+    void PlayRunStopMotion()
+    {
+        if (bossAnimator == null || string.IsNullOrEmpty(runStopTriggerName))
+            return;
+
+        StopRunStopMotion();
+
+        _runStopCachedRootMotion = bossAnimator.applyRootMotion;
+        _runStopHasCachedRootMotion = true;
+        bossAnimator.applyRootMotion = true;
+        bossAnimator.ResetTrigger(AnimParam_RunStop);
+        bossAnimator.SetTrigger(AnimParam_RunStop);
+
+        _runStopActive = true;
+        _runStopEndTime = Time.time + runStopDuration;
+        _nextRunStopAllowedTime = Time.time + runStopCooldown;
+    }
+
+    void StopRunStopMotion()
+    {
+        _runStopActive = false;
+        if (_runStopHasCachedRootMotion && bossAnimator != null)
+            bossAnimator.applyRootMotion = _runStopCachedRootMotion;
+        _runStopHasCachedRootMotion = false;
     }
 
     void SetCombatStrafeAnimation(bool active)

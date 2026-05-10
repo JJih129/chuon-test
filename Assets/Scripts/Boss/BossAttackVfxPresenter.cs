@@ -41,10 +41,8 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     [SerializeField] PatternSlashVfxEntry[] patternSlashVfx = Array.Empty<PatternSlashVfxEntry>();
 
     [Header("프로시저럴 검 궤적")]
-    [SerializeField] float trailTime = 0.09f;
     [SerializeField] float trailStartWidth = 0.14f;
     [SerializeField] float trailEndWidth = 0.02f;
-    [SerializeField] float trailMinVertexDistance = 0.065f;
     [SerializeField] Color trailStartColor = new Color(0.3f, 1f, 1f, 0.95f);
     [SerializeField] Color trailEndColor = new Color(0.15f, 0.7f, 1f, 0f);
     [SerializeField] float swordTipForwardPadding = 0.04f;
@@ -65,8 +63,6 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     readonly Dictionary<string, PatternSlashVfxEntry> _entryByPatternName = new Dictionary<string, PatternSlashVfxEntry>(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, PatternSlashVfxEntry> _entryByTriggerName = new Dictionary<string, PatternSlashVfxEntry>(StringComparer.OrdinalIgnoreCase);
     bool _patternLookupDirty = true;
-    float _cachedStartWidthScale = -1f;
-    float _cachedEndWidthScale = -1f;
 
     public void PlayCurrentPatternSlash()
     {
@@ -569,8 +565,6 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     void MarkLookupDirty()
     {
         _patternLookupDirty = true;
-        _cachedStartWidthScale = -1f;
-        _cachedEndWidthScale = -1f;
     }
 
     void RebuildPatternLookupIfNeeded()

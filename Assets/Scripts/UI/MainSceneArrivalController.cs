@@ -1,9 +1,11 @@
 using System.Collections;
-using System.Text;
+using System.Collections.Generic;
 using Unity.Cinemachine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
+using UnityEngine.Timeline;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.UI;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -63,6 +65,8 @@ public class MainSceneArrivalController : MonoBehaviour
 
     [Header("Boss Intro Timeline")]
     [SerializeField] bool useBossIntroTimeline = true;
+    [SerializeField] bool preferPlayableDirectorBossIntro = true;
+    [SerializeField] PlayableDirector bossIntroDirector;
     [SerializeField] IntroStep[] bossIntroSteps =
     {
         new IntroStep("EGO", "도착했어, 추온. 격납고 층이야.", 1.8f, AttackTelegraphType.Guard, IntroEvent.ElevatorOpened),
@@ -88,30 +92,42 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField, Min(0f)] float alarmSirenLightRange = 8f;
     [SerializeField] ParticleSystem bossRevealDustPrefab;
     [SerializeField] Transform bossRevealVfxAnchor;
+    [SerializeField] bool spawnBossRevealDust = false;
     [SerializeField] bool useFallbackBossRevealDust = true;
     [SerializeField] bool useBossRevealCloseUp = true;
     [SerializeField] CinemachineCamera bossRevealCloseUpCamera;
     [SerializeField] int bossRevealCloseUpPriority = 120;
     [SerializeField] int bossRevealCloseUpInactivePriority = -100;
-    [SerializeField, Min(0.1f)] float bossRevealCloseUpHold = 2.35f;
-    [SerializeField, Min(0f)] float bossRevealCloseUpBlendIn = 0.42f;
-    [SerializeField, Min(0f)] float bossRevealCloseUpBlendOut = 0.38f;
+    [SerializeField, Min(0.1f)] float bossRevealCloseUpHold = 3.8f;
+    [SerializeField, Min(0f)] float bossRevealCloseUpBlendIn = 0.55f;
+    [SerializeField, Min(0f)] float bossRevealCloseUpBlendOut = 0.75f;
     [SerializeField, Min(0.5f)] float bossRevealCloseUpDistance = 3.4f;
     [SerializeField] float bossRevealCloseUpSideOffset = 1.45f;
     [SerializeField] float bossRevealCloseUpHeight = 1.35f;
     [SerializeField] float bossRevealCloseUpLookHeight = 1.25f;
+    [SerializeField] bool bossRevealCloseUpTracksMovingBoss = true;
+    [SerializeField] bool useBossIntroHologram = true;
+    [SerializeField] bool hideBossVisualUntilReveal = true;
+    [SerializeField] bool moveBossFromHiddenStartOnReveal = true;
+    [SerializeField, Min(0f)] float bossRevealWalkOutDistance = 5.5f;
+    [SerializeField, Min(0.1f)] float bossRevealWalkOutDuration = 3.6f;
+    [SerializeField, Min(0.1f)] float bossRevealWalkAnimationSpeed = 0.62f;
+    [SerializeField] AnimationClip bossRevealWalkEndClip;
+    [SerializeField, Min(0.05f)] float bossRevealWalkEndMaxDuration = 0.9f;
+    [SerializeField] Material bossIntroHologramMaterial;
+    [SerializeField, Min(0f)] float bossIntroHologramFadeIn = 0.2f;
+    [SerializeField, Min(0f)] float bossIntroHologramHoldBeforeReveal = 2.25f;
+    [SerializeField, Min(0f)] float bossIntroHologramRevealDuration = 0.95f;
+    [SerializeField] Color bossIntroHologramColor = new Color(0f, 0.65f, 1f, 0.34f);
 
     [Header("Boss Intro Dialogue UI")]
     [SerializeField] bool useBossIntroDialogueSubtitle = true;
-    [SerializeField, Min(0f)] float introTextTypingSpeed = 0.018f;
-    [SerializeField] Vector2 introDialogueAnchor = new Vector2(0.5f, 0.18f);
-    [SerializeField] Vector2 introDialogueSize = new Vector2(920f, 112f);
-    [SerializeField] Color introDialogueSpeakerColor = new Color(0.0f, 0.85f, 1f, 1f);
-    [SerializeField] Color introDialogueTextColor = new Color(1f, 1f, 1f, 1f);
+    [SerializeField] IntroDialoguePresenter introDialoguePresenter;
 
     [Header("Elevator Arrival")]
     [SerializeField] bool playElevatorArrivalOnSceneStart = true;
     [SerializeField] Transform elevatorArrivalAnchor;
+    [SerializeField] ElevatorDoorController elevatorDoorController;
     [SerializeField] GameObject closedElevatorDoorVisual;
     [SerializeField] GameObject openElevatorDoorVisual;
     [SerializeField] Transform[] elevatorGrillePanels;
@@ -124,6 +140,12 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] bool faceBossOnElevatorArrival = true;
     [SerializeField] float elevatorArrivalYaw = 0f;
     [SerializeField] bool snapCameraBehindPlayerOnElevatorArrival = true;
+    [SerializeField] bool useElevatorIntroCinematicCamera = true;
+    [SerializeField] CinemachineCamera elevatorIntroCinematicCamera;
+    [SerializeField] int elevatorIntroCinematicPriority = 130;
+    [SerializeField] int elevatorIntroCinematicInactivePriority = -100;
+    [SerializeField] Vector3 elevatorIntroCameraLocalOffset = new Vector3(-3.2f, 1.25f, 9.0f);
+    [SerializeField] Vector3 elevatorIntroCameraLookOffset = new Vector3(0f, 1.25f, 1.2f);
     [SerializeField] float elevatorArrivalCameraPitch = 8f;
     [SerializeField] float elevatorArrivalCameraYawOffset = 180f;
     [SerializeField, Min(0.5f)] float elevatorArrivalCameraDistance = 4.2f;
@@ -136,13 +158,17 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField, Min(0f)] float elevatorDoorOpenLift = 4.2f;
     [SerializeField] bool walkPlayerOutAfterDoorOpen = true;
     [SerializeField, Min(0f)] float elevatorWalkOutDelay = 0.15f;
+    [SerializeField, Min(0f)] float elevatorIntroHoldAfterWalkOut = 1.25f;
     [SerializeField, Min(0f)] float elevatorWalkOutDistance = 6.2f;
     [SerializeField, Min(0.1f)] float elevatorWalkOutDuration = 3.0f;
     [SerializeField, Range(0f, 1f)] float elevatorWalkOutAnimSpeed = 0.45f;
     [SerializeField] string elevatorWalkOutSpeedParameter = "speed";
     [SerializeField] AnimationClip elevatorWalkStartClip;
     [SerializeField] AnimationClip elevatorWalkLoopClip;
+    [SerializeField] AnimationClip elevatorWalkEndClip;
     [SerializeField, Min(0.05f)] float elevatorWalkStartMaxDuration = 0.65f;
+    [SerializeField, Min(0.05f)] float elevatorWalkEndMaxDuration = 0.9f;
+    [SerializeField] bool holdElevatorWalkEndPoseUntilInputUnlock = true;
     [SerializeField, Min(0.1f)] float elevatorWalkAnimationSpeed = 1f;
     [SerializeField] string elevatorArrivedMessage = "\uc2b9\uac15\uae30 \uc815\ucc29";
     [SerializeField] string elevatorDoorOpenMessage = "\uc804\ud22c \uad6c\uc5ed \uc811\uc18d";
@@ -166,6 +192,7 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField, Min(0.1f)] private float breakCoachHold = 0.84f;
     [SerializeField, Min(0.1f)] private float ultimateReadyHold = 0.78f;
     Coroutine _arrivalRoutine;
+    Coroutine _timelineDialogueRoutine;
     Coroutine _bossRevealCloseUpRoutine;
     Coroutine _alarmSirenRoutine;
     bool _fromLobbyTransition;
@@ -181,20 +208,68 @@ public class MainSceneArrivalController : MonoBehaviour
     IInputBlocker _inputBlocker;
     bool _arrivalInputLocked;
     bool _bossPausedForIntro;
-    CanvasGroup _introDialogueGroup;
-    Text _introSpeakerText;
-    Text _introContentText;
     CanvasGroup _alarmSirenGroup;
     Image _alarmSirenOverlay;
     Text _alarmSirenText;
     Light _alarmSirenLight;
+    Coroutine _bossHologramRoutine;
+    Coroutine _bossHologramRevealSequence;
+    Renderer[] _bossHologramRenderers;
+    Material[][] _bossOriginalSharedMaterials;
+    Material[][] _bossHologramSharedMaterials;
+    Material _runtimeBossHologramMaterial;
+    Renderer[] _bossIntroHiddenRenderers;
+    bool[] _bossIntroHiddenRendererStates;
+    bool _bossIntroVisualsHidden;
+    Coroutine _bossRevealWalkRoutine;
+    PlayableGraph _heldPlayerWalkEndGraph;
+    ElevatorWalkClipPlayback _activeElevatorWalkPlayback;
+    ElevatorWalkClipPlayback _activeBossRevealWalkPlayback;
+    FreeLookCamera _elevatorIntroFreeLookCamera;
+    bool _restoreElevatorIntroFreeLookCamera;
+    Vector3 _elevatorIntroCameraPosition;
+    bool _elevatorIntroCameraActive;
+    bool _elevatorIntroUsesVirtualCamera;
+    bool _elevatorIntroPriorityRaised;
+    int _elevatorIntroOldPriority;
+    bool _elevatorIntroOpeningFramePrimed;
+    CinemachineBrain _elevatorIntroBrain;
+    CinemachineBlendDefinition _elevatorIntroOriginalBrainBlend;
+    Coroutine _restoreElevatorIntroBrainBlendRoutine;
+    bool _elevatorIntroBrainBlendOverridden;
+    bool _runtimeConfigured;
+    MonoBehaviour[] _arrivalCameraInputBehaviours;
+    bool[] _arrivalCameraInputBehaviourStates;
+    bool _arrivalCameraInputLocked;
+    Transform _bossRevealRoot;
+    bool _bossRevealPoseCached;
+    Vector3 _bossRevealEndPosition;
+    Quaternion _bossRevealEndRotation;
     Vector3[] _elevatorGrillePanelClosedPositions;
     Vector3[] _elevatorDoorPanelClosedPositions;
-    readonly StringBuilder _introTextBuilder = new StringBuilder(96);
     int _bossRevealCloseUpOldPriority;
     bool _bossRevealCloseUpPriorityRaised;
+    static readonly int HologramColorId = Shader.PropertyToID("_Hologram_Color");
+    static readonly int TextureTintColorId = Shader.PropertyToID("_Texture_Tint_Color");
 
     public bool IsLobbyTransitionActive => _fromLobbyTransition;
+
+    public void ConfigureElevatorIntroCamera(Vector3 localOffset, Vector3 lookOffset)
+    {
+        elevatorIntroCameraLocalOffset = localOffset;
+        elevatorIntroCameraLookOffset = lookOffset;
+    }
+
+    public void ConfigureBossIntroDirector(PlayableDirector director)
+    {
+        bossIntroDirector = director;
+    }
+
+    void Awake()
+    {
+        if (playElevatorArrivalOnSceneStart && useBossIntroTimeline && hideBossVisualUntilReveal)
+            HideBossIntroVisuals();
+    }
 
     public void ConfigureRuntime(
         PlayerHUD runtimeHud,
@@ -208,10 +283,22 @@ public class MainSceneArrivalController : MonoBehaviour
         playerHealth = runtimePlayerHealth;
         bossBreakController = runtimeBossBreakController;
         playerUltimateController = runtimePlayerUltimateController;
+        _runtimeConfigured = true;
         RefreshSubscriptions();
+
+        if (isActiveAndEnabled)
+            BeginRuntimeArrivalFlow();
     }
 
     void OnEnable()
+    {
+        if (!_runtimeConfigured)
+            return;
+
+        BeginRuntimeArrivalFlow();
+    }
+
+    void BeginRuntimeArrivalFlow()
     {
         bool enteredFromLobby = TutorialSceneTransitionState.ConsumeLobbyToMain();
         _fromLobbyTransition = enteredFromLobby || playElevatorArrivalOnSceneStart;
@@ -229,6 +316,12 @@ public class MainSceneArrivalController : MonoBehaviour
 
         RefreshSubscriptions();
         if (playElevatorArrivalOnSceneStart || enteredFromLobby)
+            PrimeElevatorIntroOpeningFrame();
+
+        if ((playElevatorArrivalOnSceneStart || enteredFromLobby) && useBossIntroTimeline && hideBossVisualUntilReveal)
+            HideBossIntroVisuals();
+
+        if (playElevatorArrivalOnSceneStart || enteredFromLobby)
             _arrivalRoutine = StartCoroutine(CoPlayArrivalSequence());
         else
             StartCoroutine(CoApplyPlayerStartFacingYawDelayed());
@@ -239,6 +332,15 @@ public class MainSceneArrivalController : MonoBehaviour
         ReleaseSubscriptions();
         StopBossRevealCloseUp();
         StopAlarmSirenCue();
+        StopBossRevealWalk();
+        RestoreBossHologramVisuals();
+        RestoreBossIntroVisualsVisibility();
+        RestoreBossRevealPose();
+        RestoreElevatorIntroCameraBlend();
+        EndElevatorIntroCinematicCamera();
+        _elevatorIntroOpeningFramePrimed = false;
+        EndElevatorWalkClipPlayback(ref _activeElevatorWalkPlayback);
+        ReleaseHeldPlayerWalkEndPose();
         SetBossIntroPaused(false);
         SetArrivalInputLocked(false);
         HideIntroDialogue();
@@ -255,6 +357,15 @@ public class MainSceneArrivalController : MonoBehaviour
         ReleaseSubscriptions();
         StopBossRevealCloseUp();
         StopAlarmSirenCue();
+        StopBossRevealWalk();
+        RestoreBossHologramVisuals();
+        RestoreBossIntroVisualsVisibility();
+        RestoreBossRevealPose();
+        RestoreElevatorIntroCameraBlend();
+        EndElevatorIntroCinematicCamera();
+        _elevatorIntroOpeningFramePrimed = false;
+        EndElevatorWalkClipPlayback(ref _activeElevatorWalkPlayback);
+        ReleaseHeldPlayerWalkEndPose();
         SetBossIntroPaused(false);
         HideIntroDialogue();
     }
@@ -264,26 +375,36 @@ public class MainSceneArrivalController : MonoBehaviour
         if (playerHud == null)
             playerHud = FindObjectOfType<PlayerHUD>(true);
 
-        if (bossController == null)
-            bossController = FindObjectOfType<BossController>(true);
-
-        if (playerHealth == null)
-            playerHealth = FindObjectOfType<PlayerHealth>(true);
-
-        if (bossBreakController == null && bossController != null)
-            bossBreakController = bossController.GetComponent<BossBreakController>();
-        if (bossBreakController == null)
-            bossBreakController = FindObjectOfType<BossBreakController>(true);
-
-        if (playerUltimateController == null)
-            playerUltimateController = FindObjectOfType<PlayerUltimateController>(true);
+        ResolveCombatReferences();
 
         RefreshSubscriptions();
         SetBossIntroPaused(true);
+        if (useBossIntroTimeline && hideBossVisualUntilReveal)
+            HideBossIntroVisuals();
+        else
+            BeginBossIntroHologram();
 
         if (playerHud == null)
         {
+            RestoreBossHologramVisuals();
+            RestoreBossIntroVisualsVisibility();
             SetBossIntroPaused(false);
+            yield break;
+        }
+
+        PrepareBossIntroRevealPose();
+        bool hasTimelineDirector = preferPlayableDirectorBossIntro
+            && bossIntroDirector != null
+            && bossIntroDirector.playableAsset != null;
+
+        if (hasTimelineDirector)
+        {
+            yield return StartCoroutine(CoPlayBossIntroDirector());
+            RestoreBossHologramVisuals();
+            RestoreBossIntroVisualsVisibility();
+            SetBossIntroPaused(false);
+            SetArrivalInputLocked(false);
+            _arrivalRoutine = null;
             yield break;
         }
 
@@ -291,8 +412,13 @@ public class MainSceneArrivalController : MonoBehaviour
             yield return StartCoroutine(CoPlayElevatorArrivalIntro());
 
         if (useBossIntroTimeline && bossIntroSteps != null && bossIntroSteps.Length > 0)
+            EndElevatorIntroCinematicCamera();
+
+        if (useBossIntroTimeline && bossIntroSteps != null && bossIntroSteps.Length > 0)
         {
             yield return StartCoroutine(CoPlayBossIntroTimeline());
+            RestoreBossHologramVisuals();
+            RestoreBossIntroVisualsVisibility();
             SetBossIntroPaused(false);
             SetArrivalInputLocked(false);
             _arrivalRoutine = null;
@@ -319,6 +445,8 @@ public class MainSceneArrivalController : MonoBehaviour
 
         SetBossIntroPaused(false);
         SetArrivalInputLocked(false);
+        RestoreBossHologramVisuals();
+        RestoreBossIntroVisualsVisibility();
         _arrivalRoutine = null;
     }
 
@@ -351,6 +479,137 @@ public class MainSceneArrivalController : MonoBehaviour
         HideIntroDialogue();
     }
 
+    IEnumerator CoPlayBossIntroDirector()
+    {
+        if (bossIntroDirector == null || bossIntroDirector.playableAsset == null)
+            yield break;
+
+        bossIntroDirector.timeUpdateMode = DirectorUpdateMode.GameTime;
+        bossIntroDirector.extrapolationMode = DirectorWrapMode.None;
+        bossIntroDirector.Stop();
+        bossIntroDirector.time = 0d;
+        bossIntroDirector.RebuildGraph();
+        bossIntroDirector.Evaluate();
+        TimelineIntroBegin();
+        bossIntroDirector.Play();
+
+        double duration = bossIntroDirector.playableAsset.duration;
+        if (duration <= 0d)
+            duration = bossIntroDirector.duration;
+
+        float timeout = Mathf.Max(0.25f, (float)duration + 0.25f);
+        float elapsed = 0f;
+        while (bossIntroDirector != null && elapsed < timeout && bossIntroDirector.time < duration)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (bossIntroDirector != null)
+            bossIntroDirector.Stop();
+
+        TimelineIntroEnd();
+    }
+
+    public void TimelineIntroBegin()
+    {
+        RefreshSubscriptions();
+        SetArrivalInputLocked(true);
+        SetBossIntroPaused(true);
+        CacheElevatorArrivalReferences();
+        PlacePlayerAtElevatorArrival();
+        SetElevatorDoorOpenState(false, immediate: true);
+
+        if (hideBossVisualUntilReveal)
+            HideBossIntroVisuals();
+        else
+            BeginBossIntroHologram();
+    }
+
+    public void TimelineElevatorDoorOpen()
+    {
+        StartCoroutine(CoSetElevatorDoorOpen(true));
+    }
+
+    public void TimelinePlayerWalkOut()
+    {
+        StartCoroutine(CoWalkPlayerOutOfElevator());
+    }
+
+    public void TimelineBossReveal()
+    {
+        PlayIntroEvent(IntroEvent.BossIdentify);
+    }
+
+    public void TimelineCombatStart()
+    {
+        PlayIntroEvent(IntroEvent.CombatStart);
+    }
+
+    public void TimelineIntroLine00() => PlayTimelineIntroLine(0);
+    public void TimelineIntroLine01() => PlayTimelineIntroLine(1);
+    public void TimelineIntroLine02() => PlayTimelineIntroLine(2);
+    public void TimelineIntroLine03() => PlayTimelineIntroLine(3);
+    public void TimelineIntroLine04() => PlayTimelineIntroLine(4);
+    public void TimelineIntroLine05() => PlayTimelineIntroLine(5);
+    public void TimelineIntroLine06() => PlayTimelineIntroLine(6);
+    public void TimelineIntroLine07() => PlayTimelineIntroLine(7);
+    public void TimelineIntroLine08() => PlayTimelineIntroLine(8);
+    public void TimelineIntroLine09() => PlayTimelineIntroLine(9);
+
+    public void TimelineIntroEnd()
+    {
+        if (_timelineDialogueRoutine != null)
+        {
+            StopCoroutine(_timelineDialogueRoutine);
+            _timelineDialogueRoutine = null;
+        }
+
+        HideIntroDialogue();
+        RestoreBossHologramVisuals();
+        RestoreBossIntroVisualsVisibility();
+        RestoreGameplayAfterTimelineIntro();
+    }
+
+    void RestoreGameplayAfterTimelineIntro()
+    {
+        StopBossRevealCloseUp();
+        EndElevatorIntroCinematicCamera();
+        SetBossIntroPaused(false);
+        SetArrivalInputLocked(false);
+        EndElevatorIntroCinematicCamera();
+
+        // Timeline/Cinemachine can write its final camera pose late in the frame.
+        // Schedule a second snap so gameplay resumes from the normal FreeLook view.
+        SnapCameraBehindPlayer(ResolvePlayerFacingRoot(), true);
+    }
+
+    void PlayTimelineIntroLine(int index)
+    {
+        if (bossIntroSteps == null || index < 0 || index >= bossIntroSteps.Length)
+            return;
+
+        if (_timelineDialogueRoutine != null)
+            StopCoroutine(_timelineDialogueRoutine);
+
+        IntroStep step = bossIntroSteps[index];
+        PlayIntroEvent(step.introEvent);
+        _timelineDialogueRoutine = StartCoroutine(CoPlayTimelineIntroLine(step));
+    }
+
+    IEnumerator CoPlayTimelineIntroLine(IntroStep step)
+    {
+        if (step == null)
+            yield break;
+
+        if (useBossIntroDialogueSubtitle)
+            yield return StartCoroutine(PlayIntroDialogue(step));
+        else if (playerHud != null)
+            playerHud.ShowRuntimeTelegraphMessage(FormatIntroLine(step), step.telegraphType, step.hold, step.dangerFeedback, 20);
+
+        _timelineDialogueRoutine = null;
+    }
+
     static string FormatIntroLine(IntroStep step)
     {
         if (step == null || string.IsNullOrWhiteSpace(step.text))
@@ -364,8 +623,9 @@ public class MainSceneArrivalController : MonoBehaviour
 
     IEnumerator PlayIntroDialogue(IntroStep step)
     {
-        EnsureIntroDialogueUi();
-        if (_introDialogueGroup == null)
+        Canvas canvas = ResolveDialogueCanvas();
+        IntroDialoguePresenter presenter = ResolveIntroDialoguePresenter(canvas);
+        if (presenter == null)
         {
             string fallbackMessage = FormatIntroLine(step);
             if (!string.IsNullOrWhiteSpace(fallbackMessage))
@@ -375,56 +635,32 @@ public class MainSceneArrivalController : MonoBehaviour
             yield break;
         }
 
-        _introDialogueGroup.alpha = 1f;
-        if (_introSpeakerText != null)
-            _introSpeakerText.text = step.speaker;
-
-        if (_introContentText != null)
-        {
-            _introContentText.text = string.Empty;
-            _introTextBuilder.Clear();
-
-            string content = step.text ?? string.Empty;
-            for (int i = 0; i < content.Length; i++)
-            {
-                _introTextBuilder.Append(content[i]);
-                _introContentText.text = _introTextBuilder.ToString();
-
-                if (introTextTypingSpeed > 0f)
-                    yield return new WaitForSeconds(introTextTypingSpeed);
-            }
-        }
-
-        yield return new WaitForSeconds(Mathf.Max(0.1f, step.hold) + Mathf.Max(0f, step.delayAfter));
+        yield return presenter.CoShow(canvas, step.speaker, step.text, step.hold, step.delayAfter);
     }
 
-    void EnsureIntroDialogueUi()
+    Canvas ResolveDialogueCanvas()
     {
-        if (_introDialogueGroup != null)
-            return;
-
         Canvas canvas = playerHud != null ? playerHud.GetComponentInParent<Canvas>() : null;
+        return canvas != null ? canvas : FindObjectOfType<Canvas>(true);
+    }
+
+    IntroDialoguePresenter ResolveIntroDialoguePresenter(Canvas canvas)
+    {
+        if (introDialoguePresenter != null)
+            return introDialoguePresenter;
+
         if (canvas == null)
-            canvas = FindObjectOfType<Canvas>(true);
-        if (canvas == null)
-            return;
+            return null;
 
-        GameObject rootObject = new GameObject("BossIntroDialogueRuntime", typeof(RectTransform), typeof(CanvasGroup));
-        RectTransform root = rootObject.GetComponent<RectTransform>();
-        root.SetParent(canvas.transform, false);
-        root.anchorMin = introDialogueAnchor;
-        root.anchorMax = introDialogueAnchor;
-        root.pivot = new Vector2(0.5f, 0.5f);
-        root.sizeDelta = introDialogueSize;
-        root.anchoredPosition = Vector2.zero;
+        introDialoguePresenter = canvas.GetComponentInChildren<IntroDialoguePresenter>(true);
+        if (introDialoguePresenter == null)
+        {
+            GameObject presenterObject = new GameObject("IntroDialoguePresenter");
+            presenterObject.transform.SetParent(canvas.transform, false);
+            introDialoguePresenter = presenterObject.AddComponent<IntroDialoguePresenter>();
+        }
 
-        _introDialogueGroup = rootObject.GetComponent<CanvasGroup>();
-        _introDialogueGroup.alpha = 0f;
-        _introDialogueGroup.interactable = false;
-        _introDialogueGroup.blocksRaycasts = false;
-
-        _introSpeakerText = CreateIntroText(root, "Speaker", 23, FontStyle.Bold, TextAnchor.MiddleCenter, introDialogueSpeakerColor, new Vector2(0f, 0.58f), Vector2.one, Vector2.zero, Vector2.zero);
-        _introContentText = CreateIntroText(root, "Content", 27, FontStyle.Bold, TextAnchor.MiddleCenter, introDialogueTextColor, Vector2.zero, new Vector2(1f, 0.72f), Vector2.zero, Vector2.zero);
+        return introDialoguePresenter;
     }
 
     static Text CreateIntroText(RectTransform parent, string name, int fontSize, FontStyle style, TextAnchor anchor, Color color, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
@@ -451,8 +687,8 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void HideIntroDialogue()
     {
-        if (_introDialogueGroup != null)
-            _introDialogueGroup.alpha = 0f;
+        if (introDialoguePresenter != null)
+            introDialoguePresenter.Hide();
     }
 
     void PlayIntroEvent(IntroEvent introEvent)
@@ -469,9 +705,12 @@ public class MainSceneArrivalController : MonoBehaviour
             case IntroEvent.BossIdentify:
                 PlayIntroSfx(bossIdentifySfx);
                 SpawnBossRevealVfx();
+                PlayBossHiddenHologramReveal();
                 PlayBossRevealCloseUp();
                 break;
             case IntroEvent.CombatStart:
+                RestoreBossHologramVisuals();
+                RestoreBossIntroVisualsVisibility();
                 break;
         }
     }
@@ -622,6 +861,9 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void SpawnBossRevealVfx()
     {
+        if (!spawnBossRevealDust)
+            return;
+
         if (bossRevealDustPrefab == null && !useFallbackBossRevealDust)
             return;
 
@@ -636,6 +878,524 @@ public class MainSceneArrivalController : MonoBehaviour
             return;
 
         Destroy(instance.gameObject, Mathf.Max(1f, instance.main.duration + instance.main.startLifetime.constantMax));
+    }
+
+    void HideBossIntroVisuals()
+    {
+        if (_bossIntroVisualsHidden)
+            return;
+
+        Transform bossRoot = ResolveBossRoot();
+        if (bossRoot == null)
+            return;
+
+        List<Renderer> renderers = CollectBossHologramRenderers(bossRoot);
+        if (renderers.Count == 0)
+            return;
+
+        _bossIntroHiddenRenderers = renderers.ToArray();
+        _bossIntroHiddenRendererStates = new bool[_bossIntroHiddenRenderers.Length];
+        for (int i = 0; i < _bossIntroHiddenRenderers.Length; i++)
+        {
+            Renderer renderer = _bossIntroHiddenRenderers[i];
+            if (renderer == null)
+                continue;
+
+            _bossIntroHiddenRendererStates[i] = renderer.enabled;
+            renderer.enabled = false;
+        }
+
+        _bossIntroVisualsHidden = true;
+    }
+
+    void ShowBossIntroVisuals()
+    {
+        if (!_bossIntroVisualsHidden || _bossIntroHiddenRenderers == null)
+            return;
+
+        int count = _bossIntroHiddenRendererStates != null
+            ? Mathf.Min(_bossIntroHiddenRenderers.Length, _bossIntroHiddenRendererStates.Length)
+            : _bossIntroHiddenRenderers.Length;
+
+        for (int i = 0; i < count; i++)
+        {
+            Renderer renderer = _bossIntroHiddenRenderers[i];
+            if (renderer != null)
+                renderer.enabled = _bossIntroHiddenRendererStates == null || _bossIntroHiddenRendererStates[i];
+        }
+    }
+
+    void RestoreBossIntroVisualsVisibility()
+    {
+        ShowBossIntroVisuals();
+        _bossIntroHiddenRenderers = null;
+        _bossIntroHiddenRendererStates = null;
+        _bossIntroVisualsHidden = false;
+    }
+
+    void BeginBossIntroHologram()
+    {
+        if (!useBossIntroHologram || _bossHologramRenderers != null)
+            return;
+
+        Transform bossRoot = ResolveBossRoot();
+        Material sourceMaterial = ResolveBossIntroHologramMaterial();
+        if (bossRoot == null || sourceMaterial == null)
+            return;
+
+        List<Renderer> renderers = CollectBossHologramRenderers(bossRoot);
+        if (renderers.Count == 0)
+            return;
+
+        _bossHologramRenderers = renderers.ToArray();
+        _bossOriginalSharedMaterials = new Material[_bossHologramRenderers.Length][];
+        _bossHologramSharedMaterials = new Material[_bossHologramRenderers.Length][];
+        _runtimeBossHologramMaterial = new Material(sourceMaterial)
+        {
+            name = "RuntimeBossIntroHologram"
+        };
+
+        SetBossHologramMaterialAlpha(0f);
+
+        for (int i = 0; i < _bossHologramRenderers.Length; i++)
+        {
+            Renderer renderer = _bossHologramRenderers[i];
+            Material[] originalMaterials = renderer.sharedMaterials;
+            _bossOriginalSharedMaterials[i] = originalMaterials;
+
+            Material[] hologramMaterials = new Material[originalMaterials.Length];
+            for (int slot = 0; slot < hologramMaterials.Length; slot++)
+                hologramMaterials[slot] = _runtimeBossHologramMaterial;
+
+            _bossHologramSharedMaterials[i] = hologramMaterials;
+            renderer.sharedMaterials = hologramMaterials;
+        }
+
+        StartBossHologramFade(bossIntroHologramFadeIn, bossIntroHologramColor.a, false);
+    }
+
+    void PlayBossHiddenHologramReveal()
+    {
+        if (_bossHologramRenderers == null)
+            BeginBossIntroHologram();
+
+        StartBossRevealWalk();
+
+        if (_runtimeBossHologramMaterial == null)
+        {
+            RestoreBossIntroVisualsVisibility();
+            return;
+        }
+
+        EnforceBossHologramMaterials();
+        ShowBossIntroVisuals();
+        StopBossHologramRevealSequence();
+        _bossHologramRevealSequence = StartCoroutine(CoBossHiddenHologramReveal());
+    }
+
+    IEnumerator CoBossHiddenHologramReveal()
+    {
+        float wait = Mathf.Max(0f, bossIntroHologramFadeIn + bossIntroHologramHoldBeforeReveal);
+        if (wait > 0f)
+            yield return new WaitForSeconds(wait);
+
+        RevealBossFromHologram();
+        RestoreBossIntroVisualsVisibility();
+        _bossHologramRevealSequence = null;
+    }
+
+    void RevealBossFromHologram()
+    {
+        if (_runtimeBossHologramMaterial == null)
+            return;
+
+        StartBossHologramFade(bossIntroHologramRevealDuration, 0f, true);
+    }
+
+    void StartBossHologramFade(float duration, float targetAlpha, bool restoreOnComplete)
+    {
+        StopBossHologramRoutine();
+        _bossHologramRoutine = StartCoroutine(CoFadeBossHologram(duration, targetAlpha, restoreOnComplete));
+    }
+
+    void StopBossHologramRoutine()
+    {
+        if (_bossHologramRoutine == null)
+            return;
+
+        StopCoroutine(_bossHologramRoutine);
+        _bossHologramRoutine = null;
+    }
+
+    void StopBossHologramRevealSequence()
+    {
+        if (_bossHologramRevealSequence == null)
+            return;
+
+        StopCoroutine(_bossHologramRevealSequence);
+        _bossHologramRevealSequence = null;
+    }
+
+    void PrepareBossIntroRevealPose()
+    {
+        if (_bossRevealPoseCached || !moveBossFromHiddenStartOnReveal || bossRevealWalkOutDistance <= 0f)
+            return;
+
+        Transform bossRoot = ResolveBossRoot();
+        if (bossRoot == null)
+            return;
+
+        _bossRevealRoot = bossRoot;
+        _bossRevealEndPosition = bossRoot.position;
+        _bossRevealEndRotation = bossRoot.rotation;
+        _bossRevealPoseCached = true;
+
+        Vector3 awayFromPlayer = ResolveBossRevealStartDirection(bossRoot);
+        SetBossWorldPose(bossRoot, _bossRevealEndPosition + awayFromPlayer * bossRevealWalkOutDistance, _bossRevealEndRotation);
+    }
+
+    Vector3 ResolveBossRevealStartDirection(Transform bossRoot)
+    {
+        Transform playerRoot = ResolvePlayerFacingRoot();
+        Vector3 direction = bossRoot != null && playerRoot != null
+            ? bossRoot.position - playerRoot.position
+            : (bossRoot != null ? -bossRoot.forward : Vector3.back);
+        direction.y = 0f;
+        if (direction.sqrMagnitude <= 0.0001f)
+            direction = Vector3.back;
+        return direction.normalized;
+    }
+
+    void StartBossRevealWalk()
+    {
+        if (!moveBossFromHiddenStartOnReveal)
+            return;
+
+        PrepareBossIntroRevealPose();
+        if (!_bossRevealPoseCached)
+            return;
+
+        StopBossRevealWalk();
+        _bossRevealWalkRoutine = StartCoroutine(CoBossRevealWalk());
+    }
+
+    IEnumerator CoBossRevealWalk()
+    {
+        Transform bossRoot = ResolveBossRoot();
+        if (bossRoot == null)
+            yield break;
+
+        Animator animator = bossRoot.GetComponentInChildren<Animator>(true);
+        bool useClipPlayback = CanUseElevatorWalkClipPlayback(animator);
+        ElevatorWalkClipPlayback clipPlayback = default;
+        bool originalApplyRootMotion = animator != null && animator.applyRootMotion;
+        Vector3 startPosition = bossRoot.position;
+        Quaternion startRotation = bossRoot.rotation;
+        float duration = Mathf.Max(0.1f, bossRevealWalkOutDuration);
+        float elapsed = 0f;
+
+        if (useClipPlayback)
+        {
+            animator.applyRootMotion = false;
+            clipPlayback = BeginElevatorWalkClipPlayback(animator);
+            _activeBossRevealWalkPlayback = clipPlayback;
+        }
+
+        try
+        {
+            while (elapsed < duration)
+            {
+                float t = Mathf.Clamp01(elapsed / duration);
+                float eased = t * t * (3f - 2f * t);
+                SetBossWorldPose(
+                    bossRoot,
+                    Vector3.LerpUnclamped(startPosition, _bossRevealEndPosition, eased),
+                    Quaternion.SlerpUnclamped(startRotation, _bossRevealEndRotation, eased));
+
+                if (clipPlayback.IsValid)
+                    UpdateBossRevealWalkClipPlayback(ref clipPlayback, elapsed);
+
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            SetBossWorldPose(bossRoot, _bossRevealEndPosition, _bossRevealEndRotation);
+
+            if (clipPlayback.IsValid)
+            {
+                EndElevatorWalkClipPlayback(ref clipPlayback);
+                yield return CoPlayBossRevealWalkEnd(animator);
+            }
+        }
+        finally
+        {
+            EndElevatorWalkClipPlayback(ref clipPlayback);
+            _activeBossRevealWalkPlayback = default;
+            if (animator != null)
+                animator.applyRootMotion = originalApplyRootMotion;
+            _bossRevealWalkRoutine = null;
+        }
+    }
+
+    IEnumerator CoPlayBossRevealWalkEnd(Animator animator)
+    {
+        AnimationClip walkEnd = ResolveBossRevealWalkEndClip();
+        if (animator == null || walkEnd == null)
+            yield break;
+
+        PlayableGraph graph = PlayableGraph.Create("BossRevealWalkEndClipPlayback");
+        graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
+        try
+        {
+            AnimationPlayableOutput output = AnimationPlayableOutput.Create(graph, "BossRevealWalkEnd", animator);
+            AnimationClipPlayable playable = AnimationClipPlayable.Create(graph, walkEnd);
+            playable.SetApplyFootIK(true);
+            playable.SetSpeed(bossRevealWalkAnimationSpeed);
+            output.SetSourcePlayable(playable);
+            graph.Play();
+
+            float duration = Mathf.Min(
+                bossRevealWalkEndMaxDuration,
+                Mathf.Max(0.05f, walkEnd.length / Mathf.Max(0.01f, bossRevealWalkAnimationSpeed)));
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+        }
+        finally
+        {
+            if (graph.IsValid())
+                graph.Destroy();
+        }
+    }
+
+    void UpdateBossRevealWalkClipPlayback(ref ElevatorWalkClipPlayback playback, float elapsed)
+    {
+        if (!playback.IsValid || !playback.Mixer.IsValid())
+            return;
+
+        bool playStart = playback.HasStart && (!playback.HasLoop || elapsed < playback.StartDuration);
+        playback.Mixer.SetInputWeight(0, playStart ? 1f : 0f);
+        playback.Mixer.SetInputWeight(1, playStart ? 0f : 1f);
+
+        if (playback.HasStart && playback.Start.IsValid())
+            playback.Start.SetTime(Mathf.Min(elapsed * bossRevealWalkAnimationSpeed, playback.StartClip.length));
+
+        if (playback.HasLoop && playback.Loop.IsValid())
+        {
+            float loopLength = Mathf.Max(0.05f, playback.LoopClip.length);
+            float loopTime = Mathf.Repeat(Mathf.Max(0f, elapsed - playback.StartDuration) * bossRevealWalkAnimationSpeed, loopLength);
+            playback.Loop.SetTime(loopTime);
+        }
+    }
+
+    void StopBossRevealWalk()
+    {
+        if (_bossRevealWalkRoutine == null)
+            return;
+
+        StopCoroutine(_bossRevealWalkRoutine);
+        _bossRevealWalkRoutine = null;
+        EndElevatorWalkClipPlayback(ref _activeBossRevealWalkPlayback);
+    }
+
+    void RestoreBossRevealPose()
+    {
+        StopBossRevealWalk();
+        if (!_bossRevealPoseCached)
+            return;
+
+        if (_bossRevealRoot != null)
+            SetBossWorldPose(_bossRevealRoot, _bossRevealEndPosition, _bossRevealEndRotation);
+
+        _bossRevealRoot = null;
+        _bossRevealPoseCached = false;
+    }
+
+    static void SetBossWorldPose(Transform bossRoot, Vector3 position, Quaternion rotation)
+    {
+        if (bossRoot == null)
+            return;
+
+        NavMeshAgent agent = bossRoot.GetComponent<NavMeshAgent>();
+        bossRoot.rotation = rotation;
+        if (agent != null && agent.enabled)
+            agent.Warp(position);
+        else
+            bossRoot.position = position;
+    }
+
+    IEnumerator CoFadeBossHologram(float duration, float targetAlpha, bool restoreOnComplete)
+    {
+        float startAlpha = GetBossHologramMaterialAlpha();
+        if (duration <= 0f)
+        {
+            SetBossHologramMaterialAlpha(targetAlpha);
+            _bossHologramRoutine = null;
+            if (restoreOnComplete)
+                RestoreBossHologramVisuals();
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration && _runtimeBossHologramMaterial != null)
+        {
+            EnforceBossHologramMaterials();
+
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = t * t * (3f - 2f * t);
+            SetBossHologramMaterialAlpha(Mathf.Lerp(startAlpha, targetAlpha, eased));
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        SetBossHologramMaterialAlpha(targetAlpha);
+        _bossHologramRoutine = null;
+        if (restoreOnComplete)
+            RestoreBossHologramVisuals();
+    }
+
+    void RestoreBossHologramVisuals()
+    {
+        StopBossHologramRevealSequence();
+        StopBossHologramRoutine();
+
+        if (_bossHologramRenderers != null && _bossOriginalSharedMaterials != null)
+        {
+            int count = Mathf.Min(_bossHologramRenderers.Length, _bossOriginalSharedMaterials.Length);
+            for (int i = 0; i < count; i++)
+            {
+                Renderer renderer = _bossHologramRenderers[i];
+                Material[] originalMaterials = _bossOriginalSharedMaterials[i];
+                if (renderer != null && originalMaterials != null)
+                    renderer.sharedMaterials = originalMaterials;
+            }
+        }
+
+        _bossHologramRenderers = null;
+        _bossOriginalSharedMaterials = null;
+        _bossHologramSharedMaterials = null;
+
+        if (_runtimeBossHologramMaterial != null)
+        {
+            if (Application.isPlaying)
+                Destroy(_runtimeBossHologramMaterial);
+            else
+                DestroyImmediate(_runtimeBossHologramMaterial);
+        }
+
+        _runtimeBossHologramMaterial = null;
+    }
+
+    static List<Renderer> CollectBossHologramRenderers(Transform bossRoot)
+    {
+        List<Renderer> renderers = new List<Renderer>(16);
+        HashSet<Renderer> seen = new HashSet<Renderer>();
+
+        BossVisualRig[] visualRigs = bossRoot.GetComponentsInChildren<BossVisualRig>(true);
+        for (int i = 0; i < visualRigs.Length; i++)
+        {
+            BossVisualRig rig = visualRigs[i];
+            if (rig == null)
+                continue;
+
+            Renderer[] rigRenderers = rig.Renderers;
+            if (rigRenderers == null)
+                continue;
+
+            for (int rendererIndex = 0; rendererIndex < rigRenderers.Length; rendererIndex++)
+                TryAddBossHologramRenderer(rigRenderers[rendererIndex], renderers, seen);
+        }
+
+        Renderer[] childRenderers = bossRoot.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < childRenderers.Length; i++)
+            TryAddBossHologramRenderer(childRenderers[i], renderers, seen);
+
+        return renderers;
+    }
+
+    static void TryAddBossHologramRenderer(Renderer renderer, List<Renderer> renderers, HashSet<Renderer> seen)
+    {
+        if (IsBossHologramIgnoredRenderer(renderer) || !seen.Add(renderer))
+            return;
+
+        Material[] materials = renderer.sharedMaterials;
+        if (materials == null || materials.Length == 0)
+            return;
+
+        renderers.Add(renderer);
+    }
+
+    void EnforceBossHologramMaterials()
+    {
+        if (_bossHologramRenderers == null || _bossHologramSharedMaterials == null)
+            return;
+
+        int count = Mathf.Min(_bossHologramRenderers.Length, _bossHologramSharedMaterials.Length);
+        for (int i = 0; i < count; i++)
+        {
+            Renderer renderer = _bossHologramRenderers[i];
+            Material[] hologramMaterials = _bossHologramSharedMaterials[i];
+            if (renderer == null || hologramMaterials == null)
+                continue;
+
+            renderer.sharedMaterials = hologramMaterials;
+        }
+    }
+
+    Material ResolveBossIntroHologramMaterial()
+    {
+        if (bossIntroHologramMaterial != null)
+            return bossIntroHologramMaterial;
+
+#if UNITY_EDITOR
+        bossIntroHologramMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
+#endif
+        return bossIntroHologramMaterial;
+    }
+
+    float GetBossHologramMaterialAlpha()
+    {
+        if (_runtimeBossHologramMaterial == null)
+            return 0f;
+
+        if (_runtimeBossHologramMaterial.HasProperty(HologramColorId))
+            return _runtimeBossHologramMaterial.GetColor(HologramColorId).a;
+
+        return bossIntroHologramColor.a;
+    }
+
+    void SetBossHologramMaterialAlpha(float alpha)
+    {
+        if (_runtimeBossHologramMaterial == null)
+            return;
+
+        Color hologramColor = bossIntroHologramColor;
+        hologramColor.a = Mathf.Clamp01(alpha);
+
+        if (_runtimeBossHologramMaterial.HasProperty(HologramColorId))
+            _runtimeBossHologramMaterial.SetColor(HologramColorId, hologramColor);
+
+        if (_runtimeBossHologramMaterial.HasProperty(TextureTintColorId))
+        {
+            Color tintColor = hologramColor;
+            tintColor.a *= 0.75f;
+            _runtimeBossHologramMaterial.SetColor(TextureTintColorId, tintColor);
+        }
+    }
+
+    static bool IsBossHologramIgnoredRenderer(Renderer renderer)
+    {
+        if (renderer == null || renderer is ParticleSystemRenderer || renderer is LineRenderer)
+            return true;
+
+        string objectName = renderer.transform != null ? renderer.transform.name : string.Empty;
+        bool isVisibleBossPlane = objectName == "Plane009";
+        return (!isVisibleBossPlane && objectName.StartsWith("Plane"))
+            || objectName.Contains("Hitbox")
+            || objectName.Contains("Anchor");
     }
 
     void PlayBossRevealCloseUp()
@@ -679,24 +1439,7 @@ public class MainSceneArrivalController : MonoBehaviour
         Vector3 startPosition = mainCamera.transform.position;
         Quaternion startRotation = mainCamera.transform.rotation;
 
-        Vector3 bossPosition = bossRoot.position;
-        Vector3 fromBossToPlayer = playerRoot != null ? playerRoot.position - bossPosition : -bossRoot.forward;
-        fromBossToPlayer.y = 0f;
-        if (fromBossToPlayer.sqrMagnitude <= 0.0001f)
-            fromBossToPlayer = -bossRoot.forward;
-        fromBossToPlayer.Normalize();
-
-        Vector3 side = Vector3.Cross(Vector3.up, fromBossToPlayer).normalized;
-        if (side.sqrMagnitude <= 0.0001f)
-            side = bossRoot.right;
-
-        Vector3 lookAt = bossPosition + Vector3.up * Mathf.Max(0f, bossRevealCloseUpLookHeight);
-        Vector3 targetPosition =
-            bossPosition +
-            fromBossToPlayer * Mathf.Max(0.5f, bossRevealCloseUpDistance) +
-            side * bossRevealCloseUpSideOffset +
-            Vector3.up * bossRevealCloseUpHeight;
-        Quaternion targetRotation = Quaternion.LookRotation(lookAt - targetPosition, Vector3.up);
+        ResolveBossRevealCloseUpPose(bossRoot, playerRoot, out Vector3 targetPosition, out Quaternion targetRotation);
 
         if (useRevealVirtualCamera)
         {
@@ -709,7 +1452,20 @@ public class MainSceneArrivalController : MonoBehaviour
 
         yield return StartCoroutine(CoBlendCameraPose(cameraTransform, startPosition, startRotation, targetPosition, targetRotation, bossRevealCloseUpBlendIn));
         if (bossRevealCloseUpHold > 0f)
-            yield return new WaitForSeconds(bossRevealCloseUpHold);
+        {
+            float holdElapsed = 0f;
+            while (holdElapsed < bossRevealCloseUpHold)
+            {
+                if (bossRevealCloseUpTracksMovingBoss && bossRoot != null)
+                {
+                    ResolveBossRevealCloseUpPose(bossRoot, playerRoot, out targetPosition, out targetRotation);
+                    cameraTransform.SetPositionAndRotation(targetPosition, targetRotation);
+                }
+
+                holdElapsed += Time.deltaTime;
+                yield return null;
+            }
+        }
 
         Transform restorePlayerRoot = ResolvePlayerFacingRoot();
         if (useRevealVirtualCamera)
@@ -726,13 +1482,37 @@ public class MainSceneArrivalController : MonoBehaviour
             yield return StartCoroutine(CoBlendCameraPose(cameraTransform, cameraTransform.position, cameraTransform.rotation, restorePosition, restoreRotation, bossRevealCloseUpBlendOut));
         }
 
-        if (restoreFreeLook && freeLookCamera != null)
+        if (restoreFreeLook && freeLookCamera != null && !_arrivalInputLocked && !_arrivalCameraInputLocked)
         {
             freeLookCamera.enabled = true;
             SnapCameraBehindPlayer(restorePlayerRoot, false);
         }
 
         _bossRevealCloseUpRoutine = null;
+    }
+
+    void ResolveBossRevealCloseUpPose(Transform bossRoot, Transform playerRoot, out Vector3 position, out Quaternion rotation)
+    {
+        Vector3 bossPosition = bossRoot != null ? bossRoot.position : Vector3.zero;
+        Vector3 fromBossToPlayer = bossRoot != null && playerRoot != null ? playerRoot.position - bossPosition : Vector3.back;
+        fromBossToPlayer.y = 0f;
+        if (fromBossToPlayer.sqrMagnitude <= 0.0001f && bossRoot != null)
+            fromBossToPlayer = -bossRoot.forward;
+        if (fromBossToPlayer.sqrMagnitude <= 0.0001f)
+            fromBossToPlayer = Vector3.back;
+        fromBossToPlayer.Normalize();
+
+        Vector3 side = Vector3.Cross(Vector3.up, fromBossToPlayer).normalized;
+        if (side.sqrMagnitude <= 0.0001f)
+            side = bossRoot != null ? bossRoot.right : Vector3.right;
+
+        Vector3 lookAt = bossPosition + Vector3.up * Mathf.Max(0f, bossRevealCloseUpLookHeight);
+        position =
+            bossPosition +
+            fromBossToPlayer * Mathf.Max(0.5f, bossRevealCloseUpDistance) +
+            side * bossRevealCloseUpSideOffset +
+            Vector3.up * bossRevealCloseUpHeight;
+        rotation = Quaternion.LookRotation(lookAt - position, Vector3.up);
     }
 
     CinemachineCamera EnsureBossRevealCloseUpCamera()
@@ -870,9 +1650,19 @@ public class MainSceneArrivalController : MonoBehaviour
 
     IEnumerator CoPlayElevatorArrivalIntro()
     {
-        SetArrivalInputLocked(true);
-        CacheElevatorArrivalReferences();
-        PlacePlayerAtElevatorArrival();
+        if (!_elevatorIntroOpeningFramePrimed)
+        {
+            SetArrivalInputLocked(true);
+            CacheElevatorArrivalReferences();
+            PlacePlayerAtElevatorArrival();
+            BeginElevatorIntroCinematicCamera(ResolvePlayerFacingRoot());
+        }
+        else
+        {
+            SetArrivalInputLocked(true);
+            UpdateElevatorIntroCinematicCamera(ResolvePlayerFacingRoot());
+            _elevatorIntroOpeningFramePrimed = false;
+        }
 
         SetElevatorDoorOpenState(false, immediate: true);
 
@@ -892,10 +1682,23 @@ public class MainSceneArrivalController : MonoBehaviour
 
         if (walkPlayerOutAfterDoorOpen)
             yield return StartCoroutine(CoWalkPlayerOutOfElevator());
+
+        if (elevatorIntroHoldAfterWalkOut > 0f)
+        {
+            UpdateElevatorIntroCinematicCamera(ResolvePlayerFacingRoot());
+            yield return new WaitForSeconds(elevatorIntroHoldAfterWalkOut);
+        }
     }
 
     IEnumerator CoSetElevatorDoorOpen(bool open)
     {
+        ElevatorDoorController doorController = ResolveElevatorDoorController();
+        if (doorController != null)
+        {
+            yield return doorController.CoSetOpen(open);
+            yield break;
+        }
+
         SetElevatorDoorOpenState(open, immediate: elevatorDoorOpenDuration <= 0f || !useFallbackDoorPanelMotion);
         if (!useFallbackDoorPanelMotion)
             yield break;
@@ -945,6 +1748,14 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void SetElevatorDoorOpenState(bool open, bool immediate)
     {
+        ElevatorDoorController doorController = ResolveElevatorDoorController();
+        if (doorController != null)
+        {
+            if (immediate)
+                doorController.SetOpenImmediate(open);
+            return;
+        }
+
         if (closedElevatorDoorVisual != null)
             closedElevatorDoorVisual.SetActive(!open);
         if (openElevatorDoorVisual != null)
@@ -1010,6 +1821,7 @@ public class MainSceneArrivalController : MonoBehaviour
             {
                 animator.applyRootMotion = false;
                 clipPlayback = BeginElevatorWalkClipPlayback(animator);
+                _activeElevatorWalkPlayback = clipPlayback;
             }
 
             while (elapsed < duration)
@@ -1021,16 +1833,24 @@ public class MainSceneArrivalController : MonoBehaviour
                     animator.SetFloat(elevatorWalkOutSpeedParameter, elevatorWalkOutAnimSpeed);
                 if (clipPlayback.IsValid)
                     UpdateElevatorWalkClipPlayback(ref clipPlayback, elapsed);
+                UpdateElevatorIntroCinematicCamera(playerRoot);
 
                 elapsed += Time.deltaTime;
                 yield return null;
             }
 
             SetPlayerWorldPose(playerRoot, end, rotation);
+
+            if (clipPlayback.IsValid)
+            {
+                EndElevatorWalkClipPlayback(ref clipPlayback);
+                yield return CoPlayElevatorWalkEnd(animator, holdElevatorWalkEndPoseUntilInputUnlock);
+            }
         }
         finally
         {
             EndElevatorWalkClipPlayback(ref clipPlayback);
+            _activeElevatorWalkPlayback = default;
             if (animator != null)
                 animator.applyRootMotion = originalApplyRootMotion;
             if (canDriveSpeed)
@@ -1038,7 +1858,11 @@ public class MainSceneArrivalController : MonoBehaviour
             moveController?.SetExternalControl(false);
         }
 
-        SnapCameraBehindPlayer(playerRoot, false);
+        if (!useBossIntroTimeline || bossIntroSteps == null || bossIntroSteps.Length == 0)
+        {
+            EndElevatorIntroCinematicCamera();
+            SnapCameraBehindPlayer(playerRoot, false);
+        }
     }
 
     bool CanUseElevatorWalkClipPlayback(Animator animator)
@@ -1049,6 +1873,46 @@ public class MainSceneArrivalController : MonoBehaviour
             && animator.isActiveAndEnabled
             && animator.runtimeAnimatorController != null
             && (walkStart != null || walkLoop != null);
+    }
+
+    IEnumerator CoPlayElevatorWalkEnd(Animator animator, bool holdFinalPose)
+    {
+        AnimationClip walkEnd = ResolveElevatorWalkEndClip();
+        if (animator == null || walkEnd == null)
+            yield break;
+
+        ReleaseHeldPlayerWalkEndPose();
+
+        PlayableGraph graph = PlayableGraph.Create("ElevatorWalkEndClipPlayback");
+        graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
+        try
+        {
+            AnimationPlayableOutput output = AnimationPlayableOutput.Create(graph, "ElevatorWalkEnd", animator);
+            AnimationClipPlayable playable = AnimationClipPlayable.Create(graph, walkEnd);
+            playable.SetApplyFootIK(true);
+            playable.SetSpeed(elevatorWalkAnimationSpeed);
+            output.SetSourcePlayable(playable);
+            graph.Play();
+
+            float duration = Mathf.Min(
+                elevatorWalkEndMaxDuration,
+                Mathf.Max(0.05f, walkEnd.length / Mathf.Max(0.01f, elevatorWalkAnimationSpeed)));
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            playable.SetTime(walkEnd.length);
+            playable.SetSpeed(0f);
+            graph.Evaluate(0f);
+        }
+        finally
+        {
+            if (graph.IsValid())
+                graph.Destroy();
+        }
     }
 
     ElevatorWalkClipPlayback BeginElevatorWalkClipPlayback(Animator animator)
@@ -1139,6 +2003,32 @@ public class MainSceneArrivalController : MonoBehaviour
         return elevatorWalkLoopClip;
     }
 
+    AnimationClip ResolveElevatorWalkEndClip()
+    {
+        if (elevatorWalkEndClip != null)
+            return elevatorWalkEndClip;
+
+#if UNITY_EDITOR
+        elevatorWalkEndClip = LoadEditorAnimationClip(
+            "Assets/GhostSamurai_Animset/Animation/katana/Common/Root/GhostSamurai_Common_Walk_End_Root.FBX",
+            "GhostSamurai_Common_Walk_End_Root");
+#endif
+        return elevatorWalkEndClip;
+    }
+
+    AnimationClip ResolveBossRevealWalkEndClip()
+    {
+        if (bossRevealWalkEndClip != null)
+            return bossRevealWalkEndClip;
+
+#if UNITY_EDITOR
+        bossRevealWalkEndClip = LoadEditorAnimationClip(
+            "Assets/GhostSamurai_Animset/Animation/katana/Common/Root/GhostSamurai_Common_Walk_End_Root.FBX",
+            "GhostSamurai_Common_Walk_End_Root");
+#endif
+        return bossRevealWalkEndClip;
+    }
+
 #if UNITY_EDITOR
     static AnimationClip LoadEditorAnimationClip(string path, string clipName)
     {
@@ -1198,7 +2088,34 @@ public class MainSceneArrivalController : MonoBehaviour
         if (openElevatorDoorVisual == null)
             openElevatorDoorVisual = GameObject.Find("opendoor (1)");
 
+        ResolveElevatorDoorController();
         EnsureElevatorDoorPanelCache();
+    }
+
+    ElevatorDoorController ResolveElevatorDoorController()
+    {
+        if (elevatorDoorController == null && elevatorArrivalAnchor != null)
+            elevatorDoorController = elevatorArrivalAnchor.GetComponentInChildren<ElevatorDoorController>(true);
+
+        if (elevatorDoorController == null && elevatorArrivalAnchor != null)
+            elevatorDoorController = elevatorArrivalAnchor.gameObject.AddComponent<ElevatorDoorController>();
+
+        if (elevatorDoorController != null)
+        {
+            elevatorDoorController.ConfigureLegacy(
+                closedElevatorDoorVisual,
+                openElevatorDoorVisual,
+                elevatorGrillePanels,
+                elevatorDoorPanels,
+                useFallbackDoorPanelMotion,
+                elevatorGrilleOpenDuration,
+                elevatorDoorOpenDelayAfterGrille,
+                elevatorDoorOpenDuration,
+                elevatorDoorOpenLift);
+            elevatorDoorController.AutoBindFallbackPanels(elevatorArrivalAnchor);
+        }
+
+        return elevatorDoorController;
     }
 
     void EnsureElevatorDoorPanelCache()
@@ -1320,8 +2237,194 @@ public class MainSceneArrivalController : MonoBehaviour
 
         Quaternion rotation = ResolveElevatorArrivalRotation(playerRoot);
         SetPlayerWorldPose(playerRoot, basePosition, rotation);
-        SnapCameraBehindPlayer(playerRoot, true);
+        if (!useElevatorIntroCinematicCamera)
+            SnapCameraBehindPlayer(playerRoot, true);
         _startFacingApplied = true;
+    }
+
+    void PrimeElevatorIntroOpeningFrame()
+    {
+        if (!playElevatorArrivalOnSceneStart && !_fromLobbyTransition)
+            return;
+
+        SetArrivalInputLocked(true);
+        SetBossIntroPaused(true);
+        CacheElevatorArrivalReferences();
+        PlacePlayerAtElevatorArrival();
+        SetElevatorDoorOpenState(false, immediate: true);
+        BeginElevatorIntroCinematicCamera(ResolvePlayerFacingRoot());
+        _elevatorIntroOpeningFramePrimed = true;
+    }
+
+    void BeginElevatorIntroCinematicCamera(Transform playerRoot)
+    {
+        if (!useElevatorIntroCinematicCamera || playerRoot == null)
+            return;
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+            return;
+
+        _elevatorIntroFreeLookCamera = FindObjectOfType<FreeLookCamera>(true);
+        _restoreElevatorIntroFreeLookCamera = _elevatorIntroFreeLookCamera != null && _elevatorIntroFreeLookCamera.enabled;
+        if (_elevatorIntroFreeLookCamera != null)
+            _elevatorIntroFreeLookCamera.enabled = false;
+
+        elevatorIntroCinematicCamera = EnsureElevatorIntroCinematicCamera();
+        _elevatorIntroUsesVirtualCamera = elevatorIntroCinematicCamera != null && mainCamera.GetComponent<CinemachineBrain>() != null;
+        if (_elevatorIntroUsesVirtualCamera)
+        {
+            CinemachineCompat.TryCopyLensFromUnityCamera(elevatorIntroCinematicCamera, mainCamera);
+            elevatorIntroCinematicCamera.Follow = null;
+            elevatorIntroCinematicCamera.LookAt = null;
+            ForceElevatorIntroCameraCut(mainCamera.GetComponent<CinemachineBrain>());
+        }
+
+        Vector3 forward = ResolveElevatorWalkOutDirection(playerRoot);
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+        if (right.sqrMagnitude <= 0.0001f)
+            right = playerRoot.right;
+        else
+            right.Normalize();
+
+        _elevatorIntroCameraPosition = playerRoot.position
+            + right * elevatorIntroCameraLocalOffset.x
+            + Vector3.up * elevatorIntroCameraLocalOffset.y
+            + forward * elevatorIntroCameraLocalOffset.z;
+        _elevatorIntroCameraActive = true;
+        UpdateElevatorIntroCinematicCamera(playerRoot);
+        RaiseElevatorIntroCinematicCameraPriority();
+    }
+
+    void UpdateElevatorIntroCinematicCamera(Transform playerRoot)
+    {
+        if (!_elevatorIntroCameraActive || playerRoot == null)
+            return;
+
+        Camera mainCamera = Camera.main;
+        Transform cameraTransform = _elevatorIntroUsesVirtualCamera && elevatorIntroCinematicCamera != null
+            ? elevatorIntroCinematicCamera.transform
+            : mainCamera != null ? mainCamera.transform : null;
+        if (cameraTransform == null)
+            return;
+
+        Vector3 forward = ResolveElevatorWalkOutDirection(playerRoot);
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+        if (right.sqrMagnitude <= 0.0001f)
+            right = playerRoot.right;
+        else
+            right.Normalize();
+
+        Vector3 lookTarget = playerRoot.position
+            + right * elevatorIntroCameraLookOffset.x
+            + Vector3.up * elevatorIntroCameraLookOffset.y
+            + forward * elevatorIntroCameraLookOffset.z;
+        Vector3 toTarget = lookTarget - _elevatorIntroCameraPosition;
+        if (toTarget.sqrMagnitude <= 0.0001f)
+            return;
+
+        cameraTransform.SetPositionAndRotation(
+            _elevatorIntroCameraPosition,
+            Quaternion.LookRotation(toTarget.normalized, Vector3.up));
+    }
+
+    void EndElevatorIntroCinematicCamera()
+    {
+        if (!_elevatorIntroCameraActive && _elevatorIntroFreeLookCamera == null && !_elevatorIntroPriorityRaised)
+            return;
+
+        _elevatorIntroCameraActive = false;
+        RestoreElevatorIntroCinematicCameraPriority();
+        RestoreElevatorIntroCameraBlend();
+        _elevatorIntroUsesVirtualCamera = false;
+        if ((_arrivalInputLocked || _arrivalCameraInputLocked) && _elevatorIntroFreeLookCamera != null && _restoreElevatorIntroFreeLookCamera)
+            return;
+
+        if (_elevatorIntroFreeLookCamera != null && _restoreElevatorIntroFreeLookCamera)
+            _elevatorIntroFreeLookCamera.enabled = true;
+
+        _elevatorIntroFreeLookCamera = null;
+        _restoreElevatorIntroFreeLookCamera = false;
+    }
+
+    void ForceElevatorIntroCameraCut(CinemachineBrain brain)
+    {
+        if (brain == null)
+            return;
+
+        if (!_elevatorIntroBrainBlendOverridden)
+        {
+            _elevatorIntroBrain = brain;
+            _elevatorIntroOriginalBrainBlend = brain.DefaultBlend;
+            _elevatorIntroBrainBlendOverridden = true;
+        }
+
+        brain.DefaultBlend = new CinemachineBlendDefinition(CinemachineBlendDefinition.Styles.Cut, 0f);
+
+        if (_restoreElevatorIntroBrainBlendRoutine != null)
+            StopCoroutine(_restoreElevatorIntroBrainBlendRoutine);
+        _restoreElevatorIntroBrainBlendRoutine = StartCoroutine(CoRestoreElevatorIntroCameraBlendAfterCut());
+    }
+
+    IEnumerator CoRestoreElevatorIntroCameraBlendAfterCut()
+    {
+        yield return new WaitForEndOfFrame();
+        yield return null;
+        _restoreElevatorIntroBrainBlendRoutine = null;
+        RestoreElevatorIntroCameraBlend();
+    }
+
+    void RestoreElevatorIntroCameraBlend()
+    {
+        if (_restoreElevatorIntroBrainBlendRoutine != null)
+        {
+            StopCoroutine(_restoreElevatorIntroBrainBlendRoutine);
+            _restoreElevatorIntroBrainBlendRoutine = null;
+        }
+
+        if (!_elevatorIntroBrainBlendOverridden)
+            return;
+
+        if (_elevatorIntroBrain != null)
+            _elevatorIntroBrain.DefaultBlend = _elevatorIntroOriginalBrainBlend;
+
+        _elevatorIntroBrain = null;
+        _elevatorIntroBrainBlendOverridden = false;
+    }
+
+    CinemachineCamera EnsureElevatorIntroCinematicCamera()
+    {
+        if (elevatorIntroCinematicCamera != null)
+            return elevatorIntroCinematicCamera;
+
+        GameObject cameraObject = new GameObject("RuntimeElevatorIntroCamera");
+        cameraObject.transform.SetParent(transform, false);
+        elevatorIntroCinematicCamera = cameraObject.AddComponent<CinemachineCamera>();
+        elevatorIntroCinematicCamera.Priority = elevatorIntroCinematicInactivePriority;
+        return elevatorIntroCinematicCamera;
+    }
+
+    void RaiseElevatorIntroCinematicCameraPriority()
+    {
+        if (!_elevatorIntroUsesVirtualCamera || elevatorIntroCinematicCamera == null)
+            return;
+
+        if (!_elevatorIntroPriorityRaised)
+            _elevatorIntroOldPriority = elevatorIntroCinematicCamera.Priority;
+
+        elevatorIntroCinematicCamera.Priority = elevatorIntroCinematicPriority;
+        _elevatorIntroPriorityRaised = true;
+    }
+
+    void RestoreElevatorIntroCinematicCameraPriority()
+    {
+        if (!_elevatorIntroPriorityRaised)
+            return;
+
+        if (elevatorIntroCinematicCamera != null)
+            elevatorIntroCinematicCamera.Priority = _elevatorIntroOldPriority;
+
+        _elevatorIntroPriorityRaised = false;
     }
 
     IEnumerator CoSnapCameraBehindPlayerDelayed()
@@ -1386,11 +2489,37 @@ public class MainSceneArrivalController : MonoBehaviour
 
     Transform ResolveBossRoot()
     {
-        if (bossController != null)
-            return bossController.transform;
+        BossController resolvedBoss = ResolveBossController();
+        if (resolvedBoss != null)
+            return resolvedBoss.transform;
 
-        BossController runtimeBoss = FindObjectOfType<BossController>(true);
-        return runtimeBoss != null ? runtimeBoss.transform : null;
+        Transform bossTransform = FindLoadedSceneTransformByName("boss");
+        if (bossTransform == null)
+            bossTransform = FindLoadedSceneTransformByName("Boss");
+
+        return bossTransform;
+    }
+
+    static Transform FindLoadedSceneTransformByName(string objectName)
+    {
+        if (string.IsNullOrEmpty(objectName))
+            return null;
+
+        Transform[] transforms = Resources.FindObjectsOfTypeAll<Transform>();
+        for (int i = 0; i < transforms.Length; i++)
+        {
+            Transform candidate = transforms[i];
+            if (candidate == null || candidate.name != objectName)
+                continue;
+
+            GameObject gameObject = candidate.gameObject;
+            if (!gameObject.scene.IsValid() || !gameObject.scene.isLoaded)
+                continue;
+
+            return candidate;
+        }
+
+        return null;
     }
 
     Vector3 ResolveElevatorWalkOutDirection(Transform playerRoot)
@@ -1509,12 +2638,9 @@ public class MainSceneArrivalController : MonoBehaviour
 
     Transform ResolvePlayerFacingRoot()
     {
-        if (playerHealth != null)
-            return playerHealth.transform;
-
-        PlayerHealth runtimeHealth = FindObjectOfType<PlayerHealth>(true);
-        if (runtimeHealth != null)
-            return runtimeHealth.transform;
+        PlayerHealth resolvedHealth = ResolvePlayerHealth();
+        if (resolvedHealth != null)
+            return resolvedHealth.transform;
 
         GameObject player = GameObject.FindWithTag("Player");
         if (player == null)
@@ -1535,15 +2661,93 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void SetArrivalInputLocked(bool locked)
     {
-        if (_arrivalInputLocked == locked)
+        if (_arrivalInputLocked == locked && _arrivalCameraInputLocked == locked)
             return;
+
+        if (!locked)
+            ReleaseHeldPlayerWalkEndPose();
+
+        SetArrivalCameraInputLocked(locked);
 
         IInputBlocker inputBlocker = ResolveInputBlocker();
         if (inputBlocker == null)
+        {
+            _arrivalInputLocked = locked;
             return;
+        }
 
         inputBlocker.BlockAll(locked);
         _arrivalInputLocked = locked;
+    }
+
+    void SetArrivalCameraInputLocked(bool locked)
+    {
+        if (_arrivalCameraInputLocked == locked)
+            return;
+
+        if (locked)
+        {
+            List<MonoBehaviour> behaviours = new List<MonoBehaviour>(8);
+            AddArrivalCameraInputBehaviour(FindObjectOfType<FreeLookCamera>(true), behaviours);
+            AddArrivalCameraInputBehaviour(FindObjectOfType<MouseWheelZoom>(true), behaviours);
+            AddArrivalCameraInputBehaviour(FindObjectOfType<MouseWheelZoom_FreeLookOnly>(true), behaviours);
+
+            _arrivalCameraInputBehaviours = behaviours.ToArray();
+            _arrivalCameraInputBehaviourStates = new bool[_arrivalCameraInputBehaviours.Length];
+            for (int i = 0; i < _arrivalCameraInputBehaviours.Length; i++)
+            {
+                MonoBehaviour behaviour = _arrivalCameraInputBehaviours[i];
+                if (behaviour == null)
+                    continue;
+
+                _arrivalCameraInputBehaviourStates[i] = behaviour.enabled;
+                behaviour.enabled = false;
+            }
+        }
+        else
+        {
+            int count = _arrivalCameraInputBehaviours != null && _arrivalCameraInputBehaviourStates != null
+                ? Mathf.Min(_arrivalCameraInputBehaviours.Length, _arrivalCameraInputBehaviourStates.Length)
+                : 0;
+
+            for (int i = 0; i < count; i++)
+            {
+                MonoBehaviour behaviour = _arrivalCameraInputBehaviours[i];
+                if (behaviour != null)
+                    behaviour.enabled = _arrivalCameraInputBehaviourStates[i];
+            }
+
+            _arrivalCameraInputBehaviours = null;
+            _arrivalCameraInputBehaviourStates = null;
+            RestoreDeferredElevatorFreeLookCamera();
+        }
+
+        _arrivalCameraInputLocked = locked;
+    }
+
+    void RestoreDeferredElevatorFreeLookCamera()
+    {
+        if (_elevatorIntroFreeLookCamera != null && _restoreElevatorIntroFreeLookCamera)
+            _elevatorIntroFreeLookCamera.enabled = true;
+
+        _elevatorIntroFreeLookCamera = null;
+        _restoreElevatorIntroFreeLookCamera = false;
+    }
+
+    static void AddArrivalCameraInputBehaviour(MonoBehaviour behaviour, List<MonoBehaviour> behaviours)
+    {
+        if (behaviour == null || behaviours.Contains(behaviour))
+            return;
+
+        behaviours.Add(behaviour);
+    }
+
+    void ReleaseHeldPlayerWalkEndPose()
+    {
+        if (_heldPlayerWalkEndGraph.IsValid())
+            _heldPlayerWalkEndGraph.Destroy();
+
+        _heldPlayerWalkEndGraph = default;
     }
 
     void SetBossIntroPaused(bool paused)
@@ -1551,13 +2755,59 @@ public class MainSceneArrivalController : MonoBehaviour
         if (!paused && !_bossPausedForIntro)
             return;
 
-        if (bossController == null)
-            bossController = FindObjectOfType<BossController>(true);
-        if (bossController == null)
+        BossController resolvedBoss = ResolveBossController();
+        if (resolvedBoss == null)
             return;
 
-        bossController.SetExternalIntroPaused(paused);
+        resolvedBoss.SetExternalIntroPaused(paused);
         _bossPausedForIntro = paused;
+    }
+
+    void ResolveCombatReferences()
+    {
+        ResolveBossController();
+        ResolvePlayerHealth();
+        ResolveBossBreakController();
+        ResolvePlayerUltimateController();
+    }
+
+    BossController ResolveBossController()
+    {
+        if (bossController == null)
+            bossController = FindObjectOfType<BossController>(true);
+
+        return bossController;
+    }
+
+    PlayerHealth ResolvePlayerHealth()
+    {
+        if (playerHealth == null)
+            playerHealth = FindObjectOfType<PlayerHealth>(true);
+
+        return playerHealth;
+    }
+
+    BossBreakController ResolveBossBreakController()
+    {
+        if (bossBreakController == null)
+        {
+            BossController resolvedBoss = ResolveBossController();
+            if (resolvedBoss != null)
+                bossBreakController = resolvedBoss.GetComponent<BossBreakController>();
+        }
+
+        if (bossBreakController == null)
+            bossBreakController = FindObjectOfType<BossBreakController>(true);
+
+        return bossBreakController;
+    }
+
+    PlayerUltimateController ResolvePlayerUltimateController()
+    {
+        if (playerUltimateController == null)
+            playerUltimateController = FindObjectOfType<PlayerUltimateController>(true);
+
+        return playerUltimateController;
     }
 
     static bool HasFloatParameter(Animator animator, string parameterName)
@@ -1623,19 +2873,7 @@ public class MainSceneArrivalController : MonoBehaviour
         if (!_fromLobbyTransition)
             return;
 
-        if (bossController == null)
-            bossController = FindObjectOfType<BossController>(true);
-
-        if (playerHealth == null)
-            playerHealth = FindObjectOfType<PlayerHealth>(true);
-
-        if (bossBreakController == null && bossController != null)
-            bossBreakController = bossController.GetComponent<BossBreakController>();
-        if (bossBreakController == null)
-            bossBreakController = FindObjectOfType<BossBreakController>(true);
-
-        if (playerUltimateController == null)
-            playerUltimateController = FindObjectOfType<PlayerUltimateController>(true);
+        ResolveCombatReferences();
 
         if (bossController != null)
         {

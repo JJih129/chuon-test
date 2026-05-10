@@ -49,10 +49,8 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [Header("프로시저럴 트레일")]
     [SerializeField] Color trailStartColor = new Color(1f, 0.32f, 0.28f, 0.95f);
     [SerializeField] Color trailEndColor = new Color(0.85f, 0.08f, 0.08f, 0f);
-    [SerializeField] float trailTime = 0.09f;
     [SerializeField] float trailStartWidth = 0.14f;
     [SerializeField] float trailEndWidth = 0.02f;
-    [SerializeField] float trailMinVertexDistance = 0.065f;
     [SerializeField] float swordTipForwardPadding = 0.03f;
     [SerializeField] float swordBaseBackwardPadding = 0.01f;
     [SerializeField] bool autoSizeTrailFromSword = true;
@@ -85,8 +83,6 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     Transform _activeTrailTipAnchor;
     Transform _resolvedSwordBaseAnchor;
     Transform _resolvedSwordTrailAnchor;
-    float _cachedStartWidthScale = -1f;
-    float _cachedEndWidthScale = -1f;
     GameObject _proceduralRangeFlashObject;
     MeshRenderer _proceduralRangeFlashRenderer;
     Material _proceduralRangeFlashMaterial;

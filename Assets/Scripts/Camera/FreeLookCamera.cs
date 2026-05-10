@@ -10,11 +10,21 @@ public class FreeLookCamera : MonoBehaviour
     public PlayerLockOn playerLockOn;
 
     [Header("Orbit")]
-    public float distance = 4f;
-    public float height = 1.5f;
+    public float distance = 3.25f;
+    public float height = 1.34f;
+    public float focusHeight = 1.42f;
     public float mouseSensitivity = 3f;
     public float minY = -30f;
     public float maxY = 60f;
+
+    [Header("AAA Follow Stabilization")]
+    public bool stabilizeFollowTarget = true;
+    [Min(0f)] public float movingFocusSmoothTime = 0.1f;
+    [Min(0f)] public float idleFocusSmoothTime = 0.2f;
+    [Min(0f)] public float focusDeadZone = 0.12f;
+    [Min(0f)] public float maxFocusFollowSpeed = 40f;
+    [Min(0f)] public float manualYawSmoothTime = 0.035f;
+    [Min(0f)] public float manualPitchSmoothTime = 0.04f;
 
     [Header("Auto-Align")]
     public bool autoAlignEnabled = false;
@@ -32,7 +42,17 @@ public class FreeLookCamera : MonoBehaviour
     float noInputTimer;
     float yaw;
     float pitch = 10f;
+    float _targetYaw;
+    float _targetPitch = 10f;
+    float _yawVelocity;
+    float _pitchVelocity;
     bool orbitInitialized;
+    Vector3 _smoothedFocusPoint;
+    Vector3 _focusVelocity;
+    Vector3 _smoothedCameraAnchor;
+    Vector3 _anchorVelocity;
+    bool _focusInitialized;
+    bool _anchorInitialized;
     float _nextReferenceResolveAt;
     const float ReferenceResolveInterval = 0.5f;
 
@@ -159,6 +179,7 @@ public class FreeLookCamera : MonoBehaviour
             CinemachineCompat.TrySetLegacyFreeLookAxes(legacyFreeLookCamera, restoredYaw, restoredPitch);
             yaw = NormalizeAngle(restoredYaw);
             pitch = ConvertLegacyFreeLookYToPitch(restoredPitch);
+            SyncManualTargets();
             noInputTimer = 0f;
             orbitInitialized = true;
             RestoreCursorLock();
@@ -167,6 +188,7 @@ public class FreeLookCamera : MonoBehaviour
 
         yaw = NormalizeAngle(restoredYaw);
         pitch = Mathf.Clamp(restoredPitch, minY, maxY);
+        SyncManualTargets();
         noInputTimer = 0f;
         orbitInitialized = true;
         RestoreCursorLock();
@@ -208,6 +230,7 @@ public class FreeLookCamera : MonoBehaviour
             CinemachineCompat.TrySetLegacyFreeLookAxes(legacyFreeLookCamera, snappedYaw, legacyY);
             yaw = snappedYaw;
             pitch = snappedPitch;
+            SyncManualTargets();
             orbitInitialized = true;
             noInputTimer = 0f;
             return;
@@ -215,6 +238,7 @@ public class FreeLookCamera : MonoBehaviour
 
         yaw = snappedYaw;
         pitch = snappedPitch;
+        SyncManualTargets();
 
         orbitInitialized = true;
         noInputTimer = 0f;
@@ -229,6 +253,7 @@ public class FreeLookCamera : MonoBehaviour
             {
                 yaw = NormalizeAngle(freeLookYaw);
                 pitch = ConvertLegacyFreeLookYToPitch(freeLookY);
+                SyncManualTargets();
                 orbitInitialized = true;
                 return;
             }
@@ -237,6 +262,7 @@ public class FreeLookCamera : MonoBehaviour
         Vector3 euler = transform.eulerAngles;
         yaw = NormalizeAngle(euler.y);
         pitch = Mathf.Clamp(NormalizePitch(euler.x), minY, maxY);
+        SyncManualTargets();
         orbitInitialized = true;
     }
 
@@ -285,18 +311,92 @@ public class FreeLookCamera : MonoBehaviour
             return;
 
         Vector3 focusPoint = player.position + Vector3.up;
+        focusPoint.y = player.position.y + focusHeight;
+        focusPoint = ResolveStableFocusPoint(focusPoint);
+
         Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
         Vector3 orbitOffset = rotation * new Vector3(0f, 0f, -distance);
         Vector3 worldOffset = orbitOffset + Vector3.up * height;
+        Vector3 cameraAnchor = ResolveStableCameraAnchor(player.position);
 
-        transform.position = player.position + worldOffset;
+        transform.position = cameraAnchor + worldOffset;
         transform.rotation = Quaternion.LookRotation(focusPoint - transform.position, Vector3.up);
+    }
+
+    Vector3 ResolveStableFocusPoint(Vector3 rawFocusPoint)
+    {
+        if (!Application.isPlaying || !stabilizeFollowTarget)
+        {
+            _smoothedFocusPoint = rawFocusPoint;
+            _focusVelocity = Vector3.zero;
+            _focusInitialized = true;
+            return rawFocusPoint;
+        }
+
+        if (!_focusInitialized)
+        {
+            _smoothedFocusPoint = rawFocusPoint;
+            _focusVelocity = Vector3.zero;
+            _focusInitialized = true;
+            return rawFocusPoint;
+        }
+
+        Vector3 delta = rawFocusPoint - _smoothedFocusPoint;
+        if (delta.sqrMagnitude <= focusDeadZone * focusDeadZone)
+            rawFocusPoint = _smoothedFocusPoint;
+
+        float smoothTime = IsPlayerMoving() ? movingFocusSmoothTime : idleFocusSmoothTime;
+        _smoothedFocusPoint = Vector3.SmoothDamp(
+            _smoothedFocusPoint,
+            rawFocusPoint,
+            ref _focusVelocity,
+            Mathf.Max(0.0001f, smoothTime),
+            Mathf.Max(0.01f, maxFocusFollowSpeed),
+            Time.deltaTime);
+
+        return _smoothedFocusPoint;
+    }
+
+    Vector3 ResolveStableCameraAnchor(Vector3 rawAnchor)
+    {
+        if (!Application.isPlaying || !stabilizeFollowTarget)
+        {
+            _smoothedCameraAnchor = rawAnchor;
+            _anchorVelocity = Vector3.zero;
+            _anchorInitialized = true;
+            return rawAnchor;
+        }
+
+        if (!_anchorInitialized)
+        {
+            _smoothedCameraAnchor = rawAnchor;
+            _anchorVelocity = Vector3.zero;
+            _anchorInitialized = true;
+            return rawAnchor;
+        }
+
+        Vector3 delta = rawAnchor - _smoothedCameraAnchor;
+        if (delta.sqrMagnitude <= focusDeadZone * focusDeadZone)
+            rawAnchor = _smoothedCameraAnchor;
+
+        float smoothTime = IsPlayerMoving() ? movingFocusSmoothTime : idleFocusSmoothTime;
+        _smoothedCameraAnchor = Vector3.SmoothDamp(
+            _smoothedCameraAnchor,
+            rawAnchor,
+            ref _anchorVelocity,
+            Mathf.Max(0.0001f, smoothTime),
+            Mathf.Max(0.01f, maxFocusFollowSpeed),
+            Time.deltaTime);
+
+        return _smoothedCameraAnchor;
     }
 
     void ApplyManualMouseOrbit(float mouseX, float mouseY)
     {
-        yaw += mouseX * mouseSensitivity;
-        pitch = Mathf.Clamp(pitch - mouseY * mouseSensitivity, minY, maxY);
+        _targetYaw = NormalizeAngle(_targetYaw + mouseX * mouseSensitivity);
+        _targetPitch = Mathf.Clamp(_targetPitch - mouseY * mouseSensitivity, minY, maxY);
+        yaw = Mathf.SmoothDampAngle(yaw, _targetYaw, ref _yawVelocity, Mathf.Max(0.0001f, manualYawSmoothTime), Mathf.Infinity, Time.deltaTime);
+        pitch = Mathf.SmoothDamp(pitch, _targetPitch, ref _pitchVelocity, Mathf.Max(0.0001f, manualPitchSmoothTime), Mathf.Infinity, Time.deltaTime);
         noInputTimer = 0f;
     }
 
@@ -328,11 +428,13 @@ public class FreeLookCamera : MonoBehaviour
             CinemachineCompat.TrySetLegacyFreeLookAxes(legacyFreeLookCamera, nextYaw, currentY);
             yaw = NormalizeAngle(nextYaw);
             pitch = ConvertLegacyFreeLookYToPitch(currentY);
+            SyncManualTargets();
             orbitInitialized = true;
             return;
         }
 
         yaw = Mathf.LerpAngle(yaw, targetYaw, Time.deltaTime * autoAlignSpeed);
+        SyncManualTargets();
     }
 
     void SyncFromLegacyFreeLook()
@@ -345,7 +447,16 @@ public class FreeLookCamera : MonoBehaviour
 
         yaw = NormalizeAngle(currentYaw);
         pitch = ConvertLegacyFreeLookYToPitch(currentY);
+        SyncManualTargets();
         orbitInitialized = true;
+    }
+
+    void SyncManualTargets()
+    {
+        _targetYaw = yaw;
+        _targetPitch = pitch;
+        _yawVelocity = 0f;
+        _pitchVelocity = 0f;
     }
 
     void ResolveLegacyFreeLookCamera()

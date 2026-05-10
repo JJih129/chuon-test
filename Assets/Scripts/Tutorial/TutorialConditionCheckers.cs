@@ -629,7 +629,6 @@ public class TutorialUltimateConditionChecker : TutorialConditionChecker
     [SerializeField] private TutorialPlayerRuntimeBridge playerBridge;
     [SerializeField] private UltimateTargetSimple ultimateTarget;
     bool _ultimateStarted;
-    bool _ultimateDamageApplied;
 
     public void ConfigureRuntime(TutorialPlayerRuntimeBridge bridge, UltimateTargetSimple target = null)
     {
@@ -646,7 +645,6 @@ public class TutorialUltimateConditionChecker : TutorialConditionChecker
         }
 
         _ultimateStarted = false;
-        _ultimateDamageApplied = false;
         playerBridge.FillUltimateGauge();
         playerBridge.UltimateStarted += HandleUltimateStarted;
         playerBridge.UltimateEnded += HandleUltimateEnded;
@@ -680,7 +678,6 @@ public class TutorialUltimateConditionChecker : TutorialConditionChecker
 
     void HandleUltimateDamageApplied(int _)
     {
-        _ultimateDamageApplied = true;
         if (_ultimateStarted)
             ReportProgress("\uad81\uadf9\uae30 \ud0c0\uaca9 \ud655\uc778");
     }
