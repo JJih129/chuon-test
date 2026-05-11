@@ -68,6 +68,8 @@ public class PlayerMoveController : MonoBehaviour
     [SerializeField] private bool useRunStartMotion = true;
     [SerializeField] private string p_RunStartTrigger = "RunStart";
     [SerializeField, Min(0.01f)] private float runStartMinSpeed = 0.25f;
+    [SerializeField] private bool useRunStartRootMotion = true;
+    [SerializeField, Min(0.05f)] private float runStartRootMotionDuration = 0.8f;
     [SerializeField] private bool useTurnStartMotion = true;
     [SerializeField] private string p_TurnL90Trigger = "TurnL90";
     [SerializeField] private string p_TurnR90Trigger = "TurnR90";
@@ -97,6 +99,10 @@ public class PlayerMoveController : MonoBehaviour
     private Vector3 _currentWishDirection;
     private Vector3 _lastNonZeroMoveDirection;
     private Vector3 _smoothedRotationDirection;
+    private bool _runStartActive;
+    private bool _runStartCachedRootMotion;
+    private bool _runStartHasCachedRootMotion;
+    private float _runStartEndTime;
     private bool _runStopActive;
     private bool _runStopCachedRootMotion;
     private bool _runStopHasCachedRootMotion;
@@ -129,6 +135,7 @@ public class PlayerMoveController : MonoBehaviour
     void OnDisable()
     {
         if (moveAction?.action != null) moveAction.action.Disable();
+        StopRunStartMotion();
         StopRunStopMotion();
     }
 
@@ -256,7 +263,7 @@ public class PlayerMoveController : MonoBehaviour
         }
 
         // 7. 최종 이동 적용 (중력 포함)
-        MoveWithGravity(_velXZ);
+        MoveWithGravity(_runStartActive ? Vector3.zero : _velXZ);
 
         // This controller currently drives an Idle/Run style locomotion setup.
         // Use desired move speed instead of smoothed velocity so run anim engages
@@ -478,6 +485,9 @@ public class PlayerMoveController : MonoBehaviour
             PlayRunStartMotion();
 
         _wasMovingForRunStart = isMoving;
+
+        if (_runStartActive && (!isMoving || Time.time >= _runStartEndTime))
+            StopRunStartMotion();
     }
 
     void PlayRunStartMotion()
@@ -485,8 +495,26 @@ public class PlayerMoveController : MonoBehaviour
         if (animator == null || string.IsNullOrEmpty(p_RunStartTrigger))
             return;
 
+        StopRunStartMotion();
+        if (useRunStartRootMotion)
+        {
+            _runStartCachedRootMotion = animator.applyRootMotion;
+            _runStartHasCachedRootMotion = true;
+            animator.applyRootMotion = true;
+            _runStartEndTime = Time.time + runStartRootMotionDuration;
+            _runStartActive = true;
+        }
+
         animator.ResetTrigger(p_RunStartTrigger);
         animator.SetTrigger(p_RunStartTrigger);
+    }
+
+    void StopRunStartMotion()
+    {
+        _runStartActive = false;
+        if (animator != null && _runStartHasCachedRootMotion)
+            animator.applyRootMotion = _runStartCachedRootMotion;
+        _runStartHasCachedRootMotion = false;
     }
 
     bool TryPlayTurnStartMotion()
@@ -536,6 +564,7 @@ public class PlayerMoveController : MonoBehaviour
 
     void StopRunStopMotion()
     {
+        StopRunStartMotion();
         _runStopActive = false;
         if (animator != null && _runStopHasCachedRootMotion)
             animator.applyRootMotion = _runStopCachedRootMotion;
@@ -551,7 +580,7 @@ public class PlayerMoveController : MonoBehaviour
 
     void OnAnimatorMove()
     {
-        if (!_runStopActive || animator == null || _cc == null || !_cc.enabled)
+        if ((!_runStartActive && !_runStopActive) || animator == null || _cc == null || !_cc.enabled)
             return;
 
         Vector3 delta = animator.deltaPosition;

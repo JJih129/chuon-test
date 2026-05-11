@@ -12,13 +12,29 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
 {
     const string ObjectName = "DevelopmentSceneHotkeys";
 
+    const string TitleSceneName = "TitleScene";
     const string TutorialSceneName = "Tutorial";
     const string LobbySceneName = "Lobby";
     const string MainSceneName = "MainScene";
+    const string OptionsSceneName = "OptionsScene";
+    const string CreditsSceneName = "CreditsScene";
 
+    const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
     const string TutorialScenePath = "Assets/Scenes/Tutorial.unity";
     const string LobbyScenePath = "Assets/Scenes/Lobby.unity";
     const string MainScenePath = "Assets/Scenes/MainScene.unity";
+    const string OptionsScenePath = "Assets/Scenes/OptionsScene.unity";
+    const string CreditsScenePath = "Assets/Scenes/CreditsScene.unity";
+
+    static readonly SceneHotkey[] SceneHotkeys =
+    {
+        new SceneHotkey(KeyCode.F1, TitleSceneName, TitleScenePath),
+        new SceneHotkey(KeyCode.F2, TutorialSceneName, TutorialScenePath),
+        new SceneHotkey(KeyCode.F3, LobbySceneName, LobbyScenePath),
+        new SceneHotkey(KeyCode.F4, MainSceneName, MainScenePath),
+        new SceneHotkey(KeyCode.F5, OptionsSceneName, OptionsScenePath),
+        new SceneHotkey(KeyCode.F6, CreditsSceneName, CreditsScenePath),
+    };
 
     static DevelopmentSceneHotkeys _instance;
     bool _isLoading;
@@ -54,12 +70,15 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
         if (_isLoading || IsTypingInUiInput())
             return;
 
-        if (Input.GetKeyDown(KeyCode.F1))
-            LoadScene(TutorialSceneName, TutorialScenePath);
-        else if (Input.GetKeyDown(KeyCode.F2))
-            LoadScene(LobbySceneName, LobbyScenePath);
-        else if (Input.GetKeyDown(KeyCode.F3))
-            LoadScene(MainSceneName, MainScenePath);
+        for (int i = 0; i < SceneHotkeys.Length; i++)
+        {
+            SceneHotkey hotkey = SceneHotkeys[i];
+            if (Input.GetKeyDown(hotkey.Key))
+            {
+                LoadScene(hotkey.SceneName, hotkey.ScenePath);
+                return;
+            }
+        }
     }
 
     void LoadScene(string sceneName, string scenePath)
@@ -91,5 +110,19 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
             return false;
 
         return selected.GetComponent<InputField>() != null || selected.GetComponent("TMP_InputField") != null;
+    }
+
+    readonly struct SceneHotkey
+    {
+        public readonly KeyCode Key;
+        public readonly string SceneName;
+        public readonly string ScenePath;
+
+        public SceneHotkey(KeyCode key, string sceneName, string scenePath)
+        {
+            Key = key;
+            SceneName = sceneName;
+            ScenePath = scenePath;
+        }
     }
 }

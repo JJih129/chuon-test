@@ -4,11 +4,11 @@ using UnityEngine;
 public class TutorialDebugController : MonoBehaviour
 {
     [SerializeField] private TutorialFlowController flowController;
-    [SerializeField] private KeyCode logCurrentStepKey = KeyCode.F5;
-    [SerializeField] private KeyCode completeStepKey = KeyCode.F6;
-    [SerializeField] private KeyCode nextStepKey = KeyCode.F7;
-    [SerializeField] private KeyCode restartStepKey = KeyCode.F8;
-    [SerializeField] private KeyCode firstStepKey = KeyCode.F9;
+    [SerializeField] private KeyCode logCurrentStepKey = KeyCode.F7;
+    [SerializeField] private KeyCode completeStepKey = KeyCode.F8;
+    [SerializeField] private KeyCode nextStepKey = KeyCode.F9;
+    [SerializeField] private KeyCode restartStepKey = KeyCode.F10;
+    [SerializeField] private KeyCode firstStepKey = KeyCode.BackQuote;
 
     void Awake()
     {
