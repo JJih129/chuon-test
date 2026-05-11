@@ -9,6 +9,8 @@ public class LobbyObjectivePanelController : MonoBehaviour
     [SerializeField] private LobbyManager lobbyManager;
 
     [Header("Layout")]
+    [SerializeField] private bool useScenePlacedQuestPanel = true;
+    [SerializeField] private Sprite sceneQuestGaugeSprite;
     [SerializeField] private Vector2 objectivePanelAnchoredPosition = new Vector2(-32f, -28f);
     [SerializeField] private Vector2 objectivePanelSize = new Vector2(660f, 312f);
     [SerializeField] private Vector2 supportPanelAnchoredPosition = new Vector2(32f, -124f);
@@ -72,6 +74,7 @@ public class LobbyObjectivePanelController : MonoBehaviour
     RectTransform _progressRoot;
     RawImage[] _progressNodes;
     RawImage[] _progressLinks;
+    Image _sceneQuestGaugeImage;
     bool _subscribed;
     Coroutine _sweepRoutine;
     Coroutine _iconPulseRoutine;
@@ -86,6 +89,8 @@ public class LobbyObjectivePanelController : MonoBehaviour
     TextMeshProUGUI _cueTitleText;
     TextMeshProUGUI _cueBodyText;
     bool _transientCueVisible;
+    const string SceneQuestGaugeName = "QuestGauge";
+    const string SceneQuestGaugeResourcePath = "UI/HUD/chuon_hud_quest_gauge";
 
     public void ConfigureRuntime(LobbyManager runtimeLobbyManager)
     {
@@ -182,7 +187,8 @@ public class LobbyObjectivePanelController : MonoBehaviour
         if (_accentImage != null)
             _accentImage.color = color;
 
-        ApplyIconStyle(phase, color, animated);
+        if (!useScenePlacedQuestPanel)
+            ApplyIconStyle(phase, color, animated);
 
         if (_categoryText != null)
         {
@@ -215,10 +221,13 @@ public class LobbyObjectivePanelController : MonoBehaviour
         if (!_transientCueVisible)
             ApplySupportTexts();
 
-        EnsureProgressVisuals();
-        UpdateProgressVisuals(index, color);
+        if (!useScenePlacedQuestPanel)
+        {
+            EnsureProgressVisuals();
+            UpdateProgressVisuals(index, color);
+        }
 
-        if (animated)
+        if (animated && !useScenePlacedQuestPanel)
             PlaySweep(color, 0.16f);
     }
 
@@ -228,10 +237,18 @@ public class LobbyObjectivePanelController : MonoBehaviour
         if (questPanel == null)
             return;
 
-        SetLegacyQuestTextVisible(false);
-        SetLegacyQuestPanelVisible(false);
         EnsureRuntimeCanvas(questPanel);
         EnsureHudRoot();
+
+        if (useScenePlacedQuestPanel)
+        {
+            ConfigureScenePlacedQuestPanel(questPanel);
+            EnsureTransientCueVisuals();
+            return;
+        }
+
+        SetLegacyQuestTextVisible(false);
+        SetLegacyQuestPanelVisible(false);
         if (_hudRoot == null)
             return;
 
@@ -363,6 +380,53 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
         EnsureProgressVisuals();
         EnsureTransientCueVisuals();
+    }
+
+    void ConfigureScenePlacedQuestPanel(CanvasGroup questPanel)
+    {
+        SetLegacyQuestTextVisible(true);
+        SetLegacyQuestPanelVisible(true);
+
+        _runtimeRoot = questPanel.transform as RectTransform;
+        _titleText = lobbyManager != null ? lobbyManager.questTitleText : null;
+        _statusText = lobbyManager != null ? lobbyManager.questDescriptionText : null;
+        _runtimeBackground = null;
+        _accentImage = null;
+        _sweepImage = null;
+        _iconRoot = null;
+        _categoryText = null;
+        _counterText = null;
+        _badgeRoot = null;
+        _badgeBackground = null;
+        _badgeText = null;
+        _progressRoot = null;
+        _progressNodes = null;
+        _progressLinks = null;
+
+        if (_titleText != null)
+        {
+            _titleText.enabled = true;
+            _titleText.raycastTarget = false;
+        }
+
+        if (_statusText != null)
+        {
+            _statusText.enabled = true;
+            _statusText.raycastTarget = false;
+        }
+
+        _sceneQuestGaugeImage = FindSceneQuestGaugeImage(_runtimeRoot);
+        if (_sceneQuestGaugeImage != null)
+        {
+            if (sceneQuestGaugeSprite == null)
+                sceneQuestGaugeSprite = Resources.Load<Sprite>(SceneQuestGaugeResourcePath);
+
+            if (sceneQuestGaugeSprite != null)
+                _sceneQuestGaugeImage.sprite = sceneQuestGaugeSprite;
+
+            _sceneQuestGaugeImage.raycastTarget = false;
+            _sceneQuestGaugeImage.color = Color.white;
+        }
     }
 
     public void ShowTransientCue(string title, string description)
@@ -613,6 +677,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void EnsureProgressVisuals()
     {
+        if (useScenePlacedQuestPanel)
+            return;
+
         if (_runtimeRoot == null)
             return;
 
@@ -680,6 +747,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void UpdateProgressVisuals(int activeIndex, Color activeColor)
     {
+        if (useScenePlacedQuestPanel)
+            return;
+
         if (_progressNodes == null || _progressLinks == null)
             return;
 
@@ -704,6 +774,15 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
             link.color = i < activeIndex ? Color.Lerp(activeColor, Color.white, 0.12f) : pendingLinkColor;
         }
+    }
+
+    static Image FindSceneQuestGaugeImage(RectTransform root)
+    {
+        if (root == null)
+            return null;
+
+        Transform gauge = root.Find(SceneQuestGaugeName);
+        return gauge != null ? gauge.GetComponent<Image>() : null;
     }
 
     void PlaySweep(Color color, float maxAlpha)

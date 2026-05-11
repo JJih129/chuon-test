@@ -18,6 +18,14 @@ public class PlayerHUD : MonoBehaviour
     [Tooltip("앰플 슬롯 이미지들")]
     public Image[] ampouleSlots = new Image[5];
 
+    [Header("ChuOn HUD Skin")]
+    [SerializeField] bool useChuOnHudPlayerSkin = true;
+    [SerializeField] Sprite chuOnHudFrameSprite;
+    [SerializeField] Sprite chuOnHpGaugeSprite;
+    [SerializeField] Sprite chuOnPotionGaugeSprite;
+    [SerializeField] Sprite chuOnUltimateGaugeSprite;
+    [SerializeField] bool applyChuOnUltimateGaugeSkin = true;
+
     [Header("Guard Strain")]
     [Tooltip("직렬화된 가드 안정도 Fill 이미지가 있으면 우선 사용")]
     public Image guardStrainFillImage;
@@ -195,6 +203,24 @@ public class PlayerHUD : MonoBehaviour
     const string RuntimePunishWindowTextName = "_Text";
     const string RuntimePerformanceHudRootName = "_RuntimePerformanceHUD";
     const string RuntimePerformanceHudTextName = "_Text";
+    const string LegacyChuOnHudFrameName = "_ChuOnHudPlayerFrame";
+    const string ChuOnHudFramePath = "UI/HUD/chuon_hud_player";
+    const string ChuOnHpGaugePath = "UI/HUD/chuon_hud_player_hpgauge";
+    const string ChuOnPotionGaugePath = "UI/HUD/chuon_hud_player_potiongauge";
+    const string ChuOnUltimateGaugePath = "UI/HUD/chuon_hud_player_ultimategauge";
+
+    void Awake()
+    {
+        ApplyChuOnHudSkin();
+    }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        if (!Application.isPlaying)
+            LoadChuOnHudSkinSprites();
+    }
+#endif
 
     void Update()
     {
@@ -251,6 +277,7 @@ public class PlayerHUD : MonoBehaviour
 
     public void Bind(IHealth health, PlayerConsumables consumables = null, PlayerGuardController guard = null, BossController boss = null)
     {
+        ApplyChuOnHudSkin();
         Unbind();
 
         _boundHealth = health;
@@ -280,6 +307,132 @@ public class PlayerHUD : MonoBehaviour
 
         BindGuard(guard);
         BindBoss(boss);
+    }
+
+    void ApplyChuOnHudSkin()
+    {
+        if (!useChuOnHudPlayerSkin)
+            return;
+
+        LoadChuOnHudSkinSprites();
+        RemoveLegacyChuOnRuntimeFrame();
+        ApplyChuOnHpGaugeSkin();
+        ApplyChuOnPotionGaugeSkin();
+        ApplyChuOnUltimateGaugeSkin();
+        ApplyChuOnPlayerHudFrameSkin();
+    }
+
+    void LoadChuOnHudSkinSprites()
+    {
+        if (chuOnHudFrameSprite == null)
+            chuOnHudFrameSprite = Resources.Load<Sprite>(ChuOnHudFramePath);
+        if (chuOnHpGaugeSprite == null)
+            chuOnHpGaugeSprite = Resources.Load<Sprite>(ChuOnHpGaugePath);
+        if (chuOnPotionGaugeSprite == null)
+            chuOnPotionGaugeSprite = Resources.Load<Sprite>(ChuOnPotionGaugePath);
+        if (chuOnUltimateGaugeSprite == null)
+            chuOnUltimateGaugeSprite = Resources.Load<Sprite>(ChuOnUltimateGaugePath);
+    }
+
+    void ApplyChuOnHpGaugeSkin()
+    {
+        if (hpFillImage == null || chuOnHpGaugeSprite == null)
+            return;
+
+        hpFillImage.sprite = chuOnHpGaugeSprite;
+        hpFillImage.type = Image.Type.Filled;
+        hpFillImage.fillMethod = Image.FillMethod.Horizontal;
+        hpFillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
+        hpFillImage.fillClockwise = true;
+        hpFillImage.color = Color.white;
+        hpFillImage.raycastTarget = false;
+    }
+
+    void ApplyChuOnPotionGaugeSkin()
+    {
+        if (ampouleSlots == null || chuOnPotionGaugeSprite == null)
+            return;
+
+        for (int i = 0; i < ampouleSlots.Length; i++)
+        {
+            Image slot = ampouleSlots[i];
+            if (slot == null)
+                continue;
+
+            slot.sprite = chuOnPotionGaugeSprite;
+            slot.color = Color.white;
+            slot.raycastTarget = false;
+        }
+    }
+
+    void ApplyChuOnUltimateGaugeSkin()
+    {
+        if (!applyChuOnUltimateGaugeSkin || chuOnUltimateGaugeSprite == null)
+            return;
+
+        UI_UltimateGauge[] gauges = FindObjectsOfType<UI_UltimateGauge>(true);
+        for (int i = 0; i < gauges.Length; i++)
+        {
+            Image fill = gauges[i] != null ? gauges[i].fill : null;
+            if (fill == null)
+                continue;
+
+            fill.sprite = chuOnUltimateGaugeSprite;
+            fill.color = Color.white;
+            fill.raycastTarget = false;
+        }
+    }
+
+    void ApplyChuOnPlayerHudFrameSkin()
+    {
+        if (chuOnHudFrameSprite == null || hpFillImage == null)
+            return;
+
+        Transform hpRoot = hpFillImage.transform.parent;
+        if (hpRoot == null)
+            return;
+
+        Image[] images = hpRoot.GetComponentsInChildren<Image>(true);
+        for (int i = 0; i < images.Length; i++)
+        {
+            Image image = images[i];
+            if (image == null || image == hpFillImage || IsAmpouleSlotImage(image))
+                continue;
+
+            image.sprite = chuOnHudFrameSprite;
+            image.color = Color.white;
+            image.raycastTarget = false;
+            break;
+        }
+    }
+
+    bool IsAmpouleSlotImage(Image image)
+    {
+        if (ampouleSlots == null)
+            return false;
+
+        for (int i = 0; i < ampouleSlots.Length; i++)
+        {
+            if (ampouleSlots[i] == image)
+                return true;
+        }
+
+        return false;
+    }
+
+    void RemoveLegacyChuOnRuntimeFrame()
+    {
+        if (hpFillImage == null || hpFillImage.transform.parent == null)
+            return;
+
+        Transform legacy = hpFillImage.transform.parent.Find(LegacyChuOnHudFrameName);
+        if (legacy == null)
+            return;
+
+        if (Application.isPlaying)
+            Destroy(legacy.gameObject);
+        else
+            DestroyImmediate(legacy.gameObject);
     }
 
     public void Unbind()

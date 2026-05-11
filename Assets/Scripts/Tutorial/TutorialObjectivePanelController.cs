@@ -10,6 +10,12 @@ public class TutorialObjectivePanelController : MonoBehaviour
     [SerializeField] private TutorialHintUIBridge hintBridge;
 
     [Header("Style")]
+    [SerializeField] private bool useScenePlacedQuestPanel = true;
+    [SerializeField] private Sprite sceneQuestGaugeSprite;
+    [SerializeField, Min(1)] private int sceneQuestGaugeSegmentCount = 5;
+    [SerializeField] private Vector2 sceneQuestGaugeSegmentSize = new Vector2(12f, 12f);
+    [SerializeField] private Vector2 sceneQuestGaugeSegmentStart = new Vector2(0.24f, 0.50f);
+    [SerializeField] private Vector2 sceneQuestGaugeSegmentSpacing = new Vector2(0.145f, 0f);
     [SerializeField] private Vector2 iconAnchoredPosition = new Vector2(20f, -18f);
     [SerializeField] private Vector2 iconSize = new Vector2(32f, 32f);
     [SerializeField] private Vector2 categoryAnchoredPosition = new Vector2(62f, -16f);
@@ -64,11 +70,18 @@ public class TutorialObjectivePanelController : MonoBehaviour
     RectTransform _progressRoot;
     RawImage[] _progressNodes;
     RawImage[] _progressLinks;
+    Image _sceneQuestGaugeImage;
+    RectTransform _sceneQuestGaugeSegmentRoot;
+    Graphic[] _sceneQuestGaugeSegments;
     Coroutine _sweepRoutine;
     Coroutine _iconPulseRoutine;
     bool _subscribed;
     string _bridgeHintTitle = string.Empty;
     string _bridgeHintBody = string.Empty;
+    const string SceneQuestGaugeName = "QuestGauge";
+    const string SceneQuestGaugeResourcePath = "UI/HUD/chuon_hud_quest_gauge";
+    const string SceneQuestGaugeSegmentRootName = "QuestGaugeFillSegments";
+    const string SceneQuestGaugeSegmentPrefix = "QuestGaugeFill_";
 
     public void ConfigureRuntime(TutorialFlowController runtimeFlowController, TutorialHintUIBridge runtimeHintBridge)
     {
@@ -176,9 +189,16 @@ public class TutorialObjectivePanelController : MonoBehaviour
             _statusText.color = Color.Lerp(bodyTextColor, GetStepColor(step.stepType), 0.42f);
         }
 
-        SetBadgeText(step.stepType, true, GetStepColor(step.stepType));
-        UpdateProgressVisuals(flowController != null ? flowController.CurrentStepIndex : -1, true, GetStepColor(step.stepType));
-        PlaySweep(GetStepColor(step.stepType), 0.16f);
+        if (!useScenePlacedQuestPanel)
+        {
+            SetBadgeText(step.stepType, true, GetStepColor(step.stepType));
+            UpdateProgressVisuals(flowController != null ? flowController.CurrentStepIndex : -1, true, GetStepColor(step.stepType));
+            PlaySweep(GetStepColor(step.stepType), 0.16f);
+        }
+        else
+        {
+            UpdateSceneQuestGaugeProgress(flowController != null ? flowController.CurrentStepIndex : -1);
+        }
     }
 
     void HandleStepProgressUpdated(TutorialStepDefinition step, string progressText)
@@ -226,8 +246,11 @@ public class TutorialObjectivePanelController : MonoBehaviour
         if (_accentImage != null)
             _accentImage.color = color;
 
-        ApplyIconStyle(step.stepType, color);
-        SetBadgeText(step.stepType, false, color);
+        if (!useScenePlacedQuestPanel)
+        {
+            ApplyIconStyle(step.stepType, color);
+            SetBadgeText(step.stepType, false, color);
+        }
 
         if (_statusText != null)
         {
@@ -235,10 +258,17 @@ public class TutorialObjectivePanelController : MonoBehaviour
             _statusText.color = bodyTextColor;
         }
 
-        EnsureProgressVisuals();
-        UpdateProgressVisuals(currentStepDisplay - 1, false, color);
+        if (!useScenePlacedQuestPanel)
+        {
+            EnsureProgressVisuals();
+            UpdateProgressVisuals(currentStepDisplay - 1, false, color);
+        }
+        else
+        {
+            UpdateSceneQuestGaugeProgress(currentStepDisplay - 1);
+        }
 
-        if (playSweep)
+        if (playSweep && !useScenePlacedQuestPanel)
             PlaySweep(color, 0.22f);
     }
 
@@ -252,6 +282,12 @@ public class TutorialObjectivePanelController : MonoBehaviour
         {
             _bridgeHintTitle = hintBridge.QuestTitleText != null ? hintBridge.QuestTitleText.text : _bridgeHintTitle;
             _bridgeHintBody = hintBridge.QuestDescriptionText != null ? hintBridge.QuestDescriptionText.text : _bridgeHintBody;
+        }
+
+        if (useScenePlacedQuestPanel)
+        {
+            ConfigureScenePlacedQuestPanel(questPanel);
+            return;
         }
 
         if (_runtimeRoot == null)
@@ -342,6 +378,59 @@ public class TutorialObjectivePanelController : MonoBehaviour
         SyncBridgeHintTextVisibility(false);
     }
 
+    void ConfigureScenePlacedQuestPanel(CanvasGroup questPanel)
+    {
+        _runtimeRoot = questPanel.transform as RectTransform;
+        _titleText = hintBridge != null ? hintBridge.QuestTitleText : null;
+        _statusText = hintBridge != null ? hintBridge.QuestDescriptionText : null;
+        _accentImage = null;
+        _sweepImage = null;
+        _iconRoot = null;
+        _categoryText = null;
+        _counterText = null;
+        _badgeRoot = null;
+        _badgeBackground = null;
+        _badgeText = null;
+        _progressRoot = null;
+        _progressNodes = null;
+        _progressLinks = null;
+        _sceneQuestGaugeSegmentRoot = null;
+        _sceneQuestGaugeSegments = null;
+
+        questPanel.alpha = 1f;
+        questPanel.interactable = false;
+        questPanel.blocksRaycasts = false;
+
+        if (_titleText != null)
+        {
+            _titleText.enabled = true;
+            _titleText.raycastTarget = false;
+        }
+
+        if (_statusText != null)
+        {
+            _statusText.enabled = true;
+            _statusText.raycastTarget = false;
+        }
+
+        _sceneQuestGaugeImage = FindSceneQuestGaugeImage(_runtimeRoot);
+        if (_sceneQuestGaugeImage != null)
+        {
+            if (sceneQuestGaugeSprite == null)
+                sceneQuestGaugeSprite = Resources.Load<Sprite>(SceneQuestGaugeResourcePath);
+
+            if (sceneQuestGaugeSprite != null)
+                _sceneQuestGaugeImage.sprite = sceneQuestGaugeSprite;
+
+            _sceneQuestGaugeImage.raycastTarget = false;
+            _sceneQuestGaugeImage.color = Color.white;
+        }
+
+        EnsureSceneQuestGaugeSegments();
+        UpdateSceneQuestGaugeProgress(flowController != null ? flowController.CurrentStepIndex : -1);
+        SyncBridgeHintTextVisibility(true);
+    }
+
     void EnsureIconVisuals()
     {
         if (_runtimeRoot == null)
@@ -418,6 +507,9 @@ public class TutorialObjectivePanelController : MonoBehaviour
 
     void EnsureProgressVisuals()
     {
+        if (useScenePlacedQuestPanel)
+            return;
+
         if (_runtimeRoot == null)
             return;
 
@@ -494,6 +586,9 @@ public class TutorialObjectivePanelController : MonoBehaviour
 
     void UpdateProgressVisuals(int activeIndex, bool treatActiveAsCompleted, Color activeColor)
     {
+        if (useScenePlacedQuestPanel)
+            return;
+
         if (_progressNodes == null || _progressNodes.Length == 0)
             return;
 
@@ -524,6 +619,99 @@ public class TutorialObjectivePanelController : MonoBehaviour
             bool isCompletedLink = i < clampedIndex || (treatActiveAsCompleted && i == clampedIndex);
             link.color = isCompletedLink ? new Color(activeColor.r, activeColor.g, activeColor.b, activeColor.a * 0.72f) : pendingLinkColor;
         }
+    }
+
+    void EnsureSceneQuestGaugeSegments()
+    {
+        if (_sceneQuestGaugeImage == null)
+            return;
+
+        if (_sceneQuestGaugeSegmentRoot == null)
+        {
+            Transform existing = _sceneQuestGaugeImage.transform.Find(SceneQuestGaugeSegmentRootName);
+            if (existing != null)
+                _sceneQuestGaugeSegmentRoot = existing as RectTransform;
+
+            if (_sceneQuestGaugeSegmentRoot == null)
+            {
+                GameObject rootObject = new GameObject(SceneQuestGaugeSegmentRootName, typeof(RectTransform));
+                _sceneQuestGaugeSegmentRoot = rootObject.GetComponent<RectTransform>();
+                _sceneQuestGaugeSegmentRoot.SetParent(_sceneQuestGaugeImage.transform, false);
+            }
+        }
+
+        StretchToParent(_sceneQuestGaugeSegmentRoot);
+
+        Graphic[] existingSegments = _sceneQuestGaugeSegmentRoot.GetComponentsInChildren<Graphic>(true);
+        if (existingSegments != null && existingSegments.Length > 0)
+        {
+            _sceneQuestGaugeSegments = existingSegments;
+            return;
+        }
+
+        int segmentCount = Mathf.Max(1, sceneQuestGaugeSegmentCount);
+        _sceneQuestGaugeSegments = new Graphic[segmentCount];
+        for (int i = 0; i < segmentCount; i++)
+        {
+            GameObject segmentObject = new GameObject(SceneQuestGaugeSegmentPrefix + i.ToString("00"), typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage));
+            segmentObject.transform.SetParent(_sceneQuestGaugeSegmentRoot, false);
+
+            RawImage segment = segmentObject.GetComponent<RawImage>();
+            segment.texture = Texture2D.whiteTexture;
+            segment.raycastTarget = false;
+            ConfigureSceneQuestGaugeSegment(segment.rectTransform, i);
+            _sceneQuestGaugeSegments[i] = segment;
+        }
+    }
+
+    void ConfigureSceneQuestGaugeSegment(RectTransform rectTransform, int index)
+    {
+        if (rectTransform == null)
+            return;
+
+        Vector2 anchor = sceneQuestGaugeSegmentStart + sceneQuestGaugeSegmentSpacing * index;
+        rectTransform.anchorMin = anchor;
+        rectTransform.anchorMax = anchor;
+        rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        rectTransform.anchoredPosition = Vector2.zero;
+        rectTransform.sizeDelta = sceneQuestGaugeSegmentSize;
+        rectTransform.localScale = Vector3.one;
+        rectTransform.localRotation = Quaternion.identity;
+    }
+
+    void UpdateSceneQuestGaugeProgress(int activeIndex)
+    {
+        EnsureSceneQuestGaugeSegments();
+        if (_sceneQuestGaugeSegments == null || _sceneQuestGaugeSegments.Length == 0)
+            return;
+
+        int stepCount = Mathf.Max(1, flowController != null ? flowController.StepCount : _sceneQuestGaugeSegments.Length);
+        int clampedIndex = Mathf.Clamp(activeIndex, -1, stepCount - 1);
+        int filledCount = clampedIndex < 0
+            ? 0
+            : Mathf.Clamp(Mathf.CeilToInt((clampedIndex + 1f) / stepCount * _sceneQuestGaugeSegments.Length), 0, _sceneQuestGaugeSegments.Length);
+
+        for (int i = 0; i < _sceneQuestGaugeSegments.Length; i++)
+        {
+            Graphic segment = _sceneQuestGaugeSegments[i];
+            if (segment == null)
+                continue;
+
+            bool filled = i < filledCount;
+            segment.color = filled
+                ? new Color(0.18f, 0.94f, 1f, 0.95f)
+                : new Color(0.18f, 0.94f, 1f, 0f);
+            segment.raycastTarget = false;
+        }
+    }
+
+    static Image FindSceneQuestGaugeImage(RectTransform root)
+    {
+        if (root == null)
+            return null;
+
+        Transform gauge = root.Find(SceneQuestGaugeName);
+        return gauge != null ? gauge.GetComponent<Image>() : null;
     }
 
     void PlaySweep(Color color, float maxAlpha)
@@ -703,7 +891,7 @@ public class TutorialObjectivePanelController : MonoBehaviour
             _sweepImage.color = new Color(1f, 1f, 1f, 0f);
         if (_iconRoot != null)
             _iconRoot.localScale = Vector3.one;
-        if (_statusText != null)
+        if (_statusText != null && !useScenePlacedQuestPanel)
             _statusText.text = string.Empty;
         SyncBridgeHintTextVisibility(true);
     }

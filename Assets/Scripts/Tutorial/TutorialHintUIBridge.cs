@@ -348,7 +348,7 @@ public class TutorialHintUIBridge : MonoBehaviour
 
         if (_legacyQuestPanelGroup != null)
         {
-            _legacyQuestPanelGroup.alpha = 0f;
+            _legacyQuestPanelGroup.alpha = 1f;
             _legacyQuestPanelGroup.interactable = false;
             _legacyQuestPanelGroup.blocksRaycasts = false;
         }
@@ -378,7 +378,6 @@ public class TutorialHintUIBridge : MonoBehaviour
         _runtimeHudGroup.blocksRaycasts = false;
 
         CreateDialoguePanel();
-        CreateObjectivePanel();
         CreateComboPanel();
         CreateTimingCuePanel();
     }
