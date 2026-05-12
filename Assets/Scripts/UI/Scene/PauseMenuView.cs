@@ -39,25 +39,44 @@ public class PauseMenuView : MonoBehaviour
     void Awake()
     {
         EnsureUnifiedSettingsOverlay();
+        ApplyHiddenState();
 
         if (useUnifiedSettingsOverlay)
-        {
-            if (menuRoot != null)
-                menuRoot.SetActive(false);
-
-            if (settingsPanel != null)
-                settingsPanel.SetActive(false);
             return;
-        }
 
         EnsureSettingsPanelReferences();
         EnsureSettingsContent();
+        ApplyHiddenState();
+    }
 
+    void ApplyHiddenState()
+    {
         if (menuRoot != null)
             menuRoot.SetActive(false);
 
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
+
+        if (backgroundGroup != null)
+        {
+            backgroundGroup.DOKill();
+            backgroundGroup.alpha = 0f;
+            backgroundGroup.interactable = false;
+            backgroundGroup.blocksRaycasts = false;
+        }
+
+        if (menuContainer != null)
+        {
+            menuContainer.DOKill();
+            menuContainer.localScale = Vector3.one;
+
+            var menuCanvasGroup = menuContainer.GetComponent<CanvasGroup>();
+            if (menuCanvasGroup != null)
+            {
+                menuCanvasGroup.DOKill();
+                menuCanvasGroup.alpha = 0f;
+            }
+        }
     }
 
     public void ShowMenu()
@@ -80,6 +99,8 @@ public class PauseMenuView : MonoBehaviour
             settingsPanel.SetActive(false);
 
         backgroundGroup.alpha = 0f;
+        backgroundGroup.interactable = true;
+        backgroundGroup.blocksRaycasts = true;
         backgroundGroup.DOFade(1f, 0.3f).SetUpdate(true);
 
         menuContainer.localScale = Vector3.one * 0.8f;
@@ -113,7 +134,7 @@ public class PauseMenuView : MonoBehaviour
 
         DOVirtual.DelayedCall(0.25f, () =>
         {
-            menuRoot.SetActive(false);
+            ApplyHiddenState();
             onComplete?.Invoke();
         }).SetUpdate(true);
     }

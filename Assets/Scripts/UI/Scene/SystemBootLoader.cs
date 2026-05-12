@@ -310,7 +310,10 @@ public class SystemBootLoader : MonoBehaviour
 
         if (SceneFader.Instance != null && SceneFader.Instance.fadeCanvasGroup != null)
         {
+            SceneFader.Instance.fadeCanvasGroup.gameObject.SetActive(true);
+            SceneFader.Instance.fadeCanvasGroup.alpha = 0f;
             SceneFader.Instance.fadeCanvasGroup.blocksRaycasts = true;
+            SceneFader.Instance.fadeCanvasGroup.interactable = true;
             SceneFader.Instance.fadeCanvasGroup
                 .DOFade(1f, Mathf.Max(0.01f, sceneActivationFadeDuration))
                 .OnComplete(() =>

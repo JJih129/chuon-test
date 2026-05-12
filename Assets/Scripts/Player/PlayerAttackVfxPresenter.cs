@@ -46,6 +46,31 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [SerializeField] Texture2D drakkarHeavyTrailTexture;
     [SerializeField] Texture2D drakkarWideTrailTexture;
 
+    [Header("Auto Sword Trail Mesh")]
+    [Tooltip("Use the sword-motion sampled mesh trail instead of a fixed slash anchor for weapon trail VFX.")]
+    [SerializeField] bool useSwordMotionMeshTrail = true;
+
+    [Tooltip("Optional Free Slash VFX prefab used only as a material source. It is not spawned every attack.")]
+    [SerializeField] GameObject swordMotionTrailVfxPrefab;
+
+    [Tooltip("Pre-placed static mesh trail component. This must be assigned in the scene or player prefab.")]
+    [SerializeField] SwordTrailMeshRenderer swordMotionTrail;
+
+    [Tooltip("Pre-placed static TrailBase/TrailTip provider. This must be assigned in the scene or player prefab.")]
+    [SerializeField] SwordTrailPoints swordMotionTrailPoints;
+
+    [Tooltip("Player trail tint. Red is the default player attack color.")]
+    [SerializeField] Color swordMotionTrailTint = new Color(1f, 0.08f, 0.03f, 1f);
+
+    [Tooltip("Minimum sword point movement before adding a new mesh trail sample.")]
+    [SerializeField, Min(0.001f)] float swordMotionTrailMinSampleDistance = 0.02f;
+
+    [Tooltip("How long the sampled player sword trail remains visible.")]
+    [SerializeField, Min(0.01f)] float swordMotionTrailLifeTime = 0.18f;
+
+    [Tooltip("Maximum sample count kept by the player sword trail ring buffer.")]
+    [SerializeField, Range(2, 128)] int swordMotionTrailMaxSamples = 36;
+
     [Header("프로시저럴 트레일")]
     [SerializeField] Color trailStartColor = new Color(1f, 0.32f, 0.28f, 0.95f);
     [SerializeField] Color trailEndColor = new Color(0.85f, 0.08f, 0.08f, 0f);
@@ -79,6 +104,8 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     Material _proceduralLightTrailMaterial;
     Material _proceduralHeavyTrailMaterial;
     Material _proceduralWideTrailMaterial;
+    Material _swordMotionTrailMaterial;
+    bool _warnedMissingSwordMotionTrailSetup;
     Transform _activeTrailBaseAnchor;
     Transform _activeTrailTipAnchor;
     Transform _resolvedSwordBaseAnchor;
@@ -128,6 +155,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         if (_proceduralRangeFlashObject != null)
             Destroy(_proceduralRangeFlashObject);
+
     }
 
 #if UNITY_EDITOR
@@ -156,7 +184,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         _currentInput = input;
 
         AutoWire();
-        if (useDrakkarTrailFallback || ShouldUseProceduralTrailFallback(attackData))
+        if (!useSwordMotionMeshTrail && (useDrakkarTrailFallback || ShouldUseProceduralTrailFallback(attackData)))
             EnableProceduralTrail();
     }
 
@@ -164,11 +192,13 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     {
         _currentAttackData = null;
         _currentComboDepth = 0;
+        StopSwordMotionTrail();
         DisableProceduralTrail();
     }
 
     public void StopAttackWindow()
     {
+        StopSwordMotionTrail();
         DisableProceduralTrail();
     }
 
@@ -192,9 +222,11 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         Transform trailAnchor = ResolveTrailAnchor(hitbox);
         Transform rangeAnchor = ResolveRangeAnchor(hitbox, trailAnchor);
 
-        if (entry.weaponTrailVfxPrefab != null || defaultWeaponTrailVfxPrefab != null)
+        bool swordMotionTrailStarted = BeginSwordMotionTrail();
+
+        if (!swordMotionTrailStarted && (entry.weaponTrailVfxPrefab != null || defaultWeaponTrailVfxPrefab != null))
             SpawnWeaponTrail(entry, trailAnchor);
-        if (useDrakkarTrailFallback || ShouldUseProceduralTrailFallback())
+        if (!swordMotionTrailStarted && (useDrakkarTrailFallback || ShouldUseProceduralTrailFallback()))
             EnableProceduralTrail();
 
         GameObject rangePrefab = entry.hitRangeVfxPrefab != null ? entry.hitRangeVfxPrefab : defaultHitRangeVfxPrefab;
@@ -342,6 +374,64 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return;
 
         _proceduralTrailDriver.End();
+    }
+
+    bool BeginSwordMotionTrail()
+    {
+        if (!useSwordMotionMeshTrail)
+            return false;
+
+        if (swordMotionTrail == null || swordMotionTrailPoints == null || !swordMotionTrailPoints.HasValidPoints)
+        {
+            WarnMissingSwordMotionTrailSetup();
+            return false;
+        }
+
+        Material material = ResolveSwordMotionTrailMaterial();
+        if (material == null)
+        {
+            WarnMissingSwordMotionTrailSetup();
+            return false;
+        }
+
+        swordMotionTrail.Configure(
+            swordMotionTrailPoints,
+            material,
+            swordMotionTrailTint,
+            swordMotionTrailMinSampleDistance,
+            swordMotionTrailLifeTime,
+            swordMotionTrailMaxSamples,
+            false,
+            false);
+        swordMotionTrail.gameObject.layer = gameObject.layer;
+        swordMotionTrail.StartTrail();
+        return true;
+    }
+
+    void WarnMissingSwordMotionTrailSetup()
+    {
+        if (_warnedMissingSwordMotionTrailSetup)
+            return;
+
+        _warnedMissingSwordMotionTrailSetup = true;
+        Debug.LogWarning("[PlayerAttackVfxPresenter] Static sword motion trail is enabled, but the scene/prefab is missing SwordTrailMeshRenderer, SwordTrailPoints, TrailBase/TrailTip, or a usable material source. Run Tools/ChuOn/VFX/Install Static Sword Trails, then verify the assigned static references.", this);
+    }
+
+    void StopSwordMotionTrail()
+    {
+        if (swordMotionTrail != null)
+            swordMotionTrail.StopTrail();
+    }
+
+    Material ResolveSwordMotionTrailMaterial()
+    {
+        if (_swordMotionTrailMaterial != null)
+            return _swordMotionTrailMaterial;
+
+        _swordMotionTrailMaterial = SwordTrailVfxMaterialSource.ResolveMaterial(
+            swordMotionTrailVfxPrefab,
+            SwordTrailVfxMaterialSource.Palette.Player);
+        return _swordMotionTrailMaterial;
     }
 
     void EnsureProceduralTrail(Transform baseAnchor)

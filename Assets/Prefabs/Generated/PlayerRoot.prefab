@@ -421,6 +421,7 @@ GameObject:
   m_Component:
   - component: {fileID: 7664266843825567488}
   - component: {fileID: 5060544867550534676}
+  - component: {fileID: 5577386098904870021}
   m_Layer: 0
   m_Name: Object002
   m_TagString: Untagged
@@ -440,7 +441,9 @@ Transform:
   m_LocalPosition: {x: 0.6403723, y: 1.3360609, z: 0.58478045}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1735428787587605962}
+  - {fileID: 2534466773368772224}
   m_Father: {fileID: 5737315137724193391}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!137 &5060544867550534676
@@ -497,6 +500,20 @@ SkinnedMeshRenderer:
     m_Center: {x: -0.5657698, y: 0.038472228, z: 0.053138286}
     m_Extent: {x: 0.6958436, y: 0.12024356, z: 0.051178873}
   m_DirtyAABB: 0
+--- !u!114 &5577386098904870021
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 834839076285680809}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a36ec630b0f291498a5d3d4e6816245, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  trailBase: {fileID: 1735428787587605962}
+  trailTip: {fileID: 2534466773368772224}
 --- !u!1 &915796284602555612
 GameObject:
   m_ObjectHideFlags: 0
@@ -903,6 +920,37 @@ Transform:
   - {fileID: 9057525468407925542}
   m_Father: {fileID: 8691196008409807496}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2818826070693825083
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1735428787587605962}
+  m_Layer: 0
+  m_Name: Player_TrailBase
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1735428787587605962
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2818826070693825083}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.0046022423, y: -0.7036522, z: 0.012065696}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7664266843825567488}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &3142947224693501705
 GameObject:
   m_ObjectHideFlags: 0
@@ -1041,6 +1089,7 @@ GameObject:
   - component: {fileID: 634111914035777834}
   - component: {fileID: 245853775745863209}
   - component: {fileID: 6612084301157624411}
+  - component: {fileID: 4146075493603641095}
   m_Layer: 0
   m_Name: PlayerRoot
   m_TagString: Player
@@ -1064,6 +1113,7 @@ Transform:
   - {fileID: 8891424320520245772}
   - {fileID: 3737384201610072036}
   - {fileID: 733261426487139155}
+  - {fileID: 3345713155320206904}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!143 &7261877498965566706
@@ -1280,6 +1330,24 @@ MonoBehaviour:
   gravity: 20
   groundSnap: 0.03
   p_Speed: speed
+  useRunStartMotion: 1
+  p_RunStartTrigger: RunStart
+  runStartMinSpeed: 0.25
+  useRunStartRootMotion: 1
+  runStartRootMotionDuration: 0.8
+  useTurnStartMotion: 1
+  p_TurnL90Trigger: TurnL90
+  p_TurnR90Trigger: TurnR90
+  p_TurnL180Trigger: TurnL180
+  p_TurnR180Trigger: TurnR180
+  turnStartMinAngle: 55
+  turnStart180Angle: 135
+  turnStartCooldown: 0.2
+  useRunStopMotion: 0
+  p_RunStopTrigger: RunStop
+  runStopMinSpeed: 0.35
+  runStopDuration: 0.45
+  runStopCooldown: 0.18
 --- !u!114 &3629856975197315660
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1311,7 +1379,13 @@ MonoBehaviour:
   useLegacyInput: 1
   toggleKey: 9
   toggleKeyAlt: 325
+  targetSwitchFOV: 160
+  holdToUnlockDuration: 0.35
   cameraMgr: {fileID: 0}
+  showTargetIndicator: 1
+  targetIndicatorColor: {r: 1, g: 0.04, b: 0.02, a: 0.95}
+  targetIndicatorSize: 24
+  targetIndicatorOffset: {x: 0, y: 0.55, z: 0}
   autoUnlockWhenTargetDisabled: 1
   targetLostGraceTime: 0.22
   autoRetargetOnLost: 1
@@ -1402,7 +1476,11 @@ MonoBehaviour:
   dodgeStateName: Base Layer.Dodge_Roll
   dodgeStateTransitionDuration: 0.02
   dodgeStateStartNormalizedTime: 0
+  waitForDodgeAnimationEnd: 1
+  dodgeAnimationEndNormalizedTime: 0.98
+  dodgeAnimationEndGraceSeconds: 0.18
   lockMoveDuringDodge: 1
+  blockInputsDuringDodge: 1
   zeroVelocityOnDodge: 1
   disableRootMotionOnDodge: 0
   useDirectionalRootMotionDodge: 1
@@ -1486,6 +1564,10 @@ MonoBehaviour:
   hitLayerIndex: 2
   lockMovementWhileAttacking: 1
   locomotionDuringAttack: 0
+  lightRecoveryMoveUnlockNormalized: 0.84
+  heavyRecoveryMoveUnlockNormalized: 0.9
+  lightRecoveryEndNormalized: 0.94
+  heavyRecoveryEndNormalized: 0.97
   speedParam: speed
   playerRoot: {fileID: 0}
   characterController: {fileID: 0}
@@ -1753,6 +1835,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   source: {fileID: 5692553494910946447}
+  showActivationRejectedFeedback: 1
+  showPhaseFeedback: 0
+  feedbackText: {fileID: 0}
+  feedbackGroup: {fileID: 0}
+  feedbackHoldDuration: 0.9
+  feedbackFadeDuration: 0.18
+  rejectedColor: {r: 1, g: 0.34, b: 0.24, a: 1}
+  phaseColor: {r: 0.55, g: 0.95, b: 1, a: 1}
 --- !u!114 &444060228122662876
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1799,11 +1889,13 @@ MonoBehaviour:
   anim: {fileID: 5777839405900600649}
   guard: {fileID: 6669824055994905385}
   perfectDodge: {fileID: 171033920233620033}
+  dodgeController: {fileID: 0}
   feedback: {fileID: 2570013235222381821}
   hitTriggerParam: Hit
   frontArcDegrees: 120
   chipDamageMul: 0.1
   suppressHitAnimWhenGuarding: 1
+  invulnerableWhileDodging: 1
   debugLogs: 0
 --- !u!114 &6669824055994905385
 MonoBehaviour:
@@ -1954,6 +2046,7 @@ MonoBehaviour:
   characterController: {fileID: 7261877498965566706}
   rigidbodyRef: {fileID: 0}
   velocitySource: {fileID: 9217704258761649807}
+  moveController: {fileID: 0}
   p_IsGuarding: IsGuarding
   p_GuardSpeed: GuardSpeed
   p_MoveX: GuardMoveX
@@ -2324,6 +2417,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: f28becedd52dd144da48a65a1d3c60d1, type: 3}
   - {fileID: 8300000, guid: 329b1f0f182843c47a23dcc52057afa7, type: 3}
   useVelocityDrivenFootsteps: 0
+  requireMoveInputForFootsteps: 1
   minMoveSpeedForFootsteps: 0.2
   minStepInterval: 0.26
   maxStepInterval: 0.46
@@ -2335,6 +2429,184 @@ MonoBehaviour:
   footstepPitchJitter: 0.06
   runVolumeMultiplier: 1.08
   strafeVolumeMultiplier: 0.92
+--- !u!114 &4146075493603641095
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3762919195783750324}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20dc26e61f2df1046a51fd1954ca050e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerReferences: {fileID: 245853775745863209}
+  combatController: {fileID: 3625136038103508255}
+  weaponSocketOverride: {fileID: 0}
+  swordTrailAnchorOverride: {fileID: 0}
+  defaultHitRangeVfxPrefab: {fileID: 0}
+  defaultWeaponTrailVfxPrefab: {fileID: 0}
+  useProceduralTrailFallback: 1
+  useDrakkarTrailFallback: 1
+  useWeaponSocketForTrail: 1
+  preferSwordMeshTrailAnchor: 1
+  defaultFallbackLifetime: 0.25
+  minRespawnGap: 0.03
+  drakkarTrailMaterial: {fileID: 0}
+  drakkarLightTrailTexture: {fileID: 0}
+  drakkarHeavyTrailTexture: {fileID: 0}
+  drakkarWideTrailTexture: {fileID: 0}
+  useSwordMotionMeshTrail: 1
+  swordMotionTrailVfxPrefab: {fileID: 5313456068782518071, guid: 50f1354827c77ef4b99c4dca0ee3411d, type: 3}
+  swordMotionTrail: {fileID: 2520820632988603144}
+  swordMotionTrailPoints: {fileID: 5577386098904870021}
+  swordMotionTrailTint: {r: 1, g: 0.08, b: 0.03, a: 1}
+  swordMotionTrailMinSampleDistance: 0.012
+  swordMotionTrailLifeTime: 0.28
+  swordMotionTrailMaxSamples: 56
+  trailStartColor: {r: 1, g: 0.32, b: 0.28, a: 0.95}
+  trailEndColor: {r: 0.85, g: 0.08, b: 0.08, a: 0}
+  trailStartWidth: 0.14
+  trailEndWidth: 0.02
+  swordTipForwardPadding: 0.03
+  swordBaseBackwardPadding: 0.01
+  autoSizeTrailFromSword: 1
+  trailWidthMultiplier: 1.35
+  minimumAutoTrailWidth: 0.32
+  autoTrailEndWidthRatio: 0.24
+  useProceduralRangeFlashFallback: 0
+  rangeFlashColor: {r: 1, g: 0.6, b: 0.18, a: 0.2}
+  rangeFlashScalePadding: {x: 1.05, y: 1.05, z: 1.1}
+  rangeFlashLifetime: 0.12
+  attackVfxEntries:
+  - attackData: {fileID: 11400000, guid: 3a9f06ed13cc7cc47b6a05eaf9e80db1, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: e0f8db546142e7546bf745f5e467e114, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: d7864872463564b41ae1e0602e1ec8de, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: 6d1c7965d746f8e448c8092106f83ae4, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: 372410184e048ca49b466cd9c081651f, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: a57588628443c984c8007adf0ef47739, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: dca78e9929952bf4bab1a2cd6984b8f6, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: b46132e41a86ac24ea91ef68ef58d503, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: e8b1fd3fb923d3d4a8a736486c7f71b1, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: 995b96ea2313a01478c6b66cf4e5d524, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: 30cff410ee3fbc645b42857ae2b00126, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: 14d22a5bdfcee3443a671eba3723acff, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: c889046bce7be8749bbc7628f7876aa7, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  - attackData: {fileID: 11400000, guid: 1963dd76be7ea2f46b150e25374c58c1, type: 2}
+    hitRangeVfxPrefab: {fileID: 0}
+    weaponTrailVfxPrefab: {fileID: 0}
+    localPositionOffset: {x: 0, y: 0, z: 0}
+    localEulerOffset: {x: 0, y: 0, z: 0}
+    localScaleMultiplier: {x: 1, y: 1, z: 1}
+    parentRangeVfxToHitbox: 0
+    scaleRangeVfxToHitbox: 0
+    fallbackLifetime: 0.2
+  debugLog: 0
 --- !u!1 &3780169282448676770
 GameObject:
   m_ObjectHideFlags: 0
@@ -3631,6 +3903,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 2780588292072370287}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &8445603854830064250
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2534466773368772224}
+  m_Layer: 0
+  m_Name: Player_TrailTip
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2534466773368772224
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8445603854830064250}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.0046022423, y: 0.7036521, z: 0.012065696}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 7664266843825567488}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8526031644129671779
 GameObject:
   m_ObjectHideFlags: 0
@@ -3823,6 +4126,118 @@ Transform:
   - {fileID: 7075201692748339406}
   m_Father: {fileID: 877709829727985687}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &8806014087094886681
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3345713155320206904}
+  - component: {fileID: 4371184337478899419}
+  - component: {fileID: 1152786923193206216}
+  - component: {fileID: 2520820632988603144}
+  m_Layer: 0
+  m_Name: PlayerSwordMotionTrail
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3345713155320206904
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8806014087094886681}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 9217704258761649807}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!33 &4371184337478899419
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8806014087094886681}
+  m_Mesh: {fileID: 0}
+--- !u!23 &1152786923193206216
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8806014087094886681}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 0}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &2520820632988603144
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8806014087094886681}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c34c2397def4f44ba3583aee0e5f49c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  trailPoints: {fileID: 0}
+  playOnEnable: 0
+  minSampleDistance: 0.025
+  trailLifeTime: 0.18
+  maxSamples: 32
+  clearOnStop: 0
+  useUnscaledTime: 0
+  generateDoubleSided: 1
+  disableRendererWhenEmpty: 1
+  drawDebugGizmos: 1
+  visualWidthMultiplier: 1.6
+  minimumVisualWidth: 0.95
+  cameraFacingBlend: 0.75
+  trailMaterial: {fileID: 0}
+  trailTint: {r: 1, g: 1, b: 1, a: 1}
+  applyTintPropertyBlock: 1
 --- !u!1 &8870325426181895550
 GameObject:
   m_ObjectHideFlags: 0

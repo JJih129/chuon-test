@@ -37,6 +37,31 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     [SerializeField] Texture2D drakkarMeleeTrailTexture;
     [SerializeField] Texture2D drakkarWideTrailTexture;
 
+    [Header("Auto Sword Trail Mesh")]
+    [Tooltip("Use the sword-motion sampled mesh trail instead of a fixed slash anchor for boss weapon trail VFX.")]
+    [SerializeField] bool useSwordMotionMeshTrail = true;
+
+    [Tooltip("Optional Free Slash VFX prefab used only as a material source. It is not spawned every attack.")]
+    [SerializeField] GameObject swordMotionTrailVfxPrefab;
+
+    [Tooltip("Pre-placed static mesh trail component. This must be assigned in the scene or boss prefab.")]
+    [SerializeField] SwordTrailMeshRenderer swordMotionTrail;
+
+    [Tooltip("Pre-placed static TrailBase/TrailTip provider. This must be assigned in the scene or boss prefab.")]
+    [SerializeField] SwordTrailPoints swordMotionTrailPoints;
+
+    [Tooltip("Boss trail tint. Cyan/blue is the default boss attack color.")]
+    [SerializeField] Color swordMotionTrailTint = new Color(0.1f, 0.75f, 1f, 1f);
+
+    [Tooltip("Minimum sword point movement before adding a new mesh trail sample.")]
+    [SerializeField, Min(0.001f)] float swordMotionTrailMinSampleDistance = 0.025f;
+
+    [Tooltip("How long the sampled boss sword trail remains visible.")]
+    [SerializeField, Min(0.01f)] float swordMotionTrailLifeTime = 0.22f;
+
+    [Tooltip("Maximum sample count kept by the boss sword trail ring buffer.")]
+    [SerializeField, Range(2, 128)] int swordMotionTrailMaxSamples = 42;
+
     [Header("패턴별 검기")]
     [SerializeField] PatternSlashVfxEntry[] patternSlashVfx = Array.Empty<PatternSlashVfxEntry>();
 
@@ -58,6 +83,8 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     Material _proceduralTrailMaterial;
     Material _proceduralMeleeTrailMaterial;
     Material _proceduralWideTrailMaterial;
+    Material _swordMotionTrailMaterial;
+    bool _warnedMissingSwordMotionTrailSetup;
     Transform _resolvedSwordTrailAnchor;
     Transform _resolvedSwordTrailBaseAnchor;
     readonly Dictionary<string, PatternSlashVfxEntry> _entryByPatternName = new Dictionary<string, PatternSlashVfxEntry>(StringComparer.OrdinalIgnoreCase);
@@ -68,6 +95,13 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     {
         Transform swordBaseAnchor = ResolveSwordTrailBaseAnchor();
         Transform swordTipAnchor = ResolveSwordTrailAnchor();
+        if (swordBaseAnchor != null && swordTipAnchor != null && BeginSwordMotionTrail(swordBaseAnchor, swordTipAnchor))
+        {
+            if (debugLog)
+                Debug.Log($"[BossAttackVfxPresenter] mesh trail on: {swordBaseAnchor.name} -> {swordTipAnchor.name}", this);
+            return;
+        }
+
         if (swordBaseAnchor != null && swordTipAnchor != null && useProceduralSwordTrail)
         {
             EnableProceduralTrail(swordBaseAnchor, swordTipAnchor);
@@ -108,6 +142,8 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
 
     public void StopCurrentPatternSlash()
     {
+        StopSwordMotionTrail();
+
         if (_proceduralTrailDriver != null)
             _proceduralTrailDriver.End();
     }
@@ -126,6 +162,7 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
             Destroy(_proceduralMeleeTrailMaterial);
         if (_proceduralWideTrailMaterial != null)
             Destroy(_proceduralWideTrailMaterial);
+
     }
 
 #if UNITY_EDITOR
@@ -400,6 +437,64 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     static Vector3 Abs(Vector3 value)
     {
         return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
+    }
+
+    bool BeginSwordMotionTrail(Transform baseAnchor, Transform tipAnchor)
+    {
+        if (!useSwordMotionMeshTrail || baseAnchor == null || tipAnchor == null)
+            return false;
+
+        if (swordMotionTrail == null || swordMotionTrailPoints == null || !swordMotionTrailPoints.HasValidPoints)
+        {
+            WarnMissingSwordMotionTrailSetup();
+            return false;
+        }
+
+        Material material = ResolveSwordMotionTrailMaterial();
+        if (material == null)
+        {
+            WarnMissingSwordMotionTrailSetup();
+            return false;
+        }
+
+        swordMotionTrail.Configure(
+            swordMotionTrailPoints,
+            material,
+            swordMotionTrailTint,
+            swordMotionTrailMinSampleDistance,
+            swordMotionTrailLifeTime,
+            swordMotionTrailMaxSamples,
+            false,
+            false);
+        swordMotionTrail.gameObject.layer = gameObject.layer;
+        swordMotionTrail.StartTrail();
+        return true;
+    }
+
+    void WarnMissingSwordMotionTrailSetup()
+    {
+        if (_warnedMissingSwordMotionTrailSetup)
+            return;
+
+        _warnedMissingSwordMotionTrailSetup = true;
+        Debug.LogWarning("[BossAttackVfxPresenter] Static sword motion trail is enabled, but the scene/prefab is missing SwordTrailMeshRenderer, SwordTrailPoints, TrailBase/TrailTip, or a usable material source. Run Tools/ChuOn/VFX/Install Static Sword Trails, then verify the assigned static references.", this);
+    }
+
+    void StopSwordMotionTrail()
+    {
+        if (swordMotionTrail != null)
+            swordMotionTrail.StopTrail();
+    }
+
+    Material ResolveSwordMotionTrailMaterial()
+    {
+        if (_swordMotionTrailMaterial != null)
+            return _swordMotionTrailMaterial;
+
+        _swordMotionTrailMaterial = SwordTrailVfxMaterialSource.ResolveMaterial(
+            swordMotionTrailVfxPrefab,
+            SwordTrailVfxMaterialSource.Palette.Boss);
+        return _swordMotionTrailMaterial;
     }
 
     void EnsureProceduralTrail(Transform trailAnchor)
