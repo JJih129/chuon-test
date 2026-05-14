@@ -153,13 +153,22 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     public void ShowGuideText(string body, string speaker = null)
     {
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            HideGuideText();
+            return;
+        }
+
         EnsureRuntimeHud();
         _currentGuideBody = body;
         _currentGuideSpeaker = speaker;
         _guideTextVisible = !string.IsNullOrWhiteSpace(body);
 
         if (dialogueGroup != null)
+        {
+            dialogueGroup.gameObject.SetActive(true);
             dialogueGroup.alpha = string.IsNullOrWhiteSpace(body) ? 0f : 1f;
+        }
 
         if (speakerText != null)
             speakerText.text = string.IsNullOrWhiteSpace(speaker) ? defaultSpeaker : speaker;
@@ -175,7 +184,20 @@ public class TutorialHintUIBridge : MonoBehaviour
         _guideTextVisible = false;
 
         if (dialogueGroup != null)
+        {
             dialogueGroup.alpha = 0f;
+            dialogueGroup.interactable = false;
+            dialogueGroup.blocksRaycasts = false;
+
+            if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+                dialogueGroup.gameObject.SetActive(false);
+        }
+
+        if (speakerText != null)
+            speakerText.text = string.Empty;
+
+        if (contentText != null)
+            contentText.text = string.Empty;
     }
 
     public void ShowTimingCue(string body, string speaker, float duration)
@@ -208,6 +230,13 @@ public class TutorialHintUIBridge : MonoBehaviour
         if (keyCueSprite != null)
         {
             yield return CoKeySpriteCue(duration, keyCueSprite);
+            _timingCueRoutine = null;
+            yield break;
+        }
+
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            HideTimingCue();
             _timingCueRoutine = null;
             yield break;
         }
@@ -344,6 +373,9 @@ public class TutorialHintUIBridge : MonoBehaviour
             _legacyDialogueGroup.alpha = 0f;
             _legacyDialogueGroup.interactable = false;
             _legacyDialogueGroup.blocksRaycasts = false;
+
+            if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+                _legacyDialogueGroup.gameObject.SetActive(false);
         }
 
         if (_legacyQuestPanelGroup != null)
@@ -517,6 +549,16 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     bool ShouldUseParryKeyCue(string body, string speaker)
     {
+        if (ContainsIgnoreCase(body, "Guard") ||
+            ContainsIgnoreCase(body, "E") ||
+            ContainsIgnoreCase(body, "패링") ||
+            ContainsIgnoreCase(body, "가드") ||
+            ContainsIgnoreCase(body, "방어") ||
+            ContainsIgnoreCase(speaker, "GUARD") ||
+            ContainsIgnoreCase(speaker, "패링") ||
+            ContainsIgnoreCase(speaker, "방어"))
+            return true;
+
         return ContainsIgnoreCase(body, "Parry") ||
                ContainsIgnoreCase(speaker, "PARRY") ||
                ContainsIgnoreCase(body, "패링");
@@ -524,6 +566,10 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     bool ShouldUseDodgeKeyCue(string body, string speaker)
     {
+        if (ContainsIgnoreCase(body, "회피") ||
+            ContainsIgnoreCase(speaker, "회피"))
+            return true;
+
         return ContainsIgnoreCase(body, "Dodge") ||
                ContainsIgnoreCase(body, "Shift") ||
                ContainsIgnoreCase(speaker, "DODGE") ||

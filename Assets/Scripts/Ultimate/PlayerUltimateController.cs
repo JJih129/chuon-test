@@ -273,7 +273,7 @@ public class PlayerUltimateController : MonoBehaviour
     {
         if (_isCinematic) return;
 
-        if (enableDebugFillGaugeShortcut && Input.GetKeyDown(debugFillGaugeKey))
+        if (enableDebugFillGaugeShortcut && WasKeyPressedThisFrame(debugFillGaugeKey))
             FillGaugeForDebug();
 
         if (!ShouldConsumeActivationInput()) return;
@@ -718,10 +718,39 @@ public class PlayerUltimateController : MonoBehaviour
         if (activateAction != null && activateAction.action != null && activateAction.action.WasPressedThisFrame())
             return true;
 
-        if (useLegacyHotkey && Input.GetKeyDown(legacyHotkey))
+        if (useLegacyHotkey && WasKeyPressedThisFrame(legacyHotkey))
             return true;
 
         return false;
+    }
+
+    static bool WasKeyPressedThisFrame(KeyCode key)
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            switch (key)
+            {
+                case KeyCode.R: return keyboard.rKey.wasPressedThisFrame;
+                case KeyCode.Q: return keyboard.qKey.wasPressedThisFrame;
+                case KeyCode.E: return keyboard.eKey.wasPressedThisFrame;
+                case KeyCode.F: return keyboard.fKey.wasPressedThisFrame;
+                case KeyCode.Alpha1: return keyboard.digit1Key.wasPressedThisFrame;
+                case KeyCode.Alpha2: return keyboard.digit2Key.wasPressedThisFrame;
+                case KeyCode.Alpha3: return keyboard.digit3Key.wasPressedThisFrame;
+                case KeyCode.Alpha4: return keyboard.digit4Key.wasPressedThisFrame;
+                case KeyCode.Alpha5: return keyboard.digit5Key.wasPressedThisFrame;
+                case KeyCode.Space: return keyboard.spaceKey.wasPressedThisFrame;
+                case KeyCode.LeftShift: return keyboard.leftShiftKey.wasPressedThisFrame;
+                case KeyCode.RightShift: return keyboard.rightShiftKey.wasPressedThisFrame;
+            }
+        }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(key);
+#else
+        return false;
+#endif
     }
 
     IEnumerator Co_Cinematic()

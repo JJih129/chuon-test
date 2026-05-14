@@ -12,47 +12,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b34f817682bf662469d498a77cf48c99, type: 3}
   m_Name: TitleCredits_Default
   m_EditorClassIdentifier: 
-  title: 개발진
-  subtitle: "프로젝트 추온 개발 기록\n실제 개발진 정보와 개발 사진을 이 에셋에서 직접 편집하면 타이틀 크레딧에 바로 반영됩니다."
-  autoScrollNormalizedPerSecond: 0.016
+  title: PROJECT CHUON
+  subtitle: "DEVELOPMENT CREDITS\n함께 만든 사람들"
+  autoScrollNormalizedPerSecond: 0.012
   sections:
-  - heading: 총괄 디렉션
-    responsibilities: 프로젝트 비전, 타이틀 경험, 전체 연출 방향을 담당합니다.
+  - heading: Game Design
+    responsibilities: 게임 구조, 진행 흐름, 플레이 목표 설계
     members:
-    - 이름 입력
-    - 이름 입력
-    photos:
-    - sprite: {fileID: 0}
-      caption: 메인 무드보드 / 타이틀 방향 보드
-    - sprite: {fileID: 0}
-      caption: 세계관 정리 / 키 비주얼 리뷰
-  - heading: 전투 시스템
-    responsibilities: 플레이어 전투 감각, 보스 패턴, 락온 카메라, 전투 밸런싱을 담당합니다.
+    - 박서진
+    photos: []
+  - heading: Programming
+    responsibilities: 플레이어, 전투, UI, 씬 진행 시스템 구현
     members:
-    - 이름 입력
-    - 이름 입력
-    photos:
-    - sprite: {fileID: 0}
-      caption: 전투 프로토타입 반복 작업
-    - sprite: {fileID: 0}
-      caption: 보스 패턴 디버그 캡처
-  - heading: 캐릭터 아트 & UI
-    responsibilities: 캐릭터 표현, 타이틀 아트, 메뉴 구성, HUD와 시각 연출을 담당합니다.
+    - 손지훈
+    photos: []
+  - heading: Art Director
+    responsibilities: 비주얼 방향성, 화면 톤, 아트 품질 관리
     members:
-    - 이름 입력
-    - 이름 입력
-    photos:
-    - sprite: {fileID: 0}
-      caption: 캐릭터 표현 / 표정 보정
-    - sprite: {fileID: 0}
-      caption: 메뉴 구성 / UI 스터디
-  - heading: 레벨 / 시네마틱 / QA
-    responsibilities: 전장 구성, 시네마틱 타이밍, 씬 조립, 최종 검수를 담당합니다.
+    - 박준우
+    photos: []
+  - heading: 2D Art
+    responsibilities: UI 그래픽, 아이콘, 2D 비주얼 리소스
     members:
-    - 이름 입력
-    - 이름 입력
-    photos:
-    - sprite: {fileID: 0}
-      caption: 시네마틱 샷 기획
-    - sprite: {fileID: 0}
-      caption: 플레이테스트 / 밸런스 로그
+    - 강은비 · 이기요
+    photos: []
+  - heading: Character Modeling
+    responsibilities: 캐릭터 모델링 및 비주얼 리소스 제작
+    members:
+    - 조예원
+    photos: []
+  - heading: Environment Modeling
+    responsibilities: 맵 모델링 및 환경 오브젝트 제작
+    members:
+    - 김기문
+    photos: []

@@ -1,17 +1,16 @@
 using System.Collections;
 using System.Text;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public sealed class TitleCreditsOverlay : MonoBehaviour
 {
-    const float DefaultFadeDuration = 0.18f;
-    const float DefaultPixelsPerSecond = 40f;
+    const float DefaultFadeDuration = 0.28f;
+    const float WheelScrollPixels = 220f;
 
-    static readonly Color OverlayColor = new Color(0.01f, 0.02f, 0.05f, 0.92f);
-    static readonly Color FrameColor = new Color(0.04f, 0.06f, 0.11f, 0.97f);
+    static readonly Color OverlayColor = new Color(0.005f, 0.008f, 0.014f, 0.96f);
+    static readonly Color FrameColor = new Color(0.025f, 0.04f, 0.065f, 0.97f);
     static readonly Color FrameLineColor = new Color(0.18f, 0.92f, 1f, 0.80f);
     static readonly Color AccentColor = new Color(1f, 0.74f, 0.34f, 0.98f);
     static readonly Color TextColor = new Color(0.95f, 0.98f, 1f, 0.98f);
@@ -30,8 +29,6 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
     Coroutine _fadeRoutine;
     bool _isVisible;
     bool _structureBuilt;
-    float _manualPauseTimer;
-    float _scrollPixelsPerSecond;
 
     public bool IsVisible => _isVisible;
 
@@ -55,7 +52,6 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         gameObject.SetActive(true);
         Canvas.ForceUpdateCanvases();
         ResetScrollPosition();
-        _manualPauseTimer = 0f;
         _isVisible = true;
         FadeTo(1f, true);
     }
@@ -74,23 +70,16 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         if (!_isVisible || _contentRect == null || _viewportRect == null)
             return;
 
-        if (Input.mouseScrollDelta.sqrMagnitude > 0.0001f)
-            _manualPauseTimer = 2f;
-
-        if (_manualPauseTimer > 0f)
-        {
-            _manualPauseTimer -= Time.unscaledDeltaTime;
-            return;
-        }
-
         float hiddenHeight = Mathf.Max(0f, _contentRect.rect.height - _viewportRect.rect.height);
         if (hiddenHeight <= 1f)
             return;
 
+        float wheel = Input.mouseScrollDelta.y;
+        if (Mathf.Abs(wheel) <= 0.0001f)
+            return;
+
         Vector2 anchored = _contentRect.anchoredPosition;
-        anchored.y += _scrollPixelsPerSecond * Time.unscaledDeltaTime;
-        if (anchored.y > hiddenHeight + 100f)
-            anchored.y = -_viewportRect.rect.height * 0.35f;
+        anchored.y = Mathf.Clamp(anchored.y - wheel * WheelScrollPixels, 0f, hiddenHeight);
         _contentRect.anchoredPosition = anchored;
     }
 
@@ -116,8 +105,8 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         _canvasGroup.interactable = false;
 
         _frameRect = CreateRect("CreditsFrame", transform);
-        _frameRect.anchorMin = new Vector2(0.04f, 0.04f);
-        _frameRect.anchorMax = new Vector2(0.96f, 0.96f);
+        _frameRect.anchorMin = new Vector2(0.055f, 0.055f);
+        _frameRect.anchorMax = new Vector2(0.945f, 0.945f);
         _frameRect.offsetMin = Vector2.zero;
         _frameRect.offsetMax = Vector2.zero;
         _frameRect.gameObject.AddComponent<Image>().color = FrameColor;
@@ -129,7 +118,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         CreateLine("HeaderAccent", _frameRect, new Vector2(0.04f, 0.92f), new Vector2(0.22f, 0.925f), AccentColor);
 
         _titleText = CreateText("Title", _frameRect, 36, FontStyle.Bold, TextAnchor.UpperLeft);
-        _titleText.text = "\uAC1C\uBC1C\uC9C4";
+        _titleText.text = "PROJECT CHUON";
         _titleText.color = TextColor;
         ConfigureRect(_titleText.rectTransform, new Vector2(0.04f, 0.92f), new Vector2(0.55f, 0.98f));
 
@@ -142,22 +131,22 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         _closeButton.onClick.AddListener(Hide);
 
         _viewportRect = CreateRect("Viewport", _frameRect);
-        ConfigureRect(_viewportRect, new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.80f));
+        ConfigureRect(_viewportRect, new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.80f));
         Image viewportImage = _viewportRect.gameObject.AddComponent<Image>();
         viewportImage.color = new Color(1f, 1f, 1f, 0.01f);
         Mask mask = _viewportRect.gameObject.AddComponent<Mask>();
         mask.showMaskGraphic = false;
 
         _contentRect = CreateRect("CreditsContent", _viewportRect);
-        _contentRect.anchorMin = new Vector2(0.5f, 1f);
-        _contentRect.anchorMax = new Vector2(0.5f, 1f);
+        _contentRect.anchorMin = new Vector2(0f, 1f);
+        _contentRect.anchorMax = new Vector2(1f, 1f);
         _contentRect.pivot = new Vector2(0.5f, 1f);
-        _contentRect.anchoredPosition = Vector2.zero;
-        _contentRect.sizeDelta = new Vector2(_viewportRect.rect.width, 0f);
+        _contentRect.offsetMin = Vector2.zero;
+        _contentRect.offsetMax = Vector2.zero;
 
         VerticalLayoutGroup layout = _contentRect.gameObject.AddComponent<VerticalLayoutGroup>();
-        layout.spacing = 56f;
-        layout.padding = new RectOffset(40, 40, 24, 120);
+        layout.spacing = 24f;
+        layout.padding = new RectOffset(70, 70, 34, 150);
         layout.childControlWidth = true;
         layout.childControlHeight = true;
         layout.childForceExpandWidth = true;
@@ -167,9 +156,6 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        EventTrigger trigger = _viewportRect.gameObject.AddComponent<EventTrigger>();
-        AddTrigger(trigger, EventTriggerType.BeginDrag, () => _manualPauseTimer = 3f);
-        AddTrigger(trigger, EventTriggerType.PointerEnter, () => _manualPauseTimer = 1.5f);
     }
 
     void BindData(TitleCreditsData data)
@@ -178,7 +164,6 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
             data = TitleCreditsData.CreateRuntimeFallback();
 
         _boundData = data;
-        _scrollPixelsPerSecond = Mathf.Max(DefaultPixelsPerSecond, data.autoScrollNormalizedPerSecond * 2500f);
         _titleText.text = data.title;
         _subtitleText.text = data.subtitle;
 
@@ -193,7 +178,6 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
                 BuildSection(data.sections[i], i);
         }
 
-        CreateOutroBlock();
         LayoutRebuilder.ForceRebuildLayoutImmediate(_contentRect);
     }
 
@@ -201,7 +185,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
     {
         RectTransform block = CreateRect("IntroBlock", _contentRect);
         LayoutElement element = block.gameObject.AddComponent<LayoutElement>();
-        element.preferredHeight = 260f;
+        element.preferredHeight = 220f;
 
         VerticalLayoutGroup layout = block.gameObject.AddComponent<VerticalLayoutGroup>();
         layout.childAlignment = TextAnchor.MiddleCenter;
@@ -212,12 +196,12 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         layout.childForceExpandHeight = false;
 
         Text bigTitle = CreateText("BigTitle", block, 52, FontStyle.Bold, TextAnchor.MiddleCenter);
-        bigTitle.text = _boundData != null ? _boundData.title : "\uAC1C\uBC1C\uC9C4";
+        bigTitle.text = _boundData != null ? _boundData.title : "PROJECT CHUON";
         bigTitle.color = TextColor;
         FitPreferredHeight(bigTitle.rectTransform, 64f);
 
-        Text subTitle = CreateText("BigSubtitle", block, 20, FontStyle.Bold, TextAnchor.MiddleCenter);
-        subTitle.text = _boundData != null ? _boundData.subtitle : "\uD504\uB85C\uC81D\uD2B8 \uCD94\uC628";
+        Text subTitle = CreateText("BigSubtitle", block, 18, FontStyle.Bold, TextAnchor.MiddleCenter);
+        subTitle.text = _boundData != null ? _boundData.subtitle : "DEVELOPMENT CREDITS";
         subTitle.color = MutedTextColor;
         FitPreferredHeight(subTitle.rectTransform, 72f);
     }
@@ -226,12 +210,25 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
     {
         RectTransform sectionRoot = CreateRect("Section_" + index.ToString("00"), _contentRect);
         LayoutElement sectionElement = sectionRoot.gameObject.AddComponent<LayoutElement>();
-        sectionElement.preferredHeight = 360f;
+        bool hasPhotos = HasPhotos(section);
+        sectionElement.preferredHeight = hasPhotos ? 320f : 128f;
+
+        Image sectionImage = sectionRoot.gameObject.AddComponent<Image>();
+        sectionImage.color = index % 2 == 0
+            ? new Color(0.035f, 0.060f, 0.095f, 0.46f)
+            : new Color(0.020f, 0.035f, 0.060f, 0.34f);
+        sectionImage.raycastTarget = false;
+
+        if (!hasPhotos)
+        {
+            BuildTextOnlySection(sectionRoot, section);
+            return;
+        }
 
         HorizontalLayoutGroup rowLayout = sectionRoot.gameObject.AddComponent<HorizontalLayoutGroup>();
-        rowLayout.spacing = 40f;
+        rowLayout.spacing = 34f;
         rowLayout.childAlignment = TextAnchor.MiddleCenter;
-        rowLayout.padding = new RectOffset(24, 24, 8, 8);
+        rowLayout.padding = new RectOffset(34, 34, 12, 12);
         rowLayout.childControlWidth = true;
         rowLayout.childControlHeight = true;
         rowLayout.childForceExpandWidth = true;
@@ -240,30 +237,31 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         RectTransform textColumn = CreateRect("TextColumn", sectionRoot);
         LayoutElement textColumnElement = textColumn.gameObject.AddComponent<LayoutElement>();
         textColumnElement.flexibleWidth = 1f;
-        textColumnElement.preferredWidth = 680f;
+        textColumnElement.preferredWidth = 610f;
 
         VerticalLayoutGroup textLayout = textColumn.gameObject.AddComponent<VerticalLayoutGroup>();
-        textLayout.spacing = 14f;
-        textLayout.childAlignment = TextAnchor.MiddleCenter;
+        textLayout.spacing = 8f;
+        textLayout.childAlignment = TextAnchor.MiddleLeft;
         textLayout.childControlWidth = true;
         textLayout.childControlHeight = true;
         textLayout.childForceExpandWidth = true;
         textLayout.childForceExpandHeight = false;
 
-        Text heading = CreateText("Heading", textColumn, 34, FontStyle.Bold, TextAnchor.MiddleCenter);
-        heading.text = section.heading;
+        Text heading = CreateText("Heading", textColumn, 22, FontStyle.Bold, TextAnchor.MiddleLeft);
+        heading.text = section.heading != null ? section.heading.ToUpperInvariant() : string.Empty;
         heading.color = AccentColor;
-        FitPreferredHeight(heading.rectTransform, 48f);
+        FitPreferredHeight(heading.rectTransform, 36f);
 
-        Text responsibilities = CreateText("Responsibilities", textColumn, 17, FontStyle.Normal, TextAnchor.MiddleCenter);
+        Text responsibilities = CreateText("Responsibilities", textColumn, 14, FontStyle.Bold, TextAnchor.MiddleLeft);
         responsibilities.text = section.responsibilities;
         responsibilities.color = MutedTextColor;
-        FitPreferredHeight(responsibilities.rectTransform, 92f);
+        FitPreferredHeight(responsibilities.rectTransform, 72f);
 
-        Text members = CreateText("Members", textColumn, 25, FontStyle.Bold, TextAnchor.MiddleCenter);
+        RectTransform memberColumn = textColumn;
+        Text members = CreateText("Members", memberColumn, 27, FontStyle.Bold, TextAnchor.MiddleCenter);
         members.text = BuildMembersText(section);
         members.color = TextColor;
-        FitPreferredHeight(members.rectTransform, 160f);
+        FitPreferredHeight(members.rectTransform, 145f);
 
         RectTransform photoColumn = CreateRect("PhotoColumn", sectionRoot);
         LayoutElement photoColumnElement = photoColumn.gameObject.AddComponent<LayoutElement>();
@@ -279,44 +277,36 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         photoLayout.childForceExpandHeight = false;
 
         TitleCreditsData.PhotoEntry[] photos = section.photos;
-        if (photos == null || photos.Length == 0)
+        for (int i = 0; i < photos.Length; i++)
         {
-            CreatePhotoCard(photoColumn, null, "\uAC1C\uBC1C \uACFC\uC815");
-        }
-        else
-        {
-            for (int i = 0; i < photos.Length; i++)
-            {
-                Sprite sprite = photos[i] != null ? photos[i].sprite : null;
-                string caption = photos[i] != null ? photos[i].caption : "\uAC1C\uBC1C \uACFC\uC815";
-                CreatePhotoCard(photoColumn, sprite, caption);
-            }
+            Sprite sprite = photos[i] != null ? photos[i].sprite : null;
+            string caption = photos[i] != null ? photos[i].caption : "\uAC1C\uBC1C \uACFC\uC815";
+            CreatePhotoCard(photoColumn, sprite, caption);
         }
     }
 
-    void CreateOutroBlock()
+    void BuildTextOnlySection(RectTransform sectionRoot, TitleCreditsData.Section section)
     {
-        RectTransform block = CreateRect("OutroBlock", _contentRect);
-        LayoutElement element = block.gameObject.AddComponent<LayoutElement>();
-        element.preferredHeight = 320f;
+        Text heading = CreateText("Heading", sectionRoot, 22, FontStyle.Bold, TextAnchor.MiddleLeft);
+        heading.text = section.heading != null ? section.heading.ToUpperInvariant() : string.Empty;
+        heading.color = AccentColor;
+        ConfigureRect(heading.rectTransform, new Vector2(0.08f, 0.52f), new Vector2(0.42f, 0.88f));
 
-        VerticalLayoutGroup layout = block.gameObject.AddComponent<VerticalLayoutGroup>();
-        layout.childAlignment = TextAnchor.MiddleCenter;
-        layout.spacing = 16f;
-        layout.childControlWidth = true;
-        layout.childControlHeight = true;
-        layout.childForceExpandWidth = true;
-        layout.childForceExpandHeight = false;
+        Text responsibilities = CreateText("Responsibilities", sectionRoot, 13, FontStyle.Bold, TextAnchor.MiddleLeft);
+        responsibilities.text = section.responsibilities;
+        responsibilities.color = MutedTextColor;
+        ConfigureRect(responsibilities.rectTransform, new Vector2(0.08f, 0.18f), new Vector2(0.46f, 0.50f));
 
-        Text thankYou = CreateText("ThankYou", block, 34, FontStyle.Bold, TextAnchor.MiddleCenter);
-        thankYou.text = "\uD50C\uB808\uC774\uD574 \uC8FC\uC154\uC11C \uAC10\uC0AC\uD569\uB2C8\uB2E4";
-        thankYou.color = TextColor;
-        FitPreferredHeight(thankYou.rectTransform, 44f);
+        Text members = CreateText("Members", sectionRoot, 30, FontStyle.Bold, TextAnchor.MiddleCenter);
+        members.text = BuildMembersText(section);
+        members.color = TextColor;
+        members.horizontalOverflow = HorizontalWrapMode.Overflow;
+        ConfigureRect(members.rectTransform, new Vector2(0.50f, 0.12f), new Vector2(0.82f, 0.88f));
+    }
 
-        Text footer = CreateText("Footer", block, 18, FontStyle.Bold, TextAnchor.MiddleCenter);
-        footer.text = "\uD504\uB85C\uC81D\uD2B8 \uCD94\uC628 / \uAC1C\uBC1C \uD06C\uB808\uB515";
-        footer.color = MutedTextColor;
-        FitPreferredHeight(footer.rectTransform, 42f);
+    static bool HasPhotos(TitleCreditsData.Section section)
+    {
+        return section != null && section.photos != null && section.photos.Length > 0;
     }
 
     void CreatePhotoCard(RectTransform parent, Sprite sprite, string caption)
@@ -363,7 +353,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
             return;
 
         LayoutRebuilder.ForceRebuildLayoutImmediate(_contentRect);
-        _contentRect.anchoredPosition = new Vector2(0f, -_viewportRect.rect.height * 0.35f);
+        _contentRect.anchoredPosition = Vector2.zero;
     }
 
     string BuildMembersText(TitleCreditsData.Section section)
@@ -379,11 +369,16 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
                 continue;
 
             if (builder.Length > 0)
-                builder.Append('\n');
-            builder.Append(member);
+                builder.Append("  ·  ");
+            builder.Append(NormalizeMemberDisplay(member));
         }
 
         return builder.Length > 0 ? builder.ToString() : "\uC774\uB984 \uC785\uB825";
+    }
+
+    static string NormalizeMemberDisplay(string member)
+    {
+        return member.Trim().Replace(" · ", "\u00A0·\u00A0");
     }
 
     void FadeTo(float targetAlpha, bool show)
@@ -416,13 +411,6 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         _canvasGroup.blocksRaycasts = false;
         _canvasGroup.interactable = false;
         gameObject.SetActive(false);
-    }
-
-    static void AddTrigger(EventTrigger trigger, EventTriggerType type, UnityEngine.Events.UnityAction action)
-    {
-        EventTrigger.Entry entry = new EventTrigger.Entry { eventID = type };
-        entry.callback.AddListener(_ => action());
-        trigger.triggers.Add(entry);
     }
 
     static RectTransform CreateRect(string objectName, Transform parent)

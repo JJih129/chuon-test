@@ -10,6 +10,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
 {
     const float DefaultFixedDeltaTime = 0.02f;
     const int CanvasSortOrder = 6200;
+    static readonly WaitForEndOfFrame EndOfFrame = new WaitForEndOfFrame();
 
     [Header("Flow")]
     [SerializeField] string titleSceneName = "TitleScene";
@@ -45,6 +46,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
     Button _quitButton;
 
     Coroutine _sequenceRoutine;
+    Coroutine _cursorRoutine;
     bool _sequenceStarted;
     bool _menuStateApplied;
     bool _transitioning;
@@ -69,6 +71,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
     void OnDestroy()
     {
         Unbind();
+        StopCursorRoutine();
         KillTweens();
     }
 
@@ -365,6 +368,42 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
         AudioListener.pause = false;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+        StartCursorRoutine();
+    }
+
+    void StartCursorRoutine()
+    {
+        if (_cursorRoutine != null)
+            return;
+
+        _cursorRoutine = StartCoroutine(CoForceDeathCursorState());
+    }
+
+    void StopCursorRoutine()
+    {
+        if (_cursorRoutine == null)
+            return;
+
+        StopCoroutine(_cursorRoutine);
+        _cursorRoutine = null;
+    }
+
+    IEnumerator CoForceDeathCursorState()
+    {
+        while (_menuStateApplied && !_transitioning)
+        {
+            ForceDeathCursorState();
+            yield return EndOfFrame;
+            ForceDeathCursorState();
+        }
+
+        _cursorRoutine = null;
+    }
+
+    static void ForceDeathCursorState()
+    {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
     }
 
     void HideGameplayHud()
@@ -382,6 +421,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
             return;
 
         _transitioning = true;
+        StopCursorRoutine();
         RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
         SceneFader sceneFader = RuntimeSceneFaderUtility.EnsureSceneFader();
         string activeSceneName = SceneManager.GetActiveScene().name;
@@ -398,6 +438,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
             return;
 
         _transitioning = true;
+        StopCursorRoutine();
         RuntimeMenuSceneStateUtility.PrepareForMenuScene();
         SceneFader sceneFader = RuntimeSceneFaderUtility.EnsureSceneFader();
 
@@ -413,6 +454,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
             return;
 
         _transitioning = true;
+        StopCursorRoutine();
         RuntimeMenuSceneStateUtility.PrepareForMenuScene();
 
 #if UNITY_EDITOR

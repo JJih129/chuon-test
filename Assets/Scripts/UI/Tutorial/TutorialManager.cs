@@ -319,7 +319,26 @@ public class TutorialManager : MonoBehaviour
     // ──────────────────────────────────────────────
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
-        if (dialogueGroup) dialogueGroup.alpha = 1;
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            if (dialogueGroup)
+            {
+                dialogueGroup.alpha = 0f;
+                dialogueGroup.interactable = false;
+                dialogueGroup.blocksRaycasts = false;
+                dialogueGroup.gameObject.SetActive(false);
+            }
+
+            if (speakerText) speakerText.text = string.Empty;
+            if (contentText) contentText.text = string.Empty;
+            yield break;
+        }
+
+        if (dialogueGroup)
+        {
+            dialogueGroup.gameObject.SetActive(true);
+            dialogueGroup.alpha = 1;
+        }
         if (speakerText) speakerText.text = speaker;
 
         if (contentText)

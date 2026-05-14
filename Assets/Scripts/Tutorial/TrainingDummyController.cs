@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
 
 [DisallowMultipleComponent]
@@ -601,7 +602,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
         while (_hasActiveProfile && playerBridge != null && playerBridge.ParryCount <= 0)
         {
-            if (Input.GetKeyDown(KeyCode.E))
+            if (WasParryPromptPressed())
             {
                 playerBridge.TryOpenTutorialParryWindow(forcedParryWindowSeconds);
                 break;
@@ -626,7 +627,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
         while (_hasActiveProfile && playerBridge != null && playerBridge.PerfectDodgeCount <= 0)
         {
-            if (Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift))
+            if (WasDodgePromptPressed())
             {
                 playerBridge.TryOpenTutorialPerfectDodgeWindow(forcedPerfectDodgeWindowSeconds);
                 break;
@@ -652,6 +653,33 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             _forcedParryPreviousAnimatorSpeed = visualAnimator.speed;
             visualAnimator.speed = 0f;
         }
+    }
+
+    static bool WasParryPromptPressed()
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
+            return true;
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.E);
+#else
+        return false;
+#endif
+    }
+
+    static bool WasDodgePromptPressed()
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null &&
+            (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame))
+            return true;
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift);
+#else
+        return false;
+#endif
     }
 
     void RestoreForcedParryFreezeIfNeeded()

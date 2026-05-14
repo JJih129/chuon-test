@@ -1,6 +1,7 @@
 // Assets/Scripts/Hit&health/health/PlayerConsumables.cs
 using System;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(PlayerHealth))]
 public class PlayerConsumables : MonoBehaviour
@@ -31,8 +32,21 @@ public class PlayerConsumables : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Q))
+        if (WasUseAmpoulePressedThisFrame())
             TryUseAmpoule();
+    }
+
+    static bool WasUseAmpoulePressedThisFrame()
+    {
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.qKey.wasPressedThisFrame)
+            return true;
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Q);
+#else
+        return false;
+#endif
     }
 
     public void TryUseAmpoule()

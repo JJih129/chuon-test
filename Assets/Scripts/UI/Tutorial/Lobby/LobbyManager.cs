@@ -1216,8 +1216,30 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            if (dialogueGroup != null)
+            {
+                dialogueGroup.alpha = 0f;
+                dialogueGroup.interactable = false;
+                dialogueGroup.blocksRaycasts = false;
+                dialogueGroup.gameObject.SetActive(false);
+            }
+
+            if (speakerText != null)
+                speakerText.text = string.Empty;
+
+            if (contentText != null)
+                contentText.text = string.Empty;
+
+            yield break;
+        }
+
         if (dialogueGroup != null)
+        {
+            dialogueGroup.gameObject.SetActive(true);
             dialogueGroup.alpha = 1f;
+        }
 
         if (speakerText != null)
             speakerText.text = speaker;

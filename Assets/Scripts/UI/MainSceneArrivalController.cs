@@ -461,6 +461,13 @@ public class MainSceneArrivalController : MonoBehaviour
             PlayIntroEvent(step.introEvent);
 
             string message = FormatIntroLine(step);
+            if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+            {
+                float wait = Mathf.Max(0.1f, step.hold) + Mathf.Max(0f, step.delayAfter);
+                yield return new WaitForSeconds(wait);
+                continue;
+            }
+
             if (!string.IsNullOrWhiteSpace(message))
             {
                 if (useBossIntroDialogueSubtitle)
@@ -602,6 +609,12 @@ public class MainSceneArrivalController : MonoBehaviour
         if (step == null)
             yield break;
 
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            _timelineDialogueRoutine = null;
+            yield break;
+        }
+
         if (useBossIntroDialogueSubtitle)
             yield return StartCoroutine(PlayIntroDialogue(step));
         else if (playerHud != null)
@@ -623,6 +636,9 @@ public class MainSceneArrivalController : MonoBehaviour
 
     IEnumerator PlayIntroDialogue(IntroStep step)
     {
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+            yield break;
+
         Canvas canvas = ResolveDialogueCanvas();
         IntroDialoguePresenter presenter = ResolveIntroDialoguePresenter(canvas);
         if (presenter == null)

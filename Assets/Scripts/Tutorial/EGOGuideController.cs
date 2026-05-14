@@ -22,6 +22,19 @@ public class EGOGuideController : MonoBehaviour
 
     public void QueueGuideLines(IReadOnlyList<TutorialGuideLine> lines, bool clearQueue, bool urgent)
     {
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            _queue.Clear();
+            _urgentQueue.Clear();
+            if (_playRoutine != null)
+            {
+                StopCoroutine(_playRoutine);
+                _playRoutine = null;
+            }
+            hintUIBridge?.HideGuideText();
+            return;
+        }
+
         if (lines == null || lines.Count == 0)
             return;
 

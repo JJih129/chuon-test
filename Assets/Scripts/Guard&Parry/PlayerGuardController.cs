@@ -273,19 +273,8 @@ public class PlayerGuardController : MonoBehaviour
         }
 
         // 1) 입력 처리
-        bool hasGuardAction = guardAction && guardAction.action != null;
-        if (hasGuardAction || ShouldUseLegacyGuardFallback())
+        if (TryReadGuardInput(out bool pressedThisFrame, out bool releasedThisFrame, out bool holding))
         {
-            bool pressedThisFrame = hasGuardAction
-                ? guardAction.action.WasPressedThisFrame()
-                : Input.GetKeyDown(KeyCode.E);
-            bool releasedThisFrame = hasGuardAction
-                ? guardAction.action.WasReleasedThisFrame()
-                : Input.GetKeyUp(KeyCode.E);
-            bool holding = hasGuardAction
-                ? guardAction.action.IsPressed()
-                : Input.GetKey(KeyCode.E);
-
             if (pressedThisFrame)
                 _inputCommandBuffer?.RecordGuardPress();
 
@@ -341,9 +330,39 @@ public class PlayerGuardController : MonoBehaviour
 
     }
 
-    bool ShouldUseLegacyGuardFallback()
+    bool TryReadGuardInput(out bool pressedThisFrame, out bool releasedThisFrame, out bool holding)
     {
-        return guardAction == null || guardAction.action == null;
+        pressedThisFrame = false;
+        releasedThisFrame = false;
+        holding = false;
+        bool hasAnyInputSource = false;
+
+        if (guardAction != null && guardAction.action != null)
+        {
+            InputAction action = guardAction.action;
+            pressedThisFrame |= action.WasPressedThisFrame();
+            releasedThisFrame |= action.WasReleasedThisFrame();
+            holding |= action.IsPressed();
+            hasAnyInputSource = true;
+        }
+
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.eKey != null)
+        {
+            pressedThisFrame |= keyboard.eKey.wasPressedThisFrame;
+            releasedThisFrame |= keyboard.eKey.wasReleasedThisFrame;
+            holding |= keyboard.eKey.isPressed;
+            hasAnyInputSource = true;
+        }
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        pressedThisFrame |= Input.GetKeyDown(KeyCode.E);
+        releasedThisFrame |= Input.GetKeyUp(KeyCode.E);
+        holding |= Input.GetKey(KeyCode.E);
+        hasAnyInputSource = true;
+#endif
+
+        return hasAnyInputSource;
     }
 
     // ───────────────────── 외부 제어 API(하위 호환) ─────────────────────
@@ -759,13 +778,7 @@ public class PlayerGuardController : MonoBehaviour
 
     bool IsGuardInputHeldNow()
     {
-        if (guardAction && guardAction.action != null)
-            return guardAction.action.IsPressed();
-
-        if (ShouldUseLegacyGuardFallback())
-            return Input.GetKey(KeyCode.E);
-
-        return false;
+        return TryReadGuardInput(out _, out _, out bool holding) && holding;
     }
 
     // ───────────────────── 이동 잠금 로직 ─────────────────────
