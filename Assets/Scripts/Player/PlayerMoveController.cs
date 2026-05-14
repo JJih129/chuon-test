@@ -68,6 +68,7 @@ public class PlayerMoveController : MonoBehaviour
     [SerializeField] private bool useRunStartMotion = true;
     [SerializeField] private string p_RunStartTrigger = "RunStart";
     [SerializeField, Min(0.01f)] private float runStartMinSpeed = 0.25f;
+    [SerializeField, Range(0f, 1f)] private float runStartForwardInputThreshold = 0.45f;
     [SerializeField] private bool useRunStartRootMotion = true;
     [SerializeField, Min(0.05f)] private float runStartRootMotionDuration = 0.8f;
     [SerializeField] private bool useTurnStartMotion = true;
@@ -271,7 +272,7 @@ public class PlayerMoveController : MonoBehaviour
         float animSpeed01 = _velXZ.sqrMagnitude <= 0.0001f
             ? 0f
             : Mathf.Clamp01(_velXZ.magnitude / Mathf.Max(0.01f, runSpeed));
-        UpdateRunStartMotion(animSpeed01);
+        UpdateRunStartMotion(animSpeed01, locked, IsGuarding());
         SetAnimSpeed(animSpeed01);
     }
 
@@ -478,10 +479,15 @@ public class PlayerMoveController : MonoBehaviour
             StopRunStopMotion();
     }
 
-    void UpdateRunStartMotion(float speed01)
+    void UpdateRunStartMotion(float speed01, bool locked, bool guarding)
     {
         bool isMoving = speed01 >= runStartMinSpeed || _currentMoveInput.sqrMagnitude > 0.0004f;
-        if (useRunStartMotion && !_wasMovingForRunStart && isMoving)
+        bool canPlayStart = CanPlayRunStartMotion(locked, guarding);
+
+        if (!canPlayStart && _runStartActive)
+            StopRunStartMotion();
+
+        if (useRunStartMotion && canPlayStart && !_wasMovingForRunStart && isMoving)
             PlayRunStartMotion();
 
         _wasMovingForRunStart = isMoving;
@@ -507,6 +513,14 @@ public class PlayerMoveController : MonoBehaviour
 
         animator.ResetTrigger(p_RunStartTrigger);
         animator.SetTrigger(p_RunStartTrigger);
+    }
+
+    bool CanPlayRunStartMotion(bool locked, bool guarding)
+    {
+        if (locked || guarding)
+            return false;
+
+        return _currentMoveInput.y >= runStartForwardInputThreshold;
     }
 
     void StopRunStartMotion()

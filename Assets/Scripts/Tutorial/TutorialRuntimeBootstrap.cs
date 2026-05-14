@@ -115,6 +115,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             "TutorialMovementMarker",
             questGoal != null ? questGoal.transform : null,
             new Color(0.18f, 0.85f, 1f, 0.9f),
+            Vector3.zero,
             new Vector3(1.15f, 0.025f, 1.15f),
             new Vector3(0f, 0.65f, 0f),
             new Vector3(0.10f, 0.35f, 0.10f),
@@ -124,6 +125,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             "TutorialExitMarker",
             exitZone != null ? exitZone.transform : null,
             new Color(1.00f, 0.68f, 0.18f, 0.92f),
+            Vector3.zero,
             new Vector3(1.30f, 0.025f, 1.30f),
             new Vector3(0f, 0.78f, 0f),
             new Vector3(0.12f, 0.42f, 0.12f),
@@ -133,15 +135,17 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             "TutorialAttackDummyMarker",
             attackDummyObject != null ? attackDummyObject.transform : null,
             new Color(0.24f, 0.88f, 1f, 0.92f),
-            new Vector3(0.95f, 0.025f, 0.95f),
-            new Vector3(0f, 0.72f, 0f),
-            new Vector3(0.09f, 0.34f, 0.09f),
-            new Vector3(0f, 1.22f, 0f),
-            new Vector3(0.26f, 0.12f, 0.26f));
+            new Vector3(0f, 1.72f, 0f),
+            new Vector3(0.38f, 0.014f, 0.38f),
+            new Vector3(0f, 1.72f, 0f),
+            Vector3.zero,
+            new Vector3(0f, 1.82f, 0f),
+            new Vector3(0.16f, 0.065f, 0.16f));
         TutorialWorldMarker guardDummyMarker = CreateWorldMarker(
             "TutorialGuardDummyMarker",
             droneObject != null ? droneObject.transform : null,
             new Color(1.00f, 0.45f, 0.18f, 0.92f),
+            Vector3.zero,
             new Vector3(1.05f, 0.025f, 1.05f),
             new Vector3(0f, 0.78f, 0f),
             new Vector3(0.10f, 0.38f, 0.10f),
@@ -656,6 +660,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         string markerName,
         Transform target,
         Color color,
+        Vector3 ringLocalPosition,
         Vector3 ringScale,
         Vector3 beamLocalPosition,
         Vector3 beamScale,
@@ -673,7 +678,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             marker = markerObject.AddComponent<TutorialWorldMarker>();
         }
 
-        marker.ConfigureRuntime(target, color, ringScale, beamLocalPosition, beamScale, capLocalPosition, capScale);
+        marker.ConfigureRuntime(target, color, ringLocalPosition, ringScale, beamLocalPosition, beamScale, capLocalPosition, capScale);
         marker.SetVisible(true);
         return marker;
     }
