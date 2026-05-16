@@ -28,6 +28,34 @@ public static class GameplaySceneCache
     static float _nextBossHealthResolveAt;
     static float _nextBossControllerResolveAt;
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetRuntimeState()
+    {
+        _mainCamera = null;
+        _mainCameraTransform = null;
+        _mainCameraShake = null;
+        _playerReferences = null;
+        _playerLockOn = null;
+        _lockOnCameraManager = null;
+        _canvas = null;
+        _playerUltimateController = null;
+        _bossBreakController = null;
+        _bossUiController = null;
+        _bossHealth = null;
+        _bossController = null;
+
+        _nextMainCameraResolveAt = 0f;
+        _nextPlayerReferencesResolveAt = 0f;
+        _nextPlayerLockOnResolveAt = 0f;
+        _nextLockOnCameraManagerResolveAt = 0f;
+        _nextCanvasResolveAt = 0f;
+        _nextPlayerUltimateResolveAt = 0f;
+        _nextBossBreakResolveAt = 0f;
+        _nextBossUiResolveAt = 0f;
+        _nextBossHealthResolveAt = 0f;
+        _nextBossControllerResolveAt = 0f;
+    }
+
     public static Camera ResolveMainCamera()
     {
         Camera taggedMainCamera = Camera.main;

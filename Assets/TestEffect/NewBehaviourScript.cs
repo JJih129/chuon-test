@@ -1,62 +1,28 @@
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class NewBehaviourScript : MonoBehaviour
 {
     public float scrollSpeedY = 1.0f;
-    public string textureProperty = "_MainTex";
+    public string textureProperty = "_MainTex"; // HDRP/URP라면 "_BaseMap"
 
-    readonly List<Material> materials = new List<Material>();
-    float offsetY;
+    private Material material;
+    private float offsetY = 0f;
 
     void Start()
     {
-        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
-        for (int i = 0; i < renderers.Length; i++)
+        // 머티리얼 인스턴스 생성 (원본 영향을 안 주게)
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer != null)
         {
-            Renderer renderer = renderers[i];
-            if (renderer == null)
-                continue;
-
-            Material material = renderer.material;
-            if (material != null)
-                materials.Add(material);
+            material = renderer.material;
         }
     }
 
     void Update()
     {
-        if (materials.Count == 0)
-            return;
+        if (material == null) return;
 
         offsetY += scrollSpeedY * Time.deltaTime;
-        Vector2 offset = new Vector2(0f, offsetY);
-
-        for (int i = 0; i < materials.Count; i++)
-        {
-            Material material = materials[i];
-            if (material == null)
-                continue;
-
-            if (material.HasProperty(textureProperty))
-            {
-                material.SetTextureOffset(textureProperty, offset);
-                continue;
-            }
-
-            if (material.HasProperty("_BaseMap"))
-                material.SetTextureOffset("_BaseMap", offset);
-        }
-    }
-
-    void OnDestroy()
-    {
-        for (int i = 0; i < materials.Count; i++)
-        {
-            if (materials[i] != null)
-                Destroy(materials[i]);
-        }
-
-        materials.Clear();
+        material.SetTextureOffset(textureProperty, new Vector2(0, offsetY));
     }
 }

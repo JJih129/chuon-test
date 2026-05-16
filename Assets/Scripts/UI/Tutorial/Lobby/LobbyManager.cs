@@ -56,7 +56,7 @@ public class LobbyManager : MonoBehaviour
     [Range(0.1f, 2f)] public float threatMarkerLeadTime = 0.85f;
     public bool disableLobbyDroneWorldUi = true;
     public bool disableLobbyDroneShadows = true;
-    public bool simplifyLobbyDroneVisual = false;
+    public bool simplifyLobbyDroneVisual = true;
     public bool useLightweightLobbyDroneSimulation = true;
     [Range(0.016f, 0.12f)] public float lightweightLobbyDroneTickInterval = 0.05f;
     [Header("Combat Roles")]
@@ -787,25 +787,6 @@ public class LobbyManager : MonoBehaviour
 
     void SimplifyLobbyDroneVisual(GameObject drone)
     {
-        Transform[] children = drone.GetComponentsInChildren<Transform>(true);
-        for (int i = 0; i < children.Length; i++)
-        {
-            Transform child = children[i];
-            if (child == null || child == drone.transform)
-                continue;
-
-            if (!child.name.Equals("drone"))
-                continue;
-
-            child.gameObject.SetActive(false);
-
-            Animator childAnimator = child.GetComponentInChildren<Animator>(true);
-            if (childAnimator != null)
-                childAnimator.enabled = false;
-
-            break;
-        }
-
         Transform simpleVisual = drone.transform.Find("__SimpleDroneVisual");
         if (simpleVisual == null)
         {
@@ -815,23 +796,80 @@ public class LobbyManager : MonoBehaviour
 
             Transform simpleTransform = simpleVisualGo.transform;
             simpleTransform.SetParent(drone.transform, false);
-            simpleTransform.localPosition = new Vector3(0f, 0.3f, 0f);
+            simpleTransform.localPosition = Vector3.zero;
             simpleTransform.localRotation = Quaternion.identity;
-            simpleTransform.localScale = new Vector3(0.7f, 0.22f, 0.7f);
+            simpleTransform.localScale = new Vector3(0.9f, 0.55f, 0.9f);
+            simpleVisual = simpleTransform;
 
             Collider simpleCollider = simpleVisualGo.GetComponent<Collider>();
             if (simpleCollider != null)
                 Destroy(simpleCollider);
+        }
 
-            Renderer simpleRenderer = simpleVisualGo.GetComponent<Renderer>();
-            if (simpleRenderer != null)
-            {
-                simpleRenderer.shadowCastingMode = ShadowCastingMode.Off;
-                simpleRenderer.receiveShadows = false;
-                simpleRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-            }
+        Renderer simpleRenderer = simpleVisual.GetComponent<Renderer>();
+        if (simpleRenderer != null)
+        {
+            simpleRenderer.enabled = true;
+            simpleRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            simpleRenderer.receiveShadows = false;
+            simpleRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+
+            Material material = ResolveSimpleDroneMaterial();
+            if (material != null)
+                simpleRenderer.sharedMaterial = material;
+        }
+
+        Renderer[] renderers = drone.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || renderer == simpleRenderer)
+                continue;
+
+            renderer.enabled = false;
+
+            Animator childAnimator = renderer.GetComponentInParent<Animator>();
+            if (childAnimator != null)
+                childAnimator.enabled = false;
+        }
+
+        DroneController controller = drone.GetComponent<DroneController>();
+        if (controller != null)
+        {
+            controller.droneRenderer = simpleRenderer;
+            controller.enabled = false;
+        }
+
+        BoxCollider hitCollider = drone.GetComponent<BoxCollider>();
+        if (hitCollider != null)
+        {
+            hitCollider.enabled = true;
+            hitCollider.isTrigger = false;
+            hitCollider.center = Vector3.zero;
+            hitCollider.size = new Vector3(1.2f, 0.9f, 1.2f);
         }
     }
+
+    static Material ResolveSimpleDroneMaterial()
+    {
+        if (_simpleDroneMaterial != null)
+            return _simpleDroneMaterial;
+
+        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null)
+            shader = Shader.Find("Standard");
+        if (shader == null)
+            return null;
+
+        _simpleDroneMaterial = new Material(shader)
+        {
+            name = "LobbyTempDroneCubeMaterial",
+            color = new Color(0.75f, 0.9f, 1f, 1f)
+        };
+        return _simpleDroneMaterial;
+    }
+
+    static Material _simpleDroneMaterial;
 
     IEnumerator SequencePostCombat()
     {
@@ -1162,6 +1200,14 @@ public class LobbyManager : MonoBehaviour
         SetLobbyInputLocked(true);
         SetPhase(LobbyFlowPhase.Elevator);
 
+        AsyncOperation sceneLoadOperation = null;
+        if (!string.IsNullOrWhiteSpace(nextSceneName))
+        {
+            sceneLoadOperation = SceneManager.LoadSceneAsync(nextSceneName);
+            if (sceneLoadOperation != null)
+                sceneLoadOperation.allowSceneActivation = false;
+        }
+
         if (presentationController != null)
         {
             presentationController.HideObjectiveMarker();
@@ -1202,14 +1248,26 @@ public class LobbyManager : MonoBehaviour
 
         if (SceneFader.Instance != null)
         {
-            SceneFader.Instance.FadeOutAndLoadScene(nextSceneName);
-            yield break;
+            bool fadeComplete = false;
+            SceneFader.Instance.FadeOut(() => fadeComplete = true);
+            yield return new WaitUntil(() => fadeComplete);
+        }
+        else
+        {
+            yield return new WaitForSeconds(Mathf.Max(0.05f, elevatorLowerDuration - elevatorFadeDelay));
         }
 
-        yield return new WaitForSeconds(Mathf.Max(0.05f, elevatorLowerDuration - elevatorFadeDelay));
+        while (sceneLoadOperation != null && sceneLoadOperation.progress < 0.9f)
+            yield return null;
 
         if (originalPlayerParent != null && playerRoot != null)
             playerRoot.SetParent(originalPlayerParent, true);
+
+        if (sceneLoadOperation != null)
+        {
+            sceneLoadOperation.allowSceneActivation = true;
+            yield break;
+        }
 
         SceneManager.LoadScene(nextSceneName);
     }

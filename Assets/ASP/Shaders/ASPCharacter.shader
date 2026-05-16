@@ -604,5 +604,4 @@ Shader "ASP/Character"
     }
 
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
-    CustomEditor "LWGUI.ASP.ASPCharacterGUI"
 }

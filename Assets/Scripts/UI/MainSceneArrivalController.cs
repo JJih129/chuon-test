@@ -62,11 +62,13 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField, Min(0.05f)] private float betweenDelay = 0.26f;
     [SerializeField] private AttackTelegraphType arrivalTelegraphType = AttackTelegraphType.Guard;
     [SerializeField] private AttackTelegraphType threatTelegraphType = AttackTelegraphType.Danger;
+    [SerializeField] private bool showArrivalGuideMessages = false;
 
     [Header("Boss Intro Timeline")]
     [SerializeField] bool useBossIntroTimeline = true;
     [SerializeField] bool preferPlayableDirectorBossIntro = true;
     [SerializeField] PlayableDirector bossIntroDirector;
+    [SerializeField] bool snapCameraBehindPlayerOnTimelineIntroEnd = false;
     [SerializeField] IntroStep[] bossIntroSteps =
     {
         new IntroStep("EGO", "도착했어, 추온. 격납고 층이야.", 1.8f, AttackTelegraphType.Guard, IntroEvent.ElevatorOpened),
@@ -90,6 +92,7 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] float alarmSirenMaxOverlayAlpha = 0.22f;
     [SerializeField, Min(0f)] float alarmSirenLightIntensity = 3.2f;
     [SerializeField, Min(0f)] float alarmSirenLightRange = 8f;
+    [SerializeField] bool showAlarmSirenWarningText = false;
     [SerializeField] ParticleSystem bossRevealDustPrefab;
     [SerializeField] Transform bossRevealVfxAnchor;
     [SerializeField] bool spawnBossRevealDust = false;
@@ -98,26 +101,26 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] CinemachineCamera bossRevealCloseUpCamera;
     [SerializeField] int bossRevealCloseUpPriority = 120;
     [SerializeField] int bossRevealCloseUpInactivePriority = -100;
-    [SerializeField, Min(0.1f)] float bossRevealCloseUpHold = 3.8f;
+    [SerializeField, Min(0.1f)] float bossRevealCloseUpHold = 2.0f;
     [SerializeField, Min(0f)] float bossRevealCloseUpBlendIn = 0.55f;
     [SerializeField, Min(0f)] float bossRevealCloseUpBlendOut = 0.75f;
-    [SerializeField, Min(0.5f)] float bossRevealCloseUpDistance = 3.4f;
-    [SerializeField] float bossRevealCloseUpSideOffset = 1.45f;
-    [SerializeField] float bossRevealCloseUpHeight = 1.35f;
-    [SerializeField] float bossRevealCloseUpLookHeight = 1.25f;
+    [SerializeField, Min(0.5f)] float bossRevealCloseUpDistance = 5.8f;
+    [SerializeField] float bossRevealCloseUpSideOffset = 1.8f;
+    [SerializeField] float bossRevealCloseUpHeight = 1.55f;
+    [SerializeField] float bossRevealCloseUpLookHeight = 1.45f;
     [SerializeField] bool bossRevealCloseUpTracksMovingBoss = true;
     [SerializeField] bool useBossIntroHologram = true;
     [SerializeField] bool hideBossVisualUntilReveal = true;
     [SerializeField] bool moveBossFromHiddenStartOnReveal = true;
     [SerializeField, Min(0f)] float bossRevealWalkOutDistance = 5.5f;
-    [SerializeField, Min(0.1f)] float bossRevealWalkOutDuration = 3.6f;
-    [SerializeField, Min(0.1f)] float bossRevealWalkAnimationSpeed = 0.62f;
+    [SerializeField, Min(0.1f)] float bossRevealWalkOutDuration = 2.0f;
+    [SerializeField, Min(0.1f)] float bossRevealWalkAnimationSpeed = 1.0f;
     [SerializeField] AnimationClip bossRevealWalkEndClip;
     [SerializeField, Min(0.05f)] float bossRevealWalkEndMaxDuration = 0.9f;
     [SerializeField] Material bossIntroHologramMaterial;
     [SerializeField, Min(0f)] float bossIntroHologramFadeIn = 0.2f;
-    [SerializeField, Min(0f)] float bossIntroHologramHoldBeforeReveal = 2.25f;
-    [SerializeField, Min(0f)] float bossIntroHologramRevealDuration = 0.95f;
+    [SerializeField, Min(0f)] float bossIntroHologramHoldBeforeReveal = 0.9f;
+    [SerializeField, Min(0f)] float bossIntroHologramRevealDuration = 0.6f;
     [SerializeField] Color bossIntroHologramColor = new Color(0f, 0.65f, 1f, 0.34f);
 
     [Header("Boss Intro Dialogue UI")]
@@ -222,6 +225,10 @@ public class MainSceneArrivalController : MonoBehaviour
     bool[] _bossIntroHiddenRendererStates;
     bool _bossIntroVisualsHidden;
     Coroutine _bossRevealWalkRoutine;
+    Animator _bossRevealWalkAnimator;
+    bool _bossRevealWalkHasCachedAnimatorRootMotion;
+    bool _bossRevealWalkCachedApplyRootMotion;
+    PlayableGraph _activeBossRevealWalkEndGraph;
     PlayableGraph _heldPlayerWalkEndGraph;
     ElevatorWalkClipPlayback _activeElevatorWalkPlayback;
     ElevatorWalkClipPlayback _activeBossRevealWalkPlayback;
@@ -428,19 +435,19 @@ public class MainSceneArrivalController : MonoBehaviour
         if (arrivalDelay > 0f)
             yield return new WaitForSeconds(arrivalDelay);
 
-        playerHud.ShowRuntimeTelegraphMessage(arrivalMessage, arrivalTelegraphType, arrivalHold, false);
+        ShowArrivalGuideMessage(arrivalMessage, arrivalTelegraphType, arrivalHold, false);
 
         if (betweenDelay > 0f)
             yield return new WaitForSeconds(betweenDelay);
 
-        playerHud.ShowRuntimeTelegraphMessage(egoMessage, AttackTelegraphType.Parry, 0.56f, false);
+        ShowArrivalGuideMessage(egoMessage, AttackTelegraphType.Parry, 0.56f, false);
 
         if (bossController != null)
         {
             if (betweenDelay > 0f)
                 yield return new WaitForSeconds(betweenDelay);
 
-            playerHud.ShowRuntimeTelegraphMessage(threatMessage, threatTelegraphType, threatHold, true);
+            ShowArrivalGuideMessage(threatMessage, threatTelegraphType, threatHold, true);
         }
 
         SetBossIntroPaused(false);
@@ -473,7 +480,7 @@ public class MainSceneArrivalController : MonoBehaviour
                 if (useBossIntroDialogueSubtitle)
                     yield return StartCoroutine(PlayIntroDialogue(step));
                 else
-                    playerHud.ShowRuntimeTelegraphMessage(message, step.telegraphType, step.hold, step.dangerFeedback, 20);
+                    ShowArrivalGuideMessage(message, step.telegraphType, step.hold, step.dangerFeedback, 20);
             }
 
             if (!useBossIntroDialogueSubtitle)
@@ -586,9 +593,12 @@ public class MainSceneArrivalController : MonoBehaviour
         SetArrivalInputLocked(false);
         EndElevatorIntroCinematicCamera();
 
-        // Timeline/Cinemachine can write its final camera pose late in the frame.
-        // Schedule a second snap so gameplay resumes from the normal FreeLook view.
-        SnapCameraBehindPlayer(ResolvePlayerFacingRoot(), true);
+        if (snapCameraBehindPlayerOnTimelineIntroEnd)
+        {
+            // Timeline/Cinemachine can write its final camera pose late in the frame.
+            // Keep this opt-in so the intro does not add a final player zoom by default.
+            SnapCameraBehindPlayer(ResolvePlayerFacingRoot(), true);
+        }
     }
 
     void PlayTimelineIntroLine(int index)
@@ -618,7 +628,7 @@ public class MainSceneArrivalController : MonoBehaviour
         if (useBossIntroDialogueSubtitle)
             yield return StartCoroutine(PlayIntroDialogue(step));
         else if (playerHud != null)
-            playerHud.ShowRuntimeTelegraphMessage(FormatIntroLine(step), step.telegraphType, step.hold, step.dangerFeedback, 20);
+            ShowArrivalGuideMessage(FormatIntroLine(step), step.telegraphType, step.hold, step.dangerFeedback, 20);
 
         _timelineDialogueRoutine = null;
     }
@@ -645,7 +655,7 @@ public class MainSceneArrivalController : MonoBehaviour
         {
             string fallbackMessage = FormatIntroLine(step);
             if (!string.IsNullOrWhiteSpace(fallbackMessage))
-                playerHud.ShowRuntimeTelegraphMessage(fallbackMessage, step.telegraphType, step.hold, step.dangerFeedback, 20);
+                ShowArrivalGuideMessage(fallbackMessage, step.telegraphType, step.hold, step.dangerFeedback, 20);
 
             yield return new WaitForSeconds(Mathf.Max(0.1f, step.hold) + Mathf.Max(0f, step.delayAfter));
             yield break;
@@ -847,8 +857,11 @@ public class MainSceneArrivalController : MonoBehaviour
         _alarmSirenOverlay = overlayObject.GetComponent<Image>();
         _alarmSirenOverlay.raycastTarget = false;
 
-        _alarmSirenText = CreateIntroText(root, "AlarmText", 34, FontStyle.Bold, TextAnchor.MiddleCenter, alarmSirenColor, new Vector2(0.25f, 0.48f), new Vector2(0.75f, 0.58f), Vector2.zero, Vector2.zero);
-        _alarmSirenText.text = "WARNING";
+        if (showAlarmSirenWarningText)
+        {
+            _alarmSirenText = CreateIntroText(root, "AlarmText", 34, FontStyle.Bold, TextAnchor.MiddleCenter, alarmSirenColor, new Vector2(0.25f, 0.48f), new Vector2(0.75f, 0.58f), Vector2.zero, Vector2.zero);
+            _alarmSirenText.text = "WARNING";
+        }
 
         GameObject lightObject = new GameObject("RuntimeBossIntroSirenLight", typeof(Light));
         lightObject.transform.SetParent(transform, false);
@@ -1105,6 +1118,9 @@ public class MainSceneArrivalController : MonoBehaviour
         bool useClipPlayback = CanUseElevatorWalkClipPlayback(animator);
         ElevatorWalkClipPlayback clipPlayback = default;
         bool originalApplyRootMotion = animator != null && animator.applyRootMotion;
+        _bossRevealWalkAnimator = animator;
+        _bossRevealWalkCachedApplyRootMotion = originalApplyRootMotion;
+        _bossRevealWalkHasCachedAnimatorRootMotion = animator != null;
         Vector3 startPosition = bossRoot.position;
         Quaternion startRotation = bossRoot.rotation;
         float duration = Mathf.Max(0.1f, bossRevealWalkOutDuration);
@@ -1148,7 +1164,12 @@ public class MainSceneArrivalController : MonoBehaviour
             EndElevatorWalkClipPlayback(ref clipPlayback);
             _activeBossRevealWalkPlayback = default;
             if (animator != null)
+            {
                 animator.applyRootMotion = originalApplyRootMotion;
+                RestoreAnimatorControllerAfterRevealPlayback(animator);
+            }
+            _bossRevealWalkAnimator = null;
+            _bossRevealWalkHasCachedAnimatorRootMotion = false;
             _bossRevealWalkRoutine = null;
         }
     }
@@ -1160,6 +1181,7 @@ public class MainSceneArrivalController : MonoBehaviour
             yield break;
 
         PlayableGraph graph = PlayableGraph.Create("BossRevealWalkEndClipPlayback");
+        _activeBossRevealWalkEndGraph = graph;
         graph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
         try
         {
@@ -1184,6 +1206,8 @@ public class MainSceneArrivalController : MonoBehaviour
         {
             if (graph.IsValid())
                 graph.Destroy();
+            _activeBossRevealWalkEndGraph = default;
+            RestoreAnimatorControllerAfterRevealPlayback(animator);
         }
     }
 
@@ -1215,6 +1239,29 @@ public class MainSceneArrivalController : MonoBehaviour
         StopCoroutine(_bossRevealWalkRoutine);
         _bossRevealWalkRoutine = null;
         EndElevatorWalkClipPlayback(ref _activeBossRevealWalkPlayback);
+        EndBossRevealWalkEndPlayback();
+        if (_bossRevealWalkAnimator != null && _bossRevealWalkHasCachedAnimatorRootMotion)
+            _bossRevealWalkAnimator.applyRootMotion = _bossRevealWalkCachedApplyRootMotion;
+        RestoreAnimatorControllerAfterRevealPlayback(_bossRevealWalkAnimator);
+        _bossRevealWalkAnimator = null;
+        _bossRevealWalkHasCachedAnimatorRootMotion = false;
+    }
+
+    void EndBossRevealWalkEndPlayback()
+    {
+        if (_activeBossRevealWalkEndGraph.IsValid())
+            _activeBossRevealWalkEndGraph.Destroy();
+
+        _activeBossRevealWalkEndGraph = default;
+    }
+
+    static void RestoreAnimatorControllerAfterRevealPlayback(Animator animator)
+    {
+        if (animator == null || animator.runtimeAnimatorController == null || !animator.isActiveAndEnabled)
+            return;
+
+        animator.Rebind();
+        animator.Update(0f);
     }
 
     void RestoreBossRevealPose()
@@ -1683,7 +1730,7 @@ public class MainSceneArrivalController : MonoBehaviour
         SetElevatorDoorOpenState(false, immediate: true);
 
         if (!string.IsNullOrWhiteSpace(elevatorArrivedMessage))
-            playerHud.ShowRuntimeTelegraphMessage(elevatorArrivedMessage, AttackTelegraphType.Guard, Mathf.Max(0.4f, elevatorDoorClosedHold), false);
+            ShowArrivalGuideMessage(elevatorArrivedMessage, AttackTelegraphType.Guard, Mathf.Max(0.4f, elevatorDoorClosedHold), false);
 
         if (elevatorDoorClosedHold > 0f)
             yield return new WaitForSeconds(elevatorDoorClosedHold);
@@ -1691,7 +1738,7 @@ public class MainSceneArrivalController : MonoBehaviour
         yield return StartCoroutine(CoSetElevatorDoorOpen(true));
 
         if (!string.IsNullOrWhiteSpace(elevatorDoorOpenMessage))
-            playerHud.ShowRuntimeTelegraphMessage(elevatorDoorOpenMessage, AttackTelegraphType.Parry, Mathf.Max(0.4f, elevatorDoorOpenHold), false);
+            ShowArrivalGuideMessage(elevatorDoorOpenMessage, AttackTelegraphType.Parry, Mathf.Max(0.4f, elevatorDoorOpenHold), false);
 
         if (elevatorDoorOpenHold > 0f)
             yield return new WaitForSeconds(elevatorDoorOpenHold);
@@ -3046,7 +3093,7 @@ public class MainSceneArrivalController : MonoBehaviour
             return;
 
         _ultimateReadyCoachShown = true;
-        playerHud.ShowRuntimeTelegraphMessage(
+        ShowArrivalGuideMessage(
             ultimateReadyMessage,
             AttackTelegraphType.Danger,
             ultimateReadyHold,
@@ -3058,8 +3105,15 @@ public class MainSceneArrivalController : MonoBehaviour
         if (delay > 0f)
             yield return new WaitForSeconds(delay);
 
-        if (playerHud != null)
-            playerHud.ShowRuntimeTelegraphMessage(message, telegraphType, hold, useDangerFeedback);
+        ShowArrivalGuideMessage(message, telegraphType, hold, useDangerFeedback);
+    }
+
+    void ShowArrivalGuideMessage(string message, AttackTelegraphType telegraphType, float hold, bool useDangerFeedback, int priority = 0)
+    {
+        if (!showArrivalGuideMessages || playerHud == null || string.IsNullOrWhiteSpace(message))
+            return;
+
+        playerHud.ShowRuntimeTelegraphMessage(message, telegraphType, hold, useDangerFeedback, priority);
     }
 
     string ResolveDefenseCoachMessage(AttackTelegraphType telegraphType)

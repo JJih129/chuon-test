@@ -15,13 +15,13 @@ MonoBehaviour:
   beginTime: 0
   doorOpenTime: 0.65
   playerWalkOutTime: 2.25
-  bossRevealTime: 5.65
+  bossRevealTime: 4.35
   firstDialogueTime: 0.25
   combatStartLead: 0.05
   endLead: 0.15
   timelineTailPadding: 0.5
-  elevatorShotDuration: 5.55
-  bossRevealShotDuration: 13.05
-  defaultLineSpacing: 2.15
-  bossIdentifyLineSpacing: 3
-  longLineSpacing: 2.7
+  elevatorShotDuration: 4.2
+  bossRevealShotDuration: 12.8
+  defaultLineSpacing: 1.55
+  bossIdentifyLineSpacing: 2
+  longLineSpacing: 2

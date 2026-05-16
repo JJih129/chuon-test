@@ -80,10 +80,15 @@ public class SceneFader : MonoBehaviour
 
     public void FadeOutAndLoadScene(string sceneName)
     {
+        FadeOut(() => SceneManager.LoadScene(sceneName));
+    }
+
+    public Tween FadeOut(System.Action onComplete)
+    {
         if (!fadeCanvasGroup)
         {
-            SceneManager.LoadScene(sceneName);
-            return;
+            onComplete?.Invoke();
+            return null;
         }
 
         SetFadeObjectActive(true);
@@ -92,10 +97,10 @@ public class SceneFader : MonoBehaviour
         fadeCanvasGroup.blocksRaycasts = true;
         fadeCanvasGroup.interactable = true;
 
-        fadeCanvasGroup.DOFade(1f, fadeDuration)
+        return fadeCanvasGroup.DOFade(1f, fadeDuration)
             .SetUpdate(true)
             .SetEase(Ease.InOutQuad)
-            .OnComplete(() => SceneManager.LoadScene(sceneName));
+            .OnComplete(() => onComplete?.Invoke());
     }
 
     public void HideImmediate()

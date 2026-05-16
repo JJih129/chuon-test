@@ -396,6 +396,13 @@ public class PlayerMoveController : MonoBehaviour
         if (IsValidBasisTransform(cameraTransform))
             return cameraTransform;
 
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null && IsValidBasisTransform(mainCamera.transform))
+        {
+            cameraTransform = mainCamera.transform;
+            return cameraTransform;
+        }
+
         return playerRoot != null ? playerRoot : transform;
     }
 
