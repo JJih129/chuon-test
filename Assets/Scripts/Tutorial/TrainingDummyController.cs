@@ -48,6 +48,14 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [SerializeField, Range(0f, 0.25f)] private float hitScalePunch = 0.08f;
     [SerializeField, Min(0.05f)] private float hitReactionDuration = 0.14f;
 
+    [Header("Spawn Hologram")]
+    [SerializeField] private bool useHologramSpawnDespawn = true;
+    [SerializeField] private Material hologramTransitionMaterial;
+    [SerializeField] private string hologramMaterialResourcePath = "Tutorial/TutorialHologramSpawn";
+    [SerializeField, Min(0f)] private float hologramSpawnDuration = 0.55f;
+    [SerializeField, Min(0f)] private float hologramDespawnDuration = 0.45f;
+    [SerializeField] private Color hologramTransitionColor = new Color(0f, 0.65f, 1f, 0.34f);
+
     [Header("Defense Reaction")]
     [SerializeField] private Color guardedReactionColor = new Color(0.28f, 0.90f, 1f, 1f);
     [SerializeField] private Color parriedReactionColor = new Color(0.62f, 1f, 1f, 1f);
@@ -131,6 +139,10 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     Vector3 _initialScale;
     MaterialPropertyBlock _propertyBlock;
     MaterialPropertyBlock _markerPropertyBlock;
+    Coroutine _hologramTransitionRoutine;
+    Renderer[] _hologramRenderers;
+    Material[][] _hologramOriginalMaterials;
+    Material _runtimeHologramMaterial;
     TrainingDummyStepProfile _activeProfile;
     bool _hasActiveProfile;
     int _adaptiveFailureCount;
@@ -161,6 +173,8 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     static Material s_dangerIndicatorMaterial;
     static Material s_dangerTargetMarkerMaterial;
+    static readonly int HologramColorId = Shader.PropertyToID("_Hologram_Color");
+    static readonly int TextureTintColorId = Shader.PropertyToID("_Texture_Tint_Color");
 
     public event System.Action<TrainingDummyController, TutorialCombatHitInfo> PlayerHitByPlayer;
     public event System.Action<TrainingDummyController, TrainingDummyAttackResult> AttackResolved;
@@ -189,6 +203,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     void OnDisable()
     {
+        StopHologramTransition(true);
         StopVisualReactions();
         HideDangerIndicator();
         HideDangerTargetMarker();
@@ -289,6 +304,8 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     public void ApplyStep(TutorialStepType stepType)
     {
+        bool wasActiveProfile = _hasActiveProfile;
+        bool wasActiveInHierarchy = gameObject.activeInHierarchy;
         _activeProfile = null;
         _hasActiveProfile = false;
         _adaptiveFailureCount = 0;
@@ -314,7 +331,6 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             }
         }
 
-        gameObject.SetActive(_hasActiveProfile);
         StopAttackLoop();
         StopVisualReactions();
         HideDangerIndicator();
@@ -322,7 +338,22 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         ClearPendingProjectiles();
 
         if (!_hasActiveProfile || _activeProfile == null)
+        {
+            if (wasActiveProfile && wasActiveInHierarchy)
+                StartHologramDespawnOrDisable();
+            else
+            {
+                StopHologramTransition(true);
+                gameObject.SetActive(false);
+            }
             return;
+        }
+
+        gameObject.SetActive(true);
+        if (!wasActiveProfile || !wasActiveInHierarchy)
+            StartHologramSpawn();
+        else
+            StopHologramTransition(true);
 
         PlayIdleAnimation();
         _currentHealth = _activeProfile.useHealth ? Mathf.Max(1f, _activeProfile.damage * 6f) : 99999f;
@@ -1101,6 +1132,240 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         SetEmission(_hasActiveProfile && _activeProfile != null ? _activeProfile.stateColor : idleEmission);
         if (worldMarker != null && _hasActiveProfile && _activeProfile != null)
             worldMarker.SetMarkerColor(_activeProfile.stateColor);
+    }
+
+    void StartHologramSpawn()
+    {
+        if (!useHologramSpawnDespawn || !gameObject.activeInHierarchy)
+        {
+            StopHologramTransition(true);
+            return;
+        }
+
+        Material sourceMaterial = ResolveHologramTransitionMaterial();
+        if (sourceMaterial == null)
+        {
+            StopHologramTransition(true);
+            return;
+        }
+
+        StopHologramTransition(true);
+        if (!PrepareHologramMaterials(sourceMaterial))
+            return;
+
+        SetHologramAlpha(0f);
+        _hologramTransitionRoutine = StartCoroutine(CoHologramTransition(hologramSpawnDuration, 0f, hologramTransitionColor.a, true));
+    }
+
+    void StartHologramDespawnOrDisable()
+    {
+        if (!gameObject.activeInHierarchy)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
+
+        if (!useHologramSpawnDespawn)
+        {
+            StopHologramTransition(true);
+            gameObject.SetActive(false);
+            return;
+        }
+
+        Material sourceMaterial = ResolveHologramTransitionMaterial();
+        if (sourceMaterial == null)
+        {
+            StopHologramTransition(true);
+            gameObject.SetActive(false);
+            return;
+        }
+
+        StopHologramTransition(true);
+        if (!PrepareHologramMaterials(sourceMaterial))
+        {
+            gameObject.SetActive(false);
+            return;
+        }
+
+        SetHologramAlpha(hologramTransitionColor.a);
+        _hologramTransitionRoutine = StartCoroutine(CoHologramTransition(hologramDespawnDuration, hologramTransitionColor.a, 0f, false));
+    }
+
+    IEnumerator CoHologramTransition(float duration, float startAlpha, float targetAlpha, bool restoreOnComplete)
+    {
+        if (duration <= 0f)
+        {
+            SetHologramAlpha(targetAlpha);
+            _hologramTransitionRoutine = null;
+            RestoreHologramMaterials();
+            if (!restoreOnComplete)
+                gameObject.SetActive(false);
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration && _runtimeHologramMaterial != null)
+        {
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = t * t * (3f - 2f * t);
+            SetHologramAlpha(Mathf.Lerp(startAlpha, targetAlpha, eased));
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        SetHologramAlpha(targetAlpha);
+        _hologramTransitionRoutine = null;
+        RestoreHologramMaterials();
+        if (!restoreOnComplete)
+            gameObject.SetActive(false);
+        else if (_hasActiveProfile && _activeProfile != null)
+            SetEmission(_activeProfile.stateColor);
+    }
+
+    bool PrepareHologramMaterials(Material sourceMaterial)
+    {
+        Renderer[] childRenderers = GetComponentsInChildren<Renderer>(true);
+        if (childRenderers == null || childRenderers.Length == 0)
+            return false;
+
+        List<Renderer> renderers = new List<Renderer>(childRenderers.Length);
+        List<Material[]> originals = new List<Material[]>(childRenderers.Length);
+
+        for (int i = 0; i < childRenderers.Length; i++)
+        {
+            Renderer renderer = childRenderers[i];
+            if (IsHologramIgnoredRenderer(renderer))
+                continue;
+
+            Material[] materials = renderer.sharedMaterials;
+            if (materials == null || materials.Length == 0)
+                continue;
+
+            renderers.Add(renderer);
+            originals.Add(materials);
+        }
+
+        if (renderers.Count == 0)
+            return false;
+
+        _runtimeHologramMaterial = new Material(sourceMaterial)
+        {
+            name = name + "_RuntimeHologram"
+        };
+
+        _hologramRenderers = renderers.ToArray();
+        _hologramOriginalMaterials = originals.ToArray();
+        SetHologramAlpha(0f);
+
+        for (int i = 0; i < _hologramRenderers.Length; i++)
+        {
+            Renderer renderer = _hologramRenderers[i];
+            Material[] original = _hologramOriginalMaterials[i];
+            if (renderer == null || original == null)
+                continue;
+
+            Material[] hologramMaterials = new Material[original.Length];
+            for (int slot = 0; slot < hologramMaterials.Length; slot++)
+                hologramMaterials[slot] = _runtimeHologramMaterial;
+
+            renderer.sharedMaterials = hologramMaterials;
+        }
+
+        return true;
+    }
+
+    bool IsHologramIgnoredRenderer(Renderer renderer)
+    {
+        if (renderer == null || renderer is ParticleSystemRenderer || renderer is LineRenderer || renderer == dangerTargetMarkerRenderer)
+            return true;
+
+        if (renderer.GetComponentInParent<TutorialWorldMarker>(true) != null)
+            return true;
+
+        if (parryMarkerObject != null && renderer.transform != null && renderer.transform.IsChildOf(parryMarkerObject.transform))
+            return true;
+
+        string objectName = renderer.transform != null ? renderer.transform.name : string.Empty;
+        return objectName.Contains("Marker") ||
+               objectName.Contains("Danger") ||
+               objectName.Contains("Hitbox") ||
+               objectName.Contains("Guide") ||
+               objectName.Contains("LockPivot");
+    }
+
+    Material ResolveHologramTransitionMaterial()
+    {
+        if (hologramTransitionMaterial != null)
+            return hologramTransitionMaterial;
+
+        if (!string.IsNullOrWhiteSpace(hologramMaterialResourcePath))
+            hologramTransitionMaterial = Resources.Load<Material>(hologramMaterialResourcePath);
+
+#if UNITY_EDITOR
+        if (hologramTransitionMaterial == null)
+            hologramTransitionMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
+#endif
+
+        return hologramTransitionMaterial;
+    }
+
+    void SetHologramAlpha(float alpha)
+    {
+        if (_runtimeHologramMaterial == null)
+            return;
+
+        Color color = hologramTransitionColor;
+        color.a = Mathf.Clamp01(alpha);
+
+        if (_runtimeHologramMaterial.HasProperty(HologramColorId))
+            _runtimeHologramMaterial.SetColor(HologramColorId, color);
+
+        if (_runtimeHologramMaterial.HasProperty(TextureTintColorId))
+        {
+            Color tint = color;
+            tint.a *= 0.75f;
+            _runtimeHologramMaterial.SetColor(TextureTintColorId, tint);
+        }
+    }
+
+    void StopHologramTransition(bool restoreMaterials)
+    {
+        if (_hologramTransitionRoutine != null)
+        {
+            StopCoroutine(_hologramTransitionRoutine);
+            _hologramTransitionRoutine = null;
+        }
+
+        if (restoreMaterials)
+            RestoreHologramMaterials();
+    }
+
+    void RestoreHologramMaterials()
+    {
+        if (_hologramRenderers != null && _hologramOriginalMaterials != null)
+        {
+            int count = Mathf.Min(_hologramRenderers.Length, _hologramOriginalMaterials.Length);
+            for (int i = 0; i < count; i++)
+            {
+                Renderer renderer = _hologramRenderers[i];
+                Material[] materials = _hologramOriginalMaterials[i];
+                if (renderer != null && materials != null)
+                    renderer.sharedMaterials = materials;
+            }
+        }
+
+        _hologramRenderers = null;
+        _hologramOriginalMaterials = null;
+
+        if (_runtimeHologramMaterial != null)
+        {
+            if (Application.isPlaying)
+                Destroy(_runtimeHologramMaterial);
+            else
+                DestroyImmediate(_runtimeHologramMaterial);
+        }
+
+        _runtimeHologramMaterial = null;
     }
 
     AttackSnapshot CaptureAttackSnapshot()

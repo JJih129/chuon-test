@@ -91,6 +91,8 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
 
         if (resolvedHit.IsPerfectDodge)
         {
+            CombatRewardUtility.TryNotifyPerfectDodge(payload.attacker, gameObject);
+
             if (debugLogs)
             {
                 Debug.Log(
@@ -114,6 +116,7 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
                 this);
         }
 
+        int beforeHp = health.CurrentHP;
         PlayerResolvedHitApplier.Apply(
             resolvedHit,
             payload,
@@ -126,6 +129,13 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
             suppressHitAnimWhenGuarding,
             debugLogs,
             this);
+
+        if (health.CurrentHP < beforeHp && payload.attacker != null)
+        {
+            BossController boss = payload.attacker.GetComponentInParent<BossController>();
+            if (boss != null)
+                boss.NotifyBossHitPlayer(transform);
+        }
     }
 
     void RefreshAnimatorParameterCache()

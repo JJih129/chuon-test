@@ -6,12 +6,14 @@ public static class BossResolvedHitApplier
         BossHealth bossHealth,
         BossBreakController bossBreakController,
         ResolvedHitResult resolvedHit,
-        HitPayload payload)
+        HitPayload payload,
+        bool suppressBreak = false,
+        bool suppressReward = false)
     {
         if (bossHealth == null || !resolvedHit.IsDamage)
             return;
 
-        if (resolvedHit.BreakBonus > 0f && bossBreakController != null)
+        if (!suppressBreak && resolvedHit.BreakBonus > 0f && bossBreakController != null)
         {
             bossBreakController.AddBreak(
                 resolvedHit.BreakBonus,
@@ -26,10 +28,11 @@ public static class BossResolvedHitApplier
 
         if (bossHealth.CurrentHP < beforeHp)
         {
-            if (bossBreakController != null && resolvedHit.HitType != HitType.Force)
+            if (!suppressBreak && bossBreakController != null && resolvedHit.HitType != HitType.Force)
                 bossBreakController.AddBreak(0f, BossBreakController.BreakSource.Generic);
 
-            CombatRewardUtility.TryGrantBasicAttackGauge(payload.attacker);
+            if (!suppressReward)
+                CombatRewardUtility.TryGrantBasicAttackGauge(payload.attacker);
         }
     }
 }

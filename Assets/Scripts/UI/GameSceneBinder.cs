@@ -21,7 +21,10 @@ public class GameSceneBinder : MonoBehaviour
         var boss = FindObjectOfType<BossController>(true);
         var bossBreak = FindObjectOfType<BossBreakController>(true);
         var ultimate = FindObjectOfType<PlayerUltimateController>(true);
-        if (hud && ph) hud.Bind(ph, pc, pg, boss);
+        if (hud && ph) hud.Bind(ph, pc, pg, boss, ultimate);
+
+        var bossUiController = FindObjectOfType<BossUIController>(true);
+        EnsureDeathPresentation(hud, ph, bossUiController);
 
         if (SceneManager.GetActiveScene().name != MainSceneName)
             yield break;
@@ -34,25 +37,35 @@ public class GameSceneBinder : MonoBehaviour
         arrivalController.ConfigureBossIntroDirector(FindBossIntroDirector());
         arrivalController.ConfigureRuntime(hud, boss, ph, bossBreak, ultimate);
 
-        var bossStatusController = GetComponent<MainSceneBossStatusController>();
-        if (bossStatusController == null)
-            bossStatusController = gameObject.AddComponent<MainSceneBossStatusController>();
+        MainSceneBossStatusController bossStatusController = null;
+        if (ExhibitionPrototypePresentationPolicy.RuntimeBossStatusPanelEnabled)
+        {
+            bossStatusController = GetComponent<MainSceneBossStatusController>();
+            if (bossStatusController == null)
+                bossStatusController = gameObject.AddComponent<MainSceneBossStatusController>();
 
-        var bossUiController = FindObjectOfType<BossUIController>(true);
-        bossStatusController.ConfigureRuntime(bossUiController, boss, bossBreak, ultimate);
+            bossStatusController.ConfigureRuntime(bossUiController, boss, bossBreak, ultimate);
+        }
 
-        var bossObjectiveController = GetComponent<MainSceneObjectivePanelController>();
-        if (bossObjectiveController == null)
-            bossObjectiveController = gameObject.AddComponent<MainSceneObjectivePanelController>();
+        MainSceneObjectivePanelController bossObjectiveController = null;
+        if (ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            bossObjectiveController = GetComponent<MainSceneObjectivePanelController>();
+            if (bossObjectiveController == null)
+                bossObjectiveController = gameObject.AddComponent<MainSceneObjectivePanelController>();
 
-        bossObjectiveController.ConfigureRuntime(bossUiController, boss, bossBreak, ultimate);
+            bossObjectiveController.ConfigureRuntime(bossUiController, boss, bossBreak, ultimate);
+        }
 
         var consumables = FindObjectOfType<PlayerConsumables>(true);
-        var combatAssistController = GetComponent<MainSceneCombatAssistController>();
-        if (combatAssistController == null)
-            combatAssistController = gameObject.AddComponent<MainSceneCombatAssistController>();
+        if (ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+        {
+            var combatAssistController = GetComponent<MainSceneCombatAssistController>();
+            if (combatAssistController == null)
+                combatAssistController = gameObject.AddComponent<MainSceneCombatAssistController>();
 
-        combatAssistController.ConfigureRuntime(arrivalController, hud, ph, consumables, bossBreak, ultimate);
+            combatAssistController.ConfigureRuntime(arrivalController, hud, ph, consumables, bossBreak, ultimate);
+        }
 
         var bossHealth = boss != null ? boss.bossHealth : FindObjectOfType<BossHealth>(true);
         var clearPresentationController = GetComponent<MainSceneClearPresentationController>();
@@ -74,11 +87,18 @@ public class GameSceneBinder : MonoBehaviour
         Transform playerRoot = ph != null ? ph.transform : null;
         postClearGuideController.ConfigureRuntime(arrivalController, hud, bossHealth, playerRoot, clearExitBridge);
 
+    }
+
+    void EnsureDeathPresentation(PlayerHUD hud, PlayerHealth playerHealth, BossUIController bossUiController)
+    {
+        if (playerHealth == null)
+            return;
+
         var deathPresentationController = GetComponent<MainSceneDeathPresentationController>();
         if (deathPresentationController == null)
             deathPresentationController = gameObject.AddComponent<MainSceneDeathPresentationController>();
 
-        deathPresentationController.ConfigureRuntime(hud, ph, bossUiController);
+        deathPresentationController.ConfigureRuntime(hud, playerHealth, bossUiController);
     }
 
     static PlayableDirector FindBossIntroDirector()

@@ -96,6 +96,8 @@ public class HomingProjectile : MonoBehaviour
 
             return;
         }
+        if (IsFriendlyDroneHit(other))
+            return;
 
         HitPayload payload = new HitPayload
         {
@@ -131,6 +133,19 @@ public class HomingProjectile : MonoBehaviour
         }
 
         ReleaseSelf();
+    }
+
+    bool IsFriendlyDroneHit(Collider other)
+    {
+        if (owner == null || other == null)
+            return false;
+
+        DroneController ownerDrone = owner.GetComponentInParent<DroneController>();
+        if (ownerDrone == null)
+            return false;
+
+        DroneController hitDrone = other.GetComponentInParent<DroneController>();
+        return hitDrone != null && hitDrone != ownerDrone;
     }
 
     void OnDisable()

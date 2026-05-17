@@ -2343,8 +2343,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21647334, y: -0.0024672179, z: -0.00054706034, w: 0.9762853}
-  m_LocalPosition: {x: 0.031205729, y: -1.0765237, z: -28.174059}
+  m_LocalRotation: {x: -0.21309516, y: -0.0024690912, z: -0.00053852226, w: 0.9770282}
+  m_LocalPosition: {x: 0.031275984, y: -1.0389577, z: -28.18797}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -24781,6 +24781,10 @@ MonoBehaviour:
   chuOnPotionGaugeSprite: {fileID: 21300000, guid: e44cbca567d02a94393de7c3bca94248, type: 3}
   chuOnUltimateGaugeSprite: {fileID: 21300000, guid: 6aba98f19acf3ca47b3e0d360dc56047, type: 3}
   applyChuOnUltimateGaugeSkin: 1
+  ultimateGaugePercentText: {fileID: 0}
+  showUltimateGaugePercent: 1
+  ultimateGaugePercentFontSize: 18
+  ultimateGaugePercentTextColor: {r: 0.86, g: 1, b: 1, a: 0.98}
   guardStrainFillImage: {fileID: 0}
   guardStrainTrackImage: {fileID: 0}
   guardStrainBarHeight: 8
@@ -24992,6 +24996,7 @@ MonoBehaviour:
   betweenDelay: 0.26
   arrivalTelegraphType: 2
   threatTelegraphType: 4
+  showArrivalGuideMessages: 0
   useBossIntroTimeline: 1
   preferPlayableDirectorBossIntro: 1
   bossIntroDirector: {fileID: 902207461}
@@ -25080,6 +25085,7 @@ MonoBehaviour:
   alarmSirenMaxOverlayAlpha: 0.22
   alarmSirenLightIntensity: 3.2
   alarmSirenLightRange: 8
+  showAlarmSirenWarningText: 0
   bossRevealDustPrefab: {fileID: 0}
   bossRevealVfxAnchor: {fileID: 0}
   spawnBossRevealDust: 0
@@ -25096,6 +25102,8 @@ MonoBehaviour:
   bossRevealCloseUpHeight: 1.55
   bossRevealCloseUpLookHeight: 1.45
   bossRevealCloseUpTracksMovingBoss: 1
+  timelineBossRevealCameraTracksMovingBoss: 1
+  timelineBossRevealCameraName: VCam_MainIntro_BossReveal
   useBossIntroHologram: 1
   hideBossVisualUntilReveal: 1
   moveBossFromHiddenStartOnReveal: 1
@@ -33334,6 +33342,7 @@ MonoBehaviour:
   bossAnimator: {fileID: 5866666021567638740}
   playerTarget: {fileID: 0}
   patternVisuals: {fileID: 0}
+  attackVfxPresenter: {fileID: 0}
   groundTelegraph: {fileID: 0}
   defaultPreAttackPoseClip: {fileID: 7400000, guid: 9165d3451d5768041bfb931384318e10, type: 2}
   useDefaultPreAttackPoseForNonParryable: 1
@@ -33379,6 +33388,7 @@ MonoBehaviour:
   maxAttackStateWaitTime: 2
   phaseTwoThresholdNormalized: 0.66
   phaseThreeThresholdNormalized: 0.33
+  useDefaultPhaseModifierFallback: 1
   phaseTwoTelegraphScale: 0.96
   phaseThreeTelegraphScale: 0.9
   phaseTwoFollowUpChanceBonus: 0.08
@@ -33386,6 +33396,61 @@ MonoBehaviour:
   phaseThreeExtraFollowUpChains: 1
   phaseEntryPressureDuration: 5
   phaseEntryUnlockedPatternWeight: 1.75
+  phaseTransitionAttackLockDuration: 0.45
+  difficultyTier: 1
+  difficultyProfiles:
+  - tier: 0
+    damageMultiplier: 0.8
+    cooldownMultiplier: 1.25
+    telegraphDurationMultiplier: 1.25
+    hitboxActiveDurationMultiplier: 0.92
+    reactionDelay: 0.28
+    patternWeightMultiplier: 0.95
+    engageSpeedMultiplier: 0.88
+    postActionDurationMultiplier: 1.18
+    phaseTransitionHpThreshold: 0.72
+    overrideMaxFollowUpCount: 1
+    maxFollowUpCount: 0
+    parryWindowMultiplier: 1.25
+  - tier: 1
+    damageMultiplier: 1
+    cooldownMultiplier: 1
+    telegraphDurationMultiplier: 1
+    hitboxActiveDurationMultiplier: 1
+    reactionDelay: 0.18
+    patternWeightMultiplier: 1
+    engageSpeedMultiplier: 1
+    postActionDurationMultiplier: 1
+    phaseTransitionHpThreshold: 0.66
+    overrideMaxFollowUpCount: 0
+    maxFollowUpCount: 1
+    parryWindowMultiplier: 1
+  - tier: 2
+    damageMultiplier: 1.1
+    cooldownMultiplier: 0.9
+    telegraphDurationMultiplier: 0.92
+    hitboxActiveDurationMultiplier: 1
+    reactionDelay: 0.12
+    patternWeightMultiplier: 1.08
+    engageSpeedMultiplier: 1.14
+    postActionDurationMultiplier: 0.86
+    phaseTransitionHpThreshold: 0.62
+    overrideMaxFollowUpCount: 1
+    maxFollowUpCount: 2
+    parryWindowMultiplier: 0.92
+  - tier: 3
+    damageMultiplier: 1.2
+    cooldownMultiplier: 0.78
+    telegraphDurationMultiplier: 0.84
+    hitboxActiveDurationMultiplier: 1
+    reactionDelay: 0.08
+    patternWeightMultiplier: 1.15
+    engageSpeedMultiplier: 1.24
+    postActionDurationMultiplier: 0.76
+    phaseTransitionHpThreshold: 0.58
+    overrideMaxFollowUpCount: 1
+    maxFollowUpCount: 3
+    parryWindowMultiplier: 0.86
   minimumParryTelegraphLeadTime: 0.28
   minimumGuardTelegraphLeadTime: 0.3
   minimumDodgeTelegraphLeadTime: 0.36
@@ -33402,6 +33467,18 @@ MonoBehaviour:
   parryStunTriggerName: Stagger
   parryStunStateName: Break
   parryStunTransitionDuration: 0.03
+  combatRecoverySettings:
+    recoveryDuration: 0.35
+    invulnerableDuration: 0.18
+    superArmorDuration: 0.55
+    lockoutDuration: 0.25
+    recenterDuration: 0.3
+    recenterTurnSpeed: 540
+    returnToCombatAnchor: 1
+    maxAnchorDistance: 7.5
+    anchorReturnSpeed: 3.5
+    postRecoveryCombatIdleDuration: 0.25
+    keepDamageRewardDuringSuperArmor: 1
   followUpRecoveryTax: 0.34
   fakeOutFollowUpChanceMultiplier: 0.18
   dangerFollowUpChanceMultiplier: 0.06
@@ -33410,11 +33487,68 @@ MonoBehaviour:
   recentRepeatPatternWeightMultiplier: 0.6
   repeatedTelegraphWeightMultiplier: 0.82
   recentPatternMemory: 3
+  usePlayerStatePatternBias: 1
+  farPressureDistance: 7.5
+  farPressureDelay: 1.25
+  farPressureRangedWeightMultiplier: 1.55
+  farPressureChaseWeightMultiplier: 1.25
+  farPressureEngageSpeedMultiplier: 1.15
+  closeLingerDistance: 2.2
+  closeLingerDelay: 1.1
+  closeLingerPunishWeightMultiplier: 1.35
+  closeLingerRangedWeightMultiplier: 0.62
+  playerDefenseResponseMemoryTime: 6
+  repeatedParryResponseThreshold: 2
+  repeatedPerfectDodgeResponseThreshold: 2
+  repeatedParryParryableWeightMultiplier: 0.72
+  repeatedParryDodgeOnlyWeightMultiplier: 1.22
+  repeatedPerfectDodgeDodgeOnlyWeightMultiplier: 0.72
+  repeatedPerfectDodgeParryableWeightMultiplier: 1.16
+  playerObservationMoveSpeedThreshold: 0.35
+  playerDodgingDelayedAttackWeightMultiplier: 1.18
+  playerGuardingPunishWeightMultiplier: 1.2
+  playerAttackingCounterWeightMultiplier: 1.18
+  playerStunnedRangedWeightMultiplier: 0.55
+  playerRecentlyHitBossCounterWeightMultiplier: 1.16
+  bossMissedPressureDelay: 4
+  bossMissedPressureWeightMultiplier: 1.18
+  playerSideAngleThreshold: 75
+  playerBackAngleThreshold: 125
+  playerBackAngleCounterWeightMultiplier: 1.18
+  playerStateReactionDelay: 0.18
+  useSpatialPatternBias: 1
+  spatialBiasProbeDistance: 1.35
+  blockedBackstepWeightMultiplier: 0.45
+  cornerRangedWeightMultiplier: 0.7
+  cornerRecenterWeightMultiplier: 1.25
+  arenaAwarenessSettings:
+    enabled: 1
+    farDistance: 8
+    rearAngleThreshold: 125
+    centerReturnDistance: 7.5
+    playerWallProbeDistance: 1.5
+    wallBackstepWeightMultiplier: 0.35
+    rearRecenterWeightMultiplier: 1.35
+    farPressureWeightMultiplier: 1.35
+    centerReturnWeightMultiplier: 1.35
+    blockedPathFallbackWeightMultiplier: 1.25
+    playerWallPressureWeightMultiplier: 1.15
+    centerReturnDirectionBlend: 0.45
   enableStateLogs: 0
+  enablePatternDebugLog: 0
+  enablePlayerObservationDebugLog: 0
+  playerObservationDebugInterval: 0.75
+  enablePatternTelemetryDebugLog: 0
+  enableCombatRecoveryTelemetryDebugLog: 0
+  drawAttackRangeGizmos: 1
+  drawEngageRangeGizmos: 1
+  drawHitboxTimingGizmos: 1
+  drawArenaAwarenessGizmos: 1
   moveSpeed: 4
   stoppingDistance: 1.5
   attackCommitDistanceBuffer: 0.28
   moveSlowdownDistance: 1.75
+  enableVerboseCombatLogs: 0
   debugSwordWaveLogs: 1
   pressureEngageDistance: 4.6
   pressureReleaseDistance: 5.4
@@ -33427,6 +33561,7 @@ MonoBehaviour:
   swordWaveDirectCooldown: 3.2
   swordWaveDirectChargeTime: 1.15
   noPatternFallbackAttackDelay: 0.65
+  attackSelectionRetryDelay: 0.12
   chaseTurnSpeed: 360
   closeChaseTurnSpeed: 540
   closeChaseTurnDistance: 1.8
@@ -33451,6 +33586,29 @@ MonoBehaviour:
   allPatterns:
   - patternName: a
     animTriggerName: Attack_A
+    selectorData:
+      patternId: 0
+      minRange: 0
+      maxRange: 5
+      minAngle: 0
+      maxAngle: 180
+      baseWeight: 1
+      cooldown: 2
+      minPhase: 1
+      maxPhase: 3
+      canRepeat: 0
+      recentRepeatBlockCount: 1
+      isFallback: 1
+      fallbackPriority: 0
+      postActionType: 1
+      engageMode: 1
+      engageStartRange: 0
+      engageStopRange: 0
+      engageMaxDuration: 0.5
+      engageMoveSpeedMultiplier: 1
+      rangedFallbackPatternId: 3
+      dashFallbackPatternId: 2
+    phaseModifiers: []
     isParryable: 1
     canPerfectDodge: 1
     canGuard: 1
@@ -33497,6 +33655,29 @@ MonoBehaviour:
     maxPhase: 3
   - patternName: b
     animTriggerName: Attack_B
+    selectorData:
+      patternId: 0
+      minRange: 0
+      maxRange: 5
+      minAngle: 0
+      maxAngle: 180
+      baseWeight: 1
+      cooldown: 2
+      minPhase: 1
+      maxPhase: 3
+      canRepeat: 0
+      recentRepeatBlockCount: 1
+      isFallback: 1
+      fallbackPriority: 0
+      postActionType: 1
+      engageMode: 1
+      engageStartRange: 0
+      engageStopRange: 0
+      engageMaxDuration: 0.5
+      engageMoveSpeedMultiplier: 1
+      rangedFallbackPatternId: 3
+      dashFallbackPatternId: 2
+    phaseModifiers: []
     isParryable: 1
     canPerfectDodge: 1
     canGuard: 1
@@ -33543,6 +33724,29 @@ MonoBehaviour:
     maxPhase: 3
   - patternName: c
     animTriggerName: Attack_C
+    selectorData:
+      patternId: 0
+      minRange: 0
+      maxRange: 5
+      minAngle: 0
+      maxAngle: 180
+      baseWeight: 1
+      cooldown: 2
+      minPhase: 1
+      maxPhase: 3
+      canRepeat: 0
+      recentRepeatBlockCount: 1
+      isFallback: 1
+      fallbackPriority: 0
+      postActionType: 1
+      engageMode: 1
+      engageStartRange: 0
+      engageStopRange: 0
+      engageMaxDuration: 0.5
+      engageMoveSpeedMultiplier: 1
+      rangedFallbackPatternId: 3
+      dashFallbackPatternId: 2
+    phaseModifiers: []
     isParryable: 0
     canPerfectDodge: 1
     canGuard: 0
@@ -33589,6 +33793,29 @@ MonoBehaviour:
     maxPhase: 3
   - patternName: d
     animTriggerName: Attack_D
+    selectorData:
+      patternId: 0
+      minRange: 0
+      maxRange: 5
+      minAngle: 0
+      maxAngle: 180
+      baseWeight: 1
+      cooldown: 2
+      minPhase: 1
+      maxPhase: 3
+      canRepeat: 0
+      recentRepeatBlockCount: 1
+      isFallback: 1
+      fallbackPriority: 0
+      postActionType: 1
+      engageMode: 1
+      engageStartRange: 0
+      engageStopRange: 0
+      engageMaxDuration: 0.5
+      engageMoveSpeedMultiplier: 1
+      rangedFallbackPatternId: 3
+      dashFallbackPatternId: 2
+    phaseModifiers: []
     isParryable: 0
     canPerfectDodge: 1
     canGuard: 0
@@ -33635,6 +33862,29 @@ MonoBehaviour:
     maxPhase: 3
   - patternName: e
     animTriggerName: Attack_E
+    selectorData:
+      patternId: 0
+      minRange: 0
+      maxRange: 5
+      minAngle: 0
+      maxAngle: 180
+      baseWeight: 1
+      cooldown: 2
+      minPhase: 1
+      maxPhase: 3
+      canRepeat: 0
+      recentRepeatBlockCount: 1
+      isFallback: 1
+      fallbackPriority: 0
+      postActionType: 1
+      engageMode: 1
+      engageStartRange: 0
+      engageStopRange: 0
+      engageMaxDuration: 0.5
+      engageMoveSpeedMultiplier: 1
+      rangedFallbackPatternId: 3
+      dashFallbackPatternId: 2
+    phaseModifiers: []
     isParryable: 0
     canPerfectDodge: 1
     canGuard: 1
@@ -33681,6 +33931,29 @@ MonoBehaviour:
     maxPhase: 3
   - patternName: f
     animTriggerName: Attack_F
+    selectorData:
+      patternId: 0
+      minRange: 0
+      maxRange: 5
+      minAngle: 0
+      maxAngle: 180
+      baseWeight: 1
+      cooldown: 2
+      minPhase: 1
+      maxPhase: 3
+      canRepeat: 0
+      recentRepeatBlockCount: 1
+      isFallback: 1
+      fallbackPriority: 0
+      postActionType: 1
+      engageMode: 1
+      engageStartRange: 0
+      engageStopRange: 0
+      engageMaxDuration: 0.5
+      engageMoveSpeedMultiplier: 1
+      rangedFallbackPatternId: 3
+      dashFallbackPatternId: 2
+    phaseModifiers: []
     isParryable: 0
     canPerfectDodge: 1
     canGuard: 1
@@ -33727,6 +34000,29 @@ MonoBehaviour:
     maxPhase: 3
   - patternName: SwordWave
     animTriggerName: Attack_F
+    selectorData:
+      patternId: 0
+      minRange: 0
+      maxRange: 5
+      minAngle: 0
+      maxAngle: 180
+      baseWeight: 1
+      cooldown: 2
+      minPhase: 1
+      maxPhase: 3
+      canRepeat: 0
+      recentRepeatBlockCount: 1
+      isFallback: 1
+      fallbackPriority: 0
+      postActionType: 1
+      engageMode: 1
+      engageStartRange: 0
+      engageStopRange: 0
+      engageMaxDuration: 0.5
+      engageMoveSpeedMultiplier: 1
+      rangedFallbackPatternId: 3
+      dashFallbackPatternId: 2
+    phaseModifiers: []
     isParryable: 0
     canPerfectDodge: 1
     canGuard: 1
@@ -33771,6 +34067,49 @@ MonoBehaviour:
     preferredFollowUpTelegraph: 0
     minPhase: 0
     maxPhase: 0
+  usePatternSelector: 1
+  useLegacyPatternSelectionFallback: 0
+  patternSelector:
+    enableDebugLog: 0
+    recentRepeatWeightMultiplier: 0.55
+  patternSelectorHistory:
+    capacity: 3
+  postActionSettings:
+    combatIdleMinTime: 0.25
+    combatIdleMaxTime: 0.55
+    backstepDistance: 1.4
+    backstepDuration: 0.35
+    strafeDistance: 1.6
+    strafeDuration: 0.55
+    chaseDesiredDistance: 3.2
+    chaseStopDistance: 2.6
+    chaseMaxDuration: 0.8
+    recenterDuration: 0.35
+    recenterAngleTolerance: 5
+    turnSpeed: 540
+    keepFacingTargetDuringPostAction: 1
+  enablePostActionDebugLog: 0
+  enableEngageDebugLog: 0
+  engageStallCheckInterval: 0.25
+  engageMinProgressDistance: 0.08
+  engageBlockedAbortTime: 0.55
+  attackTimingData: []
+  useDefaultAttackTimingFallback: 1
+  defaultAttackTimingControlsParryWindow: 1
+  defaultAttackTimingTelegraphScale: 1
+  defaultAttackTimingParryWindowScale: 0.65
+  enableAttackTimingDebugLog: 0
+  attackTimingCueShakeAmplitude: 0.045
+  attackTimingCueShakeDuration: 0.14
+  attackTimingCueShakeMinIntervalRealtime: 0.08
+  attackTimingCueAudioSource: {fileID: 0}
+  attackTimingWarningClip: {fileID: 0}
+  attackTimingWarningVolume: 0.85
+  attackTimingWarningMinIntervalRealtime: 0.08
+  telegraphVfxPresenter: {fileID: 0}
+  autoCreateRuntimeTelegraphVfxPresenter: 1
+  attackFeedbackPresenter: {fileID: 0}
+  autoCreateRuntimeAttackFeedbackPresenter: 1
   snapRotationToPlayerOnAttack: 1
   preAttackRotateTime: 0
   preAttackRotateSpeed: 720
@@ -42528,6 +42867,7 @@ GameObject:
   - component: {fileID: 5866666021567638741}
   - component: {fileID: 5866666021567638742}
   - component: {fileID: 5866666021567638743}
+  - component: {fileID: 5866666021567638744}
   m_Layer: 12
   m_Name: boss
   m_TagString: Enemy
@@ -43762,6 +44102,167 @@ MonoBehaviour:
   minimumAutoTrailWidth: 0.32
   autoTrailEndWidthRatio: 0.24
   debugLog: 0
+--- !u!114 &5866666021567638744
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919132149501209620}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c1d290b83d3087148a967ae775e09724, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  audioSource: {fileID: 0}
+  profiles:
+  - telegraphType: 2
+    weaponFlash: 1
+    bodyFlash: 0
+    warningSound: 1
+    chargeSound: 0
+    swingSound: 1
+    impactSound: 1
+    cameraShake: 0
+    timeScaleHitStop: 0
+    trailEffect: 1
+    groundWarning: 0
+    projectileWarning: 0
+    warningClip: {fileID: 0}
+    chargeClip: {fileID: 0}
+    swingClip: {fileID: 0}
+    impactClip: {fileID: 0}
+    volume: 0.85
+    cameraShakeAmplitude: 0
+    cameraShakeDuration: 0
+    hitStopTimeScale: 1
+    hitStopDuration: 0
+    trailEffectPrefab: {fileID: 0}
+    trailEffectLifetime: 0.6
+  - telegraphType: 3
+    weaponFlash: 1
+    bodyFlash: 0
+    warningSound: 1
+    chargeSound: 0
+    swingSound: 1
+    impactSound: 1
+    cameraShake: 0
+    timeScaleHitStop: 0
+    trailEffect: 1
+    groundWarning: 1
+    projectileWarning: 0
+    warningClip: {fileID: 0}
+    chargeClip: {fileID: 0}
+    swingClip: {fileID: 0}
+    impactClip: {fileID: 0}
+    volume: 0.85
+    cameraShakeAmplitude: 0
+    cameraShakeDuration: 0
+    hitStopTimeScale: 1
+    hitStopDuration: 0
+    trailEffectPrefab: {fileID: 0}
+    trailEffectLifetime: 0.6
+  - telegraphType: 4
+    weaponFlash: 1
+    bodyFlash: 1
+    warningSound: 1
+    chargeSound: 1
+    swingSound: 1
+    impactSound: 1
+    cameraShake: 1
+    timeScaleHitStop: 1
+    trailEffect: 1
+    groundWarning: 1
+    projectileWarning: 0
+    warningClip: {fileID: 0}
+    chargeClip: {fileID: 0}
+    swingClip: {fileID: 0}
+    impactClip: {fileID: 0}
+    volume: 0.85
+    cameraShakeAmplitude: 0.055
+    cameraShakeDuration: 0.16
+    hitStopTimeScale: 0.82
+    hitStopDuration: 0.035
+    trailEffectPrefab: {fileID: 0}
+    trailEffectLifetime: 0.6
+  - telegraphType: 5
+    weaponFlash: 1
+    bodyFlash: 1
+    warningSound: 0
+    chargeSound: 1
+    swingSound: 1
+    impactSound: 1
+    cameraShake: 1
+    timeScaleHitStop: 1
+    trailEffect: 1
+    groundWarning: 1
+    projectileWarning: 0
+    warningClip: {fileID: 0}
+    chargeClip: {fileID: 0}
+    swingClip: {fileID: 0}
+    impactClip: {fileID: 0}
+    volume: 0.85
+    cameraShakeAmplitude: 0.04
+    cameraShakeDuration: 0.18
+    hitStopTimeScale: 0.86
+    hitStopDuration: 0.03
+    trailEffectPrefab: {fileID: 0}
+    trailEffectLifetime: 0.6
+  - telegraphType: 6
+    weaponFlash: 1
+    bodyFlash: 0
+    warningSound: 1
+    chargeSound: 1
+    swingSound: 1
+    impactSound: 1
+    cameraShake: 0
+    timeScaleHitStop: 0
+    trailEffect: 1
+    groundWarning: 0
+    projectileWarning: 1
+    warningClip: {fileID: 0}
+    chargeClip: {fileID: 0}
+    swingClip: {fileID: 0}
+    impactClip: {fileID: 0}
+    volume: 0.85
+    cameraShakeAmplitude: 0
+    cameraShakeDuration: 0
+    hitStopTimeScale: 1
+    hitStopDuration: 0
+    trailEffectPrefab: {fileID: 0}
+    trailEffectLifetime: 0.6
+  - telegraphType: 1
+    weaponFlash: 1
+    bodyFlash: 0
+    warningSound: 0
+    chargeSound: 0
+    swingSound: 1
+    impactSound: 1
+    cameraShake: 0
+    timeScaleHitStop: 0
+    trailEffect: 1
+    groundWarning: 0
+    projectileWarning: 0
+    warningClip: {fileID: 0}
+    chargeClip: {fileID: 0}
+    swingClip: {fileID: 0}
+    impactClip: {fileID: 0}
+    volume: 0.85
+    cameraShakeAmplitude: 0
+    cameraShakeDuration: 0
+    hitStopTimeScale: 1
+    hitStopDuration: 0
+    trailEffectPrefab: {fileID: 0}
+    trailEffectLifetime: 0.6
+  soundMinIntervalRealtime: 0.04
+  cameraShakeMinIntervalRealtime: 0.08
+  hitStopMinIntervalRealtime: 0.08
+  projectileWarningLine: {fileID: 0}
+  projectileWarningMaterial: {fileID: 0}
+  projectileWarningColor: {r: 0.2, g: 0.85, b: 1, a: 0.86}
+  projectileWarningWidth: 0.08
+  projectileWarningStartYOffset: 0.7
+  projectileWarningEndYOffset: 0.35
 --- !u!4 &5989394478466620555
 Transform:
   m_ObjectHideFlags: 0

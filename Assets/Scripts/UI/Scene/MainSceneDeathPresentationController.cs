@@ -9,7 +9,7 @@ using UnityEngine.UI;
 public sealed class MainSceneDeathPresentationController : MonoBehaviour
 {
     const float DefaultFixedDeltaTime = 0.02f;
-    const int CanvasSortOrder = 6200;
+    const int CanvasSortOrder = 7000;
     static readonly WaitForEndOfFrame EndOfFrame = new WaitForEndOfFrame();
 
     [Header("Flow")]
@@ -66,6 +66,9 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
             _boundHealth.OnDied += HandlePlayerDied;
 
         EnsureOverlay();
+
+        if (_boundHealth != null && _boundHealth.IsDead)
+            HandlePlayerDied();
     }
 
     void OnDestroy()
@@ -135,6 +138,8 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
     {
         if (_canvas != null)
             return;
+
+        RuntimeUiInputUtility.EnsureEventSystem();
 
         _theme = themeOverride != null
             ? themeOverride
@@ -366,8 +371,8 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
         Time.timeScale = 0f;
         Time.fixedDeltaTime = DefaultFixedDeltaTime;
         AudioListener.pause = false;
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        RuntimeUiInputUtility.EnsureEventSystem();
+        RuntimeUiInputUtility.ForceMenuCursor();
         StartCursorRoutine();
     }
 
@@ -402,8 +407,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
 
     static void ForceDeathCursorState()
     {
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        RuntimeUiInputUtility.ForceMenuCursor();
     }
 
     void HideGameplayHud()

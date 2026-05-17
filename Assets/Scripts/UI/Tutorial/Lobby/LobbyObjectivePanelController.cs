@@ -95,6 +95,12 @@ public class LobbyObjectivePanelController : MonoBehaviour
     public void ConfigureRuntime(LobbyManager runtimeLobbyManager)
     {
         lobbyManager = runtimeLobbyManager;
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            SuppressPrototypeUi();
+            return;
+        }
+
         CacheQuestTexts();
         EnsureRuntimeVisuals();
         RefreshSubscriptions();
@@ -103,6 +109,14 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            if (lobbyManager == null)
+                lobbyManager = GetComponent<LobbyManager>();
+            SuppressPrototypeUi();
+            return;
+        }
+
         CacheQuestTexts();
         EnsureRuntimeVisuals();
         RefreshSubscriptions();
@@ -115,8 +129,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
         HideTransientCue();
         if (_cueGroup != null)
             _cueGroup.alpha = 0f;
-        SetLegacyQuestTextVisible(true);
-        SetLegacyQuestPanelVisible(true);
+        bool restoreLegacyQuest = ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled;
+        SetLegacyQuestTextVisible(restoreLegacyQuest);
+        SetLegacyQuestPanelVisible(restoreLegacyQuest);
     }
 
     void OnDestroy()
@@ -156,6 +171,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void HandleQuestUpdated(string title, string description)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+            return;
+
         EnsureRuntimeVisuals();
         _questTitle = title;
         _questDescription = description;
@@ -166,6 +184,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void HandleEnemyProgressUpdated(int current, int total)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+            return;
+
         _questDescription = "\uc801 \uc81c\uac70 " + current + " / " + Mathf.Max(1, total);
         ApplyQuestTexts();
         if (!_transientCueVisible)
@@ -174,6 +195,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void ApplyPhase(LobbyManager.LobbyFlowPhase phase, bool animated)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+            return;
+
         EnsureRuntimeVisuals();
         _currentPhase = phase;
 
@@ -233,6 +257,12 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void EnsureRuntimeVisuals()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            SuppressPrototypeUi();
+            return;
+        }
+
         CanvasGroup questPanel = lobbyManager != null ? lobbyManager.questPanelGroup : null;
         if (questPanel == null)
             return;
@@ -431,6 +461,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     public void ShowTransientCue(string title, string description)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
+            return;
+
         EnsureRuntimeVisuals();
         if (_cueGroup == null)
             return;
@@ -541,6 +574,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void ApplySupportTexts()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
+            return;
+
         EnsureTransientCueVisuals();
         if (_cueGroup == null)
             return;
@@ -570,6 +606,15 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void EnsureTransientCueVisuals()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
+        {
+            if (_cueRoot != null)
+                _cueRoot.gameObject.SetActive(false);
+            if (_cueGroup != null)
+                _cueGroup.alpha = 0f;
+            return;
+        }
+
         if (_runtimeCanvas == null)
             return;
 
@@ -1091,6 +1136,25 @@ public class LobbyObjectivePanelController : MonoBehaviour
             _sweepImage.color = new Color(1f, 1f, 1f, 0f);
         if (_iconRoot != null)
             _iconRoot.localScale = Vector3.one;
+    }
+
+    void SuppressPrototypeUi()
+    {
+        ReleaseSubscriptions();
+        HideImmediate();
+        HideTransientCue();
+
+        if (_runtimeRoot != null)
+            _runtimeRoot.gameObject.SetActive(false);
+        if (_hudRoot != null)
+            _hudRoot.gameObject.SetActive(false);
+        if (_cueRoot != null)
+            _cueRoot.gameObject.SetActive(false);
+        if (_cueGroup != null)
+            _cueGroup.alpha = 0f;
+
+        SetLegacyQuestTextVisible(false);
+        SetLegacyQuestPanelVisible(false);
     }
 
     static void StretchToParent(RectTransform rectTransform)

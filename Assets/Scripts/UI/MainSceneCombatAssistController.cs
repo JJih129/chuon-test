@@ -54,6 +54,12 @@ public class MainSceneCombatAssistController : MonoBehaviour
         BossBreakController runtimeBossBreakController,
         PlayerUltimateController runtimePlayerUltimateController)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+        {
+            ReleaseSubscriptions();
+            return;
+        }
+
         arrivalController = runtimeArrivalController;
         playerHud = runtimeHud;
         playerHealth = runtimePlayerHealth;
@@ -69,6 +75,12 @@ public class MainSceneCombatAssistController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+        {
+            ReleaseSubscriptions();
+            return;
+        }
+
         ResolveReferences();
         ResetRuntimeState();
         RefreshSubscriptions();
@@ -122,6 +134,9 @@ public class MainSceneCombatAssistController : MonoBehaviour
 
     void RefreshSubscriptions()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+            return;
+
         ReleaseSubscriptions();
         if (!_assistActive)
             return;

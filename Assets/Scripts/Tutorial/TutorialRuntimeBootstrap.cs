@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using Unity.Cinemachine;
 using UnityEngine;
@@ -11,11 +12,17 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 {
     const string TutorialScenePath = "Assets/Scenes/Tutorial.unity";
     const string CombatGirlEnemyPrefabPath = "Assets/Prefabs/Tutorial/TutorialCombatGirlEnemy.prefab";
+    const string AspCharacterShaderName = "ASP/Character";
+    const string AspCharacterMaterialResourcePath = "Tutorial/TutorialAspCharacterRuntime";
+    const int MaxBootstrapResolveFrames = 45;
+    const float MaxBootstrapResolveSeconds = 2f;
 
     TutorialFlowController _flowController;
     TutorialHintUIBridge _hintBridge;
     EGOGuideController _egoGuideController;
     TutorialPlayerRuntimeBridge _playerBridge;
+    bool _prototypeBuilt;
+    bool _flowStartRequested;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void RegisterSceneBootstrap()
@@ -44,15 +51,79 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             return;
         }
 
-        BuildRuntimePrototype();
+        if (!TryBuildRuntimePrototype())
+            StartCoroutine(CoBuildRuntimePrototypeWhenReady());
     }
 
     void Start()
     {
-        _flowController?.StartFlow();
+        _flowStartRequested = true;
+        TryStartFlow();
     }
 
-    void BuildRuntimePrototype()
+    IEnumerator CoBuildRuntimePrototypeWhenReady()
+    {
+        int frameCount = 0;
+        float startedAt = Time.unscaledTime;
+        while (!_prototypeBuilt &&
+               frameCount < MaxBootstrapResolveFrames &&
+               Time.unscaledTime - startedAt < MaxBootstrapResolveSeconds)
+        {
+            yield return null;
+            frameCount++;
+            TryBuildRuntimePrototype();
+        }
+
+        if (!_prototypeBuilt)
+        {
+            Debug.LogWarning("[TutorialRuntimeBootstrap] Player or Camera missing. Runtime tutorial bootstrap skipped; legacy tutorial remains active.", this);
+            enabled = false;
+        }
+    }
+
+    bool TryBuildRuntimePrototype()
+    {
+        if (_prototypeBuilt)
+            return true;
+
+        GameObject player = ResolvePlayerObject();
+        Camera mainCamera = ResolveMainCamera();
+        if (player == null || mainCamera == null)
+            return false;
+
+        BuildRuntimePrototype(player, mainCamera);
+        _prototypeBuilt = true;
+        TryStartFlow();
+        return true;
+    }
+
+    void TryStartFlow()
+    {
+        if (_flowStartRequested)
+            _flowController?.StartFlow();
+    }
+
+    static GameObject ResolvePlayerObject()
+    {
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+            return player;
+
+        PlayerMoveController moveController = FindFirstObjectByType<PlayerMoveController>();
+        if (moveController != null)
+            return moveController.gameObject;
+
+        PlayerHealth playerHealth = FindFirstObjectByType<PlayerHealth>();
+        return playerHealth != null ? playerHealth.gameObject : null;
+    }
+
+    static Camera ResolveMainCamera()
+    {
+        Camera mainCamera = Camera.main;
+        return mainCamera != null ? mainCamera : FindFirstObjectByType<Camera>();
+    }
+
+    void BuildRuntimePrototype(GameObject player, Camera mainCamera)
     {
         TutorialManager legacyTutorialManager = FindFirstObjectByType<TutorialManager>();
         if (legacyTutorialManager != null)
@@ -60,16 +131,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             // 湲곗〈 ?쒗넗由ъ뼹 ?ㅽ겕由쏀듃????UI 李몄“瑜??좎???梨?鍮꾪솢?깊솕留??쒕떎.
             // ?대젃寃??섎㈃ ???꾨줈?좏??낆씠 媛숈? 由ъ냼?ㅻ? ?ъ궗?⑺빐??湲곗〈 李몄“瑜?源⑥? ?딅뒗??
             TutorialManager.Instance = null;
+            legacyTutorialManager.StopAllCoroutines();
             legacyTutorialManager.enabled = false;
-        }
-
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        Camera mainCamera = Camera.main;
-        if (player == null || mainCamera == null)
-        {
-            Debug.LogWarning("[TutorialRuntimeBootstrap] Player or Camera missing. Prototype bootstrap aborted.", this);
-            enabled = false;
-            return;
         }
 
         GameObject questGoal = legacyTutorialManager != null ? legacyTutorialManager.movementGoal : GameObject.Find("QuestGoal");
@@ -174,8 +237,11 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialPresentationController presentationController = gameObject.AddComponent<TutorialPresentationController>();
         presentationController.ConfigureRuntime(_flowController, _playerBridge, tutorialCanvas);
 
-        TutorialDefenseFeedbackController defenseFeedbackController = gameObject.AddComponent<TutorialDefenseFeedbackController>();
-        defenseFeedbackController.ConfigureRuntime(_flowController, guardDummy, tutorialCanvas);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+        {
+            TutorialDefenseFeedbackController defenseFeedbackController = gameObject.AddComponent<TutorialDefenseFeedbackController>();
+            defenseFeedbackController.ConfigureRuntime(_flowController, guardDummy, tutorialCanvas);
+        }
 
         TutorialCombatCoachController combatCoachController = gameObject.AddComponent<TutorialCombatCoachController>();
         combatCoachController.ConfigureRuntime(_flowController, _egoGuideController, attackDummy, guardDummy);
@@ -197,26 +263,39 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             exitZone,
             sceneMoveObject != null ? sceneMoveObject.GetComponent<SceneLoadInteractable>() : null);
 
-        TutorialSupportFeedbackController supportFeedbackController = gameObject.AddComponent<TutorialSupportFeedbackController>();
-        supportFeedbackController.ConfigureRuntime(
-            _flowController,
-            _playerBridge,
-            tutorialCanvas,
-            movementGoalZone != null ? movementGoalZone.transform : null,
-            attackDummy != null ? attackDummy.transform : null,
-            exitZone != null ? exitZone.transform : null);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+        {
+            TutorialSupportFeedbackController supportFeedbackController = gameObject.AddComponent<TutorialSupportFeedbackController>();
+            supportFeedbackController.ConfigureRuntime(
+                _flowController,
+                _playerBridge,
+                tutorialCanvas,
+                movementGoalZone != null ? movementGoalZone.transform : null,
+                attackDummy != null ? attackDummy.transform : null,
+                exitZone != null ? exitZone.transform : null);
+        }
 
-        TutorialObjectivePanelController objectivePanelController = gameObject.AddComponent<TutorialObjectivePanelController>();
-        objectivePanelController.ConfigureRuntime(_flowController, _hintBridge);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialObjectiveControllerEnabled)
+        {
+            TutorialObjectivePanelController objectivePanelController = gameObject.AddComponent<TutorialObjectivePanelController>();
+            objectivePanelController.ConfigureRuntime(_flowController, _hintBridge);
+        }
 
-        TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
-        guideBeamController.ConfigureRuntime(
-            _flowController,
-            player.transform,
-            movementGoalZone != null ? movementGoalZone.transform : null,
-            exitZone != null ? exitZone.transform : null,
-            movementMarker,
-            exitMarker);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialGuidePathEnabled)
+        {
+            TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
+            guideBeamController.ConfigureRuntime(
+                _flowController,
+                player.transform,
+                movementGoalZone != null ? movementGoalZone.transform : null,
+                attackDummy != null ? attackDummy.transform : null,
+                guardDummy != null ? guardDummy.transform : null,
+                exitZone != null ? exitZone.transform : null,
+                movementMarker,
+                attackDummyMarker,
+                guardDummyMarker,
+                exitMarker);
+        }
 
         TutorialZoneHighlightController zoneHighlightController = gameObject.AddComponent<TutorialZoneHighlightController>();
         zoneHighlightController.ConfigureRuntime(_flowController, movementGoalZone, exitZone, player.transform);
@@ -281,6 +360,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             return null;
 
         TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
+        ApplyAspCharacterShaderToTutorialEnemy(dummyObject);
         TrainingDummyController controller = EnsureComponent<TrainingDummyController>(dummyObject);
         RemoveConflictingDamageReceivers(dummyObject, controller);
         Renderer renderer = visualRig != null && visualRig.PrimaryRenderer != null
@@ -360,6 +440,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             return null;
 
         TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
+        ApplyAspCharacterShaderToTutorialEnemy(dummyObject);
         Transform attackOrigin = dummyObject.transform;
         Transform firePoint = visualRig != null && visualRig.FirePoint != null
             ? visualRig.FirePoint
@@ -1148,6 +1229,98 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             EnsureRuntimeLockPivot(target);
 
         return visualRig;
+    }
+
+    static void ApplyAspCharacterShaderToTutorialEnemy(GameObject target)
+    {
+        if (target == null)
+            return;
+
+        Material template = Resources.Load<Material>(AspCharacterMaterialResourcePath);
+        Shader shader = template != null ? template.shader : Shader.Find(AspCharacterShaderName);
+        if (shader == null)
+            return;
+
+        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            return;
+
+        Dictionary<Material, Material> convertedMaterials = new Dictionary<Material, Material>(renderers.Length);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || renderer is LineRenderer)
+                continue;
+
+            Material[] materials = renderer.sharedMaterials;
+            bool changed = false;
+            for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
+            {
+                Material source = materials[materialIndex];
+                if (source == null || source.shader == shader)
+                    continue;
+
+                if (!convertedMaterials.TryGetValue(source, out Material converted) || converted == null)
+                {
+                    converted = CreateAspRuntimeMaterial(source, template, shader);
+                    convertedMaterials[source] = converted;
+                }
+
+                materials[materialIndex] = converted;
+                changed = true;
+            }
+
+            if (changed)
+                renderer.sharedMaterials = materials;
+        }
+    }
+
+    static Material CreateAspRuntimeMaterial(Material source, Material template, Shader shader)
+    {
+        Material material = new Material(template != null ? template : source)
+        {
+            shader = shader,
+            name = source.name + "_ASP_Runtime"
+        };
+
+        CopyTextureIfPresent(source, material, "_BaseMap", "_MainTex");
+        CopyTextureIfPresent(source, material, "_EmissionMap", "_EmissionMap");
+        CopyColorIfPresent(source, material, "_BaseColor", "_Color", Color.white);
+        CopyColorIfPresent(source, material, "_Color", "_BaseColor", Color.white);
+        if (material.HasProperty("_style"))
+            material.SetFloat("_style", 1f);
+        if (material.HasProperty("_EmissionToggle"))
+            material.SetFloat("_EmissionToggle", 1f);
+
+        return material;
+    }
+
+    static void CopyTextureIfPresent(Material source, Material target, string targetProperty, string fallbackSourceProperty)
+    {
+        if (source == null || target == null || !target.HasProperty(targetProperty))
+            return;
+
+        Texture texture = null;
+        if (source.HasProperty(targetProperty))
+            texture = source.GetTexture(targetProperty);
+        if (texture == null && source.HasProperty(fallbackSourceProperty))
+            texture = source.GetTexture(fallbackSourceProperty);
+        if (texture != null)
+            target.SetTexture(targetProperty, texture);
+    }
+
+    static void CopyColorIfPresent(Material source, Material target, string targetProperty, string fallbackSourceProperty, Color defaultColor)
+    {
+        if (source == null || target == null || !target.HasProperty(targetProperty))
+            return;
+
+        Color color = defaultColor;
+        if (source.HasProperty(targetProperty))
+            color = source.GetColor(targetProperty);
+        else if (source.HasProperty(fallbackSourceProperty))
+            color = source.GetColor(fallbackSourceProperty);
+
+        target.SetColor(targetProperty, color);
     }
 
     void ApplyLayerRecursively(Transform root, int layer)

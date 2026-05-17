@@ -27,6 +27,7 @@ public class PauseMenuView : MonoBehaviour
     [Header("Unified Settings Overlay")]
     [SerializeField] bool useUnifiedSettingsOverlay = true;
     [SerializeField] string unifiedSettingsPrefabResourcePath = UnifiedSettingsPrefabResourcePath;
+    [SerializeField] bool debugLog = true;
 
     GameObject settingsContentInstance;
     RectTransform settingsContentVisualRoot;
@@ -35,6 +36,7 @@ public class PauseMenuView : MonoBehaviour
     RectTransform settingsOverlayHostRect;
     TitleSettingsOverlay unifiedSettingsOverlay;
     GameObject unifiedSettingsPrefab;
+    Tween hideTween;
 
     void Awake()
     {
@@ -53,6 +55,8 @@ public class PauseMenuView : MonoBehaviour
     {
         if (menuRoot != null)
             menuRoot.SetActive(false);
+
+        RuntimeUiInputUtility.RestoreModalInput();
 
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
@@ -75,6 +79,8 @@ public class PauseMenuView : MonoBehaviour
             {
                 menuCanvasGroup.DOKill();
                 menuCanvasGroup.alpha = 0f;
+                menuCanvasGroup.interactable = false;
+                menuCanvasGroup.blocksRaycasts = false;
             }
         }
     }
@@ -83,6 +89,10 @@ public class PauseMenuView : MonoBehaviour
     {
         if (menuRoot == null || backgroundGroup == null || menuContainer == null)
             return;
+
+        KillHideTween();
+        Canvas pauseCanvas = PromoteCanvasForMenu();
+        RuntimeUiInputUtility.BeginModalInput(pauseCanvas);
 
         if (unifiedSettingsOverlay != null)
             unifiedSettingsOverlay.Hide();
@@ -110,7 +120,20 @@ public class PauseMenuView : MonoBehaviour
         if (menuCanvasGroup != null)
         {
             menuCanvasGroup.alpha = 0f;
+            menuCanvasGroup.interactable = true;
+            menuCanvasGroup.blocksRaycasts = true;
             menuCanvasGroup.DOFade(1f, 0.3f).SetUpdate(true);
+        }
+
+        if (debugLog)
+        {
+            string menuGroupAlpha = menuCanvasGroup != null ? menuCanvasGroup.alpha.ToString("0.00") : "none";
+            string canvasName = pauseCanvas != null ? pauseCanvas.name : "null";
+            int canvasSort = pauseCanvas != null ? pauseCanvas.sortingOrder : -1;
+            Debug.Log(
+                $"[PauseUI] Show menuRoot={menuRoot.activeInHierarchy} bg={backgroundGroup.alpha:0.00}/{backgroundGroup.interactable}/{backgroundGroup.blocksRaycasts} " +
+                $"menuGroup={menuGroupAlpha}/{(menuCanvasGroup != null && menuCanvasGroup.interactable)}/{(menuCanvasGroup != null && menuCanvasGroup.blocksRaycasts)} " +
+                $"canvas={canvasName} sort={canvasSort} cursor={Cursor.visible}/{Cursor.lockState}");
         }
     }
 
@@ -122,6 +145,8 @@ public class PauseMenuView : MonoBehaviour
             return;
         }
 
+        KillHideTween();
+
         if (unifiedSettingsOverlay != null)
             unifiedSettingsOverlay.Hide();
 
@@ -132,11 +157,42 @@ public class PauseMenuView : MonoBehaviour
         if (menuCanvasGroup != null)
             menuCanvasGroup.DOFade(0f, 0.2f).SetUpdate(true);
 
-        DOVirtual.DelayedCall(0.25f, () =>
+        hideTween = DOVirtual.DelayedCall(0.25f, () =>
         {
+            hideTween = null;
             ApplyHiddenState();
             onComplete?.Invoke();
         }).SetUpdate(true);
+    }
+
+    public void HideMenuImmediate()
+    {
+        KillHideTween();
+        ApplyHiddenState();
+    }
+
+    void KillHideTween()
+    {
+        if (hideTween == null)
+            return;
+
+        hideTween.Kill();
+        hideTween = null;
+    }
+
+    Canvas PromoteCanvasForMenu()
+    {
+        Canvas canvas = GetComponentInParent<Canvas>(true);
+        if (canvas == null)
+            return null;
+
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 6500;
+        GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
+        if (raycaster != null)
+            raycaster.enabled = true;
+
+        return canvas;
     }
 
     public void ToggleSettings(bool isOpen)

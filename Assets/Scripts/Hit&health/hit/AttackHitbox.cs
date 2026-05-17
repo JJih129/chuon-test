@@ -19,6 +19,7 @@ public class AttackHitbox : MonoBehaviour
     [Header("Attacker")]
     public Transform attackerRoot;
     public int attackSequenceId;
+    public event System.Action<HitPayload> HitApplied;
 
     [Header("Filters")]
     public LayerMask hitLayers = ~0;
@@ -436,6 +437,7 @@ public class AttackHitbox : MonoBehaviour
             Debug.Log($"[AttackHitbox] Hit {receiver} | dmg={payload.damage} type={payload.hitType}", this);
 
         receiver.ReceiveHit(payload);
+        HitApplied?.Invoke(payload);
     }
 
     void ScanExpandedTargets()

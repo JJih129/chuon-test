@@ -109,6 +109,8 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] float bossRevealCloseUpHeight = 1.55f;
     [SerializeField] float bossRevealCloseUpLookHeight = 1.45f;
     [SerializeField] bool bossRevealCloseUpTracksMovingBoss = true;
+    [SerializeField] bool timelineBossRevealCameraTracksMovingBoss = true;
+    [SerializeField] string timelineBossRevealCameraName = "VCam_MainIntro_BossReveal";
     [SerializeField] bool useBossIntroHologram = true;
     [SerializeField] bool hideBossVisualUntilReveal = true;
     [SerializeField] bool moveBossFromHiddenStartOnReveal = true;
@@ -256,6 +258,10 @@ public class MainSceneArrivalController : MonoBehaviour
     Vector3[] _elevatorDoorPanelClosedPositions;
     int _bossRevealCloseUpOldPriority;
     bool _bossRevealCloseUpPriorityRaised;
+    CinemachineCamera _timelineBossRevealCamera;
+    Transform _timelineBossRevealTrackedBoss;
+    Transform _timelineBossRevealTrackedPlayer;
+    bool _timelineBossRevealCameraTracking;
     static readonly int HologramColorId = Shader.PropertyToID("_Hologram_Color");
     static readonly int TextureTintColorId = Shader.PropertyToID("_Texture_Tint_Color");
 
@@ -337,6 +343,7 @@ public class MainSceneArrivalController : MonoBehaviour
     void OnDisable()
     {
         ReleaseSubscriptions();
+        StopTimelineBossRevealCameraTracking();
         StopBossRevealCloseUp();
         StopAlarmSirenCue();
         StopBossRevealWalk();
@@ -362,6 +369,7 @@ public class MainSceneArrivalController : MonoBehaviour
     void OnDestroy()
     {
         ReleaseSubscriptions();
+        StopTimelineBossRevealCameraTracking();
         StopBossRevealCloseUp();
         StopAlarmSirenCue();
         StopBossRevealWalk();
@@ -375,6 +383,11 @@ public class MainSceneArrivalController : MonoBehaviour
         ReleaseHeldPlayerWalkEndPose();
         SetBossIntroPaused(false);
         HideIntroDialogue();
+    }
+
+    void LateUpdate()
+    {
+        UpdateTimelineBossRevealCameraTracking();
     }
 
     IEnumerator CoPlayArrivalSequence()
@@ -552,6 +565,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
     public void TimelineBossReveal()
     {
+        StartTimelineBossRevealCameraTracking();
         PlayIntroEvent(IntroEvent.BossIdentify);
     }
 
@@ -587,6 +601,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void RestoreGameplayAfterTimelineIntro()
     {
+        StopTimelineBossRevealCameraTracking();
         StopBossRevealCloseUp();
         EndElevatorIntroCinematicCamera();
         SetBossIntroPaused(false);
@@ -1513,7 +1528,11 @@ public class MainSceneArrivalController : MonoBehaviour
             RaiseBossRevealCloseUpCameraPriority(revealCamera);
         }
 
-        yield return StartCoroutine(CoBlendCameraPose(cameraTransform, startPosition, startRotation, targetPosition, targetRotation, bossRevealCloseUpBlendIn));
+        if (bossRevealCloseUpTracksMovingBoss)
+            yield return StartCoroutine(CoBlendBossRevealCloseUpPose(cameraTransform, bossRoot, playerRoot, startPosition, startRotation, bossRevealCloseUpBlendIn));
+        else
+            yield return StartCoroutine(CoBlendCameraPose(cameraTransform, startPosition, startRotation, targetPosition, targetRotation, bossRevealCloseUpBlendIn));
+
         if (bossRevealCloseUpHold > 0f)
         {
             float holdElapsed = 0f;
@@ -1576,6 +1595,89 @@ public class MainSceneArrivalController : MonoBehaviour
             side * bossRevealCloseUpSideOffset +
             Vector3.up * bossRevealCloseUpHeight;
         rotation = Quaternion.LookRotation(lookAt - position, Vector3.up);
+    }
+
+    IEnumerator CoBlendBossRevealCloseUpPose(Transform cameraTransform, Transform bossRoot, Transform playerRoot, Vector3 startPosition, Quaternion startRotation, float duration)
+    {
+        if (cameraTransform == null || bossRoot == null)
+            yield break;
+
+        if (duration <= 0f)
+        {
+            ResolveBossRevealCloseUpPose(bossRoot, playerRoot, out Vector3 immediatePosition, out Quaternion immediateRotation);
+            cameraTransform.SetPositionAndRotation(immediatePosition, immediateRotation);
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            ResolveBossRevealCloseUpPose(bossRoot, playerRoot, out Vector3 targetPosition, out Quaternion targetRotation);
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = t * t * (3f - 2f * t);
+            cameraTransform.SetPositionAndRotation(
+                Vector3.LerpUnclamped(startPosition, targetPosition, eased),
+                Quaternion.SlerpUnclamped(startRotation, targetRotation, eased));
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        ResolveBossRevealCloseUpPose(bossRoot, playerRoot, out Vector3 finalPosition, out Quaternion finalRotation);
+        cameraTransform.SetPositionAndRotation(finalPosition, finalRotation);
+    }
+
+    void StartTimelineBossRevealCameraTracking()
+    {
+        StopTimelineBossRevealCameraTracking();
+        if (!timelineBossRevealCameraTracksMovingBoss)
+            return;
+
+        _timelineBossRevealCamera = ResolveTimelineBossRevealCamera();
+        _timelineBossRevealTrackedBoss = ResolveBossRoot();
+        _timelineBossRevealTrackedPlayer = ResolvePlayerFacingRoot();
+        _timelineBossRevealCameraTracking = _timelineBossRevealCamera != null && _timelineBossRevealTrackedBoss != null;
+
+        if (_timelineBossRevealCameraTracking)
+            UpdateTimelineBossRevealCameraTracking();
+    }
+
+    void StopTimelineBossRevealCameraTracking()
+    {
+        _timelineBossRevealCameraTracking = false;
+        _timelineBossRevealTrackedBoss = null;
+        _timelineBossRevealTrackedPlayer = null;
+    }
+
+    void UpdateTimelineBossRevealCameraTracking()
+    {
+        if (!_timelineBossRevealCameraTracking)
+            return;
+
+        if (_timelineBossRevealCamera == null || _timelineBossRevealTrackedBoss == null)
+        {
+            StopTimelineBossRevealCameraTracking();
+            return;
+        }
+
+        if (_timelineBossRevealTrackedPlayer == null)
+            _timelineBossRevealTrackedPlayer = ResolvePlayerFacingRoot();
+
+        ResolveBossRevealCloseUpPose(_timelineBossRevealTrackedBoss, _timelineBossRevealTrackedPlayer, out Vector3 position, out Quaternion rotation);
+        _timelineBossRevealCamera.Follow = null;
+        _timelineBossRevealCamera.LookAt = null;
+        _timelineBossRevealCamera.transform.SetPositionAndRotation(position, rotation);
+    }
+
+    CinemachineCamera ResolveTimelineBossRevealCamera()
+    {
+        if (_timelineBossRevealCamera != null)
+            return _timelineBossRevealCamera;
+
+        if (bossIntroDirector == null || string.IsNullOrWhiteSpace(timelineBossRevealCameraName))
+            return null;
+
+        Transform cameraTransform = bossIntroDirector.transform.Find(timelineBossRevealCameraName);
+        return cameraTransform != null ? cameraTransform.GetComponent<CinemachineCamera>() : null;
     }
 
     CinemachineCamera EnsureBossRevealCloseUpCamera()

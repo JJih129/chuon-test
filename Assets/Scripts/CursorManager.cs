@@ -5,8 +5,8 @@ public class CursorManager : MonoBehaviour
     public static CursorManager Instance { get; private set; }
 
     [Header("Settings")]
-    public bool lockOnStart = true;     // 시작 시 자동 락
-    public bool escToggle = true;       // ESC로 토글 허용(디버그/메뉴용)
+    public bool lockOnStart = true;
+    public bool escToggle = true;
 
     void Awake()
     {
@@ -15,20 +15,37 @@ public class CursorManager : MonoBehaviour
             Destroy(gameObject);
             return;
         }
+
         Instance = this;
         DontDestroyOnLoad(gameObject);
 
-        if (lockOnStart) Lock();
+        if (lockOnStart)
+            Lock();
     }
 
     void Update()
     {
-        if (!escToggle) return;
+        if (!escToggle)
+            return;
+
+        if (PauseManager.Instance != null && PauseManager.Instance.IsPaused)
+        {
+            RuntimeUiInputUtility.ForceMenuCursor();
+            return;
+        }
+
+        if (Time.timeScale <= 0f)
+        {
+            RuntimeUiInputUtility.ForceMenuCursor();
+            return;
+        }
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (Cursor.lockState == CursorLockMode.Locked) Unlock();
-            else Lock();
+            if (Cursor.lockState == CursorLockMode.Locked)
+                Unlock();
+            else
+                Lock();
         }
     }
 

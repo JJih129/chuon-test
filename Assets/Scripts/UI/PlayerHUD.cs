@@ -26,6 +26,12 @@ public class PlayerHUD : MonoBehaviour
     [SerializeField] Sprite chuOnUltimateGaugeSprite;
     [SerializeField] bool applyChuOnUltimateGaugeSkin = true;
 
+    [Header("Ultimate Gauge Text")]
+    [SerializeField] Text ultimateGaugePercentText;
+    [SerializeField] bool showUltimateGaugePercent = true;
+    [SerializeField] int ultimateGaugePercentFontSize = 18;
+    [SerializeField] Color ultimateGaugePercentTextColor = new Color(0.86f, 1f, 1f, 0.98f);
+
     [Header("Guard Strain")]
     [Tooltip("직렬화된 가드 안정도 Fill 이미지가 있으면 우선 사용")]
     public Image guardStrainFillImage;
@@ -146,6 +152,7 @@ public class PlayerHUD : MonoBehaviour
     PlayerConsumables _boundConsumables;
     PlayerGuardController _boundGuard;
     BossController _boundBoss;
+    PlayerUltimateController _boundUltimate;
 
     CanvasGroup _guardCanvasGroup;
     RectTransform _guardRoot;
@@ -186,6 +193,9 @@ public class PlayerHUD : MonoBehaviour
     float _parryCounterFlashUntilTime;
     float _punishWindowDuration;
     float _punishWindowDamageMultiplier = 1f;
+    int _lastUltimateGaugePercent = -1;
+
+    static string[] s_ultimateGaugePercentLabels;
 
     const string RuntimeGuardRootName = "_RuntimeGuardStrainBar";
     const string RuntimeGuardTrackName = "_Track";
@@ -203,6 +213,7 @@ public class PlayerHUD : MonoBehaviour
     const string RuntimePunishWindowTextName = "_Text";
     const string RuntimePerformanceHudRootName = "_RuntimePerformanceHUD";
     const string RuntimePerformanceHudTextName = "_Text";
+    const string RuntimeUltimateGaugePercentTextName = "_PercentText";
     const string LegacyChuOnHudFrameName = "_ChuOnHudPlayerFrame";
     const string ChuOnHudFramePath = "UI/HUD/chuon_hud_player";
     const string ChuOnHpGaugePath = "UI/HUD/chuon_hud_player_hpgauge";
@@ -224,7 +235,7 @@ public class PlayerHUD : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(performanceHudToggleKey))
+        if (ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled && Input.GetKeyDown(performanceHudToggleKey))
         {
             showPerformanceHud = !showPerformanceHud;
             if (!showPerformanceHud && _performanceHudRoot != null)
@@ -275,7 +286,7 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
-    public void Bind(IHealth health, PlayerConsumables consumables = null, PlayerGuardController guard = null, BossController boss = null)
+    public void Bind(IHealth health, PlayerConsumables consumables = null, PlayerGuardController guard = null, BossController boss = null, PlayerUltimateController ultimate = null)
     {
         ApplyChuOnHudSkin();
         Unbind();
@@ -307,6 +318,7 @@ public class PlayerHUD : MonoBehaviour
 
         BindGuard(guard);
         BindBoss(boss);
+        BindUltimate(ultimate != null ? ultimate : GameplaySceneCache.ResolvePlayerUltimateController());
     }
 
     void ApplyChuOnHudSkin()
@@ -452,11 +464,15 @@ public class PlayerHUD : MonoBehaviour
 
         UnbindGuard();
         UnbindBoss();
+        UnbindUltimate();
         hpFillImage?.DOKill();
     }
 
     public void ShowRuntimeTelegraphMessage(string message, AttackTelegraphType telegraphType = AttackTelegraphType.Auto, float holdTime = 0.72f, bool useDangerFeedback = false, int priority = 0)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+            return;
+
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -586,6 +602,118 @@ public class PlayerHUD : MonoBehaviour
 
         if (_punishWindowRoot != null)
             _punishWindowRoot.localScale = Vector3.one;
+    }
+
+    void EnsureUltimateGaugePercentVisual()
+    {
+        if (!showUltimateGaugePercent)
+        {
+            if (ultimateGaugePercentText != null)
+                ultimateGaugePercentText.gameObject.SetActive(false);
+            return;
+        }
+
+        if (ultimateGaugePercentText == null)
+        {
+            RectTransform parent = ResolveUltimateGaugeTextParent();
+            if (parent == null)
+                return;
+
+            RectTransform textRect = parent.Find(RuntimeUltimateGaugePercentTextName) as RectTransform;
+            if (textRect == null)
+            {
+                GameObject textGo = new GameObject(RuntimeUltimateGaugePercentTextName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+                textRect = textGo.GetComponent<RectTransform>();
+                textRect.SetParent(parent, false);
+            }
+
+            ultimateGaugePercentText = textRect.GetComponent<Text>();
+            if (ultimateGaugePercentText == null)
+                ultimateGaugePercentText = textRect.gameObject.AddComponent<Text>();
+        }
+
+        RectTransform rect = ultimateGaugePercentText.rectTransform;
+        StretchToParent(rect);
+        rect.SetAsLastSibling();
+
+        ultimateGaugePercentText.alignment = TextAnchor.MiddleCenter;
+        ultimateGaugePercentText.font = ResolveRuntimeFont();
+        ultimateGaugePercentText.fontSize = Mathf.Max(10, ultimateGaugePercentFontSize);
+        ultimateGaugePercentText.fontStyle = FontStyle.Bold;
+        ultimateGaugePercentText.horizontalOverflow = HorizontalWrapMode.Overflow;
+        ultimateGaugePercentText.verticalOverflow = VerticalWrapMode.Overflow;
+        ultimateGaugePercentText.color = ultimateGaugePercentTextColor;
+        ultimateGaugePercentText.raycastTarget = false;
+        ultimateGaugePercentText.gameObject.SetActive(true);
+    }
+
+    RectTransform ResolveUltimateGaugeTextParent()
+    {
+        UI_UltimateGauge[] gauges = FindObjectsOfType<UI_UltimateGauge>(true);
+        Canvas hudCanvas = hpFillImage != null ? hpFillImage.canvas : null;
+        RectTransform fallback = null;
+
+        for (int i = 0; i < gauges.Length; i++)
+        {
+            Image fill = gauges[i] != null ? gauges[i].fill : null;
+            RectTransform fillRect = fill != null ? fill.rectTransform : null;
+            if (fillRect == null)
+                continue;
+
+            if (fallback == null)
+                fallback = fillRect;
+
+            if (hudCanvas == null || fill.canvas == hudCanvas)
+                return fillRect;
+        }
+
+        return fallback;
+    }
+
+    void HandleUltimateGaugeChanged(float gauge, float normalized, bool ready)
+    {
+        SetUltimateGaugePercent(normalized);
+    }
+
+    void SetUltimateGaugePercent(float normalized)
+    {
+        EnsureUltimateGaugePercentVisual();
+        if (ultimateGaugePercentText == null)
+            return;
+
+        int percent = Mathf.Clamp(Mathf.RoundToInt(Mathf.Clamp01(normalized) * 100f), 0, 100);
+        if (_lastUltimateGaugePercent == percent)
+            return;
+
+        _lastUltimateGaugePercent = percent;
+        ultimateGaugePercentText.text = GetUltimateGaugePercentLabel(percent);
+    }
+
+    void BindUltimate(PlayerUltimateController ultimate)
+    {
+        _boundUltimate = ultimate;
+        EnsureUltimateGaugePercentVisual();
+
+        if (_boundUltimate == null)
+        {
+            SetUltimateGaugePercent(0f);
+            return;
+        }
+
+        _boundUltimate.OnGaugeChanged += HandleUltimateGaugeChanged;
+        HandleUltimateGaugeChanged(
+            _boundUltimate.Gauge,
+            _boundUltimate.gaugeMax > 0f ? Mathf.Clamp01(_boundUltimate.Gauge / _boundUltimate.gaugeMax) : 0f,
+            _boundUltimate.IsGaugeReady);
+    }
+
+    void UnbindUltimate()
+    {
+        if (_boundUltimate != null)
+            _boundUltimate.OnGaugeChanged -= HandleUltimateGaugeChanged;
+
+        _boundUltimate = null;
+        _lastUltimateGaugePercent = -1;
     }
 
     void UpdateGuardStrainVisual()
@@ -761,6 +889,9 @@ public class PlayerHUD : MonoBehaviour
 
     void HandleAttackTelegraph(AttackTelegraphType telegraphType, float leadTime, string label)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+            return;
+
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -790,6 +921,9 @@ public class PlayerHUD : MonoBehaviour
 
     void HandlePunishWindowOpened(float duration, float damageMultiplier, string patternName)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+            return;
+
         EnsureCombatTelegraphVisuals();
         EnsurePunishWindowVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
@@ -835,6 +969,9 @@ public class PlayerHUD : MonoBehaviour
 
     void HandleBossPhaseChanged(int phase, float hpNormalized)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+            return;
+
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -1272,7 +1409,7 @@ public class PlayerHUD : MonoBehaviour
 
     void UpdatePerformanceHud()
     {
-        if (!showPerformanceHud)
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled || !showPerformanceHud)
         {
             if (_performanceHudRoot != null)
                 _performanceHudRoot.gameObject.SetActive(false);
@@ -1316,7 +1453,7 @@ public class PlayerHUD : MonoBehaviour
 
     void EnsurePerformanceHudVisuals()
     {
-        if (!showPerformanceHud || hpFillImage == null)
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled || !showPerformanceHud || hpFillImage == null)
             return;
 
         if (_performanceHudRoot != null && _performanceHudText != null)
@@ -1574,6 +1711,18 @@ public class PlayerHUD : MonoBehaviour
     static Font ResolveRuntimeFont()
     {
         return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+    }
+
+    static string GetUltimateGaugePercentLabel(int percent)
+    {
+        if (s_ultimateGaugePercentLabels == null)
+        {
+            s_ultimateGaugePercentLabels = new string[101];
+            for (int i = 0; i < s_ultimateGaugePercentLabels.Length; i++)
+                s_ultimateGaugePercentLabels[i] = i + "%";
+        }
+
+        return s_ultimateGaugePercentLabels[Mathf.Clamp(percent, 0, 100)];
     }
 
     static bool Approximately(Color a, Color b)

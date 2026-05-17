@@ -68,6 +68,13 @@ public class MainSceneBossStatusController : MonoBehaviour
         BossBreakController runtimeBossBreakController,
         PlayerUltimateController runtimePlayerUltimateController)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeBossStatusPanelEnabled)
+        {
+            HidePanel();
+            enabled = false;
+            return;
+        }
+
         bossUiController = runtimeBossUiController;
         bossController = runtimeBossController;
         bossBreakController = runtimeBossBreakController;
@@ -80,6 +87,13 @@ public class MainSceneBossStatusController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeBossStatusPanelEnabled)
+        {
+            HidePanel();
+            enabled = false;
+            return;
+        }
+
         NormalizeCompactLayout();
         EnsureVisuals();
         RefreshSubscriptions();
@@ -89,6 +103,7 @@ public class MainSceneBossStatusController : MonoBehaviour
     {
         ReleaseSubscriptions();
         StopPulse();
+        HidePanel();
     }
 
     void OnDestroy()
@@ -164,6 +179,12 @@ public class MainSceneBossStatusController : MonoBehaviour
         }
 
         _subscribed = false;
+    }
+
+    void HidePanel()
+    {
+        if (_root != null)
+            _root.gameObject.SetActive(false);
     }
 
     void HandleBossPhaseChanged(int phase, float hpNormalized)

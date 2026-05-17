@@ -187,10 +187,10 @@ public class LobbyManager : MonoBehaviour
         if (presentationController == null)
             presentationController = gameObject.AddComponent<LobbyPresentationController>();
         _combatCoachController = GetComponent<LobbyCombatCoachController>();
-        if (_combatCoachController == null)
+        if (_combatCoachController == null && ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
             _combatCoachController = gameObject.AddComponent<LobbyCombatCoachController>();
         _objectivePanelController = GetComponent<LobbyObjectivePanelController>();
-        if (_objectivePanelController == null)
+        if (_objectivePanelController == null && ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
             _objectivePanelController = gameObject.AddComponent<LobbyObjectivePanelController>();
     }
 
@@ -835,10 +835,7 @@ public class LobbyManager : MonoBehaviour
 
         DroneController controller = drone.GetComponent<DroneController>();
         if (controller != null)
-        {
             controller.droneRenderer = simpleRenderer;
-            controller.enabled = false;
-        }
 
         BoxCollider hitCollider = drone.GetComponent<BoxCollider>();
         if (hitCollider != null)
@@ -1343,6 +1340,14 @@ public class LobbyManager : MonoBehaviour
         if (questPanelGroup == null)
             return;
 
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            questPanelGroup.alpha = 0f;
+            questPanelGroup.interactable = false;
+            questPanelGroup.blocksRaycasts = false;
+            return;
+        }
+
         if (_objectivePanelController != null)
         {
             questPanelGroup.alpha = 0f;
@@ -1358,6 +1363,9 @@ public class LobbyManager : MonoBehaviour
 
     public void ShowTransientQuestCue(string title, string description, float holdDuration = 1.8f, bool flashAlert = false)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
+            return;
+
         if (_transientQuestCueRoutine != null)
             StopCoroutine(_transientQuestCueRoutine);
 
@@ -1382,7 +1390,7 @@ public class LobbyManager : MonoBehaviour
 
     void ConfigureCombatCoachController()
     {
-        if (_combatCoachController == null)
+        if (_combatCoachController == null || !ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
             return;
 
         GameObject player = GameObject.FindWithTag("Player");
@@ -1392,7 +1400,7 @@ public class LobbyManager : MonoBehaviour
 
     void ConfigureObjectivePanelController()
     {
-        if (_objectivePanelController == null)
+        if (_objectivePanelController == null || !ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
             return;
 
         _objectivePanelController.ConfigureRuntime(this);

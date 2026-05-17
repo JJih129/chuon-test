@@ -63,6 +63,8 @@ public class BulletProjectile : MonoBehaviour
     {
         if (other == null) return;
         if (owner != null && (other.gameObject == owner || other.transform.IsChildOf(owner.transform))) return;
+        if (IsFriendlyDroneHit(other))
+            return;
 
         if (debugLogs)
             Debug.Log($"[BulletProjectile] Collided with {other.gameObject.name}", this);
@@ -98,6 +100,19 @@ public class BulletProjectile : MonoBehaviour
         if (debugLogs)
             Debug.Log("[BulletProjectile] No damage target found for " + other.gameObject.name, this);
         ReleaseSelf();
+    }
+
+    bool IsFriendlyDroneHit(Collider other)
+    {
+        if (owner == null || other == null)
+            return false;
+
+        DroneController ownerDrone = owner.GetComponentInParent<DroneController>();
+        if (ownerDrone == null)
+            return false;
+
+        DroneController hitDrone = other.GetComponentInParent<DroneController>();
+        return hitDrone != null && hitDrone != ownerDrone;
     }
 
     HitPayload CreateHitPayload()

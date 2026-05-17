@@ -29,6 +29,8 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     [SerializeField] bool useCollisionAwareMovement = true;
     [SerializeField] LayerMask movementCollisionMask = ~0;
     [SerializeField, Min(0f)] float movementSkin = 0.04f;
+    [SerializeField] bool createRuntimeMovementColliderIfMissing = true;
+    [SerializeField] Vector3 runtimeMovementColliderSize = new Vector3(1.2f, 0.9f, 1.2f);
 
     [Header("Combat Movement")]
     [SerializeField, Min(0.1f)] float combatDistanceTolerance = 1.4f;
@@ -145,6 +147,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     Coroutine _deathRoutine;
     Collider[] _cachedColliders;
     Collider _movementCollider;
+    BoxCollider _runtimeMovementCollider;
     readonly RaycastHit[] _movementCastHits = new RaycastHit[8];
     Vector3 _initialLocalScale;
 
@@ -663,7 +666,10 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     {
         _movementCollider = null;
         if (_cachedColliders == null || _cachedColliders.Length == 0)
+        {
+            EnsureRuntimeMovementCollider();
             return;
+        }
 
         for (int i = 0; i < _cachedColliders.Length; i++)
         {
@@ -674,6 +680,27 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             _movementCollider = col;
             return;
         }
+
+        EnsureRuntimeMovementCollider();
+    }
+
+    void EnsureRuntimeMovementCollider()
+    {
+        if (!createRuntimeMovementColliderIfMissing)
+            return;
+
+        if (_runtimeMovementCollider == null)
+            _runtimeMovementCollider = GetComponent<BoxCollider>();
+
+        if (_runtimeMovementCollider == null)
+            _runtimeMovementCollider = gameObject.AddComponent<BoxCollider>();
+
+        _runtimeMovementCollider.isTrigger = false;
+        _runtimeMovementCollider.center = Vector3.zero;
+        _runtimeMovementCollider.size = MaxVector(AbsVector(runtimeMovementColliderSize), Vector3.one * 0.1f);
+        _runtimeMovementCollider.enabled = true;
+        _movementCollider = _runtimeMovementCollider;
+        _cachedColliders = GetComponentsInChildren<Collider>(true);
     }
 
     Renderer ResolvePrimaryRenderer()

@@ -21,6 +21,9 @@ public sealed class CombatDebugHudRuntime : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Bootstrap()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
+            return;
+
         if (!Application.isEditor && !Debug.isDebugBuild)
             return;
 
@@ -76,6 +79,12 @@ public sealed class CombatDebugHudRuntime : MonoBehaviour
 
     void Awake()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         if (_instance != null && _instance != this)
         {
             Destroy(gameObject);
@@ -99,6 +108,9 @@ public sealed class CombatDebugHudRuntime : MonoBehaviour
 
     void Initialize()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
+            return;
+
         if (_initialized)
             return;
 
@@ -120,6 +132,14 @@ public sealed class CombatDebugHudRuntime : MonoBehaviour
 
     void Update()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
+        {
+            if (_canvas != null)
+                _canvas.enabled = false;
+            enabled = false;
+            return;
+        }
+
         if (Input.GetKeyDown(toggleKey))
         {
             _visible = !_visible;

@@ -8,8 +8,12 @@ public class TutorialGuideBeamController : MonoBehaviour
     [SerializeField] private TutorialFlowController flowController;
     [SerializeField] private Transform playerRoot;
     [SerializeField] private Transform movementTarget;
+    [SerializeField] private Transform attackTarget;
+    [SerializeField] private Transform guardTarget;
     [SerializeField] private Transform exitTarget;
     [SerializeField] private TutorialWorldMarker movementMarker;
+    [SerializeField] private TutorialWorldMarker attackMarker;
+    [SerializeField] private TutorialWorldMarker guardMarker;
     [SerializeField] private TutorialWorldMarker exitMarker;
 
     [Header("Layout")]
@@ -62,6 +66,8 @@ public class TutorialGuideBeamController : MonoBehaviour
 
     [Header("Colors")]
     [SerializeField] private Color movementColor = new Color(0.18f, 0.85f, 1f, 0.9f);
+    [SerializeField] private Color attackColor = new Color(0.24f, 0.88f, 1f, 0.92f);
+    [SerializeField] private Color guardColor = new Color(1.00f, 0.45f, 0.18f, 0.92f);
     [SerializeField] private Color exitColor = new Color(1.00f, 0.68f, 0.18f, 0.92f);
 
     LineRenderer _lineRenderer;
@@ -99,11 +105,40 @@ public class TutorialGuideBeamController : MonoBehaviour
         TutorialWorldMarker runtimeMovementMarker,
         TutorialWorldMarker runtimeExitMarker)
     {
+        ConfigureRuntime(
+            runtimeFlowController,
+            runtimePlayerRoot,
+            runtimeMovementTarget,
+            null,
+            null,
+            runtimeExitTarget,
+            runtimeMovementMarker,
+            null,
+            null,
+            runtimeExitMarker);
+    }
+
+    public void ConfigureRuntime(
+        TutorialFlowController runtimeFlowController,
+        Transform runtimePlayerRoot,
+        Transform runtimeMovementTarget,
+        Transform runtimeAttackTarget,
+        Transform runtimeGuardTarget,
+        Transform runtimeExitTarget,
+        TutorialWorldMarker runtimeMovementMarker,
+        TutorialWorldMarker runtimeAttackMarker,
+        TutorialWorldMarker runtimeGuardMarker,
+        TutorialWorldMarker runtimeExitMarker)
+    {
         flowController = runtimeFlowController;
         playerRoot = runtimePlayerRoot;
         movementTarget = runtimeMovementTarget;
+        attackTarget = runtimeAttackTarget;
+        guardTarget = runtimeGuardTarget;
         exitTarget = runtimeExitTarget;
         movementMarker = runtimeMovementMarker;
+        attackMarker = runtimeAttackMarker;
+        guardMarker = runtimeGuardMarker;
         exitMarker = runtimeExitMarker;
 
         EnsureBuilt();
@@ -206,6 +241,21 @@ public class TutorialGuideBeamController : MonoBehaviour
                 SetActiveGuide(movementTarget, movementColor);
                 break;
 
+            case TutorialStepType.CameraFocus:
+            case TutorialStepType.LockOn:
+            case TutorialStepType.BasicAttack:
+            case TutorialStepType.Combo:
+            case TutorialStepType.Ultimate:
+                SetActiveGuide(attackTarget, attackColor);
+                break;
+
+            case TutorialStepType.Guard:
+            case TutorialStepType.Parry:
+            case TutorialStepType.Dodge:
+            case TutorialStepType.PerfectDodge:
+                SetActiveGuide(guardTarget, guardColor);
+                break;
+
             case TutorialStepType.Exit:
                 SetActiveGuide(exitTarget, exitColor);
                 break;
@@ -221,7 +271,7 @@ public class TutorialGuideBeamController : MonoBehaviour
         if (step == null)
             return;
 
-        if (step.stepType == TutorialStepType.Movement || step.stepType == TutorialStepType.Exit)
+        if (_activeTarget != null)
             SetActiveGuide(null, default);
     }
 
@@ -240,6 +290,8 @@ public class TutorialGuideBeamController : MonoBehaviour
         SetBreadcrumbVisible(shouldShow);
 
         SetMarkerVisible(movementMarker, ReferenceEquals(_activeTarget, movementTarget));
+        SetMarkerVisible(attackMarker, ReferenceEquals(_activeTarget, attackTarget));
+        SetMarkerVisible(guardMarker, ReferenceEquals(_activeTarget, guardTarget));
         SetMarkerVisible(exitMarker, ReferenceEquals(_activeTarget, exitTarget));
 
         if (!shouldShow)

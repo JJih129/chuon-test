@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -85,6 +85,12 @@ public class TutorialObjectivePanelController : MonoBehaviour
 
     public void ConfigureRuntime(TutorialFlowController runtimeFlowController, TutorialHintUIBridge runtimeHintBridge)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            SuppressPrototypeUi();
+            return;
+        }
+
         flowController = runtimeFlowController;
         hintBridge = runtimeHintBridge;
 
@@ -95,6 +101,12 @@ public class TutorialObjectivePanelController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            SuppressPrototypeUi();
+            return;
+        }
+
         EnsureRuntimeVisuals();
         RefreshSubscriptions();
     }
@@ -108,7 +120,7 @@ public class TutorialObjectivePanelController : MonoBehaviour
     void OnDestroy()
     {
         ReleaseSubscriptions();
-        SyncBridgeHintTextVisibility(true);
+        SyncBridgeHintTextVisibility(ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled);
     }
 
     void RefreshSubscriptions()
@@ -216,6 +228,9 @@ public class TutorialObjectivePanelController : MonoBehaviour
 
     void ApplyStep(TutorialStepDefinition step, bool playSweep)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+            return;
+
         EnsureRuntimeVisuals();
         if (step == null || hintBridge == null)
             return;
@@ -274,6 +289,12 @@ public class TutorialObjectivePanelController : MonoBehaviour
 
     void EnsureRuntimeVisuals()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            SuppressPrototypeUi();
+            return;
+        }
+
         CanvasGroup questPanel = hintBridge != null ? hintBridge.QuestPanelGroup : null;
         if (questPanel == null)
             return;
@@ -893,7 +914,21 @@ public class TutorialObjectivePanelController : MonoBehaviour
             _iconRoot.localScale = Vector3.one;
         if (_statusText != null && !useScenePlacedQuestPanel)
             _statusText.text = string.Empty;
-        SyncBridgeHintTextVisibility(true);
+        SyncBridgeHintTextVisibility(ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled);
+    }
+
+    void SuppressPrototypeUi()
+    {
+        ReleaseSubscriptions();
+        HideImmediate();
+
+        if (_runtimeRoot != null)
+            _runtimeRoot.gameObject.SetActive(false);
+        if (_sceneQuestGaugeImage != null)
+            _sceneQuestGaugeImage.enabled = false;
+        if (_sceneQuestGaugeSegmentRoot != null)
+            _sceneQuestGaugeSegmentRoot.gameObject.SetActive(false);
+        SyncBridgeHintTextVisibility(false);
     }
 
     string ResolveHintTitle(TutorialStepDefinition step)
