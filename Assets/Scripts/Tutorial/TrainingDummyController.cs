@@ -1624,10 +1624,36 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
             return;
 
         primaryRenderer.GetPropertyBlock(_propertyBlock);
+        if (UsesAspCharacterShader(primaryRenderer))
+        {
+            _propertyBlock.SetColor(emissionProperty, Color.black);
+            primaryRenderer.SetPropertyBlock(_propertyBlock);
+            return;
+        }
+
         _propertyBlock.SetColor(emissionProperty, color);
         if (primaryRenderer.sharedMaterial != null && primaryRenderer.sharedMaterial.HasProperty("_Color"))
             _propertyBlock.SetColor("_Color", color);
         primaryRenderer.SetPropertyBlock(_propertyBlock);
+    }
+
+    static bool UsesAspCharacterShader(Renderer renderer)
+    {
+        if (renderer == null)
+            return false;
+
+        Material[] materials = renderer.sharedMaterials;
+        if (materials == null)
+            return false;
+
+        for (int i = 0; i < materials.Length; i++)
+        {
+            Material material = materials[i];
+            if (material != null && material.shader != null && material.shader.name == "ASP/Character")
+                return true;
+        }
+
+        return false;
     }
 
     Vector3 GetDangerTargetMarkerPoint(Vector3 attackTargetPoint)

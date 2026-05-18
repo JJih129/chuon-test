@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
 
 [DisallowMultipleComponent]
 public class TutorialMovementConditionChecker : TutorialConditionChecker
@@ -591,11 +592,15 @@ public class TutorialHealConditionChecker : TutorialConditionChecker
 {
     [SerializeField] private TutorialPlayerRuntimeBridge playerBridge;
     [SerializeField, Range(0.05f, 0.95f)] private float normalizedHealthTarget = 0.42f;
+    [SerializeField, Min(0f)] private float damageDelaySeconds = 3f;
+    Coroutine _damageDelayRoutine;
+    bool _listeningForAmpoule;
 
-    public void ConfigureRuntime(TutorialPlayerRuntimeBridge bridge, float targetHealthRatio)
+    public void ConfigureRuntime(TutorialPlayerRuntimeBridge bridge, float targetHealthRatio, float delaySeconds = 3f)
     {
         playerBridge = bridge;
         normalizedHealthTarget = targetHealthRatio;
+        damageDelaySeconds = Mathf.Max(0f, delaySeconds);
     }
 
     protected override void OnBeginChecking(TutorialStepDefinition step)
@@ -607,14 +612,37 @@ public class TutorialHealConditionChecker : TutorialConditionChecker
         }
 
         playerBridge.EnsureAmpouleAvailable();
-        playerBridge.ReduceHealthForTutorial(normalizedHealthTarget);
-        playerBridge.AmpouleUsed += HandleAmpouleUsed;
+        ReportProgress("\uc0c1\ud669 \ud655\uc778 \uc911");
+        _damageDelayRoutine = StartCoroutine(CoDelayTutorialDamage());
     }
 
     protected override void OnEndChecking()
     {
-        if (playerBridge != null)
+        if (_damageDelayRoutine != null)
+        {
+            StopCoroutine(_damageDelayRoutine);
+            _damageDelayRoutine = null;
+        }
+
+        if (playerBridge != null && _listeningForAmpoule)
             playerBridge.AmpouleUsed -= HandleAmpouleUsed;
+        _listeningForAmpoule = false;
+    }
+
+    IEnumerator CoDelayTutorialDamage()
+    {
+        float delay = Mathf.Max(0f, damageDelaySeconds);
+        if (delay > 0f)
+            yield return new WaitForSeconds(delay);
+
+        _damageDelayRoutine = null;
+        if (!IsRunning || IsCompleted || playerBridge == null)
+            yield break;
+
+        playerBridge.ReduceHealthForTutorial(normalizedHealthTarget);
+        playerBridge.AmpouleUsed += HandleAmpouleUsed;
+        _listeningForAmpoule = true;
+        ReportProgress("\uc570\ud50c\uc744 \uc0ac\uc6a9\ud574 \ud68c\ubcf5");
     }
 
     void HandleAmpouleUsed()

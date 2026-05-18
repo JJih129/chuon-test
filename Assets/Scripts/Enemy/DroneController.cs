@@ -22,20 +22,21 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     [Header("Movement")]
     public float moveSpeed = 3.5f;
-    public float stopDistance = 8f;
+    public float stopDistance = 9f;
     public float turnSpeedDeg = 360f;
 
     [Header("Collision")]
     [SerializeField] bool useCollisionAwareMovement = true;
     [SerializeField] LayerMask movementCollisionMask = ~0;
     [SerializeField, Min(0f)] float movementSkin = 0.04f;
+    [SerializeField, Range(1, 4)] int collisionDepenetrationIterations = 2;
     [SerializeField] bool createRuntimeMovementColliderIfMissing = true;
     [SerializeField] Vector3 runtimeMovementColliderSize = new Vector3(1.2f, 0.9f, 1.2f);
 
     [Header("Combat Movement")]
-    [SerializeField, Min(0.1f)] float combatDistanceTolerance = 1.4f;
+    [SerializeField, Min(0.1f)] float combatDistanceTolerance = 1.8f;
     [SerializeField, Range(0.1f, 1f)] float strafeSpeedMultiplier = 0.55f;
-    [SerializeField, Range(0.1f, 1f)] float retreatSpeedMultiplier = 0.7f;
+    [SerializeField, Range(0.1f, 1f)] float retreatSpeedMultiplier = 0.85f;
     [SerializeField, Min(0.1f)] float minStrafeSwitchInterval = 0.75f;
     [SerializeField, Min(0.1f)] float maxStrafeSwitchInterval = 1.35f;
     [SerializeField, Min(0f)] float postShotStrafeDuration = 0.4f;
@@ -44,12 +45,12 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     [Header("Aerial Motion")]
     [SerializeField] bool useAerialCombatMotion = true;
-    [SerializeField, Min(0f)] float hoverAmplitude = 0.28f;
-    [SerializeField, Min(0.1f)] float hoverFrequency = 1.35f;
+    [SerializeField, Min(0f)] float hoverAmplitude = 0.24f;
+    [SerializeField, Min(0.1f)] float hoverFrequency = 0.75f;
     [SerializeField, Range(0f, 35f)] float strafeBankAngle = 14f;
     [SerializeField, Range(0f, 25f)] float movePitchAngle = 8f;
     [SerializeField, Range(0.1f, 20f)] float visualTiltSharpness = 7f;
-    [SerializeField, Range(0.2f, 1.5f)] float closeOrbitDistanceMultiplier = 0.78f;
+    [SerializeField, Range(0.2f, 1.5f)] float closeOrbitDistanceMultiplier = 0.9f;
 
     [Header("Combat Role")]
     [SerializeField] DroneCombatRole combatRole = DroneCombatRole.Standard;
@@ -60,7 +61,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     [Header("Attack")]
     public GameObject projectilePrefab;
     public Transform fireOrigin;
-    public float fireDistance = 15f;
+    public float fireDistance = 16f;
     public float fireCooldown = 2f;
     public float projectileSpeed = 15f;
     public int projectileDamage = 10;
@@ -149,6 +150,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     Collider _movementCollider;
     BoxCollider _runtimeMovementCollider;
     readonly RaycastHit[] _movementCastHits = new RaycastHit[8];
+    readonly Collider[] _movementOverlapHits = new Collider[16];
     Vector3 _initialLocalScale;
 
     void Awake()
@@ -418,6 +420,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         Vector3 toTarget = target.position - transform.position;
         Vector3 flatDirection = new Vector3(toTarget.x, 0f, toTarget.z);
         float distanceSqr = flatDirection.sqrMagnitude;
+        Vector3 pendingMoveStep = Vector3.zero;
         if (distanceSqr > 0.0001f)
         {
             float distance = Mathf.Sqrt(distanceSqr);
@@ -437,8 +440,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             {
                 _lastMoveDirection = moveDirection;
                 float speedMultiplier = ResolveCombatMoveSpeedMultiplier(distance);
-                Vector3 moveStep = moveDirection * (moveSpeed * speedMultiplier * deltaTime);
-                MoveWithCollision(moveStep);
+                pendingMoveStep = moveDirection * (moveSpeed * speedMultiplier * deltaTime);
             }
             else
             {
@@ -450,7 +452,8 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             _lastMoveDirection = Vector3.zero;
         }
 
-        ApplyAerialMotion(deltaTime);
+        pendingMoveStep += ApplyAerialMotion(deltaTime);
+        MoveWithCollision(pendingMoveStep);
 
         if (TickHitReaction(deltaTime))
             return;
@@ -579,18 +582,18 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             target = player.transform;
     }
 
-    void ApplyAerialMotion(float deltaTime)
+    Vector3 ApplyAerialMotion(float deltaTime)
     {
         if (!useAerialCombatMotion)
-            return;
+            return Vector3.zero;
 
         Vector3 position = transform.position;
         float targetY = _baseHoverY;
         if (hoverAmplitude > 0f)
             targetY += Mathf.Sin((Time.time * hoverFrequency) + _hoverPhase) * hoverAmplitude;
 
-        position.y = Mathf.Lerp(position.y, targetY, 1f - Mathf.Exp(-deltaTime * 7f));
-        transform.position = position;
+        float nextY = Mathf.Lerp(position.y, targetY, 1f - Mathf.Exp(-deltaTime * 7f));
+        Vector3 hoverDelta = new Vector3(0f, nextY - position.y, 0f);
 
         Transform tiltTarget = _tiltRoot != null ? _tiltRoot : transform;
         Vector3 localMove = transform.InverseTransformDirection(_lastMoveDirection);
@@ -601,6 +604,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             tiltTarget.localRotation,
             targetRotation,
             1f - Mathf.Exp(-deltaTime * visualTiltSharpness));
+        return hoverDelta;
     }
 
     void ResolveTiltRoot(bool force = false)
@@ -979,11 +983,14 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     void MoveWithCollision(Vector3 desiredDelta)
     {
-        if (desiredDelta.sqrMagnitude <= 0.0000001f)
+        Vector3 depenetrationDelta = useCollisionAwareMovement
+            ? ResolveCurrentPenetrationDelta()
+            : Vector3.zero;
+        if (desiredDelta.sqrMagnitude <= 0.0000001f && depenetrationDelta.sqrMagnitude <= 0.0000001f)
             return;
 
         Vector3 resolvedDelta = useCollisionAwareMovement
-            ? ResolveCollisionAwareDelta(desiredDelta)
+            ? ResolveCollisionAwareDelta(desiredDelta) + depenetrationDelta
             : desiredDelta;
         if (resolvedDelta.sqrMagnitude <= 0.0000001f)
             return;
@@ -1032,6 +1039,49 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             return Vector3.zero;
 
         return direction * Mathf.Min(distance, allowedDistance);
+    }
+
+    Vector3 ResolveCurrentPenetrationDelta()
+    {
+        if (_movementCollider == null || !_movementCollider.enabled)
+            return Vector3.zero;
+
+        Vector3 totalCorrection = Vector3.zero;
+        int iterations = Mathf.Max(1, collisionDepenetrationIterations);
+        for (int iteration = 0; iteration < iterations; iteration++)
+        {
+            int overlapCount = OverlapMovementShape(totalCorrection);
+            Vector3 iterationCorrection = Vector3.zero;
+
+            for (int i = 0; i < overlapCount; i++)
+            {
+                Collider other = _movementOverlapHits[i];
+                if (other == null || other.transform.root == transform.root)
+                    continue;
+                if (((1 << other.gameObject.layer) & movementCollisionMask) == 0)
+                    continue;
+
+                if (Physics.ComputePenetration(
+                    _movementCollider,
+                    _movementCollider.transform.position + totalCorrection,
+                    _movementCollider.transform.rotation,
+                    other,
+                    other.transform.position,
+                    other.transform.rotation,
+                    out Vector3 direction,
+                    out float distance))
+                {
+                    iterationCorrection += direction * (distance + movementSkin);
+                }
+            }
+
+            if (iterationCorrection.sqrMagnitude <= 0.0000001f)
+                break;
+
+            totalCorrection += iterationCorrection;
+        }
+
+        return totalCorrection;
     }
 
     int CastMovementShape(Vector3 direction, float distance)
@@ -1090,6 +1140,58 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             direction,
             _movementCastHits,
             distance,
+            movementCollisionMask,
+            QueryMode);
+    }
+
+    int OverlapMovementShape(Vector3 offset)
+    {
+        const QueryTriggerInteraction QueryMode = QueryTriggerInteraction.Ignore;
+
+        if (_movementCollider is SphereCollider sphereCollider)
+        {
+            Vector3 center = sphereCollider.transform.TransformPoint(sphereCollider.center) + offset;
+            Vector3 absScale = AbsVector(sphereCollider.transform.lossyScale);
+            float radius = sphereCollider.radius * Mathf.Max(absScale.x, Mathf.Max(absScale.y, absScale.z));
+            return Physics.OverlapSphereNonAlloc(
+                center,
+                Mathf.Max(0.01f, radius + movementSkin),
+                _movementOverlapHits,
+                movementCollisionMask,
+                QueryMode);
+        }
+
+        if (_movementCollider is CapsuleCollider capsuleCollider)
+        {
+            GetCapsuleWorldPoints(capsuleCollider, out Vector3 point0, out Vector3 point1, out float radius);
+            return Physics.OverlapCapsuleNonAlloc(
+                point0 + offset,
+                point1 + offset,
+                Mathf.Max(0.01f, radius + movementSkin),
+                _movementOverlapHits,
+                movementCollisionMask,
+                QueryMode);
+        }
+
+        if (_movementCollider is BoxCollider boxCollider)
+        {
+            Vector3 center = boxCollider.transform.TransformPoint(boxCollider.center) + offset;
+            Vector3 halfExtents = Vector3.Scale(boxCollider.size * 0.5f, AbsVector(boxCollider.transform.lossyScale));
+            return Physics.OverlapBoxNonAlloc(
+                center,
+                MaxVector(halfExtents + Vector3.one * movementSkin, Vector3.one * 0.01f),
+                _movementOverlapHits,
+                boxCollider.transform.rotation,
+                movementCollisionMask,
+                QueryMode);
+        }
+
+        Bounds bounds = _movementCollider.bounds;
+        float fallbackRadius = Mathf.Max(bounds.extents.x, Mathf.Max(bounds.extents.y, bounds.extents.z)) + movementSkin;
+        return Physics.OverlapSphereNonAlloc(
+            bounds.center + offset,
+            fallbackRadius,
+            _movementOverlapHits,
             movementCollisionMask,
             QueryMode);
     }

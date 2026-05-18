@@ -16,6 +16,9 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
     const string AspCharacterMaterialResourcePath = "Tutorial/TutorialAspCharacterRuntime";
     const int MaxBootstrapResolveFrames = 45;
     const float MaxBootstrapResolveSeconds = 2f;
+    const float DefaultStepAdvanceDelay = 1.35f;
+    const float CombatStepAdvanceDelay = 1.55f;
+    const float UltimateStepAdvanceDelay = 1.8f;
 
     TutorialFlowController _flowController;
     TutorialHintUIBridge _hintBridge;
@@ -959,7 +962,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             6f);
 
         TutorialHealConditionChecker healChecker = gameObject.AddComponent<TutorialHealConditionChecker>();
-        healChecker.ConfigureRuntime(_playerBridge, 0.42f);
+        healChecker.ConfigureRuntime(_playerBridge, 0.42f, 3f);
 
         TutorialUltimateConditionChecker ultimateChecker = gameObject.AddComponent<TutorialUltimateConditionChecker>();
         ultimateChecker.ConfigureRuntime(_playerBridge, attackDummy != null ? attackDummy.GetComponent<UltimateTargetSimple>() : null);
@@ -1151,13 +1154,30 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             comboGuideTitle = comboGuideTitle,
             comboGuideBody = comboGuideBody,
             autoAdvance = true,
-            autoAdvanceDelay = 0.35f,
+            autoAdvanceDelay = ResolveStepAdvanceDelay(stepType),
             requiredCheckers = checkers,
             activateOnStart = FilterNulls(activateOnStart),
             deactivateOnStart = FilterNulls(deactivateOnStart),
             activateOnComplete = FilterNulls(activateOnComplete),
             deactivateOnComplete = FilterNulls(deactivateOnComplete)
         };
+    }
+
+    static float ResolveStepAdvanceDelay(TutorialStepType stepType)
+    {
+        switch (stepType)
+        {
+            case TutorialStepType.BasicAttack:
+            case TutorialStepType.Guard:
+            case TutorialStepType.Parry:
+            case TutorialStepType.Dodge:
+            case TutorialStepType.PerfectDodge:
+                return CombatStepAdvanceDelay;
+            case TutorialStepType.Ultimate:
+                return UltimateStepAdvanceDelay;
+            default:
+                return DefaultStepAdvanceDelay;
+        }
     }
 
     TutorialGuideLine Guide(EGOGuideMessageType messageType, string text, float duration)
@@ -1290,7 +1310,9 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (material.HasProperty("_style"))
             material.SetFloat("_style", 1f);
         if (material.HasProperty("_EmissionToggle"))
-            material.SetFloat("_EmissionToggle", 1f);
+            material.SetFloat("_EmissionToggle", 0f);
+        if (material.HasProperty("_EmissionColor"))
+            material.SetColor("_EmissionColor", Color.black);
 
         return material;
     }

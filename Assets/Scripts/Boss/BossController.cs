@@ -825,7 +825,6 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     private static readonly int AnimParam_IsCombatStrafing = Animator.StringToHash("IsCombatStrafing");
     private static readonly int AnimParam_IsBreak   = Animator.StringToHash("IsBreak");
     private static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
-    private static readonly int AnimParam_DodgeBack = Animator.StringToHash("Dodge_Back");
     private static readonly int AnimParam_QuickshiftB = Animator.StringToHash("Quickshift_B");
     private static readonly int AnimParam_RunStart = Animator.StringToHash("RunStart");
     private static readonly int AnimParam_RunStop = Animator.StringToHash("RunStop");
@@ -994,7 +993,6 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     private int _parryStunTriggerHash;
     private int _parryStunStateHash;
     private bool _hasParryStunTrigger;
-    private bool _hasDodgeBackTrigger;
     private bool _hasQuickshiftBTrigger;
     private bool _parryStunUsedAnimatorFreezeFallback;
     private float _parryStunCachedAnimatorSpeed = 1f;
@@ -3429,16 +3427,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         }
 
         // 2) 백스텝 트리거 Reset
-        if (!string.IsNullOrEmpty(backstepAnimTriggerName))
-        {
-            if (backstepAnimTriggerName == "Dodge_Back" && _hasDodgeBackTrigger)
-                bossAnimator.ResetTrigger(backstepAnimTriggerName);
-            else if (backstepAnimTriggerName == "Quickshift_B" && _hasQuickshiftBTrigger)
-                bossAnimator.ResetTrigger(backstepAnimTriggerName);
-        }
-
-        if (_hasDodgeBackTrigger)
-            bossAnimator.ResetTrigger("Dodge_Back");
+        if (!string.IsNullOrEmpty(backstepAnimTriggerName) &&
+            backstepAnimTriggerName == "Quickshift_B" &&
+            _hasQuickshiftBTrigger)
+            bossAnimator.ResetTrigger(backstepAnimTriggerName);
 
         if (_hasQuickshiftBTrigger)
             bossAnimator.ResetTrigger("Quickshift_B");
@@ -3457,7 +3449,6 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         _parryStunTriggerHash = string.IsNullOrWhiteSpace(parryStunTriggerName) ? 0 : Animator.StringToHash(parryStunTriggerName);
         _parryStunStateHash = string.IsNullOrWhiteSpace(parryStunStateName) ? 0 : Animator.StringToHash(parryStunStateName);
         _hasParryStunTrigger = false;
-        _hasDodgeBackTrigger = false;
         _hasQuickshiftBTrigger = false;
         _hasMoveXParam = false;
         _hasMoveYParam = false;
@@ -3474,9 +3465,6 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             {
                 if (_parryStunTriggerHash != 0 && parameter.nameHash == _parryStunTriggerHash)
                     _hasParryStunTrigger = true;
-
-                if (parameter.nameHash == AnimParam_DodgeBack)
-                    _hasDodgeBackTrigger = true;
 
                 if (parameter.nameHash == AnimParam_QuickshiftB)
                     _hasQuickshiftBTrigger = true;
@@ -3495,7 +3483,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
                     _hasCombatStrafingParam = true;
             }
 
-            if (_hasParryStunTrigger && _hasDodgeBackTrigger && _hasQuickshiftBTrigger && _hasMoveXParam && _hasMoveYParam && _hasCombatStrafingParam)
+            if (_hasParryStunTrigger && _hasQuickshiftBTrigger && _hasMoveXParam && _hasMoveYParam && _hasCombatStrafingParam)
             {
                 break;
             }
@@ -5714,13 +5702,16 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
         if (ContainsPatternToken(patternName, "SwordWave"))
             return BossPatternId.SwordWave;
-        if (ContainsPatternToken(patternName, "Backstep") || ContainsPatternToken(triggerName, "Quickshift"))
+        if (ContainsPatternToken(patternName, "Backstep") ||
+            ContainsPatternToken(patternName, "Pressure") ||
+            ContainsPatternToken(triggerName, "Quickshift") ||
+            string.Equals(triggerName, "Attack_E", StringComparison.Ordinal))
             return BossPatternId.BackstepSlash;
         if (ContainsPatternToken(patternName, "Dash") || string.Equals(triggerName, "Attack_D", StringComparison.Ordinal))
             return BossPatternId.DashSlash;
         if (ContainsPatternToken(patternName, "Heavy") ||
-            string.Equals(triggerName, "Attack_C", StringComparison.Ordinal) ||
-            string.Equals(triggerName, "Attack_E", StringComparison.Ordinal))
+            ContainsPatternToken(patternName, "Crush") ||
+            string.Equals(triggerName, "Attack_C", StringComparison.Ordinal))
             return BossPatternId.HeavySlash;
 
         return BossPatternId.QuickSlash;
@@ -6502,26 +6493,19 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             if (string.Equals(configuredTrigger, "Quickshift_B", StringComparison.OrdinalIgnoreCase) && _hasQuickshiftBTrigger)
                 return configuredTrigger;
 
-            if (string.Equals(configuredTrigger, "Dodge_Back", StringComparison.OrdinalIgnoreCase) && _hasDodgeBackTrigger)
-                return configuredTrigger;
-
             if (!string.Equals(configuredTrigger, "Backstep", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(configuredTrigger, "Quickshift_B", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(configuredTrigger, "Dodge_Back", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(configuredTrigger, "Quickshift_B", StringComparison.OrdinalIgnoreCase))
                 return configuredTrigger;
         }
 
         if (_hasQuickshiftBTrigger)
             return "Quickshift_B";
 
-        if (_hasDodgeBackTrigger)
-            return "Dodge_Back";
-
         if (!string.IsNullOrWhiteSpace(combatIdleRetreatTriggerName) &&
             !string.Equals(combatIdleRetreatTriggerName, "Backstep", StringComparison.OrdinalIgnoreCase))
             return combatIdleRetreatTriggerName;
 
-        return string.IsNullOrWhiteSpace(configuredTrigger) ? "Dodge_Back" : configuredTrigger;
+        return string.IsNullOrWhiteSpace(configuredTrigger) ? "Quickshift_B" : configuredTrigger;
     }
 
     // ==================== 패턴 선택 ====================

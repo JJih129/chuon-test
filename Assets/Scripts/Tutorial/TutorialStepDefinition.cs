@@ -16,7 +16,7 @@ public sealed class TutorialStepDefinition
     [TextArea(3, 8)] public string comboGuideBody;
     public bool allowFailure = true;
     public bool autoAdvance = true;
-    [Min(0f)] public float autoAdvanceDelay = 0.35f;
+    [Min(0f)] public float autoAdvanceDelay = 1.35f;
     public TutorialConditionChecker[] requiredCheckers;
     public GameObject[] activateOnStart;
     public GameObject[] deactivateOnStart;

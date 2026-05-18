@@ -2343,8 +2343,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21309516, y: -0.0024690912, z: -0.00053852226, w: 0.9770282}
-  m_LocalPosition: {x: 0.031275984, y: -1.0389577, z: -28.18797}
+  m_LocalRotation: {x: -0.21314728, y: -0.0024690412, z: -0.0005386492, w: 0.97701687}
+  m_LocalPosition: {x: 0.031274557, y: -1.0395694, z: -28.18774}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -33789,7 +33789,7 @@ MonoBehaviour:
     followUpDelay: 0.48
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 0
-    minPhase: 3
+    minPhase: 1
     maxPhase: 3
   - patternName: d
     animTriggerName: Attack_D
@@ -33858,7 +33858,7 @@ MonoBehaviour:
     followUpDelay: 0.42
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 0
-    minPhase: 2
+    minPhase: 1
     maxPhase: 3
   - patternName: e
     animTriggerName: Attack_E
@@ -33927,7 +33927,7 @@ MonoBehaviour:
     followUpDelay: 0.36
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 1
-    minPhase: 2
+    minPhase: 1
     maxPhase: 3
   - patternName: f
     animTriggerName: Attack_F
@@ -33996,7 +33996,7 @@ MonoBehaviour:
     followUpDelay: 0.42
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 0
-    minPhase: 2
+    minPhase: 1
     maxPhase: 3
   - patternName: SwordWave
     animTriggerName: Attack_F
@@ -34065,8 +34065,8 @@ MonoBehaviour:
     followUpDelay: 0
     forcedFollowUpPattern: 
     preferredFollowUpTelegraph: 0
-    minPhase: 0
-    maxPhase: 0
+    minPhase: 1
+    maxPhase: 3
   usePatternSelector: 1
   useLegacyPatternSelectionFallback: 0
   patternSelector:
@@ -34119,7 +34119,7 @@ MonoBehaviour:
   backstepInnerDistanceRatio: 0.72
   backstepFrontArcDot: 0.15
   minimumBackstepClearanceRatio: 0.45
-  backstepAnimTriggerName: Dodge_Back
+  backstepAnimTriggerName: Quickshift_B
   backstepDuration: 0
   backstepSpeed: 0
   backstepCooldown: 3
