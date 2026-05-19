@@ -105,7 +105,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   target: {fileID: 0}
-  moveSpeed: 3
+  moveSpeed: 2.2
   stopDistance: 9
   turnSpeedDeg: 360
   useCollisionAwareMovement: 1
@@ -116,11 +116,12 @@ MonoBehaviour:
   createRuntimeMovementColliderIfMissing: 1
   runtimeMovementColliderSize: {x: 1.2, y: 0.9, z: 1.2}
   combatDistanceTolerance: 1.8
-  strafeSpeedMultiplier: 0.55
-  retreatSpeedMultiplier: 0.85
+  strafeSpeedMultiplier: 0.42
+  retreatSpeedMultiplier: 0.38
   minStrafeSwitchInterval: 0.75
   maxStrafeSwitchInterval: 1.35
   postShotStrafeDuration: 0.4
+  postShotPauseDuration: 0.35
   fireFacingAngleThreshold: 12
   telegraphFacingAngleThreshold: 22
   useAerialCombatMotion: 1
@@ -139,8 +140,8 @@ MonoBehaviour:
   fireDistance: 15
   fireCooldown: 2.8
   projectileSpeed: 8
-  projectileDamage: 10
-  maxHP: 20
+  projectileDamage: 5
+  maxHP: 40
   hitVFX: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
   deathVFX: {fileID: 0}
   droneRenderer: {fileID: 0}
@@ -174,8 +175,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65a150d036cc9f04cb4c92a0b5289b8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  maxHP: 20
-  currentHP: 20
+  maxHP: 40
+  currentHP: 40
   hitEffectPrefab: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
 --- !u!114 &5536954089091496085
 MonoBehaviour:

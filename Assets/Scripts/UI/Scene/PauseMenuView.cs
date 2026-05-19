@@ -54,7 +54,7 @@ public class PauseMenuView : MonoBehaviour
     void ApplyHiddenState()
     {
         if (menuRoot != null)
-            menuRoot.SetActive(false);
+            menuRoot.SetActive(true);
 
         RuntimeUiInputUtility.RestoreModalInput();
 

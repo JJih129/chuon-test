@@ -33,7 +33,8 @@ public class PauseManager : MonoBehaviour
         if (uiView != null)
             uiView.HideMenuImmediate();
 
-        EnsureRuntimeOverlay().Hide();
+        if (useRuntimePauseOverlay)
+            EnsureRuntimeOverlay().Hide();
 
         RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
         SetSupplementalOverlayVisibility(true);

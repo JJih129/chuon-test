@@ -21,7 +21,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     public Transform target;
 
     [Header("Movement")]
-    public float moveSpeed = 3.5f;
+    public float moveSpeed = 2.2f;
     public float stopDistance = 9f;
     public float turnSpeedDeg = 360f;
 
@@ -35,11 +35,12 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     [Header("Combat Movement")]
     [SerializeField, Min(0.1f)] float combatDistanceTolerance = 1.8f;
-    [SerializeField, Range(0.1f, 1f)] float strafeSpeedMultiplier = 0.55f;
-    [SerializeField, Range(0.1f, 1f)] float retreatSpeedMultiplier = 0.85f;
+    [SerializeField, Range(0.1f, 1f)] float strafeSpeedMultiplier = 0.42f;
+    [SerializeField, Range(0.1f, 1f)] float retreatSpeedMultiplier = 0.38f;
     [SerializeField, Min(0.1f)] float minStrafeSwitchInterval = 0.75f;
     [SerializeField, Min(0.1f)] float maxStrafeSwitchInterval = 1.35f;
     [SerializeField, Min(0f)] float postShotStrafeDuration = 0.4f;
+    [SerializeField, Min(0f)] float postShotPauseDuration = 0.35f;
     [SerializeField, Range(2f, 45f)] float fireFacingAngleThreshold = 12f;
     [SerializeField, Range(2f, 60f)] float telegraphFacingAngleThreshold = 22f;
 
@@ -64,10 +65,10 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     public float fireDistance = 16f;
     public float fireCooldown = 2f;
     public float projectileSpeed = 15f;
-    public int projectileDamage = 10;
+    public int projectileDamage = 5;
 
     [Header("Health / VFX")]
-    public int maxHP = 20;
+    public int maxHP = 40;
     public GameObject hitVFX;
     public GameObject deathVFX;
     public Renderer droneRenderer;
@@ -118,6 +119,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     int _strafeSign = 1;
     float _nextStrafeSwitchAt;
     float _postShotStrafeUntil;
+    float _postShotPauseUntil;
     float _hitRecoverUntil;
     Vector3 _hitPushDirection;
     float _hitPushSpeed;
@@ -189,6 +191,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         _hitPushDirection = Vector3.zero;
         _hitPushSpeed = 0f;
         _hitPushDistanceRemaining = 0f;
+        _postShotPauseUntil = 0f;
         _baseHoverY = transform.position.y;
         _hoverPhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
         _lastMoveDirection = Vector3.zero;
@@ -439,8 +442,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             if (moveDirection.sqrMagnitude > 0.0001f)
             {
                 _lastMoveDirection = moveDirection;
-                float speedMultiplier = ResolveCombatMoveSpeedMultiplier(distance);
-                pendingMoveStep = moveDirection * (moveSpeed * speedMultiplier * deltaTime);
+                if (Time.time >= _postShotPauseUntil)
+                {
+                    float speedMultiplier = ResolveCombatMoveSpeedMultiplier(distance);
+                    pendingMoveStep = moveDirection * (moveSpeed * speedMultiplier * deltaTime);
+                }
             }
             else
             {
@@ -487,6 +493,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             _nextFireTime = Time.time + fireCooldown;
             _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
             _postShotStrafeUntil = Time.time + Mathf.Max(0f, postShotStrafeDuration);
+            _postShotPauseUntil = Time.time + Mathf.Max(0f, postShotPauseDuration);
             FlipStrafeDirection();
         }
     }
@@ -802,7 +809,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
         BulletProjectile bulletProjectile = bullet.GetComponent<BulletProjectile>();
         if (bulletProjectile != null)
-            bulletProjectile.Init(gameObject, projectileSpeed, projectileDamage);
+            bulletProjectile.Init(gameObject, projectileSpeed, projectileDamage, target);
 
         TutorialProjectile tutorialProjectile = bullet.GetComponent<TutorialProjectile>();
         if (tutorialProjectile != null)

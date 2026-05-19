@@ -69,6 +69,7 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] bool preferPlayableDirectorBossIntro = true;
     [SerializeField] PlayableDirector bossIntroDirector;
     [SerializeField] bool snapCameraBehindPlayerOnTimelineIntroEnd = false;
+    [SerializeField] bool endTimelineWhenBossRevealWalkEnds = true;
     [SerializeField] IntroStep[] bossIntroSteps =
     {
         new IntroStep("EGO", "도착했어, 추온. 격납고 층이야.", 1.8f, AttackTelegraphType.Guard, IntroEvent.ElevatorOpened),
@@ -250,6 +251,7 @@ public class MainSceneArrivalController : MonoBehaviour
     MonoBehaviour[] _arrivalCameraInputBehaviours;
     bool[] _arrivalCameraInputBehaviourStates;
     bool _arrivalCameraInputLocked;
+    bool _timelineIntroEnded;
     Transform _bossRevealRoot;
     bool _bossRevealPoseCached;
     Vector3 _bossRevealEndPosition;
@@ -526,20 +528,22 @@ public class MainSceneArrivalController : MonoBehaviour
 
         float timeout = Mathf.Max(0.25f, (float)duration + 0.25f);
         float elapsed = 0f;
-        while (bossIntroDirector != null && elapsed < timeout && bossIntroDirector.time < duration)
+        while (!_timelineIntroEnded && bossIntroDirector != null && elapsed < timeout && bossIntroDirector.time < duration)
         {
             elapsed += Time.deltaTime;
             yield return null;
         }
 
-        if (bossIntroDirector != null)
+        if (!_timelineIntroEnded && bossIntroDirector != null)
             bossIntroDirector.Stop();
 
-        TimelineIntroEnd();
+        if (!_timelineIntroEnded)
+            TimelineIntroEnd();
     }
 
     public void TimelineIntroBegin()
     {
+        _timelineIntroEnded = false;
         RefreshSubscriptions();
         SetArrivalInputLocked(true);
         SetBossIntroPaused(true);
@@ -587,6 +591,10 @@ public class MainSceneArrivalController : MonoBehaviour
 
     public void TimelineIntroEnd()
     {
+        if (_timelineIntroEnded)
+            return;
+
+        _timelineIntroEnded = true;
         if (_timelineDialogueRoutine != null)
         {
             StopCoroutine(_timelineDialogueRoutine);
@@ -1140,6 +1148,7 @@ public class MainSceneArrivalController : MonoBehaviour
         Quaternion startRotation = bossRoot.rotation;
         float duration = Mathf.Max(0.1f, bossRevealWalkOutDuration);
         float elapsed = 0f;
+        bool completed = false;
 
         if (useClipPlayback)
         {
@@ -1173,6 +1182,8 @@ public class MainSceneArrivalController : MonoBehaviour
                 EndElevatorWalkClipPlayback(ref clipPlayback);
                 yield return CoPlayBossRevealWalkEnd(animator);
             }
+
+            completed = true;
         }
         finally
         {
@@ -1187,6 +1198,20 @@ public class MainSceneArrivalController : MonoBehaviour
             _bossRevealWalkHasCachedAnimatorRootMotion = false;
             _bossRevealWalkRoutine = null;
         }
+
+        if (completed)
+            CompleteTimelineIntroAfterBossRevealWalk();
+    }
+
+    void CompleteTimelineIntroAfterBossRevealWalk()
+    {
+        if (!endTimelineWhenBossRevealWalkEnds || _timelineIntroEnded)
+            return;
+        if (bossIntroDirector == null || bossIntroDirector.state != PlayState.Playing)
+            return;
+
+        bossIntroDirector.Stop();
+        TimelineIntroEnd();
     }
 
     IEnumerator CoPlayBossRevealWalkEnd(Animator animator)

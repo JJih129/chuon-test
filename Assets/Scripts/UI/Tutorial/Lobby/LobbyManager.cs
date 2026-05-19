@@ -59,6 +59,9 @@ public class LobbyManager : MonoBehaviour
     public bool simplifyLobbyDroneVisual = true;
     public bool useLightweightLobbyDroneSimulation = true;
     [Range(0.016f, 0.12f)] public float lightweightLobbyDroneTickInterval = 0.05f;
+    [Header("Lobby Collision")]
+    [SerializeField] bool autoBuildLobbyMapColliders = true;
+    [SerializeField, Min(0f)] float minAutoMapColliderExtent = 0.25f;
     [Header("Combat Roles")]
     public LobbyDroneWaveProfile lobbyDroneWaveProfile = LobbyDroneWaveProfile.MixedPressure;
     public bool useRoleAwareSpawnPlan = true;
@@ -77,11 +80,11 @@ public class LobbyManager : MonoBehaviour
 
     [Header("Lobby Drone Motion")]
     [SerializeField] bool useAerialLobbyDroneMotion = true;
-    [SerializeField, Range(0.8f, 2f)] float lobbyDroneMoveSpeedMultiplier = 1.28f;
+    [SerializeField, Range(0.5f, 2f)] float lobbyDroneMoveSpeedMultiplier = 0.8f;
     [SerializeField, Range(0.45f, 1f)] float lobbyDroneDistanceMultiplier = 0.72f;
-    [SerializeField, Range(0f, 0.5f)] float lobbyDroneStrafeBoost = 0.28f;
-    [SerializeField, Range(0f, 1f)] float lobbyDroneHoverAmplitude = 0.34f;
-    [SerializeField, Range(0.3f, 3f)] float lobbyDroneHoverFrequency = 1.55f;
+    [SerializeField, Range(0f, 0.5f)] float lobbyDroneStrafeBoost = 0.12f;
+    [SerializeField, Range(0f, 1f)] float lobbyDroneHoverAmplitude = 0.24f;
+    [SerializeField, Range(0.3f, 3f)] float lobbyDroneHoverFrequency = 0.75f;
 
     [Header("Elevator")]
     public GameObject elevatorPanel;
@@ -214,6 +217,7 @@ public class LobbyManager : MonoBehaviour
         ConfigurePresentationController();
         ConfigureCombatCoachController();
         ConfigureObjectivePanelController();
+        EnsureLobbyMapColliders();
         StartCoroutine(CoApplyPlayerStartFacingYawDelayed());
         _fromTutorialTransition = TutorialSceneTransitionState.ConsumeTutorialToLobby();
         SetPhase(LobbyFlowPhase.Arrival);
@@ -344,11 +348,13 @@ public class LobbyManager : MonoBehaviour
                 DroneCombatRole role = i < rolePlan.Length ? rolePlan[i] : DroneCombatRole.Standard;
                 controller.SetCombatRole(role);
                 controller.target = playerTransform;
-                controller.SetCollisionAwareMovement(false);
+                controller.SetCollisionAwareMovement(true);
                 controller.SetLightweightSimulation(useLightweightLobbyDroneSimulation, lightweightLobbyDroneTickInterval);
                 controller.SetAttackTelegraph(droneAttackTelegraphLeadTime);
                 controller.SetAerialCombatMotion(useAerialLobbyDroneMotion, lobbyDroneHoverAmplitude, lobbyDroneHoverFrequency);
                 controller.SetCombatMovementProfile(lobbyDroneMoveSpeedMultiplier, lobbyDroneDistanceMultiplier, lobbyDroneStrafeBoost);
+                controller.fireDistance = Mathf.Max(controller.fireDistance, 30f);
+                controller.projectileSpeed = Mathf.Max(controller.projectileSpeed, 12f);
                 controller.enabled = true;
                 controller.SetInitialFireDelay(ResolveLobbyDroneInitialFireDelay(i, role));
                 RegisterActiveLobbyDrone(controller);
@@ -369,6 +375,64 @@ public class LobbyManager : MonoBehaviour
             return;
 
         _activeLobbyDrones.Add(controller);
+    }
+
+    void EnsureLobbyMapColliders()
+    {
+        if (!autoBuildLobbyMapColliders)
+            return;
+
+        MeshRenderer[] renderers = FindObjectsOfType<MeshRenderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            MeshRenderer renderer = renderers[i];
+            if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                continue;
+            if (ShouldSkipAutoMapCollider(renderer))
+                continue;
+
+            MeshFilter meshFilter = renderer.GetComponent<MeshFilter>();
+            if (meshFilter == null || meshFilter.sharedMesh == null)
+                continue;
+
+            Bounds bounds = renderer.bounds;
+            float maxExtent = Mathf.Max(bounds.extents.x, Mathf.Max(bounds.extents.y, bounds.extents.z));
+            if (maxExtent < minAutoMapColliderExtent)
+                continue;
+
+            MeshCollider collider = renderer.GetComponent<MeshCollider>();
+            if (collider == null)
+                collider = renderer.gameObject.AddComponent<MeshCollider>();
+
+            collider.sharedMesh = meshFilter.sharedMesh;
+            collider.convex = false;
+            collider.isTrigger = false;
+        }
+    }
+
+    bool ShouldSkipAutoMapCollider(Renderer renderer)
+    {
+        GameObject go = renderer.gameObject;
+        if (go.GetComponent<Collider>() != null)
+            return true;
+        if (go.GetComponentInParent<Rigidbody>() != null)
+            return true;
+        if (go.GetComponentInParent<DroneController>() != null || go.GetComponentInParent<LobbyEnemy>() != null)
+            return true;
+        if (go.GetComponentInParent<Canvas>() != null || go.GetComponentInParent<ParticleSystem>() != null)
+            return true;
+        if (go.CompareTag("Player") || go.GetComponentInParent<CharacterController>() != null)
+            return true;
+
+        string rootName = go.transform.root != null ? go.transform.root.name.ToLowerInvariant() : string.Empty;
+        string objectName = go.name.ToLowerInvariant();
+        return rootName.Contains("player")
+            || rootName.Contains("drone")
+            || rootName.Contains("enemy")
+            || rootName.Contains("vfx")
+            || rootName.Contains("ui")
+            || objectName.Contains("trigger")
+            || objectName.Contains("marker");
     }
 
     void EvaluateCombatEscalation()

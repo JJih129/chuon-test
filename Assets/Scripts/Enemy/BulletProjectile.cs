@@ -16,15 +16,20 @@ public class BulletProjectile : MonoBehaviour
     public int damage = 15;
     [Tooltip("수명(초)")]
     public float lifetime = 6f;
-
     float _lifeRemaining;
     bool _isActive;
 
     public void Init(GameObject owner, float speed, int damage)
     {
+        Init(owner, speed, damage, null);
+    }
+
+    public void Init(GameObject owner, float speed, int damage, Transform homingTarget)
+    {
         this.owner = owner;
         this.speed = speed;
         this.damage = damage;
+        AimAtTarget(homingTarget);
 
         _lifeRemaining = lifetime;
         _isActive = true;
@@ -59,9 +64,22 @@ public class BulletProjectile : MonoBehaviour
         transform.position += transform.forward * speed * Time.deltaTime;
     }
 
+    void AimAtTarget(Transform aimTarget)
+    {
+        if (aimTarget == null)
+            return;
+
+        Vector3 toTarget = aimTarget.position - transform.position;
+        if (toTarget.sqrMagnitude <= 0.0001f)
+            return;
+
+        transform.rotation = Quaternion.LookRotation(toTarget.normalized, Vector3.up);
+    }
+
     void OnTriggerEnter(Collider other)
     {
         if (other == null) return;
+        if (owner == null) return;
         if (owner != null && (other.gameObject == owner || other.transform.IsChildOf(owner.transform))) return;
         if (IsFriendlyDroneHit(other))
             return;
@@ -99,7 +117,6 @@ public class BulletProjectile : MonoBehaviour
 
         if (debugLogs)
             Debug.Log("[BulletProjectile] No damage target found for " + other.gameObject.name, this);
-        ReleaseSelf();
     }
 
     bool IsFriendlyDroneHit(Collider other)
