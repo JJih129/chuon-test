@@ -10,8 +10,12 @@ public class TutorialFocusGuidanceController : MonoBehaviour
 
     [Header("Layout")]
     [SerializeField] private Vector3 rootLocalOffset = new Vector3(0f, 0.04f, 0f);
+    [SerializeField] private Vector3 lowerRingPosition = new Vector3(0f, 0f, 0f);
     [SerializeField] private Vector3 upperRingPosition = new Vector3(0f, 1.15f, 0f);
+    [SerializeField] private Vector3 beamPosition = new Vector3(0f, 0.62f, 0f);
+    [SerializeField] private Vector3 lowerRingScale = new Vector3(1.35f, 0.018f, 1.35f);
     [SerializeField] private Vector3 upperRingScale = new Vector3(0.62f, 0.014f, 0.62f);
+    [SerializeField] private Vector3 beamScale = new Vector3(0.06f, 0.52f, 0.06f);
 
     [Header("Pulse")]
     [SerializeField, Min(0f)] private float ringPulseAmplitude = 0.12f;
@@ -32,8 +36,12 @@ public class TutorialFocusGuidanceController : MonoBehaviour
     [SerializeField, Min(0.1f)] private float lockOnOffScreenScale = 1.2f;
 
     Transform _visualRoot;
+    Transform _lowerRing;
     Transform _upperRing;
+    Transform _beam;
+    Renderer _lowerRingRenderer;
     Renderer _upperRingRenderer;
+    Renderer _beamRenderer;
     MaterialPropertyBlock _propertyBlock;
     Color _activeColor;
     bool _active;
@@ -91,6 +99,8 @@ public class TutorialFocusGuidanceController : MonoBehaviour
         float ringScaleMultiplier = 1f + (ringPulseAmplitude * pulse);
         float alpha = Mathf.Clamp01(_activeColor.a - alphaPulseAmplitude + (alphaPulseAmplitude * pulse));
 
+        if (_lowerRing != null)
+            _lowerRing.localScale = lowerRingScale * ringScaleMultiplier;
         if (_upperRing != null)
         {
             _upperRing.localScale = upperRingScale * (1f + (ringPulseAmplitude * 0.65f * (1f - pulse)));
@@ -180,10 +190,16 @@ public class TutorialFocusGuidanceController : MonoBehaviour
         _visualRoot = root.transform;
         _visualRoot.SetParent(transform, false);
 
+        _lowerRing = CreatePrimitive("LowerRing", PrimitiveType.Cylinder, out _lowerRingRenderer);
         _upperRing = CreatePrimitive("UpperRing", PrimitiveType.Cylinder, out _upperRingRenderer);
+        _beam = CreatePrimitive("Beam", PrimitiveType.Cube, out _beamRenderer);
 
+        _lowerRing.localPosition = lowerRingPosition;
         _upperRing.localPosition = upperRingPosition;
+        _beam.localPosition = beamPosition;
+        _beam.localRotation = Quaternion.identity;
 
+        _beam.localScale = beamScale;
         _visualRoot.localPosition = rootLocalOffset;
         _visualRoot.gameObject.SetActive(false);
     }
@@ -200,11 +216,25 @@ public class TutorialFocusGuidanceController : MonoBehaviour
         _visualRoot.localRotation = Quaternion.identity;
         _visualRoot.localScale = Vector3.one;
 
+        if (_lowerRing != null)
+        {
+            _lowerRing.localPosition = lowerRingPosition;
+            _lowerRing.localRotation = Quaternion.identity;
+            _lowerRing.localScale = lowerRingScale;
+        }
+
         if (_upperRing != null)
         {
             _upperRing.localPosition = upperRingPosition;
             _upperRing.localRotation = Quaternion.identity;
             _upperRing.localScale = upperRingScale;
+        }
+
+        if (_beam != null)
+        {
+            _beam.localPosition = beamPosition;
+            _beam.localRotation = Quaternion.identity;
+            _beam.localScale = beamScale;
         }
     }
 
@@ -236,7 +266,9 @@ public class TutorialFocusGuidanceController : MonoBehaviour
 
     void ApplyColor(Color color)
     {
+        ApplyRendererColor(_lowerRingRenderer, color);
         ApplyRendererColor(_upperRingRenderer, color);
+        ApplyRendererColor(_beamRenderer, color);
     }
 
     void ApplyRendererColor(Renderer renderer, Color color)

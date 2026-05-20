@@ -9,11 +9,6 @@ using TMPro;
 [RequireComponent(typeof(CanvasGroup))]
 public class InteractionPromptUIController : MonoBehaviour
 {
-    static readonly char[] KoreanProbeChars = { '가', '한', '튜', '리', '얼', '시', '작' };
-    static TMP_FontAsset s_koreanFont;
-    static bool s_fontLookupAttempted;
-    static bool s_warnedMissingKoreanFont;
-
     // [헤더] 빌보드 대상 카메라. 비우면 Camera.main 사용
     public Camera cam;
 
@@ -22,7 +17,6 @@ public class InteractionPromptUIController : MonoBehaviour
 
     // [헤더] 표시할 TMP 텍스트(프리팹에서 드래그)
     public TMP_Text text;
-    [SerializeField] TMP_FontAsset preferredKoreanFont;
 
     // [헤더] 배경 RectTransform (자동 크기 계산 대상)
     public RectTransform background;
@@ -47,7 +41,6 @@ public class InteractionPromptUIController : MonoBehaviour
     {
         if (!cam) cam = Camera.main;
         _cg = GetComponent<CanvasGroup>();
-        EnsureReadableFont();
         Hide();
     }
 
@@ -61,7 +54,6 @@ public class InteractionPromptUIController : MonoBehaviour
             text = GetComponentInChildren<TMP_Text>(true);
         if (background == null)
             background = GetComponentInChildren<RectTransform>(true);
-        EnsureReadableFont();
 
         if (debugLogs)
             Debug.Log($"[Prompt] Show called. prompt='{prompt}' textRef={(text != null)} backgroundRef={(background != null)}");
@@ -69,7 +61,7 @@ public class InteractionPromptUIController : MonoBehaviour
         // 텍스트 세팅
         bool promptChanged = !string.Equals(_lastPrompt, prompt);
         if (text != null && promptChanged)
-            text.text = SanitizePrompt(prompt);
+            text.text = prompt;
         _lastPrompt = prompt;
 
         // 활성화 먼저(레이아웃 계산은 활성화 상태에서만 정확)
@@ -120,79 +112,5 @@ public class InteractionPromptUIController : MonoBehaviour
         if (Time.unscaledTime < _nextRefreshAt) return;
         _nextRefreshAt = Time.unscaledTime + Mathf.Max(1f / 20f, refreshInterval);
         UpdateTransformImmediate();
-    }
-
-    void EnsureReadableFont()
-    {
-        if (text == null)
-            text = GetComponentInChildren<TMP_Text>(true);
-        if (text == null)
-            return;
-
-        TMP_FontAsset readableFont = ResolveReadableFont();
-        if (readableFont == null || text.font == readableFont)
-            return;
-
-        text.font = readableFont;
-        text.fontSharedMaterial = readableFont.material;
-    }
-
-    TMP_FontAsset ResolveReadableFont()
-    {
-        if (SupportsKorean(preferredKoreanFont))
-            return preferredKoreanFont;
-        if (SupportsKorean(text != null ? text.font : null))
-            return text.font;
-        if (SupportsKorean(s_koreanFont))
-            return s_koreanFont;
-
-        if (!s_fontLookupAttempted)
-        {
-            s_fontLookupAttempted = true;
-            s_koreanFont = FindSceneKoreanFont();
-        }
-
-        if (SupportsKorean(s_koreanFont))
-            return s_koreanFont;
-
-        if (!s_warnedMissingKoreanFont)
-        {
-            s_warnedMissingKoreanFont = true;
-            Debug.LogWarning("[InteractionPrompt] Korean TMP font not found. Assign NotoSansKR SDF to preferredKoreanFont.", this);
-        }
-
-        return text != null ? text.font : null;
-    }
-
-    static TMP_FontAsset FindSceneKoreanFont()
-    {
-        TMP_Text[] labels = FindObjectsOfType<TMP_Text>(true);
-        for (int i = 0; i < labels.Length; i++)
-        {
-            TMP_FontAsset font = labels[i] != null ? labels[i].font : null;
-            if (SupportsKorean(font))
-                return font;
-        }
-
-        return null;
-    }
-
-    static bool SupportsKorean(TMP_FontAsset font)
-    {
-        if (font == null)
-            return false;
-
-        for (int i = 0; i < KoreanProbeChars.Length; i++)
-        {
-            if (font.HasCharacter(KoreanProbeChars[i]))
-                return true;
-        }
-
-        return false;
-    }
-
-    static string SanitizePrompt(string prompt)
-    {
-        return string.IsNullOrEmpty(prompt) ? string.Empty : prompt.Replace("\a", string.Empty);
     }
 }

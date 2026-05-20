@@ -10,14 +10,9 @@ public class PauseManager : MonoBehaviour
 
     [Header("Settings")]
     public string titleSceneName = "TitleScene";
-    [SerializeField] bool useRuntimePauseOverlay = true;
-    [SerializeField] bool debugLog = true;
 
     bool isPaused;
     bool isSettingsOpen;
-    RuntimePauseMenuOverlay runtimeOverlay;
-
-    public bool IsPaused => isPaused;
 
     void Awake()
     {
@@ -27,17 +22,7 @@ public class PauseManager : MonoBehaviour
 
     void Start()
     {
-        isPaused = false;
-        isSettingsOpen = false;
-
-        if (uiView != null)
-            uiView.HideMenuImmediate();
-
-        if (useRuntimePauseOverlay)
-            EnsureRuntimeOverlay().Hide();
-
-        RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
-        SetSupplementalOverlayVisibility(true);
+        ResumeGame();
     }
 
     void Update()
@@ -49,15 +34,6 @@ public class PauseManager : MonoBehaviour
             CloseSettings();
         else
             TogglePause();
-    }
-
-    void LateUpdate()
-    {
-        if (!isPaused && !isSettingsOpen)
-            return;
-
-        RuntimeUiInputUtility.EnsureEventSystem();
-        RuntimeUiInputUtility.ForceMenuCursor();
     }
 
     public void TogglePause()
@@ -73,34 +49,19 @@ public class PauseManager : MonoBehaviour
         isPaused = true;
         Time.timeScale = 0f;
         SetSupplementalOverlayVisibility(false);
-        RuntimeUiInputUtility.EnsureEventSystem();
 
-        if (useRuntimePauseOverlay)
-        {
-            if (uiView != null)
-                uiView.HideMenuImmediate();
-            EnsureRuntimeOverlay().Show(this);
-        }
-        else if (uiView != null)
-        {
+        if (uiView != null)
             uiView.ShowMenu();
-        }
 
-        RuntimeUiInputUtility.ForceMenuCursor();
-
-        if (debugLog)
-            Debug.Log($"[PauseUI] PauseGame uiView={(uiView != null)} timeScale={Time.timeScale} cursor={Cursor.visible}/{Cursor.lockState}");
+        Cursor.visible = true;
+        Cursor.lockState = CursorLockMode.None;
     }
 
     public void ResumeGame()
     {
         isPaused = false;
-        RuntimeUiInputUtility.RestoreModalInput();
 
-        if (runtimeOverlay != null)
-            runtimeOverlay.Hide();
-
-        if (useRuntimePauseOverlay || uiView == null)
+        if (uiView == null)
         {
             RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
             SetSupplementalOverlayVisibility(true);
@@ -116,18 +77,11 @@ public class PauseManager : MonoBehaviour
 
     public void OnClick_Resume()
     {
-        if (debugLog)
-            Debug.Log("[PauseUI] Click Resume");
-
         ResumeGame();
     }
 
     public void OnClick_Restart()
     {
-        if (debugLog)
-            Debug.Log("[PauseUI] Click Restart");
-
-        RuntimeUiInputUtility.RestoreModalInput();
         RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
 
         if (SceneFader.Instance != null)
@@ -138,14 +92,7 @@ public class PauseManager : MonoBehaviour
 
     public void OnClick_Settings()
     {
-        if (debugLog)
-            Debug.Log("[PauseUI] Click Settings");
-
         isSettingsOpen = true;
-        if (runtimeOverlay != null)
-            runtimeOverlay.HideVisualOnly();
-        RuntimeUiInputUtility.RestoreModalInput();
-
         if (uiView != null)
             uiView.ToggleSettings(true);
     }
@@ -155,17 +102,10 @@ public class PauseManager : MonoBehaviour
         isSettingsOpen = false;
         if (uiView != null)
             uiView.ToggleSettings(false);
-
-        if (isPaused && useRuntimePauseOverlay)
-            EnsureRuntimeOverlay().Show(this);
     }
 
     public void OnClick_ToTitle()
     {
-        if (debugLog)
-            Debug.Log("[PauseUI] Click ToTitle");
-
-        RuntimeUiInputUtility.RestoreModalInput();
         RuntimeMenuSceneStateUtility.PrepareForMenuScene();
 
         if (SceneFader.Instance != null)
@@ -176,10 +116,6 @@ public class PauseManager : MonoBehaviour
 
     public void OnClick_Quit()
     {
-        if (debugLog)
-            Debug.Log("[PauseUI] Click Quit");
-
-        RuntimeUiInputUtility.RestoreModalInput();
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else
@@ -196,17 +132,6 @@ public class PauseManager : MonoBehaviour
         SetOverlayRootActive("TutorialPresentationRuntime", visible);
         SetOverlayRootActive("TutorialDefenseFeedbackRuntime", visible);
         SetOverlayRootActive("TutorialSupportFeedbackRuntime", visible);
-    }
-
-    RuntimePauseMenuOverlay EnsureRuntimeOverlay()
-    {
-        if (runtimeOverlay != null)
-            return runtimeOverlay;
-
-        GameObject overlayObject = new GameObject("RuntimePauseMenuOverlay", typeof(RectTransform), typeof(RuntimePauseMenuOverlay));
-        overlayObject.transform.SetParent(transform, false);
-        runtimeOverlay = overlayObject.GetComponent<RuntimePauseMenuOverlay>();
-        return runtimeOverlay;
     }
 
     static void SetOverlayRootActive(string objectName, bool active)

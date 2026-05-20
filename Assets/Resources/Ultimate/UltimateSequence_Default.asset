@@ -79,7 +79,7 @@ MonoBehaviour:
     dashSlashClipEndNormalized: 0.68
     useSwordCloseupDuringIntro: 1
     introSwordCameraOffset: {x: 0, y: 0, z: 0}
-    introSwordLookLocalOffset: {x: 0.02, y: 0.04, z: 0}
+    introSwordLookLocalOffset: {x: -0.04, y: -0.04, z: 0}
     introSwordCloseupCamera:
       cameraLocalOffset: {x: 0.38, y: 0.24, z: -0.62}
       playerAnchorLocalOffset: {x: 0.22, y: 0.68, z: 0.05}
@@ -89,7 +89,7 @@ MonoBehaviour:
       targetVerticalOffset: 0
       positionSmoothing: 22
       rotationSmoothing: 24
-      fov: 25
+      fov: 21
       snapOnEnter: 1
       orbitAroundTarget: 0
       orbitClockwise: 1

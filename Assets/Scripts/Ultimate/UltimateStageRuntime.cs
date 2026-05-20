@@ -302,16 +302,21 @@ public class UltimateStageRuntime : MonoBehaviour
             walkDirection = stageForward;
         walkDirection.Normalize();
 
-        Vector3 introLookPoint = playerWorld + stageForward * 0.26f + side * 0.78f + Vector3.up * 0.8f;
+        Vector3 introLookPoint = playerWorld + stageForward * 0.18f + side * 0.62f + Vector3.up * 0.76f;
         if (shotOpenLookAnchor != null)
             shotOpenLookAnchor.position = introLookPoint;
 
-        SetShotPose(shotOpenAnchor, playerWorld + stageForward * 0.12f - side * 1.08f + Vector3.up * 0.98f, introLookPoint);
-        SetShotPose(shotWideAnchor, focusPoint - stageForward * 5.2f + side * 2.15f + Vector3.up * 1.36f, focusPoint);
-        SetShotPose(shotSlashLeftAnchor, focusPoint - stageForward * 3.55f - side * 2.05f + Vector3.up * 1.08f, focusPoint);
-        SetShotPose(shotSlashRightAnchor, focusPoint - stageForward * 3.55f + side * 2.05f + Vector3.up * 1.08f, focusPoint);
-        SetShotPose(shotFinisherAnchor, victimWorld - stageForward * 4.6f + side * 2.15f + Vector3.up * 1.9f, victimWorld + Vector3.up * 1.15f);
-        SetShotPose(shotWalkOutAnchor, walkOutWorld - walkDirection * 2.7f + Vector3.up * 1.46f - side * 0.25f, walkOutWorld + Vector3.up * 1.22f);
+        SetShotPose(shotOpenAnchor, playerWorld + stageForward * 0.04f - side * 0.58f + Vector3.up * 0.82f, introLookPoint);
+        SetShotPose(shotWideAnchor, focusPoint - stageForward * 5.4f + side * 2.1f + Vector3.up * 2.75f, focusPoint);
+        SetShotPose(shotSlashLeftAnchor, focusPoint - stageForward * 5.6f - side * 2.35f + Vector3.up * 3.25f, focusPoint);
+        SetShotPose(shotSlashRightAnchor, focusPoint - stageForward * 5.6f + side * 2.35f + Vector3.up * 3.25f, focusPoint);
+
+        Vector3 finishCamera = playerWorld - stageForward * 4.2f + side * 1.15f + Vector3.up * 2.05f;
+        Vector3 finishLook = Vector3.Lerp(playerWorld, victimWorld, 0.52f) + Vector3.up * 1.05f;
+        SetShotPose(shotFinisherAnchor, finishCamera, finishLook);
+
+        Vector3 walkCamera = walkOutWorld - walkDirection * 4.05f + side * 0.75f + Vector3.up * 1.72f;
+        SetShotPose(shotWalkOutAnchor, walkCamera, walkOutWorld + Vector3.up * 1.18f);
     }
 
     Transform EnsureChild(Transform existing, string childName)

@@ -787,6 +787,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gameSceneName: BootScene
   resetTimeScaleOnLoad: 1
+  settingsPrefabResourcePath: UI/Title/PauseOptionsRoot_Title
+  creditsDataResourcePath: UI/Title/TitleCredits_Default
 --- !u!1 &617997491
 GameObject:
   m_ObjectHideFlags: 0

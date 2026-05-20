@@ -19,8 +19,6 @@ public class SystemBootLoader : MonoBehaviour
     [SerializeField, Min(0.1f)] private float minimumBootSequenceDuration = 4.5f;
     [SerializeField, Min(0f)] private float autoProceedDelayWhenNoPrompt = 0.15f;
     [SerializeField, Min(0f)] private float sceneActivationFadeDuration = 0.2f;
-    [SerializeField, Min(0)] private int visibleFramesBeforeAsyncLoad = 2;
-    [SerializeField, Range(0.016f, 0.2f)] private float maxBootSequenceDelta = 0.05f;
 
     [Header("Log Display")]
     [Range(1, 30)] public int maxVisibleLines = 10;
@@ -103,8 +101,6 @@ public class SystemBootLoader : MonoBehaviour
 
         if (logText != null)
             logText.text = string.Empty;
-
-        RefreshBootProgressUi(0, bootLogs != null ? bootLogs.Length : 0);
     }
 
     void ConfigureResponsiveUi()
@@ -192,16 +188,7 @@ public class SystemBootLoader : MonoBehaviour
 
     IEnumerator BootSequence()
     {
-        int totalLogs = bootLogs != null ? bootLogs.Length : 0;
-        visibleLines.Clear();
-        RefreshBootProgressUi(0, totalLogs);
-
-        int warmupFrames = Mathf.Max(0, visibleFramesBeforeAsyncLoad);
-        for (int i = 0; i < warmupFrames; i++)
-            yield return null;
-
         _bootSequenceStartedAt = Time.unscaledTime;
-        float bootVisibleElapsed = 0f;
 
         AsyncOperation op = SceneManager.LoadSceneAsync(nextSceneName);
         op.allowSceneActivation = false;
@@ -209,18 +196,18 @@ public class SystemBootLoader : MonoBehaviour
         forceContinueRequested = false;
 
         StringBuilder fullLogBuilder = new StringBuilder();
+        int totalLogs = bootLogs != null ? bootLogs.Length : 0;
         float revealDuration = useFastBootMode
             ? Mathf.Clamp(Mathf.Max(typingSpeed, 0.001f) * Mathf.Max(1, totalLogs), fastBootMinDuration, fastBootMaxDuration)
             : Mathf.Max(typingSpeed, 0.001f) * Mathf.Max(1, totalLogs);
 
+        visibleLines.Clear();
         float elapsed = 0f;
         int revealedCount = 0;
 
         while (revealedCount < totalLogs)
         {
-            float stepDelta = GetBootSequenceDelta();
-            elapsed += stepDelta;
-            bootVisibleElapsed += stepDelta;
+            elapsed += Time.unscaledDeltaTime;
             float normalized = revealDuration <= 0.0001f ? 1f : Mathf.Clamp01(elapsed / revealDuration);
             int targetRevealCount = Mathf.Clamp(Mathf.CeilToInt(normalized * totalLogs), 1, totalLogs);
 
@@ -246,18 +233,10 @@ public class SystemBootLoader : MonoBehaviour
         while (op.progress < 0.9f)
             yield return null;
 
-        while (bootVisibleElapsed < minimumBootSequenceDuration)
-        {
-            bootVisibleElapsed += GetBootSequenceDelta();
+        while (Time.unscaledTime - _bootSequenceStartedAt < minimumBootSequenceDuration)
             yield return null;
-        }
 
         yield return StartCoroutine(WaitForPlayerInputAndProceed(op));
-    }
-
-    float GetBootSequenceDelta()
-    {
-        return Mathf.Min(Time.unscaledDeltaTime, Mathf.Max(0.001f, maxBootSequenceDelta));
     }
 
     void RefreshBootProgressUi(int revealedCount, int totalLogs)
@@ -331,10 +310,7 @@ public class SystemBootLoader : MonoBehaviour
 
         if (SceneFader.Instance != null && SceneFader.Instance.fadeCanvasGroup != null)
         {
-            SceneFader.Instance.fadeCanvasGroup.gameObject.SetActive(true);
-            SceneFader.Instance.fadeCanvasGroup.alpha = 0f;
             SceneFader.Instance.fadeCanvasGroup.blocksRaycasts = true;
-            SceneFader.Instance.fadeCanvasGroup.interactable = true;
             SceneFader.Instance.fadeCanvasGroup
                 .DOFade(1f, Mathf.Max(0.01f, sceneActivationFadeDuration))
                 .OnComplete(() =>

@@ -131,21 +131,7 @@ public class GuidePathSystem : MonoBehaviour
     {
         HidePath();
 
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeLobbyGuidePathEnabled &&
-            !ExhibitionPrototypePresentationPolicy.RuntimePrototypeGuidesEnabled)
-            return;
-
         if (newTargets == null || linePrefab == null)
-            return;
-
-        if (player == null)
-        {
-            GameObject taggedPlayer = GameObject.FindWithTag("Player");
-            if (taggedPlayer != null)
-                player = taggedPlayer.transform;
-        }
-
-        if (player == null)
             return;
 
         for (int i = 0; i < newTargets.Length; i++)

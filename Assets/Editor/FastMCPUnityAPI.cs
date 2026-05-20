@@ -29,7 +29,6 @@ public static class FastMCPUnityAPI
     public static void SyncPlayerVisualPrefab() { PlayerVisualPrefabSyncUtility.RunFromFastMcp(); }
     public static void SyncBossVisualRig() { BossVisualRigSyncUtility.RunFromFastMcp(); }
     public static void RunGameplayRegressionChecks() { GameplayRegressionValidator.RunFromFastMcp(); }
-    public static void RunBossCombatDataValidation() { Debug.Log(BossCombatDataValidator.RunFromFastMcp().Details); }
     public static void StartPlayModeSmokeTest() { PlayModeSmokeTestRunner.StartFromFastMcp(); }
     public static void GetPlayModeSmokeTestStatus() { Debug.Log(JsonUtility.ToJson(PlayModeSmokeTestRunner.GetStatus(), true)); }
     public static void StartBossUltimateScenarioTest() { BossUltimateScenarioTestRunner.StartFromFastMcp(); }

@@ -27,7 +27,6 @@ public class PauseMenuView : MonoBehaviour
     [Header("Unified Settings Overlay")]
     [SerializeField] bool useUnifiedSettingsOverlay = true;
     [SerializeField] string unifiedSettingsPrefabResourcePath = UnifiedSettingsPrefabResourcePath;
-    [SerializeField] bool debugLog = true;
 
     GameObject settingsContentInstance;
     RectTransform settingsContentVisualRoot;
@@ -36,53 +35,30 @@ public class PauseMenuView : MonoBehaviour
     RectTransform settingsOverlayHostRect;
     TitleSettingsOverlay unifiedSettingsOverlay;
     GameObject unifiedSettingsPrefab;
-    Tween hideTween;
 
     void Awake()
     {
+        EnsureDimOverlay();
         EnsureUnifiedSettingsOverlay();
-        ApplyHiddenState();
 
         if (useUnifiedSettingsOverlay)
+        {
+            if (menuRoot != null)
+                menuRoot.SetActive(false);
+
+            if (settingsPanel != null)
+                settingsPanel.SetActive(false);
             return;
+        }
 
         EnsureSettingsPanelReferences();
         EnsureSettingsContent();
-        ApplyHiddenState();
-    }
 
-    void ApplyHiddenState()
-    {
         if (menuRoot != null)
-            menuRoot.SetActive(true);
-
-        RuntimeUiInputUtility.RestoreModalInput();
+            menuRoot.SetActive(false);
 
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
-
-        if (backgroundGroup != null)
-        {
-            backgroundGroup.DOKill();
-            backgroundGroup.alpha = 0f;
-            backgroundGroup.interactable = false;
-            backgroundGroup.blocksRaycasts = false;
-        }
-
-        if (menuContainer != null)
-        {
-            menuContainer.DOKill();
-            menuContainer.localScale = Vector3.one;
-
-            var menuCanvasGroup = menuContainer.GetComponent<CanvasGroup>();
-            if (menuCanvasGroup != null)
-            {
-                menuCanvasGroup.DOKill();
-                menuCanvasGroup.alpha = 0f;
-                menuCanvasGroup.interactable = false;
-                menuCanvasGroup.blocksRaycasts = false;
-            }
-        }
     }
 
     public void ShowMenu()
@@ -90,9 +66,7 @@ public class PauseMenuView : MonoBehaviour
         if (menuRoot == null || backgroundGroup == null || menuContainer == null)
             return;
 
-        KillHideTween();
-        Canvas pauseCanvas = PromoteCanvasForMenu();
-        RuntimeUiInputUtility.BeginModalInput(pauseCanvas);
+        EnsureDimOverlay();
 
         if (unifiedSettingsOverlay != null)
             unifiedSettingsOverlay.Hide();
@@ -109,8 +83,6 @@ public class PauseMenuView : MonoBehaviour
             settingsPanel.SetActive(false);
 
         backgroundGroup.alpha = 0f;
-        backgroundGroup.interactable = true;
-        backgroundGroup.blocksRaycasts = true;
         backgroundGroup.DOFade(1f, 0.3f).SetUpdate(true);
 
         menuContainer.localScale = Vector3.one * 0.8f;
@@ -120,21 +92,21 @@ public class PauseMenuView : MonoBehaviour
         if (menuCanvasGroup != null)
         {
             menuCanvasGroup.alpha = 0f;
-            menuCanvasGroup.interactable = true;
-            menuCanvasGroup.blocksRaycasts = true;
             menuCanvasGroup.DOFade(1f, 0.3f).SetUpdate(true);
         }
+    }
 
-        if (debugLog)
-        {
-            string menuGroupAlpha = menuCanvasGroup != null ? menuCanvasGroup.alpha.ToString("0.00") : "none";
-            string canvasName = pauseCanvas != null ? pauseCanvas.name : "null";
-            int canvasSort = pauseCanvas != null ? pauseCanvas.sortingOrder : -1;
-            Debug.Log(
-                $"[PauseUI] Show menuRoot={menuRoot.activeInHierarchy} bg={backgroundGroup.alpha:0.00}/{backgroundGroup.interactable}/{backgroundGroup.blocksRaycasts} " +
-                $"menuGroup={menuGroupAlpha}/{(menuCanvasGroup != null && menuCanvasGroup.interactable)}/{(menuCanvasGroup != null && menuCanvasGroup.blocksRaycasts)} " +
-                $"canvas={canvasName} sort={canvasSort} cursor={Cursor.visible}/{Cursor.lockState}");
-        }
+    void EnsureDimOverlay()
+    {
+        if (backgroundGroup == null)
+            return;
+
+        Image dimImage = backgroundGroup.GetComponent<Image>();
+        if (dimImage == null)
+            dimImage = backgroundGroup.gameObject.AddComponent<Image>();
+
+        dimImage.color = new Color(0f, 0f, 0f, 0.42f);
+        dimImage.raycastTarget = true;
     }
 
     public void HideMenu(System.Action onComplete = null)
@@ -144,8 +116,6 @@ public class PauseMenuView : MonoBehaviour
             onComplete?.Invoke();
             return;
         }
-
-        KillHideTween();
 
         if (unifiedSettingsOverlay != null)
             unifiedSettingsOverlay.Hide();
@@ -157,42 +127,11 @@ public class PauseMenuView : MonoBehaviour
         if (menuCanvasGroup != null)
             menuCanvasGroup.DOFade(0f, 0.2f).SetUpdate(true);
 
-        hideTween = DOVirtual.DelayedCall(0.25f, () =>
+        DOVirtual.DelayedCall(0.25f, () =>
         {
-            hideTween = null;
-            ApplyHiddenState();
+            menuRoot.SetActive(false);
             onComplete?.Invoke();
         }).SetUpdate(true);
-    }
-
-    public void HideMenuImmediate()
-    {
-        KillHideTween();
-        ApplyHiddenState();
-    }
-
-    void KillHideTween()
-    {
-        if (hideTween == null)
-            return;
-
-        hideTween.Kill();
-        hideTween = null;
-    }
-
-    Canvas PromoteCanvasForMenu()
-    {
-        Canvas canvas = GetComponentInParent<Canvas>(true);
-        if (canvas == null)
-            return null;
-
-        canvas.overrideSorting = true;
-        canvas.sortingOrder = 6500;
-        GraphicRaycaster raycaster = canvas.GetComponent<GraphicRaycaster>();
-        if (raycaster != null)
-            raycaster.enabled = true;
-
-        return canvas;
     }
 
     public void ToggleSettings(bool isOpen)

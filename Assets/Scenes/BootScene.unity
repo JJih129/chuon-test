@@ -153,6 +153,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   nextSceneName: Tutorial
   typingSpeed: 0.35
+  useFastBootMode: 1
+  fastBootMinDuration: 4.2
+  fastBootMaxDuration: 4.8
+  minimumBootSequenceDuration: 4.5
+  autoProceedDelayWhenNoPrompt: 0.15
+  sceneActivationFadeDuration: 0.2
   maxVisibleLines: 10
   logText: {fileID: 1368661700}
   progressText: {fileID: 1873854502}

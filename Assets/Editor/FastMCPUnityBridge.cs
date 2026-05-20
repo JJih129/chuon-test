@@ -266,7 +266,6 @@ public static class FastMCPUnityBridge
             case "sync_player_visual_prefab": return SyncPlayerVisualPrefab();
             case "sync_boss_visual_rig": return SyncBossVisualRig();
             case "run_gameplay_regression_checks": return RunGameplayRegressionChecks();
-            case "run_boss_combat_data_validation": return RunBossCombatDataValidation();
             case "start_playmode_smoke_test": return StartPlayModeSmokeTest();
             case "get_playmode_smoke_test_status": return GetPlayModeSmokeTestStatus();
             case "start_boss_ultimate_scenario_test": return StartBossUltimateScenarioTest();
@@ -627,17 +626,6 @@ public static class FastMCPUnityBridge
         }
 
         return Ok(summary.Details);
-    }
-
-    private static Response RunBossCombatDataValidation()
-    {
-        BossCombatDataValidator.ValidationSummary summary = BossCombatDataValidator.RunFromFastMcp();
-        if (summary.HasErrors)
-        {
-            return Fail(summary.Details);
-        }
-
-        return Ok(summary.Details, JsonUtility.ToJson(summary, true));
     }
 
     private static Response StartPlayModeSmokeTest()

@@ -360,6 +360,9 @@ public class BossReferences : MonoBehaviour
         if (_bossController == null)
             _bossController = GetComponent<BossController>();
 
+        if (_bossController != null && _bossController.IsUsingRuntimeForwardAttackHitbox)
+            return;
+
         if (_bossController != null && _bossController.attackHitbox != attackHitbox)
             _bossController.attackHitbox = attackHitbox;
     }
@@ -367,6 +370,9 @@ public class BossReferences : MonoBehaviour
     void SyncAttackHitboxBinding()
     {
         if (attackHitbox == null)
+            return;
+
+        if (IsRuntimeForwardAttackHitbox(attackHitbox))
             return;
 
         if (attackHitbox.attackerRoot != BossRoot)
@@ -400,6 +406,9 @@ public class BossReferences : MonoBehaviour
         if (attackHitbox == null)
             return;
 
+        if (IsRuntimeForwardAttackHitbox(attackHitbox))
+            return;
+
         if (attackHitboxSocket == null)
         {
             SyncAttackHitboxBinding();
@@ -422,6 +431,11 @@ public class BossReferences : MonoBehaviour
         }
 
         AttachHitboxProxyToSocket(attackHitboxSocket);
+    }
+
+    static bool IsRuntimeForwardAttackHitbox(AttackHitbox hitbox)
+    {
+        return hitbox != null && hitbox.name == "RuntimeForwardAttackHitbox";
     }
 
     void AttachHitboxProxyToSocket(Transform socket)

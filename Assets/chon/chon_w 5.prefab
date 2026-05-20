@@ -1,0 +1,140 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &6488743231413698080
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.78349435
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 1.2778723
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -5822988167199250057, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: ab98bdc2b6394704d8a05567c8a2319e, type: 2}
+    - target: {fileID: -5547835779624581775, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 601db0901574d39468a2dd6cab21ca70, type: 2}
+    - target: {fileID: -4824736011439814889, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 61c9f97ed4cdbbe47858a7c067d0d4c1, type: 2}
+    - target: {fileID: -3107852797717093578, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 61c9f97ed4cdbbe47858a7c067d0d4c1, type: 2}
+    - target: {fileID: -2610381354754146067, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 01f4f03cb3f891743bbc42207ee6f17b, type: 2}
+    - target: {fileID: 919132149155446097, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Name
+      value: chon_w 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2739463376956270610, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: f50215a1a574f7243bac21257070cab8, type: 2}
+    - target: {fileID: 4152499113433111113, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 8dfb864a6ce36a949bd455ef00e8c38e, type: 2}
+    - target: {fileID: 4161184112354977728, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 25de24b0f9020bd47a19654707cdd48f, type: 2}
+    - target: {fileID: 4198093640843028191, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 17307815ae0aabc4da0ae750ee1850ec, type: 2}
+    - target: {fileID: 4699607565268971699, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 61a16a27e29c6e943b0f2d3e75d169a8, type: 2}
+    - target: {fileID: 8402332881043045077, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 977c63960e8fd4346a091748d96091fb, type: 2}
+    - target: {fileID: 8805522794263118761, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 61c9f97ed4cdbbe47858a7c067d0d4c1, type: 2}
+    - target: {fileID: 9105351338584198794, guid: 280bc232aa2986f4a89c695617ba3202,
+        type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: 61c9f97ed4cdbbe47858a7c067d0d4c1, type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 280bc232aa2986f4a89c695617ba3202, type: 3}

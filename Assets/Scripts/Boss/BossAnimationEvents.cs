@@ -46,9 +46,6 @@ public class BossAnimationEvents : MonoBehaviour
     {
         if (debugLog) Debug.Log("[BossAnimEvents] Anim_ActivateHitbox", this);
 
-        if (bossController != null && bossController.IsTimingDataControllingHitbox)
-            return;
-
         if (!CanProcessAttackEvents())
         {
             SetResolvedHitboxesActive(false);
@@ -74,9 +71,6 @@ public class BossAnimationEvents : MonoBehaviour
     public void Anim_DeactivateHitbox()
     {
         if (debugLog) Debug.Log("[BossAnimEvents] Anim_DeactivateHitbox", this);
-
-        if (bossController != null && bossController.IsTimingDataControllingHitbox)
-            return;
 
         if (attackVfxPresenter != null)
             attackVfxPresenter.StopCurrentPatternSlash();
@@ -107,7 +101,7 @@ public class BossAnimationEvents : MonoBehaviour
         if (bossController == null)
             return true;
 
-        return bossController.CanProcessAttackHitboxAnimationEvents;
+        return bossController.CanProcessAttackAnimationEvents;
     }
 
     bool SetResolvedHitboxesActive(bool active)

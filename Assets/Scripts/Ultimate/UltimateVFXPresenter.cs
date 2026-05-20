@@ -1,9 +1,5 @@
 using UnityEngine;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
 [DisallowMultipleComponent]
 public sealed class UltimateVFXPresenter : MonoBehaviour
 {
@@ -15,11 +11,6 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
     [SerializeField] private PlayerReferences playerReferences;
     [SerializeField] private Transform fallbackVfxRoot;
     [SerializeField] private bool debugLog;
-
-    [Header("Final Explosion")]
-    [SerializeField] private GameObject finalExplosionImpactFramePrefab;
-    [SerializeField] private Vector3 finalExplosionImpactFrameScale = new Vector3(2.2f, 2.2f, 2.2f);
-    [SerializeField] private float finalExplosionImpactFrameLifetime = 0.4f;
 
     UltimateSequenceData _data;
     UltimateTargetBinder _binder;
@@ -33,9 +24,6 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
     void Awake()
     {
         ResolveReferences();
-#if UNITY_EDITOR
-        AutoAssignFinalExplosionImpactFrame();
-#endif
     }
 
 #if UNITY_EDITOR
@@ -45,7 +33,6 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
             return;
 
         ResolveReferences();
-        AutoAssignFinalExplosionImpactFrame();
     }
 #endif
 
@@ -174,7 +161,6 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         Vector3 forward = _binder != null && _binder.PlayerRoot != null ? _binder.PlayerRoot.forward : transform.forward;
         slashBurstSpawner?.EmitConvergenceBurst(position, forward, _sequenceSeed ^ 15401, _data.Vfx.explosionLifetime, _data.Vfx, 1.2f, true);
         SpawnWorldVfx(_data.Vfx.explosionVfxPrefab, position, Quaternion.identity, _data.Vfx.explosionLifetime);
-        SpawnFinalExplosionImpactFrame(position);
         for (int i = 0; i < _data.Vfx.shardSpawnCount; i++)
         {
             Vector3 jitter = Random.insideUnitSphere * 0.6f;
@@ -225,27 +211,6 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         TransientVfxPool.Spawn(prefab, position, cameraTransform.rotation, cameraTransform, lifetime);
     }
 
-    void SpawnFinalExplosionImpactFrame(Vector3 position)
-    {
-        if (finalExplosionImpactFramePrefab == null)
-            return;
-
-        float lifetime = finalExplosionImpactFrameLifetime > 0.01f
-            ? finalExplosionImpactFrameLifetime
-            : Mathf.Max(0.1f, _data != null ? _data.Vfx.explosionLifetime : 0.4f);
-
-        GameObject spawned = TransientVfxPool.Spawn(
-            finalExplosionImpactFramePrefab,
-            position,
-            Quaternion.identity,
-            _cachedVfxRoot,
-            lifetime);
-        if (spawned == null)
-            return;
-
-        spawned.transform.localScale = finalExplosionImpactFrameScale;
-    }
-
     Transform ResolveVfxRootInternal(UltimateTargetBinder binder)
     {
         if (binder != null && binder.PlayerVfxRoot != null)
@@ -254,17 +219,6 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
             return playerReferences.VFXRoot;
         return fallbackVfxRoot;
     }
-
-#if UNITY_EDITOR
-    void AutoAssignFinalExplosionImpactFrame()
-    {
-        if (finalExplosionImpactFramePrefab != null)
-            return;
-
-        const string impactFramePath = "Assets/Vefects/Easy Impact Frames/VFX/Impact Frames/Particles/VFX_Impact_Frame_01.prefab";
-        finalExplosionImpactFramePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(impactFramePath);
-    }
-#endif
 
     Transform ResolveIntroSwordAnchor()
     {

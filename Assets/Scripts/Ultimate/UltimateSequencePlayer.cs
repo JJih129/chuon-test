@@ -341,7 +341,6 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
     {
         CurrentPhase = nextPhase;
         _phaseElapsed = 0f;
-        _owner?.NotifyUltimatePhaseChanged(nextPhase, "CodeDriven");
 
         if (ShouldLog)
             Debug.Log($"[UltimateSequence] Phase -> {nextPhase}", this);

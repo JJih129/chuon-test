@@ -14,12 +14,6 @@ public class SoulButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
     public Color normalColor = Color.white; // ★ 기본값 흰색으로 변경
     public Color hoverColor = new Color(1f, 0.8f, 0f, 1f); 
     public float scaleAmount = 1.1f;
-    Vector3 baseScale;
-
-    private void Awake()
-    {
-        baseScale = transform.localScale;
-    }
 
     private void Start()
     {
@@ -31,14 +25,14 @@ public class SoulButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
     {
         // ★ SetUpdate(true) 필수
         if (buttonText) buttonText.DOColor(hoverColor, 0.2f).SetUpdate(true);
-        transform.DOScale(baseScale * scaleAmount, 0.2f).SetUpdate(true);
+        transform.DOScale(scaleAmount, 0.2f).SetUpdate(true);
         if (iconImage) iconImage.DOFade(1, 0.2f).SetUpdate(true);
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
         if (buttonText) buttonText.DOColor(normalColor, 0.2f).SetUpdate(true);
-        transform.DOScale(baseScale, 0.2f).SetUpdate(true);
+        transform.DOScale(1f, 0.2f).SetUpdate(true);
         if (iconImage) iconImage.DOFade(0, 0.2f).SetUpdate(true);
     }
 

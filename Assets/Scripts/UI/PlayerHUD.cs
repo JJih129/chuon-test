@@ -18,20 +18,6 @@ public class PlayerHUD : MonoBehaviour
     [Tooltip("앰플 슬롯 이미지들")]
     public Image[] ampouleSlots = new Image[5];
 
-    [Header("ChuOn HUD Skin")]
-    [SerializeField] bool useChuOnHudPlayerSkin = true;
-    [SerializeField] Sprite chuOnHudFrameSprite;
-    [SerializeField] Sprite chuOnHpGaugeSprite;
-    [SerializeField] Sprite chuOnPotionGaugeSprite;
-    [SerializeField] Sprite chuOnUltimateGaugeSprite;
-    [SerializeField] bool applyChuOnUltimateGaugeSkin = true;
-
-    [Header("Ultimate Gauge Text")]
-    [SerializeField] Text ultimateGaugePercentText;
-    [SerializeField] bool showUltimateGaugePercent = true;
-    [SerializeField] int ultimateGaugePercentFontSize = 18;
-    [SerializeField] Color ultimateGaugePercentTextColor = new Color(0.86f, 1f, 1f, 0.98f);
-
     [Header("Guard Strain")]
     [Tooltip("직렬화된 가드 안정도 Fill 이미지가 있으면 우선 사용")]
     public Image guardStrainFillImage;
@@ -152,7 +138,6 @@ public class PlayerHUD : MonoBehaviour
     PlayerConsumables _boundConsumables;
     PlayerGuardController _boundGuard;
     BossController _boundBoss;
-    PlayerUltimateController _boundUltimate;
 
     CanvasGroup _guardCanvasGroup;
     RectTransform _guardRoot;
@@ -193,9 +178,6 @@ public class PlayerHUD : MonoBehaviour
     float _parryCounterFlashUntilTime;
     float _punishWindowDuration;
     float _punishWindowDamageMultiplier = 1f;
-    int _lastUltimateGaugePercent = -1;
-
-    static string[] s_ultimateGaugePercentLabels;
 
     const string RuntimeGuardRootName = "_RuntimeGuardStrainBar";
     const string RuntimeGuardTrackName = "_Track";
@@ -213,29 +195,10 @@ public class PlayerHUD : MonoBehaviour
     const string RuntimePunishWindowTextName = "_Text";
     const string RuntimePerformanceHudRootName = "_RuntimePerformanceHUD";
     const string RuntimePerformanceHudTextName = "_Text";
-    const string RuntimeUltimateGaugePercentTextName = "_PercentText";
-    const string LegacyChuOnHudFrameName = "_ChuOnHudPlayerFrame";
-    const string ChuOnHudFramePath = "UI/HUD/chuon_hud_player";
-    const string ChuOnHpGaugePath = "UI/HUD/chuon_hud_player_hpgauge";
-    const string ChuOnPotionGaugePath = "UI/HUD/chuon_hud_player_potiongauge";
-    const string ChuOnUltimateGaugePath = "UI/HUD/chuon_hud_player_ultimategauge";
-
-    void Awake()
-    {
-        ApplyChuOnHudSkin();
-    }
-
-#if UNITY_EDITOR
-    void OnValidate()
-    {
-        if (!Application.isPlaying)
-            LoadChuOnHudSkinSprites();
-    }
-#endif
 
     void Update()
     {
-        if (ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled && Input.GetKeyDown(performanceHudToggleKey))
+        if (Input.GetKeyDown(performanceHudToggleKey))
         {
             showPerformanceHud = !showPerformanceHud;
             if (!showPerformanceHud && _performanceHudRoot != null)
@@ -286,9 +249,8 @@ public class PlayerHUD : MonoBehaviour
         }
     }
 
-    public void Bind(IHealth health, PlayerConsumables consumables = null, PlayerGuardController guard = null, BossController boss = null, PlayerUltimateController ultimate = null)
+    public void Bind(IHealth health, PlayerConsumables consumables = null, PlayerGuardController guard = null, BossController boss = null)
     {
-        ApplyChuOnHudSkin();
         Unbind();
 
         _boundHealth = health;
@@ -318,133 +280,6 @@ public class PlayerHUD : MonoBehaviour
 
         BindGuard(guard);
         BindBoss(boss);
-        BindUltimate(ultimate != null ? ultimate : GameplaySceneCache.ResolvePlayerUltimateController());
-    }
-
-    void ApplyChuOnHudSkin()
-    {
-        if (!useChuOnHudPlayerSkin)
-            return;
-
-        LoadChuOnHudSkinSprites();
-        RemoveLegacyChuOnRuntimeFrame();
-        ApplyChuOnHpGaugeSkin();
-        ApplyChuOnPotionGaugeSkin();
-        ApplyChuOnUltimateGaugeSkin();
-        ApplyChuOnPlayerHudFrameSkin();
-    }
-
-    void LoadChuOnHudSkinSprites()
-    {
-        if (chuOnHudFrameSprite == null)
-            chuOnHudFrameSprite = Resources.Load<Sprite>(ChuOnHudFramePath);
-        if (chuOnHpGaugeSprite == null)
-            chuOnHpGaugeSprite = Resources.Load<Sprite>(ChuOnHpGaugePath);
-        if (chuOnPotionGaugeSprite == null)
-            chuOnPotionGaugeSprite = Resources.Load<Sprite>(ChuOnPotionGaugePath);
-        if (chuOnUltimateGaugeSprite == null)
-            chuOnUltimateGaugeSprite = Resources.Load<Sprite>(ChuOnUltimateGaugePath);
-    }
-
-    void ApplyChuOnHpGaugeSkin()
-    {
-        if (hpFillImage == null || chuOnHpGaugeSprite == null)
-            return;
-
-        hpFillImage.sprite = chuOnHpGaugeSprite;
-        hpFillImage.type = Image.Type.Filled;
-        hpFillImage.fillMethod = Image.FillMethod.Horizontal;
-        hpFillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
-        hpFillImage.fillClockwise = true;
-        hpFillImage.color = Color.white;
-        hpFillImage.raycastTarget = false;
-    }
-
-    void ApplyChuOnPotionGaugeSkin()
-    {
-        if (ampouleSlots == null || chuOnPotionGaugeSprite == null)
-            return;
-
-        for (int i = 0; i < ampouleSlots.Length; i++)
-        {
-            Image slot = ampouleSlots[i];
-            if (slot == null)
-                continue;
-
-            slot.sprite = chuOnPotionGaugeSprite;
-            slot.color = Color.white;
-            slot.raycastTarget = false;
-        }
-    }
-
-    void ApplyChuOnUltimateGaugeSkin()
-    {
-        if (!applyChuOnUltimateGaugeSkin || chuOnUltimateGaugeSprite == null)
-            return;
-
-        UI_UltimateGauge[] gauges = FindObjectsOfType<UI_UltimateGauge>(true);
-        for (int i = 0; i < gauges.Length; i++)
-        {
-            Image fill = gauges[i] != null ? gauges[i].fill : null;
-            if (fill == null)
-                continue;
-
-            fill.sprite = chuOnUltimateGaugeSprite;
-            fill.color = Color.white;
-            fill.raycastTarget = false;
-        }
-    }
-
-    void ApplyChuOnPlayerHudFrameSkin()
-    {
-        if (chuOnHudFrameSprite == null || hpFillImage == null)
-            return;
-
-        Transform hpRoot = hpFillImage.transform.parent;
-        if (hpRoot == null)
-            return;
-
-        Image[] images = hpRoot.GetComponentsInChildren<Image>(true);
-        for (int i = 0; i < images.Length; i++)
-        {
-            Image image = images[i];
-            if (image == null || image == hpFillImage || IsAmpouleSlotImage(image))
-                continue;
-
-            image.sprite = chuOnHudFrameSprite;
-            image.color = Color.white;
-            image.raycastTarget = false;
-            break;
-        }
-    }
-
-    bool IsAmpouleSlotImage(Image image)
-    {
-        if (ampouleSlots == null)
-            return false;
-
-        for (int i = 0; i < ampouleSlots.Length; i++)
-        {
-            if (ampouleSlots[i] == image)
-                return true;
-        }
-
-        return false;
-    }
-
-    void RemoveLegacyChuOnRuntimeFrame()
-    {
-        if (hpFillImage == null || hpFillImage.transform.parent == null)
-            return;
-
-        Transform legacy = hpFillImage.transform.parent.Find(LegacyChuOnHudFrameName);
-        if (legacy == null)
-            return;
-
-        if (Application.isPlaying)
-            Destroy(legacy.gameObject);
-        else
-            DestroyImmediate(legacy.gameObject);
     }
 
     public void Unbind()
@@ -464,15 +299,11 @@ public class PlayerHUD : MonoBehaviour
 
         UnbindGuard();
         UnbindBoss();
-        UnbindUltimate();
         hpFillImage?.DOKill();
     }
 
     public void ShowRuntimeTelegraphMessage(string message, AttackTelegraphType telegraphType = AttackTelegraphType.Auto, float holdTime = 0.72f, bool useDangerFeedback = false, int priority = 0)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
-            return;
-
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -602,118 +433,6 @@ public class PlayerHUD : MonoBehaviour
 
         if (_punishWindowRoot != null)
             _punishWindowRoot.localScale = Vector3.one;
-    }
-
-    void EnsureUltimateGaugePercentVisual()
-    {
-        if (!showUltimateGaugePercent)
-        {
-            if (ultimateGaugePercentText != null)
-                ultimateGaugePercentText.gameObject.SetActive(false);
-            return;
-        }
-
-        if (ultimateGaugePercentText == null)
-        {
-            RectTransform parent = ResolveUltimateGaugeTextParent();
-            if (parent == null)
-                return;
-
-            RectTransform textRect = parent.Find(RuntimeUltimateGaugePercentTextName) as RectTransform;
-            if (textRect == null)
-            {
-                GameObject textGo = new GameObject(RuntimeUltimateGaugePercentTextName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-                textRect = textGo.GetComponent<RectTransform>();
-                textRect.SetParent(parent, false);
-            }
-
-            ultimateGaugePercentText = textRect.GetComponent<Text>();
-            if (ultimateGaugePercentText == null)
-                ultimateGaugePercentText = textRect.gameObject.AddComponent<Text>();
-        }
-
-        RectTransform rect = ultimateGaugePercentText.rectTransform;
-        StretchToParent(rect);
-        rect.SetAsLastSibling();
-
-        ultimateGaugePercentText.alignment = TextAnchor.MiddleCenter;
-        ultimateGaugePercentText.font = ResolveRuntimeFont();
-        ultimateGaugePercentText.fontSize = Mathf.Max(10, ultimateGaugePercentFontSize);
-        ultimateGaugePercentText.fontStyle = FontStyle.Bold;
-        ultimateGaugePercentText.horizontalOverflow = HorizontalWrapMode.Overflow;
-        ultimateGaugePercentText.verticalOverflow = VerticalWrapMode.Overflow;
-        ultimateGaugePercentText.color = ultimateGaugePercentTextColor;
-        ultimateGaugePercentText.raycastTarget = false;
-        ultimateGaugePercentText.gameObject.SetActive(true);
-    }
-
-    RectTransform ResolveUltimateGaugeTextParent()
-    {
-        UI_UltimateGauge[] gauges = FindObjectsOfType<UI_UltimateGauge>(true);
-        Canvas hudCanvas = hpFillImage != null ? hpFillImage.canvas : null;
-        RectTransform fallback = null;
-
-        for (int i = 0; i < gauges.Length; i++)
-        {
-            Image fill = gauges[i] != null ? gauges[i].fill : null;
-            RectTransform fillRect = fill != null ? fill.rectTransform : null;
-            if (fillRect == null)
-                continue;
-
-            if (fallback == null)
-                fallback = fillRect;
-
-            if (hudCanvas == null || fill.canvas == hudCanvas)
-                return fillRect;
-        }
-
-        return fallback;
-    }
-
-    void HandleUltimateGaugeChanged(float gauge, float normalized, bool ready)
-    {
-        SetUltimateGaugePercent(normalized);
-    }
-
-    void SetUltimateGaugePercent(float normalized)
-    {
-        EnsureUltimateGaugePercentVisual();
-        if (ultimateGaugePercentText == null)
-            return;
-
-        int percent = Mathf.Clamp(Mathf.RoundToInt(Mathf.Clamp01(normalized) * 100f), 0, 100);
-        if (_lastUltimateGaugePercent == percent)
-            return;
-
-        _lastUltimateGaugePercent = percent;
-        ultimateGaugePercentText.text = GetUltimateGaugePercentLabel(percent);
-    }
-
-    void BindUltimate(PlayerUltimateController ultimate)
-    {
-        _boundUltimate = ultimate;
-        EnsureUltimateGaugePercentVisual();
-
-        if (_boundUltimate == null)
-        {
-            SetUltimateGaugePercent(0f);
-            return;
-        }
-
-        _boundUltimate.OnGaugeChanged += HandleUltimateGaugeChanged;
-        HandleUltimateGaugeChanged(
-            _boundUltimate.Gauge,
-            _boundUltimate.gaugeMax > 0f ? Mathf.Clamp01(_boundUltimate.Gauge / _boundUltimate.gaugeMax) : 0f,
-            _boundUltimate.IsGaugeReady);
-    }
-
-    void UnbindUltimate()
-    {
-        if (_boundUltimate != null)
-            _boundUltimate.OnGaugeChanged -= HandleUltimateGaugeChanged;
-
-        _boundUltimate = null;
-        _lastUltimateGaugePercent = -1;
     }
 
     void UpdateGuardStrainVisual()
@@ -889,9 +608,6 @@ public class PlayerHUD : MonoBehaviour
 
     void HandleAttackTelegraph(AttackTelegraphType telegraphType, float leadTime, string label)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
-            return;
-
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -921,9 +637,6 @@ public class PlayerHUD : MonoBehaviour
 
     void HandlePunishWindowOpened(float duration, float damageMultiplier, string patternName)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
-            return;
-
         EnsureCombatTelegraphVisuals();
         EnsurePunishWindowVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
@@ -969,9 +682,6 @@ public class PlayerHUD : MonoBehaviour
 
     void HandleBossPhaseChanged(int phase, float hpNormalized)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
-            return;
-
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -1409,7 +1119,7 @@ public class PlayerHUD : MonoBehaviour
 
     void UpdatePerformanceHud()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled || !showPerformanceHud)
+        if (!showPerformanceHud)
         {
             if (_performanceHudRoot != null)
                 _performanceHudRoot.gameObject.SetActive(false);
@@ -1453,7 +1163,7 @@ public class PlayerHUD : MonoBehaviour
 
     void EnsurePerformanceHudVisuals()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled || !showPerformanceHud || hpFillImage == null)
+        if (!showPerformanceHud || hpFillImage == null)
             return;
 
         if (_performanceHudRoot != null && _performanceHudText != null)
@@ -1711,18 +1421,6 @@ public class PlayerHUD : MonoBehaviour
     static Font ResolveRuntimeFont()
     {
         return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-    }
-
-    static string GetUltimateGaugePercentLabel(int percent)
-    {
-        if (s_ultimateGaugePercentLabels == null)
-        {
-            s_ultimateGaugePercentLabels = new string[101];
-            for (int i = 0; i < s_ultimateGaugePercentLabels.Length; i++)
-                s_ultimateGaugePercentLabels[i] = i + "%";
-        }
-
-        return s_ultimateGaugePercentLabels[Mathf.Clamp(percent, 0, 100)];
     }
 
     static bool Approximately(Color a, Color b)

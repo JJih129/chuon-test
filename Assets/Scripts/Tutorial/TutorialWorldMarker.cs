@@ -9,7 +9,6 @@ public class TutorialWorldMarker : MonoBehaviour
     [SerializeField] private Vector3 localOffset = new Vector3(0f, 0.04f, 0f);
 
     [Header("Layout")]
-    [SerializeField] private Vector3 ringLocalPosition = Vector3.zero;
     [SerializeField] private Vector3 ringScale = new Vector3(0.85f, 0.025f, 0.85f);
     [SerializeField] private Vector3 beamLocalPosition = new Vector3(0f, 0.55f, 0f);
     [SerializeField] private Vector3 beamScale = new Vector3(0.08f, 0.28f, 0.08f);
@@ -40,7 +39,6 @@ public class TutorialWorldMarker : MonoBehaviour
     public void ConfigureRuntime(
         Transform target,
         Color color,
-        Vector3 runtimeRingLocalPosition,
         Vector3 runtimeRingScale,
         Vector3 runtimeBeamLocalPosition,
         Vector3 runtimeBeamScale,
@@ -49,7 +47,6 @@ public class TutorialWorldMarker : MonoBehaviour
     {
         attachTarget = target;
         markerColor = color;
-        ringLocalPosition = runtimeRingLocalPosition;
         ringScale = runtimeRingScale;
         beamLocalPosition = runtimeBeamLocalPosition;
         beamScale = runtimeBeamScale;
@@ -147,10 +144,9 @@ public class TutorialWorldMarker : MonoBehaviour
 
         if (_ringRoot != null)
         {
-            _ringRoot.localPosition = ringLocalPosition;
+            _ringRoot.localPosition = Vector3.zero;
             _ringRoot.localRotation = Quaternion.identity;
             _ringRoot.localScale = ringScale;
-            SetRendererVisible(_ringRenderer, ringScale);
         }
 
         if (_beamRoot != null)
@@ -158,7 +154,6 @@ public class TutorialWorldMarker : MonoBehaviour
             _beamRoot.localPosition = beamLocalPosition;
             _beamRoot.localRotation = Quaternion.identity;
             _beamRoot.localScale = beamScale;
-            SetRendererVisible(_beamRenderer, beamScale);
         }
 
         if (_capRoot != null)
@@ -166,7 +161,6 @@ public class TutorialWorldMarker : MonoBehaviour
             _capRoot.localPosition = capLocalPosition;
             _capRoot.localRotation = Quaternion.Euler(0f, 45f, 0f);
             _capRoot.localScale = capScale;
-            SetRendererVisible(_capRenderer, capScale);
         }
     }
 
@@ -186,14 +180,6 @@ public class TutorialWorldMarker : MonoBehaviour
         _propertyBlock.SetColor("_Color", color);
         _propertyBlock.SetColor("_BaseColor", color);
         renderer.SetPropertyBlock(_propertyBlock);
-    }
-
-    static void SetRendererVisible(Renderer renderer, Vector3 scale)
-    {
-        if (renderer == null)
-            return;
-
-        renderer.enabled = scale.sqrMagnitude > 0.000001f;
     }
 
     static Material GetMarkerMaterial()

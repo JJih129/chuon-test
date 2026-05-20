@@ -9,6 +9,7 @@ public class PlayerVisualRig : MonoBehaviour
     [SerializeField] private Transform visualRoot;
     [SerializeField] private Animator mainAnimator;
     [SerializeField] private AttackHitbox[] attackHitboxes;
+    [SerializeField] private bool normalizeVisualRootLocalPose = true;
 
     public Transform VisualRoot => visualRoot ? visualRoot : transform;
     public Animator MainAnimator => mainAnimator;
@@ -49,6 +50,12 @@ public class PlayerVisualRig : MonoBehaviour
     {
         if (!visualRoot)
             visualRoot = transform;
+
+        if (normalizeVisualRootLocalPose && visualRoot != null && visualRoot != transform)
+        {
+            visualRoot.localPosition = Vector3.zero;
+            visualRoot.localRotation = Quaternion.identity;
+        }
 
         if (!mainAnimator)
             mainAnimator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>(true);

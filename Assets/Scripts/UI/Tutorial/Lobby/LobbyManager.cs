@@ -56,12 +56,9 @@ public class LobbyManager : MonoBehaviour
     [Range(0.1f, 2f)] public float threatMarkerLeadTime = 0.85f;
     public bool disableLobbyDroneWorldUi = true;
     public bool disableLobbyDroneShadows = true;
-    public bool simplifyLobbyDroneVisual = true;
+    public bool simplifyLobbyDroneVisual = false;
     public bool useLightweightLobbyDroneSimulation = true;
     [Range(0.016f, 0.12f)] public float lightweightLobbyDroneTickInterval = 0.05f;
-    [Header("Lobby Collision")]
-    [SerializeField] bool autoBuildLobbyMapColliders = true;
-    [SerializeField, Min(0f)] float minAutoMapColliderExtent = 0.25f;
     [Header("Combat Roles")]
     public LobbyDroneWaveProfile lobbyDroneWaveProfile = LobbyDroneWaveProfile.MixedPressure;
     public bool useRoleAwareSpawnPlan = true;
@@ -77,14 +74,6 @@ public class LobbyManager : MonoBehaviour
     public bool showEscalationQuestCue = true;
     int _totalEnemyCount;
     int _currentDeadEnemy;
-
-    [Header("Lobby Drone Motion")]
-    [SerializeField] bool useAerialLobbyDroneMotion = true;
-    [SerializeField, Range(0.5f, 2f)] float lobbyDroneMoveSpeedMultiplier = 0.8f;
-    [SerializeField, Range(0.45f, 1f)] float lobbyDroneDistanceMultiplier = 0.72f;
-    [SerializeField, Range(0f, 0.5f)] float lobbyDroneStrafeBoost = 0.12f;
-    [SerializeField, Range(0f, 1f)] float lobbyDroneHoverAmplitude = 0.24f;
-    [SerializeField, Range(0.3f, 3f)] float lobbyDroneHoverFrequency = 0.75f;
 
     [Header("Elevator")]
     public GameObject elevatorPanel;
@@ -110,16 +99,10 @@ public class LobbyManager : MonoBehaviour
     [Range(0.05f, 1f)] public float elevatorSyncDelay = 0.45f;
 
     [Header("Elevator Door")]
-    public Transform elevatorCabinRoot;
     public Transform doorLeft;
     public Transform doorRight;
     public float doorOpenHeight = 4f;
     public float doorOpenSpeed = 2f;
-    [Min(0.1f)] public float doorCloseSpeed = 0.8f;
-    [Min(0f)] public float elevatorLowerDistance = 5f;
-    [Min(0.1f)] public float elevatorLowerDuration = 2.6f;
-    [Range(0f, 1.5f)] public float elevatorFadeDelay = 1.25f;
-    public bool parentPlayerToElevatorDuringDescent = true;
 
     [Header("Guide / Triggers")]
     public GuidePathSystem guideSystem;
@@ -128,11 +111,6 @@ public class LobbyManager : MonoBehaviour
     public Transform[] pathWaypoints;
     public LobbyPresentationController presentationController;
 
-    [Header("Elevator Boarding Gate")]
-    [SerializeField] bool requireBoardCenterBeforeTransition = true;
-    [SerializeField, Min(0.1f)] float boardCenterRequiredRadius = 1.05f;
-    [SerializeField] Vector3 boardCenterLocalOffset = Vector3.zero;
-
     [Header("Atmosphere")]
     [TextArea] public string routeSuspicionLine = "\ub204\uad70\uac00 \uba3c\uc800 \uc774 \uae38\uc744 \uc5f4\uc5b4\ub1a8\uc5b4. \uc548\uc804\ud558\ub2e4\uace0 \uac00\uc815\ud558\uc9c0 \ub9c8.";
     [Range(0.5f, 4f)] public float routeSuspicionDelay = 2.2f;
@@ -140,19 +118,6 @@ public class LobbyManager : MonoBehaviour
     [Header("Typing")]
     [Range(0.01f, 0.2f)] public float textTypingSpeed = 0.05f;
     [SerializeField] bool debugLogs = false;
-
-    [Header("Input Lock")]
-    [SerializeField] bool lockInputDuringArrivalIntro = true;
-    [SerializeField] bool lockInputDuringPostCombatBrief = true;
-    [SerializeField] bool lockInputDuringElevatorBrief = true;
-
-    [Header("Flow Persistence")]
-    [SerializeField] bool skipDroneEncounterAfterFirstClear = true;
-
-    [Header("Start Facing")]
-    [SerializeField] bool applyPlayerStartFacingYaw = true;
-    [SerializeField] bool faceCameraForwardOnStart = true;
-    [SerializeField] float playerStartYawOffset = 180f;
 
     readonly List<Transform> _activeWaypoints = new List<Transform>();
     bool _isDoorReached;
@@ -168,13 +133,6 @@ public class LobbyManager : MonoBehaviour
     LobbyFlowPhase _currentPhase;
     readonly List<DroneController> _activeLobbyDrones = new List<DroneController>();
     int _combatEscalationStage;
-    IInputBlocker _playerInputBlocker;
-    bool _lobbyInputLocked;
-    static bool s_droneEncounterClearedThisSession;
-    bool _doorPoseCached;
-    Vector3 _doorLeftClosedLocalPosition;
-    Vector3 _doorRightClosedLocalPosition;
-    bool _startFacingApplied;
 
     public bool IsDoorReached => _isDoorReached;
     public bool IsBoarded => _isBoarded;
@@ -190,10 +148,10 @@ public class LobbyManager : MonoBehaviour
         if (presentationController == null)
             presentationController = gameObject.AddComponent<LobbyPresentationController>();
         _combatCoachController = GetComponent<LobbyCombatCoachController>();
-        if (_combatCoachController == null && ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+        if (_combatCoachController == null)
             _combatCoachController = gameObject.AddComponent<LobbyCombatCoachController>();
         _objectivePanelController = GetComponent<LobbyObjectivePanelController>();
-        if (_objectivePanelController == null && ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        if (_objectivePanelController == null)
             _objectivePanelController = gameObject.AddComponent<LobbyObjectivePanelController>();
     }
 
@@ -217,23 +175,13 @@ public class LobbyManager : MonoBehaviour
         ConfigurePresentationController();
         ConfigureCombatCoachController();
         ConfigureObjectivePanelController();
-        EnsureLobbyMapColliders();
-        StartCoroutine(CoApplyPlayerStartFacingYawDelayed());
         _fromTutorialTransition = TutorialSceneTransitionState.ConsumeTutorialToLobby();
         SetPhase(LobbyFlowPhase.Arrival);
         StartCoroutine(SequenceArrival());
     }
 
-    void OnDisable()
-    {
-        SetLobbyInputLocked(false);
-    }
-
     IEnumerator SequenceArrival()
     {
-        SetLobbyInputLocked(lockInputDuringArrivalIntro);
-        bool skipEncounter = ShouldSkipDroneEncounter();
-
         if (_fromTutorialTransition)
         {
             yield return StartCoroutine(PlayDialogue("EGO", "\uc2dc\ubbac\ub808\uc774\uc158 \ub9c1\ud06c \ud574\uc81c. \uc2e4\uc804 \uc804\ud22c\ub97c \uc2dc\uc791\ud55c\ub2e4.", 2.1f));
@@ -242,34 +190,21 @@ public class LobbyManager : MonoBehaviour
 
         yield return StartCoroutine(PlayDialogue("ChuOn", "\uc5ec\uae30\uac00 \uce68\ud22c \uc9c0\uc810\uc778\uac00.", 2f));
 
-        if (skipEncounter)
-        {
-            yield return StartCoroutine(PlayDialogue("EGO", "\ub85c\ube44 \ubcf4\uc548 \uc2e0\ud638\ub294 \uc774\ubbf8 \uc815\ub9ac\ub410\uc5b4. \uc2b9\uac15\uae30\ub85c \uac00.", 1.8f));
-        }
-        else
-        {
-            if (alertOverlay != null)
-                alertOverlay.DOFade(0.3f, 0.5f).SetLoops(6, LoopType.Yoyo);
+        if (alertOverlay != null)
+            alertOverlay.DOFade(0.3f, 0.5f).SetLoops(6, LoopType.Yoyo);
 
-            yield return StartCoroutine(PlayDialogue("System", "\uce68\uc785\uc790 \uac10\uc9c0. \uc804\ud22c \ud504\ub85c\ud1a0\ucf5c \uae30\ub3d9.", 3f));
-            yield return StartCoroutine(PlayDialogue("EGO", "\uc6b0\ud68c \uacbd\ub85c\ub294 \uc5c6\uc5b4. \uba3c\uc800 \uc815\ub9ac\ud558\uace0 \uc774\ub3d9\ud574.", 2.5f));
-            yield return StartCoroutine(PlayDialogue("ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
-        }
+        yield return StartCoroutine(PlayDialogue("System", "\uce68\uc785\uc790 \uac10\uc9c0. \uc804\ud22c \ud504\ub85c\ud1a0\ucf5c \uae30\ub3d9.", 3f));
+        yield return StartCoroutine(PlayDialogue("EGO", "\uc6b0\ud68c \uacbd\ub85c\ub294 \uc5c6\uc5b4. \uba3c\uc800 \uc815\ub9ac\ud558\uace0 \uc774\ub3d9\ud574.", 2.5f));
+        yield return StartCoroutine(PlayDialogue("ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
 
-        SetLobbyInputLocked(false);
-
-        if (skipEncounter)
-            StartCoroutine(SequenceRouteGuide(false));
-        else
-            StartCoroutine(SequenceCombat());
+        StartCoroutine(SequenceCombat());
     }
 
     IEnumerator SequenceCombat()
     {
-        SetLobbyInputLocked(false);
         SetPhase(LobbyFlowPhase.Combat);
         _currentDeadEnemy = 0;
         _combatEscalationStage = 0;
@@ -304,7 +239,6 @@ public class LobbyManager : MonoBehaviour
         yield return new WaitUntil(() => _currentDeadEnemy >= _totalEnemyCount);
         yield return new WaitForSeconds(1f);
         CombatCompleted?.Invoke();
-        s_droneEncounterClearedThisSession = true;
         StartCoroutine(SequencePostCombat());
     }
 
@@ -348,13 +282,8 @@ public class LobbyManager : MonoBehaviour
                 DroneCombatRole role = i < rolePlan.Length ? rolePlan[i] : DroneCombatRole.Standard;
                 controller.SetCombatRole(role);
                 controller.target = playerTransform;
-                controller.SetCollisionAwareMovement(true);
                 controller.SetLightweightSimulation(useLightweightLobbyDroneSimulation, lightweightLobbyDroneTickInterval);
                 controller.SetAttackTelegraph(droneAttackTelegraphLeadTime);
-                controller.SetAerialCombatMotion(useAerialLobbyDroneMotion, lobbyDroneHoverAmplitude, lobbyDroneHoverFrequency);
-                controller.SetCombatMovementProfile(lobbyDroneMoveSpeedMultiplier, lobbyDroneDistanceMultiplier, lobbyDroneStrafeBoost);
-                controller.fireDistance = Mathf.Max(controller.fireDistance, 30f);
-                controller.projectileSpeed = Mathf.Max(controller.projectileSpeed, 12f);
                 controller.enabled = true;
                 controller.SetInitialFireDelay(ResolveLobbyDroneInitialFireDelay(i, role));
                 RegisterActiveLobbyDrone(controller);
@@ -375,64 +304,6 @@ public class LobbyManager : MonoBehaviour
             return;
 
         _activeLobbyDrones.Add(controller);
-    }
-
-    void EnsureLobbyMapColliders()
-    {
-        if (!autoBuildLobbyMapColliders)
-            return;
-
-        MeshRenderer[] renderers = FindObjectsOfType<MeshRenderer>(true);
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            MeshRenderer renderer = renderers[i];
-            if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
-                continue;
-            if (ShouldSkipAutoMapCollider(renderer))
-                continue;
-
-            MeshFilter meshFilter = renderer.GetComponent<MeshFilter>();
-            if (meshFilter == null || meshFilter.sharedMesh == null)
-                continue;
-
-            Bounds bounds = renderer.bounds;
-            float maxExtent = Mathf.Max(bounds.extents.x, Mathf.Max(bounds.extents.y, bounds.extents.z));
-            if (maxExtent < minAutoMapColliderExtent)
-                continue;
-
-            MeshCollider collider = renderer.GetComponent<MeshCollider>();
-            if (collider == null)
-                collider = renderer.gameObject.AddComponent<MeshCollider>();
-
-            collider.sharedMesh = meshFilter.sharedMesh;
-            collider.convex = false;
-            collider.isTrigger = false;
-        }
-    }
-
-    bool ShouldSkipAutoMapCollider(Renderer renderer)
-    {
-        GameObject go = renderer.gameObject;
-        if (go.GetComponent<Collider>() != null)
-            return true;
-        if (go.GetComponentInParent<Rigidbody>() != null)
-            return true;
-        if (go.GetComponentInParent<DroneController>() != null || go.GetComponentInParent<LobbyEnemy>() != null)
-            return true;
-        if (go.GetComponentInParent<Canvas>() != null || go.GetComponentInParent<ParticleSystem>() != null)
-            return true;
-        if (go.CompareTag("Player") || go.GetComponentInParent<CharacterController>() != null)
-            return true;
-
-        string rootName = go.transform.root != null ? go.transform.root.name.ToLowerInvariant() : string.Empty;
-        string objectName = go.name.ToLowerInvariant();
-        return rootName.Contains("player")
-            || rootName.Contains("drone")
-            || rootName.Contains("enemy")
-            || rootName.Contains("vfx")
-            || rootName.Contains("ui")
-            || objectName.Contains("trigger")
-            || objectName.Contains("marker");
     }
 
     void EvaluateCombatEscalation()
@@ -851,6 +722,25 @@ public class LobbyManager : MonoBehaviour
 
     void SimplifyLobbyDroneVisual(GameObject drone)
     {
+        Transform[] children = drone.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            Transform child = children[i];
+            if (child == null || child == drone.transform)
+                continue;
+
+            if (!child.name.Equals("drone"))
+                continue;
+
+            child.gameObject.SetActive(false);
+
+            Animator childAnimator = child.GetComponentInChildren<Animator>(true);
+            if (childAnimator != null)
+                childAnimator.enabled = false;
+
+            break;
+        }
+
         Transform simpleVisual = drone.transform.Find("__SimpleDroneVisual");
         if (simpleVisual == null)
         {
@@ -860,103 +750,34 @@ public class LobbyManager : MonoBehaviour
 
             Transform simpleTransform = simpleVisualGo.transform;
             simpleTransform.SetParent(drone.transform, false);
-            simpleTransform.localPosition = Vector3.zero;
+            simpleTransform.localPosition = new Vector3(0f, 0.3f, 0f);
             simpleTransform.localRotation = Quaternion.identity;
-            simpleTransform.localScale = new Vector3(0.9f, 0.55f, 0.9f);
-            simpleVisual = simpleTransform;
+            simpleTransform.localScale = new Vector3(0.7f, 0.22f, 0.7f);
 
             Collider simpleCollider = simpleVisualGo.GetComponent<Collider>();
             if (simpleCollider != null)
                 Destroy(simpleCollider);
-        }
 
-        Renderer simpleRenderer = simpleVisual.GetComponent<Renderer>();
-        if (simpleRenderer != null)
-        {
-            simpleRenderer.enabled = true;
-            simpleRenderer.shadowCastingMode = ShadowCastingMode.Off;
-            simpleRenderer.receiveShadows = false;
-            simpleRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-
-            Material material = ResolveSimpleDroneMaterial();
-            if (material != null)
-                simpleRenderer.sharedMaterial = material;
-        }
-
-        Renderer[] renderers = drone.GetComponentsInChildren<Renderer>(true);
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Renderer renderer = renderers[i];
-            if (renderer == null || renderer == simpleRenderer)
-                continue;
-
-            renderer.enabled = false;
-
-            Animator childAnimator = renderer.GetComponentInParent<Animator>();
-            if (childAnimator != null)
-                childAnimator.enabled = false;
-        }
-
-        DroneController controller = drone.GetComponent<DroneController>();
-        if (controller != null)
-            controller.droneRenderer = simpleRenderer;
-
-        BoxCollider hitCollider = drone.GetComponent<BoxCollider>();
-        if (hitCollider != null)
-        {
-            hitCollider.enabled = true;
-            hitCollider.isTrigger = false;
-            hitCollider.center = Vector3.zero;
-            hitCollider.size = new Vector3(1.2f, 0.9f, 1.2f);
+            Renderer simpleRenderer = simpleVisualGo.GetComponent<Renderer>();
+            if (simpleRenderer != null)
+            {
+                simpleRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                simpleRenderer.receiveShadows = false;
+                simpleRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+            }
         }
     }
-
-    static Material ResolveSimpleDroneMaterial()
-    {
-        if (_simpleDroneMaterial != null)
-            return _simpleDroneMaterial;
-
-        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-        if (shader == null)
-            shader = Shader.Find("Standard");
-        if (shader == null)
-            return null;
-
-        _simpleDroneMaterial = new Material(shader)
-        {
-            name = "LobbyTempDroneCubeMaterial",
-            color = new Color(0.75f, 0.9f, 1f, 1f)
-        };
-        return _simpleDroneMaterial;
-    }
-
-    static Material _simpleDroneMaterial;
 
     IEnumerator SequencePostCombat()
     {
-        yield return StartCoroutine(SequenceRouteGuide(true));
-    }
-
-    IEnumerator SequenceRouteGuide(bool fromCombat)
-    {
-        SetLobbyInputLocked(lockInputDuringPostCombatBrief);
         SetPhase(LobbyFlowPhase.Route);
-        UpdateQuestUI(
-            fromCombat ? "\uad50\uc804 \uc885\ub8cc" : "\uacbd\ub85c \ud655\uc778",
-            fromCombat ? "\ubaa8\ub4e0 \uc801 \uc2e0\ud638 \uc81c\uac70." : "\uc2b9\uac15\uae30 \uacbd\ub85c\uac00 \uc774\ubbf8 \uc5f4\ub824 \uc788\ub2e4.");
+        UpdateQuestUI("\uad50\uc804 \uc885\ub8cc", "\ubaa8\ub4e0 \uc801 \uc2e0\ud638 \uc81c\uac70.");
         _isDoorReached = false;
 
         yield return new WaitForSeconds(0.5f);
-        if (fromCombat)
-        {
-            yield return StartCoroutine(PlayDialogue("EGO", "\uc88b\uc544. \uacbd\ub85c\uac00 \uc5f4\ub838\uc5b4. \uc2b9\uac15\uae30\ub85c \uc774\ub3d9\ud574.", 2f));
-            yield return StartCoroutine(PlayDialogue("ChuOn", "\ub05d\uae4c\uc9c0 \uae34\uc7a5 \ud480\uc9c0 \ub9c8.", 1.5f));
-            yield return StartCoroutine(PlayDialogue("EGO", routeSuspicionLine, routeSuspicionDelay));
-        }
-        else
-        {
-            yield return StartCoroutine(PlayDialogue("EGO", "\ubcf4\uc548 \uc815\ub9ac \uc644\ub8cc. \uc2b9\uac15\uae30 \ub9c1\ud06c\ub85c \uc774\ub3d9\ud574.", 1.8f));
-        }
+        yield return StartCoroutine(PlayDialogue("EGO", "\uc88b\uc544. \uacbd\ub85c\uac00 \uc5f4\ub838\uc5b4. \uc2b9\uac15\uae30\ub85c \uc774\ub3d9\ud574.", 2f));
+        yield return StartCoroutine(PlayDialogue("ChuOn", "\ub05d\uae4c\uc9c0 \uae34\uc7a5 \ud480\uc9c0 \ub9c8.", 1.5f));
+        yield return StartCoroutine(PlayDialogue("EGO", routeSuspicionLine, routeSuspicionDelay));
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
@@ -985,68 +806,8 @@ public class LobbyManager : MonoBehaviour
         if (presentationController != null)
             presentationController.ShowApproachMarker();
 
-        SetLobbyInputLocked(false);
         yield return new WaitUntil(() => _isDoorReached);
         StartCoroutine(SequenceAtElevator());
-    }
-
-    bool ShouldSkipDroneEncounter()
-    {
-        return skipDroneEncounterAfterFirstClear && s_droneEncounterClearedThisSession;
-    }
-
-    void ApplyPlayerStartFacingYawOnce()
-    {
-        if (_startFacingApplied || !applyPlayerStartFacingYaw || Mathf.Abs(playerStartYawOffset) <= 0.001f)
-            return;
-
-        Transform facingRoot = ResolvePlayerFacingRoot();
-        if (facingRoot == null)
-            return;
-
-        facingRoot.rotation = ResolveStartFacingRotation(facingRoot.rotation);
-        _startFacingApplied = true;
-    }
-
-    IEnumerator CoApplyPlayerStartFacingYawDelayed()
-    {
-        ApplyPlayerStartFacingYawOnce();
-
-        if (_startFacingApplied)
-            yield break;
-
-        yield return null;
-        ApplyPlayerStartFacingYawOnce();
-    }
-
-    Transform ResolvePlayerFacingRoot()
-    {
-        GameObject player = GameObject.FindWithTag("Player");
-        if (player == null)
-            return null;
-
-        PlayerReferences references = player.GetComponent<PlayerReferences>();
-        if (references != null && references.PlayerRoot != null)
-            return references.PlayerRoot;
-
-        return player.transform;
-    }
-
-    Quaternion ResolveStartFacingRotation(Quaternion fallbackRotation)
-    {
-        if (faceCameraForwardOnStart)
-        {
-            Camera mainCamera = Camera.main;
-            if (mainCamera != null)
-            {
-                Vector3 forward = mainCamera.transform.forward;
-                forward.y = 0f;
-                if (forward.sqrMagnitude > 0.0001f)
-                    return Quaternion.LookRotation(forward.normalized, Vector3.up);
-            }
-        }
-
-        return Quaternion.AngleAxis(playerStartYawOffset, Vector3.up) * fallbackRotation;
     }
 
     public void OnWaypointReached(Transform reachedPoint)
@@ -1082,7 +843,6 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator SequenceAtElevator()
     {
-        SetLobbyInputLocked(lockInputDuringElevatorBrief);
         SetPhase(LobbyFlowPhase.Board);
         OpenDoor(doorLeft);
         OpenDoor(doorRight);
@@ -1098,17 +858,13 @@ public class LobbyManager : MonoBehaviour
         if (guideSystem != null && triggerBoard != null)
             guideSystem.ShowPath(triggerBoard);
 
-        if (elevatorPanel != null)
-            elevatorPanel.SetActive(false);
-
         _isBoarded = false;
-        SetLobbyInputLocked(false);
         yield return new WaitUntil(() => _isBoarded);
 
         if (guideSystem != null)
             guideSystem.HidePath();
 
-        StartCoroutine(CoBoardElevatorTransition());
+        StartCoroutine(SequenceInside());
     }
 
     void OpenDoor(Transform door)
@@ -1116,132 +872,67 @@ public class LobbyManager : MonoBehaviour
         if (door == null)
             return;
 
-        CacheDoorClosedPoseIfNeeded();
-
         Collider collider = door.GetComponent<Collider>();
         if (collider != null)
             collider.isTrigger = true;
 
-        Vector3 closedPosition = GetClosedDoorLocalPosition(door);
-        door.DOLocalMoveY(closedPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
+        Vector3 localPosition = door.localPosition;
+        door.DOLocalMoveY(localPosition.y + doorOpenHeight, doorOpenSpeed).SetEase(Ease.OutQuad);
     }
 
-    void CloseDoor(Transform door)
+    public void OnEnterElevator()
     {
-        if (door == null)
-            return;
-
-        CacheDoorClosedPoseIfNeeded();
-
-        Vector3 closedPosition = GetClosedDoorLocalPosition(door);
-        door.DOKill();
-        door.DOLocalMoveY(closedPosition.y, doorCloseSpeed).SetEase(Ease.InOutQuad);
-
-        Collider collider = door.GetComponent<Collider>();
-        if (collider != null)
-            collider.isTrigger = false;
-    }
-
-    void CacheDoorClosedPoseIfNeeded()
-    {
-        if (_doorPoseCached)
-            return;
-
-        _doorLeftClosedLocalPosition = doorLeft != null ? doorLeft.localPosition : Vector3.zero;
-        _doorRightClosedLocalPosition = doorRight != null ? doorRight.localPosition : Vector3.zero;
-        _doorPoseCached = true;
-    }
-
-    Vector3 GetClosedDoorLocalPosition(Transform door)
-    {
-        if (door == doorLeft)
-            return _doorLeftClosedLocalPosition;
-
-        if (door == doorRight)
-            return _doorRightClosedLocalPosition;
-
-        return door != null ? door.localPosition : Vector3.zero;
-    }
-
-    Transform ResolveElevatorCabinRoot()
-    {
-        if (elevatorCabinRoot != null)
-            return elevatorCabinRoot;
-
-        if (doorLeft != null && doorRight != null)
-        {
-            Transform common = FindCommonAncestor(doorLeft, doorRight);
-            if (common != null)
-                return common;
-        }
-
-        if (doorLeft != null && doorLeft.parent != null)
-            return doorLeft.parent;
-
-        if (doorRight != null && doorRight.parent != null)
-            return doorRight.parent;
-
-        return triggerBoard != null ? triggerBoard : null;
-    }
-
-    static Transform FindCommonAncestor(Transform a, Transform b)
-    {
-        if (a == null || b == null)
-            return null;
-
-        Transform cursor = a;
-        while (cursor != null)
-        {
-            if (b.IsChildOf(cursor))
-                return cursor;
-
-            cursor = cursor.parent;
-        }
-
-        return null;
-    }
-
-    Transform ResolvePlayerSceneRootTransform()
-    {
-        GameObject player = GameObject.FindWithTag("Player");
-        return player != null ? player.transform : null;
-    }
-
-    public bool OnEnterElevator()
-    {
-        if (_isElevatorTransitioning)
-            return false;
-
-        if (_isBoarded)
-            return true;
-
-        if (!IsPlayerAtElevatorBoardCenter())
-            return false;
-
         _isBoarded = true;
 
         if (presentationController != null)
             presentationController.HideObjectiveMarker();
-
-        if (elevatorPanel != null)
-            elevatorPanel.SetActive(false);
-
-        return true;
     }
 
-    bool IsPlayerAtElevatorBoardCenter()
+    IEnumerator SequenceInside()
     {
-        if (!requireBoardCenterBeforeTransition || triggerBoard == null)
-            return true;
+        SetPhase(LobbyFlowPhase.Elevator);
+        yield return StartCoroutine(PlayDialogue("EGO", elevatorThreatLine, 2f));
+        yield return StartCoroutine(PlayDialogue("ChuOn", elevatorResponseLine, 1.9f));
+        yield return StartCoroutine(PlayDialogue("EGO", elevatorInstructionLine, 2.1f));
 
-        Transform playerRoot = ResolvePlayerSceneRootTransform();
-        if (playerRoot == null)
-            return false;
+        if (dialogueGroup != null)
+            dialogueGroup.DOFade(0f, 0.5f);
 
-        Vector3 center = triggerBoard.TransformPoint(boardCenterLocalOffset);
-        Vector3 toPlayer = playerRoot.position - center;
-        toPlayer.y = 0f;
-        return toPlayer.sqrMagnitude <= boardCenterRequiredRadius * boardCenterRequiredRadius;
+        UpdateQuestUI("\uc811\uc18d \ub178\ub4dc", "\ud328\ub110\uc744 \uc870\uc791\ud574 \ub2e4\uc74c \uce35\uc73c\ub85c \uc774\ub3d9\ud574.");
+
+        ShowTransientQuestCue(
+            elevatorThreatCueTitle,
+            elevatorThreatCueDescription,
+            elevatorThreatCueHold,
+            true);
+
+        if (elevatorPanel != null)
+        {
+            elevatorPanel.SetActive(true);
+            elevatorPanel.transform.DOPunchScale(Vector3.one * 0.2f, 0.5f);
+
+            BaseInteractable elevatorInteractable = elevatorPanel.GetComponent<BaseInteractable>();
+            if (elevatorInteractable != null && !string.IsNullOrWhiteSpace(elevatorPromptText))
+                elevatorInteractable.promptText = elevatorPromptText;
+        }
+
+        if (presentationController != null)
+        {
+            presentationController.ShowElevatorPanelGuide();
+            presentationController.PulseElevatorInteractable();
+        }
+
+        if (elevatorPanelCueDelay > 0f)
+            yield return new WaitForSeconds(elevatorPanelCueDelay);
+
+        if (presentationController != null)
+            presentationController.PulseElevatorInteractable();
+
+        ShowTransientQuestCue(
+            elevatorPanelCueTitle,
+            elevatorPanelCueDescription,
+            elevatorPanelCueHold,
+            false);
     }
 
     public void OnInteractElevator()
@@ -1249,116 +940,36 @@ public class LobbyManager : MonoBehaviour
         if (_isElevatorTransitioning)
             return;
 
-        StartCoroutine(CoBoardElevatorTransition());
-    }
-
-    IEnumerator CoBoardElevatorTransition()
-    {
-        if (_isElevatorTransitioning)
-            yield break;
-
         _isElevatorTransitioning = true;
-        SetLobbyInputLocked(true);
-        SetPhase(LobbyFlowPhase.Elevator);
-
-        AsyncOperation sceneLoadOperation = null;
-        if (!string.IsNullOrWhiteSpace(nextSceneName))
-        {
-            sceneLoadOperation = SceneManager.LoadSceneAsync(nextSceneName);
-            if (sceneLoadOperation != null)
-                sceneLoadOperation.allowSceneActivation = false;
-        }
 
         if (presentationController != null)
         {
-            presentationController.HideObjectiveMarker();
             presentationController.HideElevatorPanelGuide();
+            presentationController.PulseElevatorInteractable();
         }
 
         if (elevatorPanel != null)
-            elevatorPanel.SetActive(false);
-
-        UpdateQuestUI("\uc2b9\uac15\uae30 \ud558\uac15", "\ubcf4\uc2a4 \uad6c\uc5ed\uc73c\ub85c \uc774\ub3d9 \uc911.");
-        ShowTransientQuestCue(elevatorSyncCueTitle, "\uc2b9\uac15\uae30 \uc911\uc559 \ud0d1\uc2b9 \ud655\uc778. \ud558\uac15\uc744 \uc2dc\uc791\ud55c\ub2e4.", elevatorSyncCueHold, false);
-
-        CloseDoor(doorLeft);
-        CloseDoor(doorRight);
-        yield return new WaitForSeconds(Mathf.Max(0.05f, doorCloseSpeed));
-
-        Transform cabinRoot = ResolveElevatorCabinRoot();
-        Transform playerRoot = ResolvePlayerSceneRootTransform();
-        Transform originalPlayerParent = null;
-
-        if (parentPlayerToElevatorDuringDescent && cabinRoot != null && playerRoot != null && !playerRoot.IsChildOf(cabinRoot))
         {
-            originalPlayerParent = playerRoot.parent;
-            playerRoot.SetParent(cabinRoot, true);
+            BaseInteractable elevatorInteractable = elevatorPanel.GetComponent<BaseInteractable>();
+            if (elevatorInteractable != null)
+                elevatorInteractable.promptText = elevatorSyncPromptText;
+
+            elevatorPanel.transform.DOPunchScale(Vector3.one * 0.14f, 0.28f);
         }
 
-        if (cabinRoot != null && elevatorLowerDistance > 0f)
-        {
-            cabinRoot.DOKill();
-            Vector3 targetPosition = cabinRoot.position + Vector3.down * elevatorLowerDistance;
-            cabinRoot.DOMove(targetPosition, elevatorLowerDuration).SetEase(Ease.InOutSine);
-        }
+        ShowTransientQuestCue(
+            elevatorSyncCueTitle,
+            elevatorSyncCueDescription,
+            elevatorSyncCueHold,
+            false);
 
-        if (elevatorFadeDelay > 0f)
-            yield return new WaitForSeconds(elevatorFadeDelay);
-
-        TutorialSceneTransitionState.MarkLobbyToMain();
-
-        if (SceneFader.Instance != null)
-        {
-            bool fadeComplete = false;
-            SceneFader.Instance.FadeOut(() => fadeComplete = true);
-            yield return new WaitUntil(() => fadeComplete);
-        }
-        else
-        {
-            yield return new WaitForSeconds(Mathf.Max(0.05f, elevatorLowerDuration - elevatorFadeDelay));
-        }
-
-        while (sceneLoadOperation != null && sceneLoadOperation.progress < 0.9f)
-            yield return null;
-
-        if (originalPlayerParent != null && playerRoot != null)
-            playerRoot.SetParent(originalPlayerParent, true);
-
-        if (sceneLoadOperation != null)
-        {
-            sceneLoadOperation.allowSceneActivation = true;
-            yield break;
-        }
-
-        SceneManager.LoadScene(nextSceneName);
+        StartCoroutine(CoTransitionFromElevator());
     }
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
-        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
-        {
-            if (dialogueGroup != null)
-            {
-                dialogueGroup.alpha = 0f;
-                dialogueGroup.interactable = false;
-                dialogueGroup.blocksRaycasts = false;
-                dialogueGroup.gameObject.SetActive(false);
-            }
-
-            if (speakerText != null)
-                speakerText.text = string.Empty;
-
-            if (contentText != null)
-                contentText.text = string.Empty;
-
-            yield break;
-        }
-
         if (dialogueGroup != null)
-        {
-            dialogueGroup.gameObject.SetActive(true);
             dialogueGroup.alpha = 1f;
-        }
 
         if (speakerText != null)
             speakerText.text = speaker;
@@ -1404,14 +1015,6 @@ public class LobbyManager : MonoBehaviour
         if (questPanelGroup == null)
             return;
 
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            questPanelGroup.alpha = 0f;
-            questPanelGroup.interactable = false;
-            questPanelGroup.blocksRaycasts = false;
-            return;
-        }
-
         if (_objectivePanelController != null)
         {
             questPanelGroup.alpha = 0f;
@@ -1427,9 +1030,6 @@ public class LobbyManager : MonoBehaviour
 
     public void ShowTransientQuestCue(string title, string description, float holdDuration = 1.8f, bool flashAlert = false)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
-            return;
-
         if (_transientQuestCueRoutine != null)
             StopCoroutine(_transientQuestCueRoutine);
 
@@ -1454,7 +1054,7 @@ public class LobbyManager : MonoBehaviour
 
     void ConfigureCombatCoachController()
     {
-        if (_combatCoachController == null || !ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
+        if (_combatCoachController == null)
             return;
 
         GameObject player = GameObject.FindWithTag("Player");
@@ -1464,45 +1064,10 @@ public class LobbyManager : MonoBehaviour
 
     void ConfigureObjectivePanelController()
     {
-        if (_objectivePanelController == null || !ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        if (_objectivePanelController == null)
             return;
 
         _objectivePanelController.ConfigureRuntime(this);
-    }
-
-    void SetLobbyInputLocked(bool locked)
-    {
-        if (_lobbyInputLocked == locked)
-            return;
-
-        IInputBlocker inputBlocker = ResolvePlayerInputBlocker();
-        if (inputBlocker == null)
-            return;
-
-        inputBlocker.BlockAll(locked);
-        _lobbyInputLocked = locked;
-    }
-
-    IInputBlocker ResolvePlayerInputBlocker()
-    {
-        if (_playerInputBlocker != null)
-        {
-            UnityEngine.Object cachedObject = _playerInputBlocker as UnityEngine.Object;
-            if (cachedObject != null)
-                return _playerInputBlocker;
-
-            _playerInputBlocker = null;
-        }
-
-        GameObject player = GameObject.FindWithTag("Player");
-        if (player == null)
-            return null;
-
-        _playerInputBlocker = player.GetComponent<IInputBlocker>();
-        if (_playerInputBlocker == null)
-            _playerInputBlocker = player.AddComponent<SimpleInputBlocker>();
-
-        return _playerInputBlocker;
     }
 
     IEnumerator CoShowTransientQuestCue(string title, string description, float holdDuration, bool flashAlert)
@@ -1544,6 +1109,27 @@ public class LobbyManager : MonoBehaviour
         }
 
         _transientQuestCueRoutine = null;
+    }
+
+    IEnumerator CoTransitionFromElevator()
+    {
+        if (!string.IsNullOrWhiteSpace(elevatorSyncLine))
+            yield return StartCoroutine(PlayDialogue("EGO", elevatorSyncLine, Mathf.Min(0.45f, elevatorSyncCueHold)));
+
+        if (dialogueGroup != null)
+            dialogueGroup.DOFade(0f, 0.15f);
+
+        yield return new WaitForSeconds(Mathf.Max(0.05f, elevatorSyncDelay));
+
+        TutorialSceneTransitionState.MarkLobbyToMain();
+
+        if (SceneFader.Instance != null)
+        {
+            SceneFader.Instance.FadeOutAndLoadScene(nextSceneName);
+            yield break;
+        }
+
+        SceneManager.LoadScene(nextSceneName);
     }
 
     void SetPhase(LobbyFlowPhase phase)

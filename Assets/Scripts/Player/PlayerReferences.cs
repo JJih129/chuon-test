@@ -130,6 +130,7 @@ public class PlayerReferences : MonoBehaviour
             return;
 
         var currentVisualInstance = FindCurrentVisualInstance();
+        RemoveDuplicateVisualInstances(currentVisualInstance, false);
         if (IsRuntimeVisualPrefabMatching(currentVisualInstance))
             return;
 
@@ -355,6 +356,7 @@ public class PlayerReferences : MonoBehaviour
         try
         {
             var currentVisualInstance = FindCurrentVisualInstance();
+            RemoveDuplicateVisualInstances(currentVisualInstance, true);
             if (IsCurrentVisualPrefabMatching(currentVisualInstance))
                 return;
 
@@ -477,6 +479,32 @@ public class PlayerReferences : MonoBehaviour
         }
 
         return null;
+    }
+
+    void RemoveDuplicateVisualInstances(Transform keep, bool immediate)
+    {
+        if (visualRoot == null)
+            return;
+
+        for (int i = visualRoot.childCount - 1; i >= 0; i--)
+        {
+            Transform child = visualRoot.GetChild(i);
+            if (child == null || child == keep)
+                continue;
+
+            bool isVisualInstance =
+                child.GetComponent<PlayerVisualRig>() != null ||
+                child.GetComponentInChildren<PlayerVisualRig>(true) != null ||
+                string.Equals(child.name, visualPrefab != null ? visualPrefab.name : string.Empty, System.StringComparison.Ordinal);
+
+            if (!isVisualInstance)
+                continue;
+
+            if (immediate)
+                Object.DestroyImmediate(child.gameObject);
+            else
+                Object.Destroy(child.gameObject);
+        }
     }
 
     Transform FindLikelyVisualRoot()

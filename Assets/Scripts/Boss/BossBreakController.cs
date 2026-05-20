@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 using System;
+using System.Collections.Generic;
 
 [DisallowMultipleComponent]
 public class BossBreakController : MonoBehaviour
@@ -37,7 +38,18 @@ public class BossBreakController : MonoBehaviour
     [Tooltip("Animator bool parameter name for break state.")]
     [SerializeField] private string breakBoolName = "IsBreak";
 
-    [Header("03. Events")]
+    [Header("03. Break Animation Hold")]
+    [SerializeField] private string breakStateName = "Break";
+    [SerializeField, Range(0.05f, 1f)] private float breakHoldNormalizedTime = 0.4f;
+
+    [Header("04. Break Hologram")]
+    [SerializeField] private bool useBreakHologram = true;
+    [SerializeField] private Transform hologramRoot;
+    [SerializeField] private Material breakHologramMaterial;
+    [SerializeField] private string breakHologramResourcePath = "Tutorial/TutorialHologramSpawn";
+    [SerializeField] private Color breakHologramColor = new Color(0f, 0.72f, 1f, 0.42f);
+
+    [Header("05. Events")]
     [Tooltip("Invoked when break state starts.")]
     public UnityEvent OnBreakEnter = new UnityEvent();
 
@@ -46,7 +58,7 @@ public class BossBreakController : MonoBehaviour
 
     public event Action<float, float> OnBreakChanged;
 
-    [Header("04. Debug")]
+    [Header("06. Debug")]
     [Tooltip("Enable debug logging for break flow.")]
     public bool logDebug = false;
 
@@ -54,6 +66,12 @@ public class BossBreakController : MonoBehaviour
     private float _breakTimer;
     private bool _isInBreak;
     private int _breakBoolHash;
+    private int _breakStateHash;
+    private bool _breakAnimationHeld;
+    private float _cachedAnimatorSpeed = 1f;
+    private Renderer[] _hologramRenderers;
+    private Material[][] _hologramOriginalMaterials;
+    private Material _runtimeHologramMaterial;
     private PlayerUltimateController _ultimateController;
     private bool _hasUltimatePresentationSnapshot;
     private float _ultimatePresentationBreakSnapshot;
@@ -67,6 +85,9 @@ public class BossBreakController : MonoBehaviour
 
     public bool IsInBreak => _isInBreak;
     public float RemainingBreakTime => _breakTimer;
+
+    static readonly int HologramColorId = Shader.PropertyToID("_Hologram_Color");
+    static readonly int TextureTintColorId = Shader.PropertyToID("_Texture_Tint_Color");
 
     private void Reset()
     {
@@ -102,12 +123,16 @@ public class BossBreakController : MonoBehaviour
         }
 
         _breakBoolHash = Animator.StringToHash(breakBoolName);
+        _breakStateHash = Animator.StringToHash(breakStateName);
         ResetGauge();
         enabled = false;
     }
 
     private void OnDestroy()
     {
+        ReleaseBreakAnimationHold();
+        RestoreBreakHologram();
+
         if (bossHealth != null)
             bossHealth.OnDied -= HandleBossDied;
 
@@ -122,6 +147,8 @@ public class BossBreakController : MonoBehaviour
     {
         if (!_isInBreak)
             return;
+
+        UpdateBreakAnimationHold();
 
         _breakTimer -= Time.deltaTime;
         if (_breakTimer <= 0f)
@@ -174,6 +201,8 @@ public class BossBreakController : MonoBehaviour
         _isInBreak = true;
         _breakTimer = breakDuration;
         enabled = true;
+        ReleaseBreakAnimationHold();
+        ApplyBreakHologram();
 
         if (bossHealth != null)
             bossHealth.SetStaggered(true);
@@ -193,6 +222,8 @@ public class BossBreakController : MonoBehaviour
 
         _isInBreak = false;
         _breakTimer = 0f;
+        ReleaseBreakAnimationHold();
+        RestoreBreakHologram();
 
         if (bossHealth != null)
             bossHealth.SetStaggered(false);
@@ -221,6 +252,8 @@ public class BossBreakController : MonoBehaviour
             _isInBreak = true;
             _breakTimer = Mathf.Max(_breakTimer, Mathf.Max(0f, preservedBreakTimer));
             enabled = true;
+            ReleaseBreakAnimationHold();
+            ApplyBreakHologram();
 
             if (bossHealth != null)
                 bossHealth.SetStaggered(true);
@@ -261,6 +294,8 @@ public class BossBreakController : MonoBehaviour
 
     private void HandleBossDied()
     {
+        ReleaseBreakAnimationHold();
+        RestoreBreakHologram();
         ForceExitBreak();
         ResetGauge();
 
@@ -296,6 +331,144 @@ public class BossBreakController : MonoBehaviour
         OnBreakChanged?.Invoke(NormalizedBreak, _currentBreak);
     }
 
+    void UpdateBreakAnimationHold()
+    {
+        if (_breakAnimationHeld || bossAnimator == null || _breakStateHash == 0)
+            return;
+
+        AnimatorStateInfo state = bossAnimator.GetCurrentAnimatorStateInfo(0);
+        if (state.shortNameHash != _breakStateHash)
+            return;
+
+        if (state.normalizedTime < Mathf.Clamp01(breakHoldNormalizedTime))
+            return;
+
+        _cachedAnimatorSpeed = bossAnimator.speed;
+        bossAnimator.speed = 0f;
+        _breakAnimationHeld = true;
+    }
+
+    void ReleaseBreakAnimationHold()
+    {
+        if (!_breakAnimationHeld)
+            return;
+
+        _breakAnimationHeld = false;
+        if (bossAnimator != null)
+            bossAnimator.speed = _cachedAnimatorSpeed;
+    }
+
+    void ApplyBreakHologram()
+    {
+        if (!useBreakHologram || _runtimeHologramMaterial != null)
+            return;
+
+        Material sourceMaterial = ResolveBreakHologramMaterial();
+        if (sourceMaterial == null)
+            return;
+
+        Transform root = hologramRoot != null ? hologramRoot : (bossAnimator != null ? bossAnimator.transform : transform);
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            return;
+
+        var validRenderers = new List<Renderer>(renderers.Length);
+        var originalMaterials = new List<Material[]>(renderers.Length);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || renderer is ParticleSystemRenderer || renderer is LineRenderer || renderer is TrailRenderer)
+                continue;
+
+            Material[] materials = renderer.sharedMaterials;
+            if (materials == null || materials.Length == 0)
+                continue;
+
+            validRenderers.Add(renderer);
+            originalMaterials.Add(materials);
+        }
+
+        if (validRenderers.Count == 0)
+            return;
+
+        _runtimeHologramMaterial = new Material(sourceMaterial) { name = name + "_BreakHologram" };
+        SetBreakHologramColor();
+
+        _hologramRenderers = validRenderers.ToArray();
+        _hologramOriginalMaterials = originalMaterials.ToArray();
+        for (int i = 0; i < _hologramRenderers.Length; i++)
+        {
+            Renderer renderer = _hologramRenderers[i];
+            Material[] original = _hologramOriginalMaterials[i];
+            if (renderer == null || original == null)
+                continue;
+
+            Material[] hologramMaterials = new Material[original.Length];
+            for (int slot = 0; slot < hologramMaterials.Length; slot++)
+                hologramMaterials[slot] = _runtimeHologramMaterial;
+            renderer.sharedMaterials = hologramMaterials;
+        }
+    }
+
+    Material ResolveBreakHologramMaterial()
+    {
+        if (breakHologramMaterial != null)
+            return breakHologramMaterial;
+
+        if (!string.IsNullOrWhiteSpace(breakHologramResourcePath))
+            breakHologramMaterial = Resources.Load<Material>(breakHologramResourcePath);
+
+#if UNITY_EDITOR
+        if (breakHologramMaterial == null)
+            breakHologramMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
+#endif
+
+        return breakHologramMaterial;
+    }
+
+    void SetBreakHologramColor()
+    {
+        if (_runtimeHologramMaterial == null)
+            return;
+
+        if (_runtimeHologramMaterial.HasProperty(HologramColorId))
+            _runtimeHologramMaterial.SetColor(HologramColorId, breakHologramColor);
+
+        if (_runtimeHologramMaterial.HasProperty(TextureTintColorId))
+        {
+            Color tint = breakHologramColor;
+            tint.a *= 0.75f;
+            _runtimeHologramMaterial.SetColor(TextureTintColorId, tint);
+        }
+    }
+
+    void RestoreBreakHologram()
+    {
+        if (_hologramRenderers != null && _hologramOriginalMaterials != null)
+        {
+            int count = Mathf.Min(_hologramRenderers.Length, _hologramOriginalMaterials.Length);
+            for (int i = 0; i < count; i++)
+            {
+                Renderer renderer = _hologramRenderers[i];
+                Material[] materials = _hologramOriginalMaterials[i];
+                if (renderer != null && materials != null)
+                    renderer.sharedMaterials = materials;
+            }
+        }
+
+        _hologramRenderers = null;
+        _hologramOriginalMaterials = null;
+
+        if (_runtimeHologramMaterial != null)
+        {
+            if (Application.isPlaying)
+                Destroy(_runtimeHologramMaterial);
+            else
+                DestroyImmediate(_runtimeHologramMaterial);
+        }
+        _runtimeHologramMaterial = null;
+    }
+
     private void OnValidate()
     {
         maxBreak = Mathf.Max(1f, maxBreak);
@@ -303,5 +476,6 @@ public class BossBreakController : MonoBehaviour
         baseBreakPerHit = Mathf.Max(0f, baseBreakPerHit);
         breakDuration = Mathf.Max(0f, breakDuration);
         recoveryPerSecond = Mathf.Max(0f, recoveryPerSecond);
+        breakHoldNormalizedTime = Mathf.Clamp(breakHoldNormalizedTime, 0.05f, 1f);
     }
 }

@@ -100,12 +100,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
         BossBreakController runtimeBossBreakController,
         PlayerUltimateController runtimePlayerUltimateController)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            SuppressPrototypeUi();
-            return;
-        }
-
         bossUiController = runtimeBossUiController;
         bossController = runtimeBossController;
         bossHealth = runtimeBossController != null ? runtimeBossController.bossHealth : null;
@@ -121,12 +115,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     void OnEnable()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            SuppressPrototypeUi();
-            return;
-        }
-
         NormalizeCompactLayout();
         CacheInitialState();
         EnsureVisuals();
@@ -380,12 +368,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     void EnsureVisuals()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            SuppressPrototypeUi();
-            return;
-        }
-
         if (bossUiController == null)
             bossUiController = GameplaySceneCache.ResolveBossUIController();
 
@@ -602,18 +584,9 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     void ApplyState(bool animated)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            return;
-
         EnsureVisuals();
         if (_badgeImage == null || _badgeText == null || _titleText == null || _counterText == null || _statusText == null)
             return;
-
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectiveTacticalTextEnabled)
-        {
-            HideTacticalObjectiveVisuals();
-            return;
-        }
 
         if (_clearOverrideActive)
         {
@@ -656,9 +629,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     public void ShowClearState()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            return;
-
         _clearOverrideActive = true;
         _ultimateActive = false;
         _ultimateReady = false;
@@ -669,18 +639,9 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     void ApplyClearState(bool animated)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            return;
-
         EnsureVisuals();
         if (_badgeImage == null || _badgeText == null || _titleText == null || _counterText == null || _statusText == null)
             return;
-
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectiveTacticalTextEnabled)
-        {
-            HideTacticalObjectiveVisuals();
-            return;
-        }
 
         if (_accentImage != null)
             _accentImage.color = clearColor;
@@ -726,34 +687,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
             PlayIconPulse();
             PlayPulse(clearColor);
         }
-    }
-
-    void HideTacticalObjectiveVisuals()
-    {
-        SetGraphicVisible(_panelImage, false);
-        SetGraphicVisible(_accentImage, false);
-        SetGraphicVisible(_sweepImage, false);
-        SetGraphicVisible(_badgeImage, false);
-        SetGraphicVisible(_badgeText, false);
-        SetGraphicVisible(_titleText, false);
-        SetGraphicVisible(_counterText, false);
-        SetGraphicVisible(_statusText, false);
-
-        if (_iconRoot != null && _iconRoot.gameObject.activeSelf)
-            _iconRoot.gameObject.SetActive(false);
-
-        if (_progressRoot != null && _progressRoot.gameObject.activeSelf)
-            _progressRoot.gameObject.SetActive(false);
-
-        StopSweep();
-        StopIconPulse();
-        StopPulse();
-    }
-
-    static void SetGraphicVisible(Graphic graphic, bool visible)
-    {
-        if (graphic != null && graphic.enabled != visible)
-            graphic.enabled = visible;
     }
 
     void UpdateProgressVisuals(int activeIndex, Color activeColor)
@@ -832,9 +765,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     string ResolveStageBadge(EncounterObjectiveStage stage)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectiveTacticalTextEnabled)
-            return "\ubaa9\ud45c";
-
         switch (stage)
         {
             case EncounterObjectiveStage.Punish:
@@ -851,9 +781,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     string ResolveStageTitle(EncounterObjectiveStage stage)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectiveTacticalTextEnabled)
-            return "\ubaa9\ud45c";
-
         switch (stage)
         {
             case EncounterObjectiveStage.Punish:
@@ -870,9 +797,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     string ResolveStatusText(EncounterObjectiveStage stage)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectiveTacticalTextEnabled)
-            return string.Empty;
-
         if (_ultimateActive)
             return "\uad81\uadf9\uae30 \uc9d1\ud589 \uc911. \uc5f0\ucd9c \ud6c4 \ubc14\ub85c \ubcf5\uadc0";
 
@@ -1155,17 +1079,6 @@ public class MainSceneObjectivePanelController : MonoBehaviour
         text.verticalOverflow = VerticalWrapMode.Truncate;
         text.raycastTarget = false;
         return text;
-    }
-
-    void SuppressPrototypeUi()
-    {
-        ReleaseSubscriptions();
-        StopPulse();
-        StopSweep();
-        StopIconPulse();
-
-        if (_root != null)
-            _root.gameObject.SetActive(false);
     }
 
     static void StretchToParent(RectTransform rectTransform)

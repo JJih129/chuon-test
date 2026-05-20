@@ -39,7 +39,6 @@ public class TutorialHintUIBridge : MonoBehaviour
     [Header("Runtime Style")]
     [SerializeField] private Color dialoguePanelColor = new Color(0.03f, 0.07f, 0.10f, 0.88f);
     [SerializeField] private Color objectivePanelColor = new Color(0.03f, 0.07f, 0.10f, 0.88f);
-    [SerializeField] private Sprite questPanelSprite;
     [SerializeField] private Color timingCuePanelColor = new Color(0.02f, 0.05f, 0.07f, 0.92f);
     [SerializeField] private Color timingCueTextColor = new Color(0.96f, 1f, 1f, 1f);
     [SerializeField] private Color accentColor = new Color(0.22f, 0.86f, 1f, 0.96f);
@@ -73,8 +72,6 @@ public class TutorialHintUIBridge : MonoBehaviour
     string _currentGuideBody;
     string _currentGuideSpeaker;
     bool _guideTextVisible;
-    bool _forceRuntimeObjectivePanel;
-    const string QuestPanelSpriteResourcePath = "UI/HUD/chuon_hud_quest_gauge";
 
     public CanvasGroup QuestPanelGroup => questPanelGroup;
     public TextMeshProUGUI QuestTitleText => questTitleText;
@@ -88,12 +85,6 @@ public class TutorialHintUIBridge : MonoBehaviour
         _legacyDialogueGroup = legacyManager.dialogueGroup;
         _legacyQuestPanelGroup = legacyManager.questPanelGroup;
         _legacyComboGuidePanel = legacyManager.comboGuidePanel;
-        _forceRuntimeObjectivePanel =
-            legacyManager.questPanelGroup == null ||
-            legacyManager.questTitleText == null ||
-            legacyManager.questDescriptionText == null ||
-            legacyManager.questTitleText == legacyManager.speakerText ||
-            legacyManager.questDescriptionText == legacyManager.contentText;
         _preferredFontAsset = ResolvePreferredFontAsset(
             legacyManager.speakerText,
             legacyManager.contentText,
@@ -107,20 +98,9 @@ public class TutorialHintUIBridge : MonoBehaviour
         questTitleText = legacyManager.questTitleText;
         questDescriptionText = legacyManager.questDescriptionText;
         comboGuidePanel = _legacyComboGuidePanel;
-        ResolveSceneQuestPanelReferences();
 
         HideLegacyUi();
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled && !ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled)
-            return;
-
         EnsureRuntimeHud();
-
-        if (_forceRuntimeObjectivePanel && _legacyQuestPanelGroup != null)
-        {
-            _legacyQuestPanelGroup.alpha = 0f;
-            _legacyQuestPanelGroup.interactable = false;
-            _legacyQuestPanelGroup.blocksRaycasts = false;
-        }
 
         if (questPanelGroup != null)
         {
@@ -142,12 +122,6 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     public void SetOverlayVisible(bool visible)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled && !ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled)
-        {
-            HidePrototypeUi();
-            return;
-        }
-
         if (_runtimeHudGroup == null)
             return;
 
@@ -158,13 +132,6 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     public void ShowHint(string line1, string line2 = null)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            HidePrototypeUi();
-            HintChanged?.Invoke(line1 ?? string.Empty, line2 ?? string.Empty);
-            return;
-        }
-
         EnsureRuntimeHud();
 
         if (questPanelGroup != null)
@@ -186,22 +153,13 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     public void ShowGuideText(string body, string speaker = null)
     {
-        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
-        {
-            HideGuideText();
-            return;
-        }
-
         EnsureRuntimeHud();
         _currentGuideBody = body;
         _currentGuideSpeaker = speaker;
         _guideTextVisible = !string.IsNullOrWhiteSpace(body);
 
         if (dialogueGroup != null)
-        {
-            dialogueGroup.gameObject.SetActive(true);
             dialogueGroup.alpha = string.IsNullOrWhiteSpace(body) ? 0f : 1f;
-        }
 
         if (speakerText != null)
             speakerText.text = string.IsNullOrWhiteSpace(speaker) ? defaultSpeaker : speaker;
@@ -217,31 +175,11 @@ public class TutorialHintUIBridge : MonoBehaviour
         _guideTextVisible = false;
 
         if (dialogueGroup != null)
-        {
             dialogueGroup.alpha = 0f;
-            dialogueGroup.interactable = false;
-            dialogueGroup.blocksRaycasts = false;
-
-            if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
-                dialogueGroup.gameObject.SetActive(false);
-        }
-
-        if (speakerText != null)
-            speakerText.text = string.Empty;
-
-        if (contentText != null)
-            contentText.text = string.Empty;
     }
 
     public void ShowTimingCue(string body, string speaker, float duration)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled &&
-            !ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled)
-        {
-            HideTimingCue();
-            return;
-        }
-
         EnsureRuntimeHud();
 
         if (_timingCueRoutine != null)
@@ -267,18 +205,9 @@ public class TutorialHintUIBridge : MonoBehaviour
     IEnumerator CoTimingCue(string body, string speaker, float duration)
     {
         Sprite keyCueSprite = ResolveKeyCueSprite(body, speaker);
-        string keyCueLabel = ResolveKeyCueLabel(body, speaker);
-        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled && (!string.IsNullOrEmpty(keyCueLabel) || keyCueSprite != null))
+        if (keyCueSprite != null)
         {
-            yield return CoKeySpriteCue(duration, keyCueSprite, keyCueLabel);
-            _timingCueRoutine = null;
-            yield break;
-        }
-
-        if (!ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled ||
-            !ExhibitionPrototypePresentationPolicy.DialogueEnabled)
-        {
-            HideTimingCue();
+            yield return CoKeySpriteCue(duration, keyCueSprite);
             _timingCueRoutine = null;
             yield break;
         }
@@ -335,30 +264,18 @@ public class TutorialHintUIBridge : MonoBehaviour
         _timingCueRoutine = null;
     }
 
-    IEnumerator CoKeySpriteCue(float duration, Sprite keySprite, string keyLabel)
+    IEnumerator CoKeySpriteCue(float duration, Sprite keySprite)
     {
-        if (_timingCueGroup == null || (_timingCueKeyImage == null && _timingCueText == null))
+        if (_timingCueGroup == null || _timingCueKeyImage == null)
             yield break;
 
-        if (keySprite == null && string.IsNullOrEmpty(keyLabel))
+        if (keySprite == null)
             yield break;
 
         SetTimingTextMode(false);
-        SetGraphicEnabled(_timingCueKeyImage, keySprite != null);
-        SetGraphicEnabled(_timingCueKeyGlow, keySprite != null);
-        if (_timingCueKeyImage != null)
-            _timingCueKeyImage.sprite = keySprite;
-        if (_timingCueKeyGlow != null && keySprite != null)
+        _timingCueKeyImage.sprite = keySprite;
+        if (_timingCueKeyGlow != null)
             _timingCueKeyGlow.sprite = keySprite;
-        if (_timingCueText != null)
-        {
-            _timingCueText.text = keyLabel ?? string.Empty;
-            _timingCueText.fontSize = string.Equals(keyLabel, "Shift", StringComparison.OrdinalIgnoreCase) ? 58f : 76f;
-            _timingCueText.fontStyle = FontStyles.Bold;
-            _timingCueText.alignment = TextAlignmentOptions.Center;
-            _timingCueText.color = Color.white;
-            _timingCueText.enabled = keySprite == null;
-        }
         _timingCueGroup.alpha = 0f;
         _timingCueGroup.gameObject.SetActive(true);
 
@@ -373,10 +290,7 @@ public class TutorialHintUIBridge : MonoBehaviour
             float glowPulse = 1.16f + Mathf.Sin(Time.unscaledTime * 14f) * 0.12f;
 
             _timingCueGroup.alpha = alpha;
-            if (_timingCueKeyImage != null)
-                _timingCueKeyImage.rectTransform.localScale = new Vector3(pulse, pulse, 1f);
-            if (_timingCueText != null && keySprite == null)
-                _timingCueText.rectTransform.localScale = new Vector3(pulse, pulse, 1f);
+            _timingCueKeyImage.rectTransform.localScale = new Vector3(pulse, pulse, 1f);
             if (_timingCueKeyGlow != null)
             {
                 _timingCueKeyGlow.rectTransform.localScale = new Vector3(glowPulse, glowPulse, 1f);
@@ -387,19 +301,13 @@ public class TutorialHintUIBridge : MonoBehaviour
         }
 
         _timingCueGroup.alpha = 0f;
-        if (_timingCueKeyImage != null)
-            _timingCueKeyImage.rectTransform.localScale = Vector3.one;
-        if (_timingCueText != null)
-            _timingCueText.rectTransform.localScale = Vector3.one;
+        _timingCueKeyImage.rectTransform.localScale = Vector3.one;
         if (_timingCueKeyGlow != null)
             _timingCueKeyGlow.rectTransform.localScale = Vector3.one;
     }
 
     public void ShowStepCompleted(string stepTitle)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            return;
-
         if (questTitleText != null && !string.IsNullOrWhiteSpace(stepTitle))
             questTitleText.text = "완료 · " + stepTitle;
 
@@ -410,46 +318,23 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     public void ShowComboGuide(string title, string body)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled)
-            return;
-
         EnsureRuntimeHud();
         comboGuideView?.Show(title, body);
     }
 
     public void UpdateComboGuideStatus(string status)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled)
-            return;
-
         comboGuideView?.SetStatus(status);
     }
 
     public void ClearComboGuideStatus()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled)
-            return;
-
         comboGuideView?.SetStatus(string.Empty);
     }
 
     public void HideComboGuide()
     {
         comboGuideView?.Hide();
-    }
-
-    void HidePrototypeUi()
-    {
-        HideTimingCue();
-
-        if (_runtimeHudGroup != null)
-            _runtimeHudGroup.alpha = 0f;
-        if (_runtimeHudRoot != null)
-            _runtimeHudRoot.gameObject.SetActive(false);
-        if (questPanelGroup != null)
-            questPanelGroup.alpha = 0f;
-        if (comboGuidePanel != null)
-            comboGuidePanel.SetActive(false);
     }
 
     void HideLegacyUi()
@@ -459,14 +344,11 @@ public class TutorialHintUIBridge : MonoBehaviour
             _legacyDialogueGroup.alpha = 0f;
             _legacyDialogueGroup.interactable = false;
             _legacyDialogueGroup.blocksRaycasts = false;
-
-            if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
-                _legacyDialogueGroup.gameObject.SetActive(false);
         }
 
         if (_legacyQuestPanelGroup != null)
         {
-            _legacyQuestPanelGroup.alpha = ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled ? 1f : 0f;
+            _legacyQuestPanelGroup.alpha = 0f;
             _legacyQuestPanelGroup.interactable = false;
             _legacyQuestPanelGroup.blocksRaycasts = false;
         }
@@ -477,11 +359,6 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     void EnsureRuntimeHud()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled &&
-            !ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled &&
-            !ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled)
-            return;
-
         if (_runtimeHudRoot != null)
             return;
 
@@ -500,55 +377,10 @@ public class TutorialHintUIBridge : MonoBehaviour
         _runtimeHudGroup.interactable = false;
         _runtimeHudGroup.blocksRaycasts = false;
 
-        if (ExhibitionPrototypePresentationPolicy.DialogueEnabled)
-            CreateDialoguePanel();
-        if (_forceRuntimeObjectivePanel && ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            CreateObjectivePanel();
-        if (ExhibitionPrototypePresentationPolicy.RuntimePrototypeUiEnabled)
-        {
-            CreateComboPanel();
-            CreateTimingCuePanel();
-        }
-        else if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled)
-        {
-            CreateTimingCuePanel();
-        }
-    }
-
-    void ResolveSceneQuestPanelReferences()
-    {
-        if (_legacyQuestPanelGroup == null)
-            return;
-
-        TextMeshProUGUI sceneTitle = FindQuestText(_legacyQuestPanelGroup.transform, "QuestTitlePos");
-        TextMeshProUGUI sceneDescription = FindQuestText(_legacyQuestPanelGroup.transform, "QuestDescription");
-        if (sceneTitle == null || sceneDescription == null)
-            return;
-
-        questPanelGroup = _legacyQuestPanelGroup;
-        questTitleText = sceneTitle;
-        questDescriptionText = sceneDescription;
-        _forceRuntimeObjectivePanel = false;
-    }
-
-    static TextMeshProUGUI FindQuestText(Transform root, string objectName)
-    {
-        if (root == null)
-            return null;
-
-        Transform direct = root.Find(objectName);
-        if (direct != null && direct.TryGetComponent(out TextMeshProUGUI directText))
-            return directText;
-
-        TextMeshProUGUI[] labels = root.GetComponentsInChildren<TextMeshProUGUI>(true);
-        for (int i = 0; i < labels.Length; i++)
-        {
-            TextMeshProUGUI label = labels[i];
-            if (label != null && string.Equals(label.gameObject.name, objectName, StringComparison.OrdinalIgnoreCase))
-                return label;
-        }
-
-        return null;
+        CreateDialoguePanel();
+        CreateObjectivePanel();
+        CreateComboPanel();
+        CreateTimingCuePanel();
     }
 
     void CreateDialoguePanel()
@@ -597,39 +429,20 @@ public class TutorialHintUIBridge : MonoBehaviour
             new Vector2(1f, 1f),
             objectivePanelAnchoredPosition,
             objectivePanelSize,
-            Color.clear);
+            objectivePanelColor);
         panelGroup.alpha = 1f;
 
-        ApplyQuestPanelSprite(panelGroup);
+        EnsureAccent(panelGroup.transform, "Accent", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 8f));
 
         questPanelGroup = panelGroup;
         questTitleText = EnsureText(panelGroup.transform, "QuestTitle");
-        ApplyTextStyle(questTitleText, 30f, FontStyles.Bold, questTitleColor, TextAlignmentOptions.TopLeft);
-        ConfigureRect(questTitleText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(64f, -72f), new Vector2(objectivePanelSize.x - 116f, 42f));
+        ApplyTextStyle(questTitleText, 46f, FontStyles.Bold, questTitleColor, TextAlignmentOptions.TopLeft);
+        ConfigureRect(questTitleText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(32f, -92f), new Vector2(objectivePanelSize.x - 64f, 52f));
 
         questDescriptionText = EnsureText(panelGroup.transform, "QuestDescription");
-        ApplyTextStyle(questDescriptionText, 20f, FontStyles.Normal, questBodyColor, TextAlignmentOptions.TopLeft);
+        ApplyTextStyle(questDescriptionText, 30f, FontStyles.Normal, questBodyColor, TextAlignmentOptions.TopLeft);
         questDescriptionText.enableWordWrapping = true;
-        ConfigureRect(questDescriptionText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(64f, -120f), new Vector2(objectivePanelSize.x - 116f, 88f));
-    }
-
-    void ApplyQuestPanelSprite(CanvasGroup panelGroup)
-    {
-        if (panelGroup == null)
-            return;
-
-        Image background = panelGroup.GetComponent<Image>();
-        if (background == null)
-            return;
-
-        if (questPanelSprite == null)
-            questPanelSprite = Resources.Load<Sprite>(QuestPanelSpriteResourcePath);
-
-        background.sprite = questPanelSprite;
-        background.color = questPanelSprite != null ? Color.white : Color.clear;
-        background.type = Image.Type.Simple;
-        background.preserveAspect = false;
-        background.raycastTarget = false;
+        ConfigureRect(questDescriptionText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(32f, -172f), new Vector2(objectivePanelSize.x - 64f, 176f));
     }
 
     void CreateComboPanel()
@@ -705,16 +518,6 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     bool ShouldUseParryKeyCue(string body, string speaker)
     {
-        if (ContainsIgnoreCase(body, "Guard") ||
-            ContainsIgnoreCase(body, "E") ||
-            ContainsIgnoreCase(body, "패링") ||
-            ContainsIgnoreCase(body, "가드") ||
-            ContainsIgnoreCase(body, "방어") ||
-            ContainsIgnoreCase(speaker, "GUARD") ||
-            ContainsIgnoreCase(speaker, "패링") ||
-            ContainsIgnoreCase(speaker, "방어"))
-            return true;
-
         return ContainsIgnoreCase(body, "Parry") ||
                ContainsIgnoreCase(speaker, "PARRY") ||
                ContainsIgnoreCase(body, "패링");
@@ -722,10 +525,6 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     bool ShouldUseDodgeKeyCue(string body, string speaker)
     {
-        if (ContainsIgnoreCase(body, "회피") ||
-            ContainsIgnoreCase(speaker, "회피"))
-            return true;
-
         return ContainsIgnoreCase(body, "Dodge") ||
                ContainsIgnoreCase(body, "Shift") ||
                ContainsIgnoreCase(speaker, "DODGE") ||
@@ -747,17 +546,6 @@ public class TutorialHintUIBridge : MonoBehaviour
             return ResolveKeySprite(ref dodgeKeySprite, "Shift");
 
         return null;
-    }
-
-    string ResolveKeyCueLabel(string body, string speaker)
-    {
-        if (ShouldUseParryKeyCue(body, speaker))
-            return "E";
-
-        if (ShouldUseDodgeKeyCue(body, speaker))
-            return "Shift";
-
-        return string.Empty;
     }
 
     Sprite ResolveKeySprite(ref Sprite keySprite, string filePrefix)

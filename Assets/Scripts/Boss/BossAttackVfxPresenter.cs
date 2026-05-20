@@ -33,41 +33,15 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     [SerializeField] bool parentToAnchor = false;
     [SerializeField] float defaultFallbackLifetime = 0.9f;
     [SerializeField] bool useProceduralSwordTrail = true;
-    [SerializeField] Material drakkarTrailMaterial;
-    [SerializeField] Texture2D drakkarMeleeTrailTexture;
-    [SerializeField] Texture2D drakkarWideTrailTexture;
-
-    [Header("Auto Sword Trail Mesh")]
-    [Tooltip("Use the sword-motion sampled mesh trail instead of a fixed slash anchor for boss weapon trail VFX.")]
-    [SerializeField] bool useSwordMotionMeshTrail = true;
-
-    [Tooltip("Optional Free Slash VFX prefab used only as a material source. It is not spawned every attack.")]
-    [SerializeField] GameObject swordMotionTrailVfxPrefab;
-
-    [Tooltip("Pre-placed static mesh trail component. This must be assigned in the scene or boss prefab.")]
-    [SerializeField] SwordTrailMeshRenderer swordMotionTrail;
-
-    [Tooltip("Pre-placed static TrailBase/TrailTip provider. This must be assigned in the scene or boss prefab.")]
-    [SerializeField] SwordTrailPoints swordMotionTrailPoints;
-
-    [Tooltip("Boss trail tint. Cyan/blue is the default boss attack color.")]
-    [SerializeField] Color swordMotionTrailTint = new Color(0.1f, 0.75f, 1f, 1f);
-
-    [Tooltip("Minimum sword point movement before adding a new mesh trail sample.")]
-    [SerializeField, Min(0.001f)] float swordMotionTrailMinSampleDistance = 0.025f;
-
-    [Tooltip("How long the sampled boss sword trail remains visible.")]
-    [SerializeField, Min(0.01f)] float swordMotionTrailLifeTime = 0.22f;
-
-    [Tooltip("Maximum sample count kept by the boss sword trail ring buffer.")]
-    [SerializeField, Range(2, 128)] int swordMotionTrailMaxSamples = 42;
 
     [Header("패턴별 검기")]
     [SerializeField] PatternSlashVfxEntry[] patternSlashVfx = Array.Empty<PatternSlashVfxEntry>();
 
     [Header("프로시저럴 검 궤적")]
+    [SerializeField] float trailTime = 0.09f;
     [SerializeField] float trailStartWidth = 0.14f;
     [SerializeField] float trailEndWidth = 0.02f;
+    [SerializeField] float trailMinVertexDistance = 0.065f;
     [SerializeField] Color trailStartColor = new Color(0.3f, 1f, 1f, 0.95f);
     [SerializeField] Color trailEndColor = new Color(0.15f, 0.7f, 1f, 0f);
     [SerializeField] float swordTipForwardPadding = 0.04f;
@@ -79,29 +53,20 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     [Header("디버그")]
     [SerializeField] bool debugLog = false;
 
-    DrakkarSwordTrailDriver _proceduralTrailDriver;
+    BossSwordTrailRibbon _proceduralTrailRibbon;
     Material _proceduralTrailMaterial;
-    Material _proceduralMeleeTrailMaterial;
-    Material _proceduralWideTrailMaterial;
-    Material _swordMotionTrailMaterial;
-    bool _warnedMissingSwordMotionTrailSetup;
     Transform _resolvedSwordTrailAnchor;
     Transform _resolvedSwordTrailBaseAnchor;
     readonly Dictionary<string, PatternSlashVfxEntry> _entryByPatternName = new Dictionary<string, PatternSlashVfxEntry>(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, PatternSlashVfxEntry> _entryByTriggerName = new Dictionary<string, PatternSlashVfxEntry>(StringComparer.OrdinalIgnoreCase);
     bool _patternLookupDirty = true;
+    float _cachedStartWidthScale = -1f;
+    float _cachedEndWidthScale = -1f;
 
     public void PlayCurrentPatternSlash()
     {
         Transform swordBaseAnchor = ResolveSwordTrailBaseAnchor();
         Transform swordTipAnchor = ResolveSwordTrailAnchor();
-        if (swordBaseAnchor != null && swordTipAnchor != null && BeginSwordMotionTrail(swordBaseAnchor, swordTipAnchor))
-        {
-            if (debugLog)
-                Debug.Log($"[BossAttackVfxPresenter] mesh trail on: {swordBaseAnchor.name} -> {swordTipAnchor.name}", this);
-            return;
-        }
-
         if (swordBaseAnchor != null && swordTipAnchor != null && useProceduralSwordTrail)
         {
             EnableProceduralTrail(swordBaseAnchor, swordTipAnchor);
@@ -142,10 +107,8 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
 
     public void StopCurrentPatternSlash()
     {
-        StopSwordMotionTrail();
-
-        if (_proceduralTrailDriver != null)
-            _proceduralTrailDriver.End();
+        if (_proceduralTrailRibbon != null)
+            _proceduralTrailRibbon.Stop();
     }
 
     void Awake()
@@ -158,11 +121,6 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     {
         if (_proceduralTrailMaterial != null)
             Destroy(_proceduralTrailMaterial);
-        if (_proceduralMeleeTrailMaterial != null)
-            Destroy(_proceduralMeleeTrailMaterial);
-        if (_proceduralWideTrailMaterial != null)
-            Destroy(_proceduralWideTrailMaterial);
-
     }
 
 #if UNITY_EDITOR
@@ -219,7 +177,9 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         if (_resolvedSwordTrailAnchor != null)
             return _resolvedSwordTrailAnchor;
 
-        Transform swordVisual = FindBestSwordVisualTransform();
+        Transform swordVisual = bossReferences != null ? bossReferences.AttackHitboxSourceVisual : null;
+        if (swordVisual == null && bossReferences != null)
+            swordVisual = bossReferences.AttackHitboxSocket;
         if (swordVisual == null)
             swordVisual = ResolveSpawnAnchor();
         if (swordVisual == null)
@@ -234,7 +194,9 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         if (_resolvedSwordTrailBaseAnchor != null)
             return _resolvedSwordTrailBaseAnchor;
 
-        Transform swordVisual = FindBestSwordVisualTransform();
+        Transform swordVisual = bossReferences != null ? bossReferences.AttackHitboxSourceVisual : null;
+        if (swordVisual == null && bossReferences != null)
+            swordVisual = bossReferences.AttackHitboxSocket;
         if (swordVisual == null)
             swordVisual = ResolveSpawnAnchor();
         if (swordVisual == null)
@@ -242,61 +204,6 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
 
         _resolvedSwordTrailBaseAnchor = CreateSwordBaseAnchor(swordVisual);
         return _resolvedSwordTrailBaseAnchor;
-    }
-
-    Transform FindBestSwordVisualTransform()
-    {
-        Transform socket = bossReferences != null ? bossReferences.AttackHitboxSocket : null;
-        Transform searchRoot = bossReferences != null && bossReferences.VisualRoot != null
-            ? bossReferences.VisualRoot
-            : transform;
-
-        Renderer[] renderers = searchRoot.GetComponentsInChildren<Renderer>(true);
-        Transform best = null;
-        float bestScore = float.NegativeInfinity;
-
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Renderer renderer = renderers[i];
-            if (renderer == null)
-                continue;
-
-            Transform candidate = renderer.transform;
-            if (!TryGetLocalMeshBounds(candidate, out Bounds localBounds))
-                continue;
-
-            string lowerName = candidate.name.ToLowerInvariant();
-            if (lowerName.Contains("body") || lowerName.Contains("clothes") || lowerName.Contains("face") || lowerName.Contains("hair"))
-                continue;
-
-            Vector3 size = localBounds.size;
-            float maxAxis = Mathf.Max(size.x, Mathf.Max(size.y, size.z));
-            float minAxis = Mathf.Min(size.x, Mathf.Min(size.y, size.z));
-            if (maxAxis <= 0.05f || minAxis <= 0.0001f)
-                continue;
-
-            float slenderness = maxAxis / minAxis;
-            if (slenderness < 3f)
-                continue;
-
-            float score = slenderness * 10f - size.sqrMagnitude;
-            if (socket != null)
-                score -= Vector3.Distance(candidate.position, socket.position) * 4f;
-
-            if (lowerName.Contains("sword") || lowerName.Contains("katana") || lowerName.Contains("blade") || lowerName.Contains("weapon"))
-                score += 50f;
-
-            if (score > bestScore)
-            {
-                bestScore = score;
-                best = candidate;
-            }
-        }
-
-        if (best != null)
-            return best;
-
-        return bossReferences != null ? bossReferences.AttackHitboxSourceVisual : null;
     }
 
     Transform CreateSwordTipAnchor(Transform swordVisual)
@@ -382,19 +289,23 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     void EnableProceduralTrail(Transform baseAnchor, Transform tipAnchor)
     {
         EnsureProceduralTrail(baseAnchor);
-        if (_proceduralTrailDriver == null)
+        if (_proceduralTrailRibbon == null)
             return;
 
-        Material trailMaterial = ResolveDrakkarTrailMaterial();
-        if (trailMaterial == null)
-            return;
+        if (_cachedStartWidthScale < 0f || _cachedEndWidthScale < 0f)
+            ResolveDynamicTrailWidthScales(tipAnchor, out _cachedStartWidthScale, out _cachedEndWidthScale);
 
-        _proceduralTrailDriver.Configure(
+        _proceduralTrailRibbon.Configure(
             baseAnchor,
             tipAnchor,
-            trailMaterial,
-            gameObject.layer);
-        _proceduralTrailDriver.Begin();
+            _proceduralTrailMaterial,
+            trailTime,
+            trailMinVertexDistance,
+            _cachedStartWidthScale,
+            _cachedEndWidthScale,
+            trailStartColor,
+            trailEndColor);
+        _proceduralTrailRibbon.Begin();
     }
 
     void ResolveDynamicTrailWidthScales(Transform trailAnchor, out float startWidthScale, out float endWidthScale)
@@ -439,186 +350,25 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
     }
 
-    bool BeginSwordMotionTrail(Transform baseAnchor, Transform tipAnchor)
-    {
-        if (!useSwordMotionMeshTrail || baseAnchor == null || tipAnchor == null)
-            return false;
-
-        if (swordMotionTrail == null || swordMotionTrailPoints == null || !swordMotionTrailPoints.HasValidPoints)
-        {
-            WarnMissingSwordMotionTrailSetup();
-            return false;
-        }
-
-        Material material = ResolveSwordMotionTrailMaterial();
-        if (material == null)
-        {
-            WarnMissingSwordMotionTrailSetup();
-            return false;
-        }
-
-        swordMotionTrail.Configure(
-            swordMotionTrailPoints,
-            material,
-            swordMotionTrailTint,
-            swordMotionTrailMinSampleDistance,
-            swordMotionTrailLifeTime,
-            swordMotionTrailMaxSamples,
-            false,
-            false);
-        swordMotionTrail.gameObject.layer = gameObject.layer;
-        swordMotionTrail.StartTrail();
-        return true;
-    }
-
-    void WarnMissingSwordMotionTrailSetup()
-    {
-        if (_warnedMissingSwordMotionTrailSetup)
-            return;
-
-        _warnedMissingSwordMotionTrailSetup = true;
-        Debug.LogWarning("[BossAttackVfxPresenter] Static sword motion trail is enabled, but the scene/prefab is missing SwordTrailMeshRenderer, SwordTrailPoints, TrailBase/TrailTip, or a usable material source. Run Tools/ChuOn/VFX/Install Static Sword Trails, then verify the assigned static references.", this);
-    }
-
-    void StopSwordMotionTrail()
-    {
-        if (swordMotionTrail != null)
-            swordMotionTrail.StopTrail();
-    }
-
-    Material ResolveSwordMotionTrailMaterial()
-    {
-        if (_swordMotionTrailMaterial != null)
-            return _swordMotionTrailMaterial;
-
-        _swordMotionTrailMaterial = SwordTrailVfxMaterialSource.ResolveMaterial(
-            swordMotionTrailVfxPrefab,
-            SwordTrailVfxMaterialSource.Palette.Boss);
-        return _swordMotionTrailMaterial;
-    }
-
     void EnsureProceduralTrail(Transform trailAnchor)
     {
-        if (_proceduralTrailDriver != null || trailAnchor == null)
+        if (_proceduralTrailRibbon != null || trailAnchor == null)
             return;
 
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+            return;
+
+        _proceduralTrailMaterial = new Material(shader);
+        _proceduralTrailMaterial.name = "BossAttackTrailRuntime";
+        _proceduralTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
+
         GameObject trailObject = new GameObject("RuntimeBossAttackRibbon");
+        trailObject.hideFlags = HideFlags.HideAndDontSave;
         trailObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
         trailObject.transform.localScale = Vector3.one;
 
-        _proceduralTrailDriver = trailObject.AddComponent<DrakkarSwordTrailDriver>();
-    }
-
-    Material ResolveDrakkarTrailMaterial()
-    {
-        if (drakkarTrailMaterial != null)
-            return drakkarTrailMaterial;
-
-#if UNITY_EDITOR
-        string triggerName = bossController != null ? bossController.CurrentPatternTriggerName : string.Empty;
-        string patternName = bossController != null ? bossController.CurrentPatternName : string.Empty;
-        bool useWideMaterial = string.Equals(triggerName, "Attack_F", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(patternName, "SwordWave", StringComparison.OrdinalIgnoreCase);
-
-        string materialPath = useWideMaterial
-            ? "Assets/Effects/Trail/MAT_BossTrail_Wide.mat"
-            : "Assets/Effects/Trail/MAT_BossTrail_Melee.mat";
-        Material authoredMaterial = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
-        if (authoredMaterial != null)
-            return authoredMaterial;
-#endif
-
-        EnsureDefaultDrakkarTextures();
-
-        string runtimeTriggerName = bossController != null ? bossController.CurrentPatternTriggerName : string.Empty;
-        string runtimePatternName = bossController != null ? bossController.CurrentPatternName : string.Empty;
-        bool useWide = string.Equals(runtimeTriggerName, "Attack_F", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(runtimePatternName, "SwordWave", StringComparison.OrdinalIgnoreCase);
-
-        if (useWide && drakkarWideTrailTexture != null)
-        {
-            _proceduralWideTrailMaterial = GetOrCreateDrakkarTrailMaterial(
-                _proceduralWideTrailMaterial,
-                drakkarWideTrailTexture,
-                "BossAttackTrailWideRuntime");
-            return _proceduralWideTrailMaterial;
-        }
-
-        if (drakkarMeleeTrailTexture != null)
-        {
-            _proceduralMeleeTrailMaterial = GetOrCreateDrakkarTrailMaterial(
-                _proceduralMeleeTrailMaterial,
-                drakkarMeleeTrailTexture,
-                "BossAttackTrailMeleeRuntime");
-            return _proceduralMeleeTrailMaterial;
-        }
-
-#if UNITY_EDITOR
-        _proceduralTrailMaterial = AssetDatabase.LoadAssetAtPath<Material>(
-            "Assets/Drakkar/GameUtils/VISUALS/Trails/DrakkarTrails Examples/Assets/Trail Blue Alpha.mat");
-#endif
-
-        if (_proceduralTrailMaterial == null)
-        {
-            Shader shader = Shader.Find("Trail Shader Alpha") ?? Shader.Find("Sprites/Default");
-            if (shader == null)
-                return null;
-
-            _proceduralTrailMaterial = new Material(shader);
-            _proceduralTrailMaterial.name = "BossAttackTrailRuntime";
-            _proceduralTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
-
-            ConfigureDrakkarTrailMaterial(_proceduralTrailMaterial, Texture2D.whiteTexture);
-        }
-
-        return _proceduralTrailMaterial;
-    }
-
-    Material GetOrCreateDrakkarTrailMaterial(Material current, Texture2D texture, string materialName)
-    {
-        if (current != null)
-            return current;
-
-        Shader shader = Shader.Find("Trail Shader Alpha") ?? Shader.Find("Sprites/Default");
-        if (shader == null || texture == null)
-            return null;
-
-        current = new Material(shader);
-        current.name = materialName;
-        current.hideFlags = HideFlags.HideAndDontSave;
-        ConfigureDrakkarTrailMaterial(current, texture);
-        return current;
-    }
-
-    void ConfigureDrakkarTrailMaterial(Material material, Texture texture)
-    {
-        if (material == null)
-            return;
-
-        if (material.HasProperty("_Color1"))
-            material.SetColor("_Color1", ForceVisibleTrailAlpha(trailStartColor));
-        if (material.HasProperty("_Color2"))
-            material.SetColor("_Color2", ForceVisibleTrailAlpha(trailEndColor));
-        if (material.HasProperty("_Texture"))
-            material.SetTexture("_Texture", texture);
-        if (material.HasProperty("_Power"))
-            material.SetFloat("_Power", 8f);
-    }
-
-    static Color ForceVisibleTrailAlpha(Color color)
-    {
-        color.a = 1f;
-        return color;
-    }
-
-    void EnsureDefaultDrakkarTextures()
-    {
-#if UNITY_EDITOR
-        if (drakkarMeleeTrailTexture == null)
-            drakkarMeleeTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_player_heavy.png");
-        if (drakkarWideTrailTexture == null)
-            drakkarWideTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_ultimate_wide.png");
-#endif
+        _proceduralTrailRibbon = trailObject.AddComponent<BossSwordTrailRibbon>();
     }
 
     static bool TryGetLocalMeshBounds(Transform target, out Bounds bounds)
@@ -660,6 +410,8 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     void MarkLookupDirty()
     {
         _patternLookupDirty = true;
+        _cachedStartWidthScale = -1f;
+        _cachedEndWidthScale = -1f;
     }
 
     void RebuildPatternLookupIfNeeded()

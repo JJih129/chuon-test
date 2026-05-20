@@ -212,6 +212,9 @@ public class AttackPattern
 
     public AttackTelegraphType ResolveTelegraphType()
     {
+        return AttackTelegraphType.Parry;
+
+#pragma warning disable CS0162
         if (telegraphType != AttackTelegraphType.Auto)
             return telegraphType;
 
@@ -225,6 +228,7 @@ public class AttackPattern
             return AttackTelegraphType.Guard;
 
         return AttackTelegraphType.Dodge;
+#pragma warning restore CS0162
     }
 
     public float ResolveTelegraphLeadTime()
@@ -253,16 +257,7 @@ public class AttackPattern
 
     public bool ResolveCanParry()
     {
-        switch (telegraphType != AttackTelegraphType.Auto ? telegraphType : ResolveTelegraphType())
-        {
-            case AttackTelegraphType.Parry:
-                return isParryable;
-            case AttackTelegraphType.Guard:
-            case AttackTelegraphType.Dodge:
-            case AttackTelegraphType.Danger:
-            default:
-                return false;
-        }
+        return true;
     }
 
     public bool ResolveCanPerfectDodge()
@@ -272,19 +267,17 @@ public class AttackPattern
 
     public bool ResolveCanGuard()
     {
-        return canGuard && !ResolveIsUnblockable();
+        return true;
     }
 
     public bool ResolveIsUnblockable()
     {
-        return isUnblockable
-            || telegraphType == AttackTelegraphType.Danger
-            || (telegraphType == AttackTelegraphType.Auto && !canGuard && causesGuardBreak);
+        return false;
     }
 
     public bool ResolveCausesGuardBreak()
     {
-        return causesGuardBreak;
+        return false;
     }
 
     public float ResolveRecoveryTime()
@@ -564,6 +557,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [SerializeField] private BossAttackVfxPresenter attackVfxPresenter;
     [Tooltip("공격 선행 바닥 위험 구역 표시용")]
     [SerializeField] private BossGroundTelegraph groundTelegraph;
+    [SerializeField] private BossPatternHandTelegraph handPatternTelegraph;
     [Tooltip("패링 불가 패턴 선행 자세에 사용할 기본 애니메이션 클립. 비워두면 트리거/대기만 사용합니다.")]
     [SerializeField] private AnimationClip defaultPreAttackPoseClip;
     [Tooltip("패링 불가 패턴이면 별도 설정이 없어도 기본 발도 자세를 사용합니다.")]
@@ -585,6 +579,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [Header("공격 히트박스 (공통 컴포넌트)")]
     [Tooltip("보스 무기/팔 등에 붙은 AttackHitbox")]
     public AttackHitbox attackHitbox;
+    [SerializeField] private bool useRuntimeForwardBoxAttackHitbox = true;
+    [SerializeField] private bool disableOriginalAttackHitboxWhenUsingRuntimeBox = true;
+    [SerializeField] private Vector3 runtimeForwardHitboxCenter = new Vector3(0f, 0.92f, 1.12f);
+    [SerializeField] private Vector3 runtimeForwardHitboxSize = new Vector3(2.25f, 2.08f, 1.75f);
 
     [Header("Damage")]
     [SerializeField, Range(0.1f, 2f)] private float outgoingDamageMultiplier = 0.5f;
@@ -885,7 +883,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [SerializeField] private bool useDefaultAttackTimingFallback = true;
     [SerializeField] private bool defaultAttackTimingControlsParryWindow = true;
     [SerializeField, Range(0.05f, 1f)] private float defaultAttackTimingTelegraphScale = 1f;
-    [SerializeField, Range(0.05f, 1f)] private float defaultAttackTimingParryWindowScale = 0.65f;
+    [SerializeField, Range(0.05f, 1f)] private float defaultAttackTimingParryWindowScale = 0.82f;
+    [SerializeField, Min(0f)] private float parryWindowEaseLeadTime = 0.11f;
+    [SerializeField, Min(0f)] private float parryWindowEaseTailTime = 0.11f;
     [SerializeField] private bool enableAttackTimingDebugLog = false;
     [SerializeField, Min(0f)] private float attackTimingCueShakeAmplitude = 0.045f;
     [SerializeField, Min(0f)] private float attackTimingCueShakeDuration = 0.14f;
@@ -933,6 +933,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     private float _punishWindowUntilTime = float.NegativeInfinity;
     private float _punishDamageMultiplier = 1f;
     private string _punishSourcePattern = string.Empty;
+    private AttackHitbox _originalAttackHitbox;
+    private BoxCollider _runtimeForwardAttackBox;
     private bool _cachedAttackHitboxDefaults;
     private bool _defaultAttackHitboxUseOneShotWindow;
     private float _defaultAttackHitboxExpandedPadding;
@@ -1092,6 +1094,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     public bool CanProcessAttackAnimationEvents => !_isDead && !_isUltimateVictim && !_isExecutingPostAction && currentState == BossState.Attack && _currentPattern != null;
     public bool CanProcessAttackHitboxAnimationEvents => CanProcessAttackAnimationEvents && !_timingDataControlsHitbox;
     public bool IsTimingDataControllingHitbox => _timingDataControlsHitbox;
+    public bool IsUsingRuntimeForwardAttackHitbox => useRuntimeForwardBoxAttackHitbox && _runtimeForwardAttackBox != null && attackHitbox == _runtimeForwardAttackBox.GetComponent<AttackHitbox>();
     public BossPlayerCombatObservation CurrentPlayerObservation => _playerObservation;
     public bool IsCombatRecoveryActive => _combatRecoveryController != null && _combatRecoveryController.IsRunning;
     public bool IsCombatRecoverySuperArmorActive => _combatRecoverySuperArmorActive ||
@@ -1119,6 +1122,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             groundTelegraph = GetComponentInChildren<BossGroundTelegraph>(true);
         if (groundTelegraph == null)
             groundTelegraph = CreateRuntimeGroundTelegraph();
+        if (handPatternTelegraph == null)
+            handPatternTelegraph = GetComponentInChildren<BossPatternHandTelegraph>(true);
+        if (handPatternTelegraph == null)
+            handPatternTelegraph = gameObject.AddComponent<BossPatternHandTelegraph>();
 
         if (rb == null)
             rb = GetComponent<Rigidbody>();
@@ -1128,6 +1135,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             bossAnimator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>();
         if (attackTimingCueAudioSource == null)
             attackTimingCueAudioSource = GetComponent<AudioSource>();
+        EnsureRuntimeForwardBoxAttackHitbox();
         if (attackHitbox != null)
             attackHitbox.HitApplied += HandleAttackHitboxHitApplied;
         _combatRecoveryController ??= new BossCombatRecoveryController();
@@ -2760,6 +2768,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
     public void ActivateHitbox()
     {
+        RefreshRuntimeForwardAttackHitboxPose();
         if (_currentPattern != null && attackHitbox != null)
             attackHitbox.ActivateWindow();
     }
@@ -2768,6 +2777,92 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     {
         if (attackHitbox != null)
             attackHitbox.DeactivateWindow();
+    }
+
+    void EnsureRuntimeForwardBoxAttackHitbox()
+    {
+        if (!useRuntimeForwardBoxAttackHitbox)
+            return;
+
+        if (_runtimeForwardAttackBox != null)
+        {
+            RefreshRuntimeForwardAttackHitboxPose();
+            attackHitbox = _runtimeForwardAttackBox.GetComponent<AttackHitbox>();
+            return;
+        }
+
+        _originalAttackHitbox = attackHitbox;
+        Transform existing = transform.Find("RuntimeForwardAttackHitbox");
+        GameObject hitboxObject = existing != null ? existing.gameObject : new GameObject("RuntimeForwardAttackHitbox");
+        hitboxObject.transform.SetParent(transform, false);
+        ResetRuntimeForwardHitboxTransform(hitboxObject.transform);
+
+        _runtimeForwardAttackBox = hitboxObject.GetComponent<BoxCollider>();
+        if (_runtimeForwardAttackBox == null)
+            _runtimeForwardAttackBox = hitboxObject.AddComponent<BoxCollider>();
+
+        _runtimeForwardAttackBox.isTrigger = true;
+        _runtimeForwardAttackBox.center = runtimeForwardHitboxCenter;
+        _runtimeForwardAttackBox.size = runtimeForwardHitboxSize;
+        _runtimeForwardAttackBox.enabled = false;
+
+        AttackHitbox runtimeHitbox = hitboxObject.GetComponent<AttackHitbox>();
+        if (runtimeHitbox == null)
+            runtimeHitbox = hitboxObject.AddComponent<AttackHitbox>();
+
+        if (_originalAttackHitbox != null && _originalAttackHitbox != runtimeHitbox)
+        {
+            runtimeHitbox.baseDamage = _originalAttackHitbox.baseDamage;
+            runtimeHitbox.hitType = _originalAttackHitbox.hitType;
+            runtimeHitbox.canParry = _originalAttackHitbox.canParry;
+            runtimeHitbox.canPerfectDodge = _originalAttackHitbox.canPerfectDodge;
+            runtimeHitbox.canGuard = _originalAttackHitbox.canGuard;
+            runtimeHitbox.causesGuardBreak = _originalAttackHitbox.causesGuardBreak;
+            runtimeHitbox.unblockable = _originalAttackHitbox.unblockable;
+            runtimeHitbox.hitLayers = _originalAttackHitbox.hitLayers;
+            runtimeHitbox.ignoreTriggerColliders = _originalAttackHitbox.ignoreTriggerColliders;
+            runtimeHitbox.showRuntimeHitboxPreview = _originalAttackHitbox.showRuntimeHitboxPreview;
+        }
+
+        runtimeHitbox.attackerRoot = transform;
+        runtimeHitbox.hitEachReceiverOncePerActivation = true;
+        runtimeHitbox.useOneShotWindow = true;
+        runtimeHitbox.useExpandedHitDetection = true;
+        runtimeHitbox.expandedPadding = 0.08f;
+        runtimeHitbox.useSweepHitDetection = true;
+        runtimeHitbox.sweepStepDistance = 0.25f;
+        runtimeHitbox.maxSweepSubsteps = 4;
+        runtimeHitbox.DeactivateWindow();
+
+        if (_originalAttackHitbox != null && _originalAttackHitbox != runtimeHitbox && disableOriginalAttackHitboxWhenUsingRuntimeBox)
+        {
+            _originalAttackHitbox.DeactivateWindow();
+            _originalAttackHitbox.enabled = false;
+        }
+
+        attackHitbox = runtimeHitbox;
+        _cachedAttackHitboxDefaults = false;
+    }
+
+    void RefreshRuntimeForwardAttackHitboxPose()
+    {
+        if (_runtimeForwardAttackBox == null)
+            return;
+
+        Transform hitboxTransform = _runtimeForwardAttackBox.transform;
+        if (hitboxTransform.parent != transform)
+            hitboxTransform.SetParent(transform, false);
+        ResetRuntimeForwardHitboxTransform(hitboxTransform);
+    }
+
+    static void ResetRuntimeForwardHitboxTransform(Transform hitboxTransform)
+    {
+        if (hitboxTransform == null)
+            return;
+
+        hitboxTransform.localPosition = Vector3.zero;
+        hitboxTransform.localRotation = Quaternion.identity;
+        hitboxTransform.localScale = Vector3.one;
     }
 
     void StartAttackTimingController(BossAttackTimingData timingData)
@@ -2841,6 +2936,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         CloseAttackTimingParryWindow();
         if (telegraphVfxPresenter != null)
             telegraphVfxPresenter.ResetCue();
+        if (handPatternTelegraph != null)
+            handPatternTelegraph.Hide();
         if (attackFeedbackPresenter != null)
             attackFeedbackPresenter.ResetFeedback();
         RestoreAttackTimingParryState();
@@ -2910,8 +3007,21 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         if (useVisualCue && !visualCueHandled && patternVisuals != null)
             patternVisuals.StartVisualCue(telegraphType, resolvedDuration);
 
+        PlayHandPatternTelegraph(resolvedDuration);
+
         if (useHudCue)
             OnAttackTelegraph?.Invoke(telegraphType, resolvedDuration, _attackTimingTelegraphLabel);
+    }
+
+    void PlayHandPatternTelegraph(float duration)
+    {
+        if (duration <= 0.01f)
+            return;
+
+        if (handPatternTelegraph == null)
+            handPatternTelegraph = GetComponentInChildren<BossPatternHandTelegraph>(true);
+        if (handPatternTelegraph != null)
+            handPatternTelegraph.Play(duration);
     }
 
     BossTelegraphVfxPresenter ResolveTelegraphVfxPresenter()
@@ -4093,6 +4203,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         if (patternVisuals != null)
             patternVisuals.StartVisualCue(telegraphType, telegraphLeadTime);
 
+        PlayHandPatternTelegraph(telegraphLeadTime);
+
         OnAttackTelegraph?.Invoke(telegraphType, telegraphLeadTime, telegraphLabel);
 
         if (telegraphLeadTime > 0.01f)
@@ -4119,6 +4231,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             if (patternVisuals != null)
                 patternVisuals.StartVisualCue(telegraphType, extraHoldDelay);
 
+            PlayHandPatternTelegraph(extraHoldDelay);
+
             OnAttackTelegraph?.Invoke(telegraphType, extraHoldDelay, secondaryTelegraphLabel);
             float wait = extraHoldDelay;
             while (wait > 0f)
@@ -4132,6 +4246,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         {
             if (patternVisuals != null)
                 patternVisuals.StartVisualCue(telegraphType, preAttackPoseDuration);
+
+            PlayHandPatternTelegraph(preAttackPoseDuration);
 
             OnAttackTelegraph?.Invoke(telegraphType, preAttackPoseDuration, preAttackPoseLabel);
 
@@ -6176,6 +6292,44 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         attackHitbox.expandedScanInterval = pattern.ResolveHitboxScanInterval(_defaultAttackHitboxScanInterval);
         attackHitbox.oneShotWindow = pattern.ResolveHitboxOneShotWindow(_defaultAttackHitboxOneShotWindow);
         attackHitbox.useOneShotWindow = _defaultAttackHitboxUseOneShotWindow && attackHitbox.oneShotWindow > 0.001f;
+
+        ApplyRuntimeForwardHitboxShape(pattern);
+    }
+
+    void ApplyRuntimeForwardHitboxShape(AttackPattern pattern)
+    {
+        if (_runtimeForwardAttackBox == null || pattern == null)
+            return;
+
+        Vector3 center = runtimeForwardHitboxCenter;
+        Vector3 size = runtimeForwardHitboxSize;
+
+        switch (ResolvePatternId(pattern))
+        {
+            case BossPatternId.DashSlash:
+                center = new Vector3(0f, 0.78f, 1.55f);
+                size = new Vector3(2.45f, 2.35f, 2.85f);
+                break;
+            case BossPatternId.HeavySlash:
+                center = new Vector3(0f, 0.78f, 1.28f);
+                size = new Vector3(3.05f, 2.45f, 2.25f);
+                break;
+            case BossPatternId.BackstepSlash:
+                center = new Vector3(0f, 0.76f, 1.05f);
+                size = new Vector3(2.7f, 2.25f, 1.95f);
+                break;
+            case BossPatternId.QuickSlash:
+                center = new Vector3(0f, 0.76f, 1.1f);
+                size = new Vector3(2.4f, 2.18f, 1.88f);
+                break;
+            case BossPatternId.SwordWave:
+                center = new Vector3(0f, 0.76f, 1.05f);
+                size = new Vector3(1.95f, 2.0f, 1.55f);
+                break;
+        }
+
+        _runtimeForwardAttackBox.center = center;
+        _runtimeForwardAttackBox.size = size;
     }
 
     bool TryQueueFollowUp(AttackPattern sourcePattern, float distanceToPlayer)

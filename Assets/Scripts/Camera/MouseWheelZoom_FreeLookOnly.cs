@@ -15,11 +15,8 @@ public class MouseWheelZoom_FreeLookOnly : MonoBehaviour
 {
     [Header("대상 참조")]
     public CinemachineVirtualCameraBase freeLook;
-    public PlayerLockOn playerLockOn;
 
     [Header("동작 옵션")]
-    public bool allowGameplayWheelZoom = false;
-    public bool disableDuringLockOn = true;
     public float step = 0.5f;
     public bool invertScroll = false;
 
@@ -33,20 +30,8 @@ public class MouseWheelZoom_FreeLookOnly : MonoBehaviour
             freeLook = GetComponent<CinemachineVirtualCameraBase>();
     }
 
-    void Awake()
-    {
-        if (!playerLockOn)
-            playerLockOn = GameplaySceneCache.ResolvePlayerLockOn();
-    }
-
     void Update()
     {
-        if (!allowGameplayWheelZoom || Time.timeScale == 0f)
-            return;
-
-        if (disableDuringLockOn && playerLockOn != null && playerLockOn.IsLockedOn())
-            return;
-
         if (!freeLook) return;
 
         float wheel = Input.mouseScrollDelta.y;

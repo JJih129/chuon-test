@@ -1,28 +1,62 @@
-﻿using UnityEngine;
+using System.Collections.Generic;
+using UnityEngine;
 
 public class NewBehaviourScript : MonoBehaviour
 {
     public float scrollSpeedY = 1.0f;
-    public string textureProperty = "_MainTex"; // HDRP/URP라면 "_BaseMap"
+    public string textureProperty = "_MainTex";
 
-    private Material material;
-    private float offsetY = 0f;
+    readonly List<Material> materials = new List<Material>();
+    float offsetY;
 
     void Start()
     {
-        // 머티리얼 인스턴스 생성 (원본 영향을 안 주게)
-        Renderer renderer = GetComponent<Renderer>();
-        if (renderer != null)
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
         {
-            material = renderer.material;
+            Renderer renderer = renderers[i];
+            if (renderer == null)
+                continue;
+
+            Material material = renderer.material;
+            if (material != null)
+                materials.Add(material);
         }
     }
 
     void Update()
     {
-        if (material == null) return;
+        if (materials.Count == 0)
+            return;
 
         offsetY += scrollSpeedY * Time.deltaTime;
-        material.SetTextureOffset(textureProperty, new Vector2(0, offsetY));
+        Vector2 offset = new Vector2(0f, offsetY);
+
+        for (int i = 0; i < materials.Count; i++)
+        {
+            Material material = materials[i];
+            if (material == null)
+                continue;
+
+            if (material.HasProperty(textureProperty))
+            {
+                material.SetTextureOffset(textureProperty, offset);
+                continue;
+            }
+
+            if (material.HasProperty("_BaseMap"))
+                material.SetTextureOffset("_BaseMap", offset);
+        }
+    }
+
+    void OnDestroy()
+    {
+        for (int i = 0; i < materials.Count; i++)
+        {
+            if (materials[i] != null)
+                Destroy(materials[i]);
+        }
+
+        materials.Clear();
     }
 }

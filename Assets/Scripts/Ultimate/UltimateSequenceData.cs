@@ -98,8 +98,6 @@ public sealed class UltimateSequenceData : ScriptableObject
         public bool orbitClockwise = true;
         [Min(0f)] public float orbitDegreesPerSecond = 42f;
         [Range(0f, 1f)] public float orbitFocusBias = 0.82f;
-        [Header("Shot Origin")]
-        public bool anchorCameraOnTarget;
         [Header("고정 프레이밍")]
         public bool holdStaticFraming;
     }
@@ -197,7 +195,7 @@ public sealed class UltimateSequenceData : ScriptableObject
         [Header("인트로 검 클로즈업")]
         public bool useSwordCloseupDuringIntro = true;
         public Vector3 introSwordCameraOffset = new Vector3(0.86f, 0.56f, 0.22f);
-        public Vector3 introSwordLookLocalOffset = new Vector3(-0.02f, 0.08f, 0.02f);
+        public Vector3 introSwordLookLocalOffset = new Vector3(-0.04f, -0.04f, 0f);
         public CameraShotSettings introSwordCloseupCamera = new CameraShotSettings
         {
             cameraLocalOffset = new Vector3(0.42f, 0.58f, -1.08f),
@@ -397,6 +395,8 @@ public sealed class UltimateSequenceData : ScriptableObject
                     return AssaultStageCamera;
 
                 case UltimateSequencePhase.FinalExplosion:
+                    return FinalExplosionCamera != null ? FinalExplosionCamera : FinishStageCamera;
+
                 case UltimateSequencePhase.Walkout:
                 case UltimateSequencePhase.Recover:
                     return WalkoutCamera != null ? WalkoutCamera : FinishStageCamera;
@@ -420,9 +420,10 @@ public sealed class UltimateSequenceData : ScriptableObject
                 return multiSlashCamera;
             case UltimateSequencePhase.CrackBurst:
                 return crackCamera;
+            case UltimateSequencePhase.FinalExplosion:
+                return finalExplosionCamera;
             case UltimateSequencePhase.Walkout:
             case UltimateSequencePhase.Recover:
-            case UltimateSequencePhase.FinalExplosion:
                 return walkoutCamera;
             default:
                 return introCamera;
@@ -449,150 +450,6 @@ public sealed class UltimateSequenceData : ScriptableObject
             + Mathf.Max(0f, timings.finalExplosionHoldDuration)
             + Mathf.Max(0f, timings.walkoutDuration)
             + Mathf.Max(0f, timings.recoverDuration);
-    }
-
-    public void ApplyReferenceCinematicStyle()
-    {
-        timings.preCastDuration = 0.08f;
-        timings.introPoseDuration = 0.78f;
-        timings.dashDuration = 0.34f;
-        timings.dashImpactNormalizedTime = 0.42f;
-        timings.defaultMultiSlashInterval = 0.17f;
-        timings.crackHoldDuration = 0.18f;
-        timings.finalExplosionHoldDuration = 0.36f;
-        timings.walkoutDuration = 0.98f;
-        timings.recoverDuration = 0.16f;
-
-        movement.introDistance = 2.05f;
-        movement.introSideOffset = -0.08f;
-        movement.dashEndDistance = 1.25f;
-        movement.dashSideOffset = 0f;
-        movement.dashTravelBias = 1.65f;
-        movement.slashOrbitDistance = 1.65f;
-        movement.walkoutDistance = 2.35f;
-        movement.walkoutSideOffset = -0.65f;
-
-        ConfigureShot(
-            introStageCamera,
-            new Vector3(0.62f, 1.82f, -2.35f),
-            new Vector3(0f, 0.9f, 0f),
-            0.62f,
-            0.1f,
-            0.78f,
-            0f,
-            10f,
-            12f,
-            37f,
-            true,
-            false,
-            true);
-
-        ConfigureShot(
-            assaultStageCamera,
-            new Vector3(0.72f, 2.05f, -3.05f),
-            new Vector3(0f, 0.84f, 0f),
-            0.82f,
-            0.08f,
-            0.82f,
-            0.03f,
-            7.5f,
-            9.5f,
-            40f,
-            false,
-            false,
-            true);
-        assaultStageCamera.orbitAroundTarget = true;
-        assaultStageCamera.orbitClockwise = true;
-        assaultStageCamera.orbitDegreesPerSecond = 34f;
-        assaultStageCamera.orbitFocusBias = 0.9f;
-
-        ConfigureShot(
-            finishStageCamera,
-            new Vector3(1.2f, 2.2f, -4.1f),
-            new Vector3(0f, 0.72f, 0f),
-            0.9f,
-            0.18f,
-            0.82f,
-            0.08f,
-            9f,
-            11f,
-            43f,
-            true,
-            false,
-            true);
-
-        ConfigureShot(
-            finalExplosionCamera,
-            new Vector3(2.35f, 2.55f, 4.85f),
-            new Vector3(0f, 0.42f, 0f),
-            0.98f,
-            0.32f,
-            0.84f,
-            0.16f,
-            10f,
-            12f,
-            52f,
-            true,
-            false,
-            true);
-        finalExplosionCamera.anchorCameraOnTarget = true;
-
-        ConfigureShot(
-            walkoutCamera,
-            new Vector3(0.95f, 1.85f, -3.25f),
-            new Vector3(0f, 0.84f, 0f),
-            0.76f,
-            0.12f,
-            0.82f,
-            0.04f,
-            9f,
-            11f,
-            40f,
-            true,
-            false,
-            true);
-
-        slashSteps = new[]
-        {
-            new SlashStepData { delay = 0.17f, damageMultiplier = 1f, angle = -16f, distance = 1.65f, sideOffset = -0.1f },
-            new SlashStepData { delay = 0.16f, damageMultiplier = 1.08f, angle = 10f, distance = 1.58f, sideOffset = 0.08f },
-            new SlashStepData { delay = 0.17f, damageMultiplier = 1.16f, angle = -8f, distance = 1.72f, sideOffset = -0.05f },
-            new SlashStepData { delay = 0.21f, damageMultiplier = 1.32f, angle = 18f, distance = 1.55f, sideOffset = 0.12f, accentCrackPulse = true }
-        };
-    }
-
-    static void ConfigureShot(
-        CameraShotSettings shot,
-        Vector3 cameraOffset,
-        Vector3 playerAnchorOffset,
-        float lookAtBlend,
-        float lookHeightOffset,
-        float targetBottomToCenterRatio,
-        float targetVerticalOffset,
-        float positionSmoothing,
-        float rotationSmoothing,
-        float fov,
-        bool snapOnEnter,
-        bool holdStaticFraming,
-        bool clearOrbit)
-    {
-        if (shot == null)
-            return;
-
-        shot.cameraLocalOffset = cameraOffset;
-        shot.playerAnchorLocalOffset = playerAnchorOffset;
-        shot.lookAtBlend = Mathf.Clamp01(lookAtBlend);
-        shot.lookHeightOffset = lookHeightOffset;
-        shot.targetBottomToCenterRatio = Mathf.Clamp01(targetBottomToCenterRatio);
-        shot.targetVerticalOffset = targetVerticalOffset;
-        shot.positionSmoothing = Mathf.Max(0.01f, positionSmoothing);
-        shot.rotationSmoothing = Mathf.Max(0.01f, rotationSmoothing);
-        shot.fov = Mathf.Max(10f, fov);
-        shot.snapOnEnter = snapOnEnter;
-        shot.holdStaticFraming = holdStaticFraming;
-        shot.anchorCameraOnTarget = false;
-        if (clearOrbit)
-            shot.orbitAroundTarget = false;
     }
 
     public static UltimateSequenceData CreateRuntimeDefaultInstance()

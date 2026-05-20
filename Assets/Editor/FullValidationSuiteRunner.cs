@@ -116,7 +116,7 @@ public static class FullValidationSuiteRunner
         _state.showDialog = showDialog;
         _state.runnerState = (int)RunnerState.Idle;
         _state.currentScenario = "GameplayRegressionChecks";
-        _state.currentStep = "Run sync, gameplay regression, and boss combat data checks";
+        _state.currentStep = "Run sync and gameplay regression checks";
         _state.finalState = string.Empty;
         _state.finalDetails = string.Empty;
         _state.completedSteps = 0;
@@ -127,18 +127,12 @@ public static class FullValidationSuiteRunner
         var pauseSyncSummary = PauseSettingsContentSyncUtility.RunFromFastMcp();
         var playerSyncSummary = PlayerWiringSyncUtility.RunFromFastMcp();
         var regressionSummary = GameplayRegressionValidator.RunFromFastMcp();
-        var bossCombatSummary = BossCombatDataValidator.RunFromFastMcp();
 
         AppendStepSummary("PauseSettingsSync", pauseSyncSummary.Details);
         AppendStepSummary("PlayerWiringSync", playerSyncSummary.Details);
-        AppendStepSummary("BossCombatData", bossCombatSummary.Details);
-        CompleteStep(
-            "GameplayRegressionChecks",
-            regressionSummary.ErrorCount + bossCombatSummary.ErrorCount,
-            regressionSummary.WarningCount + bossCombatSummary.WarningCount,
-            regressionSummary.Details);
+        CompleteStep("GameplayRegressionChecks", regressionSummary.ErrorCount, regressionSummary.WarningCount, regressionSummary.Details);
 
-        if (regressionSummary.HasErrors || bossCombatSummary.HasErrors)
+        if (regressionSummary.HasErrors)
         {
             Finish("Failed", true, BuildFinalDetails());
             return;

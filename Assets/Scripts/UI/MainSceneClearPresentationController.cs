@@ -23,8 +23,8 @@ public class MainSceneClearPresentationController : MonoBehaviour
     [SerializeField] private AttackTelegraphType syncTelegraphType = AttackTelegraphType.Guard;
 
     [Header("Overlay")]
-    [SerializeField] private string overlayTitle = "CLEAR";
-    [SerializeField] private string overlaySubtitle = "\uc2e4\uc804 \uac80\uc99d \uc644\ub8cc";
+    [SerializeField] private string overlayTitle = "MISSION COMPLETED";
+    [SerializeField] private string overlaySubtitle = "\uc704\ud611 \ubaa9\ud45c \ucc98\uce58 \uc644\ub8cc";
     [SerializeField] private Vector2 overlaySize = new Vector2(540f, 132f);
     [SerializeField] private Vector2 overlayAnchoredPosition = new Vector2(0f, -48f);
     [SerializeField] private int overlayTitleFontSize = 42;

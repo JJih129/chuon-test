@@ -9,8 +9,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
     [SerializeField] private LobbyManager lobbyManager;
 
     [Header("Layout")]
-    [SerializeField] private bool useScenePlacedQuestPanel = true;
-    [SerializeField] private Sprite sceneQuestGaugeSprite;
     [SerializeField] private Vector2 objectivePanelAnchoredPosition = new Vector2(-32f, -28f);
     [SerializeField] private Vector2 objectivePanelSize = new Vector2(660f, 312f);
     [SerializeField] private Vector2 supportPanelAnchoredPosition = new Vector2(32f, -124f);
@@ -74,7 +72,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
     RectTransform _progressRoot;
     RawImage[] _progressNodes;
     RawImage[] _progressLinks;
-    Image _sceneQuestGaugeImage;
     bool _subscribed;
     Coroutine _sweepRoutine;
     Coroutine _iconPulseRoutine;
@@ -89,18 +86,10 @@ public class LobbyObjectivePanelController : MonoBehaviour
     TextMeshProUGUI _cueTitleText;
     TextMeshProUGUI _cueBodyText;
     bool _transientCueVisible;
-    const string SceneQuestGaugeName = "QuestGauge";
-    const string SceneQuestGaugeResourcePath = "UI/HUD/chuon_hud_quest_gauge";
 
     public void ConfigureRuntime(LobbyManager runtimeLobbyManager)
     {
         lobbyManager = runtimeLobbyManager;
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            SuppressPrototypeUi();
-            return;
-        }
-
         CacheQuestTexts();
         EnsureRuntimeVisuals();
         RefreshSubscriptions();
@@ -109,14 +98,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void OnEnable()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            if (lobbyManager == null)
-                lobbyManager = GetComponent<LobbyManager>();
-            SuppressPrototypeUi();
-            return;
-        }
-
         CacheQuestTexts();
         EnsureRuntimeVisuals();
         RefreshSubscriptions();
@@ -129,9 +110,8 @@ public class LobbyObjectivePanelController : MonoBehaviour
         HideTransientCue();
         if (_cueGroup != null)
             _cueGroup.alpha = 0f;
-        bool restoreLegacyQuest = ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled;
-        SetLegacyQuestTextVisible(restoreLegacyQuest);
-        SetLegacyQuestPanelVisible(restoreLegacyQuest);
+        SetLegacyQuestTextVisible(true);
+        SetLegacyQuestPanelVisible(true);
     }
 
     void OnDestroy()
@@ -171,9 +151,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void HandleQuestUpdated(string title, string description)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            return;
-
         EnsureRuntimeVisuals();
         _questTitle = title;
         _questDescription = description;
@@ -184,9 +161,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void HandleEnemyProgressUpdated(int current, int total)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            return;
-
         _questDescription = "\uc801 \uc81c\uac70 " + current + " / " + Mathf.Max(1, total);
         ApplyQuestTexts();
         if (!_transientCueVisible)
@@ -195,9 +169,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void ApplyPhase(LobbyManager.LobbyFlowPhase phase, bool animated)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-            return;
-
         EnsureRuntimeVisuals();
         _currentPhase = phase;
 
@@ -211,8 +182,7 @@ public class LobbyObjectivePanelController : MonoBehaviour
         if (_accentImage != null)
             _accentImage.color = color;
 
-        if (!useScenePlacedQuestPanel)
-            ApplyIconStyle(phase, color, animated);
+        ApplyIconStyle(phase, color, animated);
 
         if (_categoryText != null)
         {
@@ -245,40 +215,23 @@ public class LobbyObjectivePanelController : MonoBehaviour
         if (!_transientCueVisible)
             ApplySupportTexts();
 
-        if (!useScenePlacedQuestPanel)
-        {
-            EnsureProgressVisuals();
-            UpdateProgressVisuals(index, color);
-        }
+        EnsureProgressVisuals();
+        UpdateProgressVisuals(index, color);
 
-        if (animated && !useScenePlacedQuestPanel)
+        if (animated)
             PlaySweep(color, 0.16f);
     }
 
     void EnsureRuntimeVisuals()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
-        {
-            SuppressPrototypeUi();
-            return;
-        }
-
         CanvasGroup questPanel = lobbyManager != null ? lobbyManager.questPanelGroup : null;
         if (questPanel == null)
             return;
 
-        EnsureRuntimeCanvas(questPanel);
-        EnsureHudRoot();
-
-        if (useScenePlacedQuestPanel)
-        {
-            ConfigureScenePlacedQuestPanel(questPanel);
-            EnsureTransientCueVisuals();
-            return;
-        }
-
         SetLegacyQuestTextVisible(false);
         SetLegacyQuestPanelVisible(false);
+        EnsureRuntimeCanvas(questPanel);
+        EnsureHudRoot();
         if (_hudRoot == null)
             return;
 
@@ -412,58 +365,8 @@ public class LobbyObjectivePanelController : MonoBehaviour
         EnsureTransientCueVisuals();
     }
 
-    void ConfigureScenePlacedQuestPanel(CanvasGroup questPanel)
-    {
-        SetLegacyQuestTextVisible(true);
-        SetLegacyQuestPanelVisible(true);
-
-        _runtimeRoot = questPanel.transform as RectTransform;
-        _titleText = lobbyManager != null ? lobbyManager.questTitleText : null;
-        _statusText = lobbyManager != null ? lobbyManager.questDescriptionText : null;
-        _runtimeBackground = null;
-        _accentImage = null;
-        _sweepImage = null;
-        _iconRoot = null;
-        _categoryText = null;
-        _counterText = null;
-        _badgeRoot = null;
-        _badgeBackground = null;
-        _badgeText = null;
-        _progressRoot = null;
-        _progressNodes = null;
-        _progressLinks = null;
-
-        if (_titleText != null)
-        {
-            _titleText.enabled = true;
-            _titleText.raycastTarget = false;
-        }
-
-        if (_statusText != null)
-        {
-            _statusText.enabled = true;
-            _statusText.raycastTarget = false;
-        }
-
-        _sceneQuestGaugeImage = FindSceneQuestGaugeImage(_runtimeRoot);
-        if (_sceneQuestGaugeImage != null)
-        {
-            if (sceneQuestGaugeSprite == null)
-                sceneQuestGaugeSprite = Resources.Load<Sprite>(SceneQuestGaugeResourcePath);
-
-            if (sceneQuestGaugeSprite != null)
-                _sceneQuestGaugeImage.sprite = sceneQuestGaugeSprite;
-
-            _sceneQuestGaugeImage.raycastTarget = false;
-            _sceneQuestGaugeImage.color = Color.white;
-        }
-    }
-
     public void ShowTransientCue(string title, string description)
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
-            return;
-
         EnsureRuntimeVisuals();
         if (_cueGroup == null)
             return;
@@ -574,9 +477,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void ApplySupportTexts()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
-            return;
-
         EnsureTransientCueVisuals();
         if (_cueGroup == null)
             return;
@@ -606,15 +506,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void EnsureTransientCueVisuals()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
-        {
-            if (_cueRoot != null)
-                _cueRoot.gameObject.SetActive(false);
-            if (_cueGroup != null)
-                _cueGroup.alpha = 0f;
-            return;
-        }
-
         if (_runtimeCanvas == null)
             return;
 
@@ -722,9 +613,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void EnsureProgressVisuals()
     {
-        if (useScenePlacedQuestPanel)
-            return;
-
         if (_runtimeRoot == null)
             return;
 
@@ -792,9 +680,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void UpdateProgressVisuals(int activeIndex, Color activeColor)
     {
-        if (useScenePlacedQuestPanel)
-            return;
-
         if (_progressNodes == null || _progressLinks == null)
             return;
 
@@ -819,15 +704,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
             link.color = i < activeIndex ? Color.Lerp(activeColor, Color.white, 0.12f) : pendingLinkColor;
         }
-    }
-
-    static Image FindSceneQuestGaugeImage(RectTransform root)
-    {
-        if (root == null)
-            return null;
-
-        Transform gauge = root.Find(SceneQuestGaugeName);
-        return gauge != null ? gauge.GetComponent<Image>() : null;
     }
 
     void PlaySweep(Color color, float maxAlpha)
@@ -1136,25 +1012,6 @@ public class LobbyObjectivePanelController : MonoBehaviour
             _sweepImage.color = new Color(1f, 1f, 1f, 0f);
         if (_iconRoot != null)
             _iconRoot.localScale = Vector3.one;
-    }
-
-    void SuppressPrototypeUi()
-    {
-        ReleaseSubscriptions();
-        HideImmediate();
-        HideTransientCue();
-
-        if (_runtimeRoot != null)
-            _runtimeRoot.gameObject.SetActive(false);
-        if (_hudRoot != null)
-            _hudRoot.gameObject.SetActive(false);
-        if (_cueRoot != null)
-            _cueRoot.gameObject.SetActive(false);
-        if (_cueGroup != null)
-            _cueGroup.alpha = 0f;
-
-        SetLegacyQuestTextVisible(false);
-        SetLegacyQuestPanelVisible(false);
     }
 
     static void StretchToParent(RectTransform rectTransform)

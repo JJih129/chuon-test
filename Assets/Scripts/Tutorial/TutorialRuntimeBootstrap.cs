@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using Unity.Cinemachine;
 using UnityEngine;
@@ -12,20 +11,16 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 {
     const string TutorialScenePath = "Assets/Scenes/Tutorial.unity";
     const string CombatGirlEnemyPrefabPath = "Assets/Prefabs/Tutorial/TutorialCombatGirlEnemy.prefab";
-    const string AspCharacterShaderName = "ASP/Character";
-    const string AspCharacterMaterialResourcePath = "Tutorial/TutorialAspCharacterRuntime";
-    const int MaxBootstrapResolveFrames = 45;
-    const float MaxBootstrapResolveSeconds = 2f;
-    const float DefaultStepAdvanceDelay = 1.35f;
-    const float CombatStepAdvanceDelay = 1.55f;
-    const float UltimateStepAdvanceDelay = 1.8f;
 
     TutorialFlowController _flowController;
     TutorialHintUIBridge _hintBridge;
     EGOGuideController _egoGuideController;
     TutorialPlayerRuntimeBridge _playerBridge;
-    bool _prototypeBuilt;
-    bool _flowStartRequested;
+    GameObject _playerObject;
+    Vector3 _tutorialStartPosition;
+    Quaternion _tutorialStartRotation;
+    float _stabilizeStartUntil;
+    bool _startStabilizationComplete;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void RegisterSceneBootstrap()
@@ -54,79 +49,15 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             return;
         }
 
-        if (!TryBuildRuntimePrototype())
-            StartCoroutine(CoBuildRuntimePrototypeWhenReady());
+        BuildRuntimePrototype();
     }
 
     void Start()
     {
-        _flowStartRequested = true;
-        TryStartFlow();
+        _flowController?.StartFlow();
     }
 
-    IEnumerator CoBuildRuntimePrototypeWhenReady()
-    {
-        int frameCount = 0;
-        float startedAt = Time.unscaledTime;
-        while (!_prototypeBuilt &&
-               frameCount < MaxBootstrapResolveFrames &&
-               Time.unscaledTime - startedAt < MaxBootstrapResolveSeconds)
-        {
-            yield return null;
-            frameCount++;
-            TryBuildRuntimePrototype();
-        }
-
-        if (!_prototypeBuilt)
-        {
-            Debug.LogWarning("[TutorialRuntimeBootstrap] Player or Camera missing. Runtime tutorial bootstrap skipped; legacy tutorial remains active.", this);
-            enabled = false;
-        }
-    }
-
-    bool TryBuildRuntimePrototype()
-    {
-        if (_prototypeBuilt)
-            return true;
-
-        GameObject player = ResolvePlayerObject();
-        Camera mainCamera = ResolveMainCamera();
-        if (player == null || mainCamera == null)
-            return false;
-
-        BuildRuntimePrototype(player, mainCamera);
-        _prototypeBuilt = true;
-        TryStartFlow();
-        return true;
-    }
-
-    void TryStartFlow()
-    {
-        if (_flowStartRequested)
-            _flowController?.StartFlow();
-    }
-
-    static GameObject ResolvePlayerObject()
-    {
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        if (player != null)
-            return player;
-
-        PlayerMoveController moveController = FindFirstObjectByType<PlayerMoveController>();
-        if (moveController != null)
-            return moveController.gameObject;
-
-        PlayerHealth playerHealth = FindFirstObjectByType<PlayerHealth>();
-        return playerHealth != null ? playerHealth.gameObject : null;
-    }
-
-    static Camera ResolveMainCamera()
-    {
-        Camera mainCamera = Camera.main;
-        return mainCamera != null ? mainCamera : FindFirstObjectByType<Camera>();
-    }
-
-    void BuildRuntimePrototype(GameObject player, Camera mainCamera)
+    void BuildRuntimePrototype()
     {
         TutorialManager legacyTutorialManager = FindFirstObjectByType<TutorialManager>();
         if (legacyTutorialManager != null)
@@ -134,9 +65,23 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             // 湲곗〈 ?쒗넗由ъ뼹 ?ㅽ겕由쏀듃????UI 李몄“瑜??좎???梨?鍮꾪솢?깊솕留??쒕떎.
             // ?대젃寃??섎㈃ ???꾨줈?좏??낆씠 媛숈? 由ъ냼?ㅻ? ?ъ궗?⑺빐??湲곗〈 李몄“瑜?源⑥? ?딅뒗??
             TutorialManager.Instance = null;
-            legacyTutorialManager.StopAllCoroutines();
             legacyTutorialManager.enabled = false;
         }
+
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        Camera mainCamera = Camera.main;
+        if (player == null || mainCamera == null)
+        {
+            Debug.LogWarning("[TutorialRuntimeBootstrap] Player or Camera missing. Prototype bootstrap aborted.", this);
+            enabled = false;
+            return;
+        }
+
+        _playerObject = player;
+        _tutorialStartPosition = ResolveGroundedTutorialStart(player);
+        _tutorialStartRotation = player.transform.rotation;
+        _stabilizeStartUntil = Time.unscaledTime + 5f;
+        RestoreTutorialPlayerStart();
 
         GameObject questGoal = legacyTutorialManager != null ? legacyTutorialManager.movementGoal : GameObject.Find("QuestGoal");
         GameObject attackDummyObject = legacyTutorialManager != null ? legacyTutorialManager.attackDummy : GameObject.Find("enemy");
@@ -181,7 +126,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             "TutorialMovementMarker",
             questGoal != null ? questGoal.transform : null,
             new Color(0.18f, 0.85f, 1f, 0.9f),
-            Vector3.zero,
             new Vector3(1.15f, 0.025f, 1.15f),
             new Vector3(0f, 0.65f, 0f),
             new Vector3(0.10f, 0.35f, 0.10f),
@@ -191,7 +135,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             "TutorialExitMarker",
             exitZone != null ? exitZone.transform : null,
             new Color(1.00f, 0.68f, 0.18f, 0.92f),
-            Vector3.zero,
             new Vector3(1.30f, 0.025f, 1.30f),
             new Vector3(0f, 0.78f, 0f),
             new Vector3(0.12f, 0.42f, 0.12f),
@@ -201,17 +144,15 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             "TutorialAttackDummyMarker",
             attackDummyObject != null ? attackDummyObject.transform : null,
             new Color(0.24f, 0.88f, 1f, 0.92f),
-            new Vector3(0f, 1.72f, 0f),
-            new Vector3(0.38f, 0.014f, 0.38f),
-            new Vector3(0f, 1.72f, 0f),
-            Vector3.zero,
-            new Vector3(0f, 1.82f, 0f),
-            new Vector3(0.16f, 0.065f, 0.16f));
+            new Vector3(0.95f, 0.025f, 0.95f),
+            new Vector3(0f, 0.72f, 0f),
+            new Vector3(0.09f, 0.34f, 0.09f),
+            new Vector3(0f, 1.22f, 0f),
+            new Vector3(0.26f, 0.12f, 0.26f));
         TutorialWorldMarker guardDummyMarker = CreateWorldMarker(
             "TutorialGuardDummyMarker",
             droneObject != null ? droneObject.transform : null,
             new Color(1.00f, 0.45f, 0.18f, 0.92f),
-            Vector3.zero,
             new Vector3(1.05f, 0.025f, 1.05f),
             new Vector3(0f, 0.78f, 0f),
             new Vector3(0.10f, 0.38f, 0.10f),
@@ -240,11 +181,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialPresentationController presentationController = gameObject.AddComponent<TutorialPresentationController>();
         presentationController.ConfigureRuntime(_flowController, _playerBridge, tutorialCanvas);
 
-        if (ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
-        {
-            TutorialDefenseFeedbackController defenseFeedbackController = gameObject.AddComponent<TutorialDefenseFeedbackController>();
-            defenseFeedbackController.ConfigureRuntime(_flowController, guardDummy, tutorialCanvas);
-        }
+        TutorialDefenseFeedbackController defenseFeedbackController = gameObject.AddComponent<TutorialDefenseFeedbackController>();
+        defenseFeedbackController.ConfigureRuntime(_flowController, guardDummy, tutorialCanvas);
 
         TutorialCombatCoachController combatCoachController = gameObject.AddComponent<TutorialCombatCoachController>();
         combatCoachController.ConfigureRuntime(_flowController, _egoGuideController, attackDummy, guardDummy);
@@ -266,39 +204,26 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             exitZone,
             sceneMoveObject != null ? sceneMoveObject.GetComponent<SceneLoadInteractable>() : null);
 
-        if (ExhibitionPrototypePresentationPolicy.RuntimeCoachFeedbackEnabled)
-        {
-            TutorialSupportFeedbackController supportFeedbackController = gameObject.AddComponent<TutorialSupportFeedbackController>();
-            supportFeedbackController.ConfigureRuntime(
-                _flowController,
-                _playerBridge,
-                tutorialCanvas,
-                movementGoalZone != null ? movementGoalZone.transform : null,
-                attackDummy != null ? attackDummy.transform : null,
-                exitZone != null ? exitZone.transform : null);
-        }
+        TutorialSupportFeedbackController supportFeedbackController = gameObject.AddComponent<TutorialSupportFeedbackController>();
+        supportFeedbackController.ConfigureRuntime(
+            _flowController,
+            _playerBridge,
+            tutorialCanvas,
+            movementGoalZone != null ? movementGoalZone.transform : null,
+            attackDummy != null ? attackDummy.transform : null,
+            exitZone != null ? exitZone.transform : null);
 
-        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialObjectiveControllerEnabled)
-        {
-            TutorialObjectivePanelController objectivePanelController = gameObject.AddComponent<TutorialObjectivePanelController>();
-            objectivePanelController.ConfigureRuntime(_flowController, _hintBridge);
-        }
+        TutorialObjectivePanelController objectivePanelController = gameObject.AddComponent<TutorialObjectivePanelController>();
+        objectivePanelController.ConfigureRuntime(_flowController, _hintBridge);
 
-        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialGuidePathEnabled)
-        {
-            TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
-            guideBeamController.ConfigureRuntime(
-                _flowController,
-                player.transform,
-                movementGoalZone != null ? movementGoalZone.transform : null,
-                attackDummy != null ? attackDummy.transform : null,
-                guardDummy != null ? guardDummy.transform : null,
-                exitZone != null ? exitZone.transform : null,
-                movementMarker,
-                attackDummyMarker,
-                guardDummyMarker,
-                exitMarker);
-        }
+        TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
+        guideBeamController.ConfigureRuntime(
+            _flowController,
+            player.transform,
+            movementGoalZone != null ? movementGoalZone.transform : null,
+            exitZone != null ? exitZone.transform : null,
+            movementMarker,
+            exitMarker);
 
         TutorialZoneHighlightController zoneHighlightController = gameObject.AddComponent<TutorialZoneHighlightController>();
         zoneHighlightController.ConfigureRuntime(_flowController, movementGoalZone, exitZone, player.transform);
@@ -323,6 +248,65 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             _hintBridge,
             runtimeSteps,
             new[] { attackDummy, guardDummy });
+    }
+
+    void LateUpdate()
+    {
+        if (_playerObject == null || _startStabilizationComplete)
+            return;
+
+        Vector3 current = _playerObject.transform.position;
+        Vector3 startFlat = new Vector3(_tutorialStartPosition.x, 0f, _tutorialStartPosition.z);
+        Vector3 currentFlat = new Vector3(current.x, 0f, current.z);
+        PlayerMoveController moveController = _playerObject.GetComponent<PlayerMoveController>();
+        bool hasMoveInput = moveController != null && moveController.CurrentMoveInput.sqrMagnitude > 0.01f;
+        if (hasMoveInput || Time.unscaledTime > _stabilizeStartUntil)
+        {
+            _startStabilizationComplete = true;
+            return;
+        }
+
+        const float allowedDrift = 0.25f;
+        if (current.y < _tutorialStartPosition.y - 1f || Vector3.SqrMagnitude(currentFlat - startFlat) > allowedDrift * allowedDrift)
+            RestoreTutorialPlayerStart();
+    }
+
+    void RestoreTutorialPlayerStart()
+    {
+        if (_playerObject == null)
+            return;
+
+        CharacterController characterController = _playerObject.GetComponent<CharacterController>();
+        bool restoreController = characterController != null && characterController.enabled;
+        if (restoreController)
+            characterController.enabled = false;
+
+        _playerObject.transform.SetPositionAndRotation(_tutorialStartPosition, _tutorialStartRotation);
+
+        if (restoreController)
+        {
+            characterController.enabled = true;
+            characterController.Move(Vector3.down * 0.35f);
+            _tutorialStartPosition = _playerObject.transform.position;
+        }
+
+        PlayerMoveController moveController = _playerObject.GetComponent<PlayerMoveController>();
+        if (moveController != null)
+            moveController.ResetVerticalVelocity();
+    }
+
+    static Vector3 ResolveGroundedTutorialStart(GameObject player)
+    {
+        Vector3 position = player.transform.position;
+        CharacterController characterController = player.GetComponent<CharacterController>();
+        GameObject tile = GameObject.Find("tile");
+        Collider floorCollider = tile != null ? tile.GetComponent<Collider>() : null;
+        if (characterController == null || floorCollider == null)
+            return position;
+
+        float bottomOffset = characterController.center.y - characterController.height * 0.5f;
+        position.y = floorCollider.bounds.max.y - bottomOffset + characterController.skinWidth;
+        return position;
     }
 
     void DisableLegacyTutorialBehaviours(TutorialManager legacyTutorialManager)
@@ -363,7 +347,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             return null;
 
         TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
-        ApplyAspCharacterShaderToTutorialEnemy(dummyObject);
         TrainingDummyController controller = EnsureComponent<TrainingDummyController>(dummyObject);
         RemoveConflictingDamageReceivers(dummyObject, controller);
         Renderer renderer = visualRig != null && visualRig.PrimaryRenderer != null
@@ -443,7 +426,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             return null;
 
         TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
-        ApplyAspCharacterShaderToTutorialEnemy(dummyObject);
         Transform attackOrigin = dummyObject.transform;
         Transform firePoint = visualRig != null && visualRig.FirePoint != null
             ? visualRig.FirePoint
@@ -597,6 +579,9 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
     void ConfigureTutorialModernUltimate(GameObject player, GameObject ultimateTargetObject, Camera mainCamera)
     {
+        // Tutorial should use the normal scene placement and flow only.
+        // MainScene owns the authored ultimate timeline presentation.
+        return;
 #if !UNITY_EDITOR
         return;
 #else
@@ -744,7 +729,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         string markerName,
         Transform target,
         Color color,
-        Vector3 ringLocalPosition,
         Vector3 ringScale,
         Vector3 beamLocalPosition,
         Vector3 beamScale,
@@ -762,7 +746,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             marker = markerObject.AddComponent<TutorialWorldMarker>();
         }
 
-        marker.ConfigureRuntime(target, color, ringLocalPosition, ringScale, beamLocalPosition, beamScale, capLocalPosition, capScale);
+        marker.ConfigureRuntime(target, color, ringScale, beamLocalPosition, beamScale, capLocalPosition, capScale);
         marker.SetVisible(true);
         return marker;
     }
@@ -962,7 +946,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             6f);
 
         TutorialHealConditionChecker healChecker = gameObject.AddComponent<TutorialHealConditionChecker>();
-        healChecker.ConfigureRuntime(_playerBridge, 0.42f, 3f);
+        healChecker.ConfigureRuntime(_playerBridge, 0.42f);
 
         TutorialUltimateConditionChecker ultimateChecker = gameObject.AddComponent<TutorialUltimateConditionChecker>();
         ultimateChecker.ConfigureRuntime(_playerBridge, attackDummy != null ? attackDummy.GetComponent<UltimateTargetSimple>() : null);
@@ -1154,30 +1138,13 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             comboGuideTitle = comboGuideTitle,
             comboGuideBody = comboGuideBody,
             autoAdvance = true,
-            autoAdvanceDelay = ResolveStepAdvanceDelay(stepType),
+            autoAdvanceDelay = 0.35f,
             requiredCheckers = checkers,
             activateOnStart = FilterNulls(activateOnStart),
             deactivateOnStart = FilterNulls(deactivateOnStart),
             activateOnComplete = FilterNulls(activateOnComplete),
             deactivateOnComplete = FilterNulls(deactivateOnComplete)
         };
-    }
-
-    static float ResolveStepAdvanceDelay(TutorialStepType stepType)
-    {
-        switch (stepType)
-        {
-            case TutorialStepType.BasicAttack:
-            case TutorialStepType.Guard:
-            case TutorialStepType.Parry:
-            case TutorialStepType.Dodge:
-            case TutorialStepType.PerfectDodge:
-                return CombatStepAdvanceDelay;
-            case TutorialStepType.Ultimate:
-                return UltimateStepAdvanceDelay;
-            default:
-                return DefaultStepAdvanceDelay;
-        }
     }
 
     TutorialGuideLine Guide(EGOGuideMessageType messageType, string text, float duration)
@@ -1249,100 +1216,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             EnsureRuntimeLockPivot(target);
 
         return visualRig;
-    }
-
-    static void ApplyAspCharacterShaderToTutorialEnemy(GameObject target)
-    {
-        if (target == null)
-            return;
-
-        Material template = Resources.Load<Material>(AspCharacterMaterialResourcePath);
-        Shader shader = template != null ? template.shader : Shader.Find(AspCharacterShaderName);
-        if (shader == null)
-            return;
-
-        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
-        if (renderers == null || renderers.Length == 0)
-            return;
-
-        Dictionary<Material, Material> convertedMaterials = new Dictionary<Material, Material>(renderers.Length);
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Renderer renderer = renderers[i];
-            if (renderer == null || renderer is LineRenderer)
-                continue;
-
-            Material[] materials = renderer.sharedMaterials;
-            bool changed = false;
-            for (int materialIndex = 0; materialIndex < materials.Length; materialIndex++)
-            {
-                Material source = materials[materialIndex];
-                if (source == null || source.shader == shader)
-                    continue;
-
-                if (!convertedMaterials.TryGetValue(source, out Material converted) || converted == null)
-                {
-                    converted = CreateAspRuntimeMaterial(source, template, shader);
-                    convertedMaterials[source] = converted;
-                }
-
-                materials[materialIndex] = converted;
-                changed = true;
-            }
-
-            if (changed)
-                renderer.sharedMaterials = materials;
-        }
-    }
-
-    static Material CreateAspRuntimeMaterial(Material source, Material template, Shader shader)
-    {
-        Material material = new Material(template != null ? template : source)
-        {
-            shader = shader,
-            name = source.name + "_ASP_Runtime"
-        };
-
-        CopyTextureIfPresent(source, material, "_BaseMap", "_MainTex");
-        CopyTextureIfPresent(source, material, "_EmissionMap", "_EmissionMap");
-        CopyColorIfPresent(source, material, "_BaseColor", "_Color", Color.white);
-        CopyColorIfPresent(source, material, "_Color", "_BaseColor", Color.white);
-        if (material.HasProperty("_style"))
-            material.SetFloat("_style", 1f);
-        if (material.HasProperty("_EmissionToggle"))
-            material.SetFloat("_EmissionToggle", 0f);
-        if (material.HasProperty("_EmissionColor"))
-            material.SetColor("_EmissionColor", Color.black);
-
-        return material;
-    }
-
-    static void CopyTextureIfPresent(Material source, Material target, string targetProperty, string fallbackSourceProperty)
-    {
-        if (source == null || target == null || !target.HasProperty(targetProperty))
-            return;
-
-        Texture texture = null;
-        if (source.HasProperty(targetProperty))
-            texture = source.GetTexture(targetProperty);
-        if (texture == null && source.HasProperty(fallbackSourceProperty))
-            texture = source.GetTexture(fallbackSourceProperty);
-        if (texture != null)
-            target.SetTexture(targetProperty, texture);
-    }
-
-    static void CopyColorIfPresent(Material source, Material target, string targetProperty, string fallbackSourceProperty, Color defaultColor)
-    {
-        if (source == null || target == null || !target.HasProperty(targetProperty))
-            return;
-
-        Color color = defaultColor;
-        if (source.HasProperty(targetProperty))
-            color = source.GetColor(targetProperty);
-        else if (source.HasProperty(fallbackSourceProperty))
-            color = source.GetColor(fallbackSourceProperty);
-
-        target.SetColor(targetProperty, color);
     }
 
     void ApplyLayerRecursively(Transform root, int layer)

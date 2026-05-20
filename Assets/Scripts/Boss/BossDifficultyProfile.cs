@@ -45,7 +45,7 @@ public struct BossDifficultyProfile
                     phaseTransitionHpThreshold = 0.72f,
                     overrideMaxFollowUpCount = true,
                     maxFollowUpCount = 0,
-                    parryWindowMultiplier = 1.25f
+                    parryWindowMultiplier = 1.32f
                 };
             case BossDifficultyTier.Hard:
                 return new BossDifficultyProfile
@@ -62,7 +62,7 @@ public struct BossDifficultyProfile
                     phaseTransitionHpThreshold = 0.62f,
                     overrideMaxFollowUpCount = true,
                     maxFollowUpCount = 2,
-                    parryWindowMultiplier = 0.92f
+                    parryWindowMultiplier = 0.98f
                 };
             case BossDifficultyTier.Expert:
                 return new BossDifficultyProfile
@@ -79,7 +79,7 @@ public struct BossDifficultyProfile
                     phaseTransitionHpThreshold = 0.58f,
                     overrideMaxFollowUpCount = true,
                     maxFollowUpCount = 3,
-                    parryWindowMultiplier = 0.86f
+                    parryWindowMultiplier = 0.92f
                 };
             case BossDifficultyTier.Normal:
             default:
@@ -97,7 +97,7 @@ public struct BossDifficultyProfile
                     phaseTransitionHpThreshold = 0f,
                     overrideMaxFollowUpCount = false,
                     maxFollowUpCount = 1,
-                    parryWindowMultiplier = 1f
+                    parryWindowMultiplier = 1.08f
                 };
         }
     }

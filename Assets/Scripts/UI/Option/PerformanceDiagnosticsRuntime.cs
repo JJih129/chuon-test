@@ -24,9 +24,6 @@ public class PerformanceDiagnosticsRuntime : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Bootstrap()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
-            return;
-
         EnsureInstance();
     }
 
@@ -86,12 +83,6 @@ public class PerformanceDiagnosticsRuntime : MonoBehaviour
 
     void Awake()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
         if (_instance != null && _instance != this)
         {
             Destroy(gameObject);
@@ -115,9 +106,6 @@ public class PerformanceDiagnosticsRuntime : MonoBehaviour
 
     void Initialize()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
-            return;
-
         if (_isInitialized)
             return;
 
@@ -136,14 +124,6 @@ public class PerformanceDiagnosticsRuntime : MonoBehaviour
 
     void Update()
     {
-        if (!ExhibitionPrototypePresentationPolicy.RuntimeDiagnosticsEnabled)
-        {
-            if (_canvas != null)
-                _canvas.enabled = false;
-            enabled = false;
-            return;
-        }
-
         if (Input.GetKeyDown(toggleKey))
         {
             _visible = !_visible;

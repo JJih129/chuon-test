@@ -21,37 +21,24 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     public Transform target;
 
     [Header("Movement")]
-    public float moveSpeed = 2.2f;
-    public float stopDistance = 9f;
+    public float moveSpeed = 3.5f;
+    public float stopDistance = 8f;
     public float turnSpeedDeg = 360f;
 
     [Header("Collision")]
     [SerializeField] bool useCollisionAwareMovement = true;
     [SerializeField] LayerMask movementCollisionMask = ~0;
     [SerializeField, Min(0f)] float movementSkin = 0.04f;
-    [SerializeField, Range(1, 4)] int collisionDepenetrationIterations = 2;
-    [SerializeField] bool createRuntimeMovementColliderIfMissing = true;
-    [SerializeField] Vector3 runtimeMovementColliderSize = new Vector3(1.2f, 0.9f, 1.2f);
 
     [Header("Combat Movement")]
-    [SerializeField, Min(0.1f)] float combatDistanceTolerance = 1.8f;
-    [SerializeField, Range(0.1f, 1f)] float strafeSpeedMultiplier = 0.42f;
-    [SerializeField, Range(0.1f, 1f)] float retreatSpeedMultiplier = 0.38f;
+    [SerializeField, Min(0.1f)] float combatDistanceTolerance = 1.4f;
+    [SerializeField, Range(0.1f, 1f)] float strafeSpeedMultiplier = 0.55f;
+    [SerializeField, Range(0.1f, 1f)] float retreatSpeedMultiplier = 0.7f;
     [SerializeField, Min(0.1f)] float minStrafeSwitchInterval = 0.75f;
     [SerializeField, Min(0.1f)] float maxStrafeSwitchInterval = 1.35f;
     [SerializeField, Min(0f)] float postShotStrafeDuration = 0.4f;
-    [SerializeField, Min(0f)] float postShotPauseDuration = 0.35f;
     [SerializeField, Range(2f, 45f)] float fireFacingAngleThreshold = 12f;
     [SerializeField, Range(2f, 60f)] float telegraphFacingAngleThreshold = 22f;
-
-    [Header("Aerial Motion")]
-    [SerializeField] bool useAerialCombatMotion = true;
-    [SerializeField, Min(0f)] float hoverAmplitude = 0.24f;
-    [SerializeField, Min(0.1f)] float hoverFrequency = 0.75f;
-    [SerializeField, Range(0f, 35f)] float strafeBankAngle = 14f;
-    [SerializeField, Range(0f, 25f)] float movePitchAngle = 8f;
-    [SerializeField, Range(0.1f, 20f)] float visualTiltSharpness = 7f;
-    [SerializeField, Range(0.2f, 1.5f)] float closeOrbitDistanceMultiplier = 0.9f;
 
     [Header("Combat Role")]
     [SerializeField] DroneCombatRole combatRole = DroneCombatRole.Standard;
@@ -62,13 +49,13 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     [Header("Attack")]
     public GameObject projectilePrefab;
     public Transform fireOrigin;
-    public float fireDistance = 16f;
+    public float fireDistance = 15f;
     public float fireCooldown = 2f;
     public float projectileSpeed = 15f;
-    public int projectileDamage = 5;
+    public int projectileDamage = 10;
 
     [Header("Health / VFX")]
-    public int maxHP = 40;
+    public int maxHP = 20;
     public GameObject hitVFX;
     public GameObject deathVFX;
     public Renderer droneRenderer;
@@ -119,16 +106,10 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     int _strafeSign = 1;
     float _nextStrafeSwitchAt;
     float _postShotStrafeUntil;
-    float _postShotPauseUntil;
     float _hitRecoverUntil;
     Vector3 _hitPushDirection;
     float _hitPushSpeed;
     float _hitPushDistanceRemaining;
-    float _baseHoverY;
-    float _hoverPhase;
-    Vector3 _lastMoveDirection;
-    Transform _tiltRoot;
-    Quaternion _tiltRootBaseLocalRotation = Quaternion.identity;
     bool _baseCombatTuningCached;
     float _baseMoveSpeed;
     float _baseStopDistance;
@@ -150,9 +131,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     Coroutine _deathRoutine;
     Collider[] _cachedColliders;
     Collider _movementCollider;
-    BoxCollider _runtimeMovementCollider;
     readonly RaycastHit[] _movementCastHits = new RaycastHit[8];
-    readonly Collider[] _movementOverlapHits = new Collider[16];
     Vector3 _initialLocalScale;
 
     void Awake()
@@ -163,18 +142,20 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         CacheColliders();
         ResolveMovementCollider();
         _initialLocalScale = transform.localScale;
-        _baseHoverY = transform.position.y;
-        _hoverPhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
 
         CacheChildRenderers();
         if (droneRenderer == null)
             droneRenderer = ResolvePrimaryRenderer();
-        ResolveTiltRoot();
 
         InitializeRendererState();
         ApplyRendererPerformanceOverrides();
 
-        ResolveTargetIfMissing();
+        if (target == null)
+        {
+            GameObject player = GameObject.FindWithTag("Player");
+            if (player != null)
+                target = player.transform;
+        }
     }
 
     void OnEnable()
@@ -191,10 +172,6 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         _hitPushDirection = Vector3.zero;
         _hitPushSpeed = 0f;
         _hitPushDistanceRemaining = 0f;
-        _postShotPauseUntil = 0f;
-        _baseHoverY = transform.position.y;
-        _hoverPhase = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
-        _lastMoveDirection = Vector3.zero;
         if (_deathRoutine != null)
         {
             StopCoroutine(_deathRoutine);
@@ -205,12 +182,10 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         CacheChildRenderers();
         CacheColliders();
         ResolveMovementCollider();
-        ResolveTiltRoot();
         RestoreDeathState();
         ApplyRendererPerformanceOverrides();
         ApplySimulationMode();
         ApplyRendererColor(_originalColor);
-        ResolveTargetIfMissing();
     }
 
     public void SetCombatRole(DroneCombatRole role, bool reapplyImmediately = true)
@@ -233,35 +208,12 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
     }
 
-    public void SetAerialCombatMotion(bool enabled, float amplitude = -1f, float frequency = -1f)
-    {
-        useAerialCombatMotion = enabled;
-        if (amplitude >= 0f)
-            hoverAmplitude = amplitude;
-        if (frequency > 0f)
-            hoverFrequency = frequency;
-    }
-
-    public void SetCombatMovementProfile(float speedMultiplier, float stopDistanceMultiplier, float strafeMultiplierBoost)
-    {
-        moveSpeed *= Mathf.Max(0.1f, speedMultiplier);
-        stopDistance = Mathf.Max(1f, stopDistance * Mathf.Max(0.1f, stopDistanceMultiplier));
-        fireDistance = Mathf.Max(stopDistance + 2f, fireDistance * Mathf.Max(0.1f, stopDistanceMultiplier));
-        strafeSpeedMultiplier = Mathf.Clamp01(strafeSpeedMultiplier + strafeMultiplierBoost);
-        retreatSpeedMultiplier = Mathf.Clamp(retreatSpeedMultiplier + strafeMultiplierBoost * 0.5f, 0.1f, 1.3f);
-    }
-
     public void SetLightweightSimulation(bool enabled, float tickInterval = 0.05f)
     {
         lightweightSimulationMode = enabled;
         lightweightTickInterval = Mathf.Max(0.016f, tickInterval);
         _nextLightweightTickAt = Time.time;
         ApplySimulationMode();
-    }
-
-    public void SetCollisionAwareMovement(bool enabled)
-    {
-        useCollisionAwareMovement = enabled;
     }
 
     void ApplySimulationMode()
@@ -414,7 +366,6 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     void TickMovementAndFire(float deltaTime)
     {
-        ResolveTargetIfMissing();
         if (target == null)
             return;
         if (_isDead)
@@ -423,43 +374,24 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         Vector3 toTarget = target.position - transform.position;
         Vector3 flatDirection = new Vector3(toTarget.x, 0f, toTarget.z);
         float distanceSqr = flatDirection.sqrMagnitude;
-        Vector3 pendingMoveStep = Vector3.zero;
         if (distanceSqr > 0.0001f)
         {
             float distance = Mathf.Sqrt(distanceSqr);
             Vector3 flatNormalized = flatDirection / distance;
-            Vector3 moveDirection = ResolveCombatMoveDirection(flatNormalized, distance);
-            Vector3 facingDirection = flatNormalized;
-            if (distance > fireDistance && moveDirection.sqrMagnitude > 0.0001f)
-                facingDirection = Vector3.Slerp(flatNormalized, moveDirection.normalized, 0.35f).normalized;
-
-            Quaternion lookRotation = Quaternion.LookRotation(facingDirection, Vector3.up);
+            Quaternion lookRotation = Quaternion.LookRotation(flatNormalized, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, lookRotation, turnSpeedDeg * deltaTime);
 
             if (TickHitReaction(deltaTime))
                 return;
 
+            Vector3 moveDirection = ResolveCombatMoveDirection(flatNormalized, distance);
             if (moveDirection.sqrMagnitude > 0.0001f)
             {
-                _lastMoveDirection = moveDirection;
-                if (Time.time >= _postShotPauseUntil)
-                {
-                    float speedMultiplier = ResolveCombatMoveSpeedMultiplier(distance);
-                    pendingMoveStep = moveDirection * (moveSpeed * speedMultiplier * deltaTime);
-                }
-            }
-            else
-            {
-                _lastMoveDirection = Vector3.zero;
+                float speedMultiplier = ResolveCombatMoveSpeedMultiplier(distance);
+                Vector3 moveStep = moveDirection * (moveSpeed * speedMultiplier * deltaTime);
+                MoveWithCollision(moveStep);
             }
         }
-        else
-        {
-            _lastMoveDirection = Vector3.zero;
-        }
-
-        pendingMoveStep += ApplyAerialMotion(deltaTime);
-        MoveWithCollision(pendingMoveStep);
 
         if (TickHitReaction(deltaTime))
             return;
@@ -493,7 +425,6 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             _nextFireTime = Time.time + fireCooldown;
             _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
             _postShotStrafeUntil = Time.time + Mathf.Max(0f, postShotStrafeDuration);
-            _postShotPauseUntil = Time.time + Mathf.Max(0f, postShotPauseDuration);
             FlipStrafeDirection();
         }
     }
@@ -514,11 +445,8 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
         Vector3 strafe = Vector3.Cross(Vector3.up, toTargetNormalized) * _strafeSign;
         float radialBias = 0f;
-        float closeOrbitDistance = stopDistance * closeOrbitDistanceMultiplier;
         if (distanceToTarget > stopDistance + tolerance * 0.35f)
             radialBias = 0.2f;
-        else if (distanceToTarget < Mathf.Max(0.5f, closeOrbitDistance))
-            radialBias = -0.45f;
         else if (distanceToTarget < stopDistance - tolerance * 0.35f)
             radialBias = -0.2f;
 
@@ -579,53 +507,6 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         return UnityEngine.Random.Range(minInterval, maxInterval);
     }
 
-    void ResolveTargetIfMissing()
-    {
-        if (target != null)
-            return;
-
-        GameObject player = GameObject.FindWithTag("Player");
-        if (player != null)
-            target = player.transform;
-    }
-
-    Vector3 ApplyAerialMotion(float deltaTime)
-    {
-        if (!useAerialCombatMotion)
-            return Vector3.zero;
-
-        Vector3 position = transform.position;
-        float targetY = _baseHoverY;
-        if (hoverAmplitude > 0f)
-            targetY += Mathf.Sin((Time.time * hoverFrequency) + _hoverPhase) * hoverAmplitude;
-
-        float nextY = Mathf.Lerp(position.y, targetY, 1f - Mathf.Exp(-deltaTime * 7f));
-        Vector3 hoverDelta = new Vector3(0f, nextY - position.y, 0f);
-
-        Transform tiltTarget = _tiltRoot != null ? _tiltRoot : transform;
-        Vector3 localMove = transform.InverseTransformDirection(_lastMoveDirection);
-        float bank = Mathf.Clamp(-localMove.x, -1f, 1f) * strafeBankAngle;
-        float pitch = Mathf.Clamp(localMove.z, -1f, 1f) * movePitchAngle;
-        Quaternion targetRotation = _tiltRootBaseLocalRotation * Quaternion.Euler(pitch, 0f, bank);
-        tiltTarget.localRotation = Quaternion.Slerp(
-            tiltTarget.localRotation,
-            targetRotation,
-            1f - Mathf.Exp(-deltaTime * visualTiltSharpness));
-        return hoverDelta;
-    }
-
-    void ResolveTiltRoot(bool force = false)
-    {
-        if (!force && _tiltRoot != null)
-            return;
-
-        if (droneRenderer != null && droneRenderer.transform != transform)
-        {
-            _tiltRoot = droneRenderer.transform;
-            _tiltRootBaseLocalRotation = _tiltRoot.localRotation;
-        }
-    }
-
     bool TickHitReaction(float deltaTime)
     {
         bool inRecover = Time.time < _hitRecoverUntil;
@@ -677,10 +558,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     {
         _movementCollider = null;
         if (_cachedColliders == null || _cachedColliders.Length == 0)
-        {
-            EnsureRuntimeMovementCollider();
             return;
-        }
 
         for (int i = 0; i < _cachedColliders.Length; i++)
         {
@@ -691,27 +569,6 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             _movementCollider = col;
             return;
         }
-
-        EnsureRuntimeMovementCollider();
-    }
-
-    void EnsureRuntimeMovementCollider()
-    {
-        if (!createRuntimeMovementColliderIfMissing)
-            return;
-
-        if (_runtimeMovementCollider == null)
-            _runtimeMovementCollider = GetComponent<BoxCollider>();
-
-        if (_runtimeMovementCollider == null)
-            _runtimeMovementCollider = gameObject.AddComponent<BoxCollider>();
-
-        _runtimeMovementCollider.isTrigger = false;
-        _runtimeMovementCollider.center = Vector3.zero;
-        _runtimeMovementCollider.size = MaxVector(AbsVector(runtimeMovementColliderSize), Vector3.one * 0.1f);
-        _runtimeMovementCollider.enabled = true;
-        _movementCollider = _runtimeMovementCollider;
-        _cachedColliders = GetComponentsInChildren<Collider>(true);
     }
 
     Renderer ResolvePrimaryRenderer()
@@ -809,7 +666,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
         BulletProjectile bulletProjectile = bullet.GetComponent<BulletProjectile>();
         if (bulletProjectile != null)
-            bulletProjectile.Init(gameObject, projectileSpeed, projectileDamage, target);
+            bulletProjectile.Init(gameObject, projectileSpeed, projectileDamage);
 
         TutorialProjectile tutorialProjectile = bullet.GetComponent<TutorialProjectile>();
         if (tutorialProjectile != null)
@@ -990,14 +847,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     void MoveWithCollision(Vector3 desiredDelta)
     {
-        Vector3 depenetrationDelta = useCollisionAwareMovement
-            ? ResolveCurrentPenetrationDelta()
-            : Vector3.zero;
-        if (desiredDelta.sqrMagnitude <= 0.0000001f && depenetrationDelta.sqrMagnitude <= 0.0000001f)
+        if (desiredDelta.sqrMagnitude <= 0.0000001f)
             return;
 
         Vector3 resolvedDelta = useCollisionAwareMovement
-            ? ResolveCollisionAwareDelta(desiredDelta) + depenetrationDelta
+            ? ResolveCollisionAwareDelta(desiredDelta)
             : desiredDelta;
         if (resolvedDelta.sqrMagnitude <= 0.0000001f)
             return;
@@ -1046,49 +900,6 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             return Vector3.zero;
 
         return direction * Mathf.Min(distance, allowedDistance);
-    }
-
-    Vector3 ResolveCurrentPenetrationDelta()
-    {
-        if (_movementCollider == null || !_movementCollider.enabled)
-            return Vector3.zero;
-
-        Vector3 totalCorrection = Vector3.zero;
-        int iterations = Mathf.Max(1, collisionDepenetrationIterations);
-        for (int iteration = 0; iteration < iterations; iteration++)
-        {
-            int overlapCount = OverlapMovementShape(totalCorrection);
-            Vector3 iterationCorrection = Vector3.zero;
-
-            for (int i = 0; i < overlapCount; i++)
-            {
-                Collider other = _movementOverlapHits[i];
-                if (other == null || other.transform.root == transform.root)
-                    continue;
-                if (((1 << other.gameObject.layer) & movementCollisionMask) == 0)
-                    continue;
-
-                if (Physics.ComputePenetration(
-                    _movementCollider,
-                    _movementCollider.transform.position + totalCorrection,
-                    _movementCollider.transform.rotation,
-                    other,
-                    other.transform.position,
-                    other.transform.rotation,
-                    out Vector3 direction,
-                    out float distance))
-                {
-                    iterationCorrection += direction * (distance + movementSkin);
-                }
-            }
-
-            if (iterationCorrection.sqrMagnitude <= 0.0000001f)
-                break;
-
-            totalCorrection += iterationCorrection;
-        }
-
-        return totalCorrection;
     }
 
     int CastMovementShape(Vector3 direction, float distance)
@@ -1147,58 +958,6 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             direction,
             _movementCastHits,
             distance,
-            movementCollisionMask,
-            QueryMode);
-    }
-
-    int OverlapMovementShape(Vector3 offset)
-    {
-        const QueryTriggerInteraction QueryMode = QueryTriggerInteraction.Ignore;
-
-        if (_movementCollider is SphereCollider sphereCollider)
-        {
-            Vector3 center = sphereCollider.transform.TransformPoint(sphereCollider.center) + offset;
-            Vector3 absScale = AbsVector(sphereCollider.transform.lossyScale);
-            float radius = sphereCollider.radius * Mathf.Max(absScale.x, Mathf.Max(absScale.y, absScale.z));
-            return Physics.OverlapSphereNonAlloc(
-                center,
-                Mathf.Max(0.01f, radius + movementSkin),
-                _movementOverlapHits,
-                movementCollisionMask,
-                QueryMode);
-        }
-
-        if (_movementCollider is CapsuleCollider capsuleCollider)
-        {
-            GetCapsuleWorldPoints(capsuleCollider, out Vector3 point0, out Vector3 point1, out float radius);
-            return Physics.OverlapCapsuleNonAlloc(
-                point0 + offset,
-                point1 + offset,
-                Mathf.Max(0.01f, radius + movementSkin),
-                _movementOverlapHits,
-                movementCollisionMask,
-                QueryMode);
-        }
-
-        if (_movementCollider is BoxCollider boxCollider)
-        {
-            Vector3 center = boxCollider.transform.TransformPoint(boxCollider.center) + offset;
-            Vector3 halfExtents = Vector3.Scale(boxCollider.size * 0.5f, AbsVector(boxCollider.transform.lossyScale));
-            return Physics.OverlapBoxNonAlloc(
-                center,
-                MaxVector(halfExtents + Vector3.one * movementSkin, Vector3.one * 0.01f),
-                _movementOverlapHits,
-                boxCollider.transform.rotation,
-                movementCollisionMask,
-                QueryMode);
-        }
-
-        Bounds bounds = _movementCollider.bounds;
-        float fallbackRadius = Mathf.Max(bounds.extents.x, Mathf.Max(bounds.extents.y, bounds.extents.z)) + movementSkin;
-        return Physics.OverlapSphereNonAlloc(
-            bounds.center + offset,
-            fallbackRadius,
-            _movementOverlapHits,
             movementCollisionMask,
             QueryMode);
     }

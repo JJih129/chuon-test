@@ -58,18 +58,10 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
         if (bossBreakController == null)
             bossBreakController = GetComponentInParent<BossBreakController>();
 
-        int beforeHp = bossHealth.CurrentHP;
         BossResolvedHitApplier.Apply(
             bossHealth,
             bossBreakController,
             resolvedHit,
-            payload,
-            bossController != null && (bossController.IsCombatRecoverySuperArmorActive || bossController.IsCombatRecoveryLockoutActive),
-            bossController != null &&
-            bossController.IsCombatRecoverySuperArmorActive &&
-            !bossController.KeepDamageRewardDuringCombatRecoverySuperArmor);
-
-        if (bossController != null && bossHealth.CurrentHP < beforeHp)
-            bossController.NotifyPlayerHitBoss(payload.attacker);
+            payload);
     }
 }

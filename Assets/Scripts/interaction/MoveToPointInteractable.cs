@@ -29,7 +29,14 @@ public class MoveToPointInteractable : BaseInteractable
     {
         if (!targetPoint) return false;
 
-        Transform player = ResolvePlayerRoot(invoker);
+        // InteractionManager로부터 플레이어 획득
+        Transform player = null;
+        if (invoker is InteractionManager im) player = im.PlayerRoot;
+        if (!player)
+        {
+            var go = GameObject.FindGameObjectWithTag("Player");
+            if (go) player = go.transform;
+        }
         if (!player) return false;
 
         StartCoroutine(CoMove(player));
@@ -69,8 +76,9 @@ public class MoveToPointInteractable : BaseInteractable
 
         if (moveMode == MoveMode.Warp)
         {
-            StartCoroutine(CoSuppressTutorialRespawnTriggers(0.25f));
-            WarpPlayer(player, targetPoint.position, faceTargetForward ? targetPoint.rotation : player.rotation);
+            player.position = targetPoint.position;
+            if (faceTargetForward)
+                player.rotation = Quaternion.LookRotation(targetPoint.forward, Vector3.up);
         }
         else // Smooth
         {
@@ -104,84 +112,6 @@ public class MoveToPointInteractable : BaseInteractable
         }
 
         return false;
-    }
-
-    IEnumerator CoSuppressTutorialRespawnTriggers(float duration)
-    {
-        TutorialRespawnTrigger[] triggers = FindObjectsOfType<TutorialRespawnTrigger>(true);
-        if (triggers == null || triggers.Length == 0)
-            yield break;
-
-        bool[] previousStates = new bool[triggers.Length];
-        for (int i = 0; i < triggers.Length; i++)
-        {
-            if (triggers[i] == null)
-                continue;
-
-            previousStates[i] = triggers[i].enabled;
-            triggers[i].enabled = false;
-        }
-
-        yield return new WaitForSecondsRealtime(Mathf.Max(0.02f, duration));
-
-        for (int i = 0; i < triggers.Length; i++)
-        {
-            if (triggers[i] != null)
-                triggers[i].enabled = previousStates[i];
-        }
-    }
-
-    static Transform ResolvePlayerRoot(object invoker)
-    {
-        Transform candidate = null;
-        if (invoker is InteractionManager im)
-            candidate = im.PlayerRoot;
-
-        if (!candidate)
-        {
-            var go = GameObject.FindGameObjectWithTag("Player");
-            if (go) candidate = go.transform;
-        }
-
-        if (!candidate)
-            return null;
-
-        PlayerReferences refs = candidate.GetComponent<PlayerReferences>() ?? candidate.GetComponentInParent<PlayerReferences>();
-        if (refs != null && refs.PlayerRoot != null)
-            return refs.PlayerRoot;
-
-        CharacterController controller = candidate.GetComponent<CharacterController>() ?? candidate.GetComponentInParent<CharacterController>();
-        if (controller != null)
-            return controller.transform;
-
-        return candidate.root != null ? candidate.root : candidate;
-    }
-
-    static void WarpPlayer(Transform player, Vector3 position, Quaternion rotation)
-    {
-        CharacterController controller = player.GetComponent<CharacterController>();
-        UnityEngine.AI.NavMeshAgent agent = player.GetComponent<UnityEngine.AI.NavMeshAgent>();
-        Rigidbody body = player.GetComponent<Rigidbody>();
-
-        bool controllerWasEnabled = controller != null && controller.enabled;
-        if (controllerWasEnabled)
-            controller.enabled = false;
-
-        if (agent != null && agent.isActiveAndEnabled)
-            agent.Warp(position);
-        else
-            player.position = position;
-
-        player.rotation = rotation;
-
-        if (controllerWasEnabled)
-            controller.enabled = true;
-
-        if (body != null && !body.isKinematic)
-        {
-            body.velocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
-        }
     }
 }
 
