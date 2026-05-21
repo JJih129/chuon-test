@@ -16,16 +16,16 @@ public class TutorialObjectivePanelController : MonoBehaviour
     [SerializeField] private Vector2 counterAnchoredPosition = new Vector2(-24f, -16f);
     [SerializeField] private Vector2 badgeAnchoredPosition = new Vector2(-150f, -14f);
     [SerializeField] private Vector2 badgeSize = new Vector2(112f, 26f);
-    [SerializeField] private Vector2 titleAnchoredPosition = new Vector2(62f, -48f);
-    [SerializeField] private Vector2 titleSize = new Vector2(430f, 34f);
-    [SerializeField] private Vector2 statusAnchoredPosition = new Vector2(62f, -90f);
-    [SerializeField] private Vector2 statusSize = new Vector2(430f, 44f);
+    [SerializeField] private Vector2 titleAnchoredPosition = new Vector2(62f, -52f);
+    [SerializeField] private Vector2 titleSize = new Vector2(500f, 42f);
+    [SerializeField] private Vector2 statusAnchoredPosition = new Vector2(62f, -100f);
+    [SerializeField] private Vector2 statusSize = new Vector2(500f, 70f);
     [SerializeField] private Vector2 progressAnchoredMin = new Vector2(24f, 14f);
     [SerializeField] private Vector2 progressAnchoredMax = new Vector2(-24f, 34f);
     [SerializeField] private float categoryFontSize = 20f;
-    [SerializeField] private float titleFontSize = 24f;
+    [SerializeField] private float titleFontSize = 30f;
     [SerializeField] private float counterFontSize = 20f;
-    [SerializeField] private float statusFontSize = 18f;
+    [SerializeField] private float statusFontSize = 23f;
     [SerializeField] private float badgeFontSize = 15f;
     [SerializeField] private float accentHeight = 8f;
     [SerializeField] private float progressNodeSize = 14f;
@@ -308,6 +308,8 @@ public class TutorialObjectivePanelController : MonoBehaviour
         _titleText.fontStyle = FontStyles.Bold;
         _titleText.enableWordWrapping = true;
         _titleText.overflowMode = TextOverflowModes.Ellipsis;
+        _titleText.extraPadding = true;
+        _titleText.lineSpacing = 2f;
         _titleText.raycastTarget = false;
 
         _counterText = EnsureText(_runtimeRoot, "Counter");
@@ -336,6 +338,8 @@ public class TutorialObjectivePanelController : MonoBehaviour
         _statusText.fontStyle = FontStyles.Normal;
         _statusText.enableWordWrapping = true;
         _statusText.overflowMode = TextOverflowModes.Ellipsis;
+        _statusText.extraPadding = true;
+        _statusText.lineSpacing = 4f;
         _statusText.raycastTarget = false;
 
         EnsureProgressVisuals();

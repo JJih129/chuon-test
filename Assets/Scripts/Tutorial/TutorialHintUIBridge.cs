@@ -28,8 +28,8 @@ public class TutorialHintUIBridge : MonoBehaviour
     [Header("Runtime Layout")]
     [SerializeField] private Vector2 dialoguePanelAnchoredPosition = new Vector2(0f, 112f);
     [SerializeField] private Vector2 dialoguePanelSize = new Vector2(1280f, 180f);
-    [SerializeField] private Vector2 objectivePanelAnchoredPosition = new Vector2(-350f, 360f);
-    [SerializeField] private Vector2 objectivePanelSize = new Vector2(620f, 190f);
+    [SerializeField] private Vector2 objectivePanelAnchoredPosition = new Vector2(-370f, 346f);
+    [SerializeField] private Vector2 objectivePanelSize = new Vector2(700f, 220f);
     [SerializeField] private Vector2 comboPanelAnchoredPosition = new Vector2(32f, -160f);
     [SerializeField] private Vector2 comboPanelSize = new Vector2(680f, 500f);
     [SerializeField] private Vector2 timingCuePanelAnchoredPosition = Vector2.zero;
@@ -44,8 +44,8 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private Color accentColor = new Color(0.22f, 0.86f, 1f, 0.96f);
     [SerializeField] private Color speakerColor = new Color(0.36f, 0.94f, 1f, 1f);
     [SerializeField] private Color guideBodyColor = new Color(0.90f, 0.97f, 1f, 0.96f);
-    [SerializeField] private Color questTitleColor = new Color(0.88f, 0.97f, 1f, 0.98f);
-    [SerializeField] private Color questBodyColor = new Color(0.82f, 0.92f, 0.98f, 0.96f);
+    [SerializeField] private Color questTitleColor = new Color(0.96f, 1f, 1f, 1f);
+    [SerializeField] private Color questBodyColor = new Color(0.90f, 0.98f, 1f, 0.98f);
     [SerializeField] private Color keyCueGlowColor = new Color(0.22f, 0.92f, 1f, 0.42f);
 
     [Header("Behaviour")]
@@ -461,17 +461,21 @@ public class TutorialHintUIBridge : MonoBehaviour
 
         questPanelGroup = panelGroup;
         questTitleText = EnsureText(panelGroup.transform, "QuestTitle");
-        ApplyTextStyle(questTitleText, 24f, FontStyles.Bold, questTitleColor, TextAlignmentOptions.TopLeft);
-        ConfigureRect(questTitleText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(52f, -48f), new Vector2(-104f, 34f));
+        ApplyTextStyle(questTitleText, 30f, FontStyles.Bold, questTitleColor, TextAlignmentOptions.TopLeft);
+        questTitleText.overflowMode = TextOverflowModes.Ellipsis;
+        questTitleText.lineSpacing = 2f;
+        ConfigureRect(questTitleText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(58f, -54f), new Vector2(-116f, 42f));
 
         questDescriptionText = EnsureText(panelGroup.transform, "QuestDescription");
-        ApplyTextStyle(questDescriptionText, 18f, FontStyles.Bold, questBodyColor, TextAlignmentOptions.TopLeft);
+        ApplyTextStyle(questDescriptionText, 23f, FontStyles.Bold, questBodyColor, TextAlignmentOptions.TopLeft);
         questDescriptionText.enableWordWrapping = true;
-        ConfigureRect(questDescriptionText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(52f, -82f), new Vector2(-104f, 68f));
+        questDescriptionText.overflowMode = TextOverflowModes.Ellipsis;
+        questDescriptionText.lineSpacing = 4f;
+        ConfigureRect(questDescriptionText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(58f, -98f), new Vector2(-116f, 88f));
 
         Image gauge = CreateImage(panelGroup.transform, "QuestGauge", Color.white);
         ApplyQuestGaugeSprite(gauge);
-        ConfigureRect(gauge.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(0f, 24f), new Vector2(-56f, 24f));
+        ConfigureRect(gauge.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(0f, 26f), new Vector2(-64f, 26f));
     }
 
     void ApplyQuestWindowSprite(Image background)
@@ -823,6 +827,7 @@ public class TutorialHintUIBridge : MonoBehaviour
         text.alignment = alignment;
         text.enableWordWrapping = true;
         text.richText = true;
+        text.extraPadding = true;
     }
 
     static void ConfigureRect(RectTransform rectTransform, Vector2 anchorMin, Vector2 anchorMax, Vector2 pivot, Vector2 anchoredPosition, Vector2 size)

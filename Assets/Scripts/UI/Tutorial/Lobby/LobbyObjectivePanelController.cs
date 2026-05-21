@@ -20,9 +20,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
     [SerializeField] private Vector2 badgeAnchoredPosition = new Vector2(-28f, -58f);
     [SerializeField] private Vector2 badgeSize = new Vector2(180f, 34f);
     [SerializeField] private Vector2 titleAnchoredPosition = new Vector2(22f, -68f);
-    [SerializeField] private Vector2 titleSize = new Vector2(336f, 24f);
+    [SerializeField] private Vector2 titleSize = new Vector2(480f, 42f);
     [SerializeField] private Vector2 statusAnchoredPosition = new Vector2(22f, -98f);
-    [SerializeField] private Vector2 statusSize = new Vector2(250f, 22f);
+    [SerializeField] private Vector2 statusSize = new Vector2(480f, 70f);
     [SerializeField] private Vector2 progressAnchoredMin = new Vector2(22f, 10f);
     [SerializeField] private Vector2 progressAnchoredMax = new Vector2(-22f, 28f);
     [SerializeField] private Vector2 cuePanelAnchoredPosition = new Vector2(24f, -24f);
@@ -31,7 +31,7 @@ public class LobbyObjectivePanelController : MonoBehaviour
     [SerializeField] private float categoryFontSize = 22f;
     [SerializeField] private float counterFontSize = 20f;
     [SerializeField] private float badgeFontSize = 18f;
-    [SerializeField] private float statusFontSize = 18f;
+    [SerializeField] private float statusFontSize = 22f;
     [SerializeField] private float progressNodeSize = 14f;
     [SerializeField] private float progressCurrentScale = 1.35f;
     [SerializeField] private float progressCompletedScale = 1.10f;
@@ -356,11 +356,13 @@ public class LobbyObjectivePanelController : MonoBehaviour
         titleRect.pivot = new Vector2(0.5f, 1f);
         titleRect.offsetMin = new Vector2(28f, -146f);
         titleRect.offsetMax = new Vector2(-28f, -92f);
-        _titleText.fontSize = Mathf.Max(28f, statusFontSize + 10f);
+        _titleText.fontSize = Mathf.Max(30f, statusFontSize + 8f);
         _titleText.fontStyle = FontStyles.Bold;
         _titleText.alignment = TextAlignmentOptions.TopLeft;
         _titleText.enableWordWrapping = true;
         _titleText.overflowMode = TextOverflowModes.Ellipsis;
+        _titleText.extraPadding = true;
+        _titleText.lineSpacing = 2f;
         _titleText.raycastTarget = false;
 
         _statusText = EnsureText(_runtimeRoot, "Status");
@@ -370,11 +372,13 @@ public class LobbyObjectivePanelController : MonoBehaviour
         statusRect.pivot = new Vector2(0.5f, 1f);
         statusRect.offsetMin = new Vector2(28f, -236f);
         statusRect.offsetMax = new Vector2(-28f, -152f);
-        _statusText.fontSize = Mathf.Max(22f, statusFontSize + 4f);
-        _statusText.fontStyle = FontStyles.Normal;
+        _statusText.fontSize = Mathf.Max(24f, statusFontSize + 2f);
+        _statusText.fontStyle = FontStyles.Bold;
         _statusText.alignment = TextAlignmentOptions.Left;
         _statusText.overflowMode = TextOverflowModes.Ellipsis;
         _statusText.enableWordWrapping = true;
+        _statusText.extraPadding = true;
+        _statusText.lineSpacing = 4f;
         _statusText.raycastTarget = false;
 
         EnsureProgressVisuals();

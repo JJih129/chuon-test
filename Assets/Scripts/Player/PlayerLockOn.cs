@@ -194,6 +194,8 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
     public bool IsLockedOn() => IsLocked;
 
+    public bool IsTimelineOwningCamera => _timelineOwnsCamera;
+
     public string BuildDebugSummary()
     {
         string targetName = CurrentTarget != null ? CurrentTarget.name : "<null>";

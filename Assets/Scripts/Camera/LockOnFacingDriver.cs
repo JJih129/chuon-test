@@ -30,7 +30,7 @@ public class LockOnFacingDriver : MonoBehaviour
 
     void LateUpdate()
     {
-        if (lockOn == null || !lockOn.IsLocked || playerRoot == null)
+        if (lockOn == null || lockOn.IsTimelineOwningCamera || !lockOn.IsLocked || playerRoot == null)
         {
             RefreshTickState();
             return;
@@ -95,7 +95,7 @@ public class LockOnFacingDriver : MonoBehaviour
     public void RefreshTickState()
     {
         ResolveReferences();
-        enabled = lockOn != null && lockOn.IsLocked && playerRoot != null;
+        enabled = lockOn != null && !lockOn.IsTimelineOwningCamera && lockOn.IsLocked && playerRoot != null;
     }
 
     void ResolveReferences()
