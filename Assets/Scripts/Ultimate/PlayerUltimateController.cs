@@ -192,6 +192,7 @@ public class PlayerUltimateController : MonoBehaviour
     PlayerLockOn _playerLockOn;
     UltimateSkillController _ultimateSkillController;
     UltimateHitProcessor _ultimateHitProcessor;
+    UltimateTargetResolver _ultimateTargetResolver;
     UltimateCinematicController _activeUltimateCinematic;
     IInvulnerabilityToggle _invul;
     PlayerCombatController _combatController;
@@ -249,6 +250,9 @@ public class PlayerUltimateController : MonoBehaviour
         if (_ultimateSkillController == null)
             _ultimateSkillController = gameObject.AddComponent<UltimateSkillController>();
         _ultimateHitProcessor = GetComponent<UltimateHitProcessor>();
+        _ultimateTargetResolver = GetComponent<UltimateTargetResolver>();
+        if (_ultimateTargetResolver == null)
+            _ultimateTargetResolver = gameObject.AddComponent<UltimateTargetResolver>();
         _combatStateReader = CombatStateReaderResolver.ResolveOrAttach(this);
         _lockOn = _playerLockOn as ILockOnController ?? GetComponent<ILockOnController>();
         _invul = GetComponent<IInvulnerabilityToggle>();
@@ -1329,6 +1333,12 @@ public class PlayerUltimateController : MonoBehaviour
 
     bool TryResolveUltimateTarget(out IUltimateTarget target, out Transform targetTransform)
     {
+        if (_ultimateTargetResolver == null)
+            _ultimateTargetResolver = GetComponent<UltimateTargetResolver>();
+
+        if (_ultimateTargetResolver != null)
+            return _ultimateTargetResolver.TryResolve(this, out target, out targetTransform);
+
         targetTransform = _lockOn?.GetCurrentTarget();
         target = ResolveLockedUltimateTarget(targetTransform);
         if (target != null)

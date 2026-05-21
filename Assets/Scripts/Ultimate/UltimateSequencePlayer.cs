@@ -342,8 +342,7 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
 
     float GetFinalExplosionDelay()
     {
-        float holdDuration = _data != null ? _data.Timings.finalExplosionHoldDuration : 0f;
-        return Mathf.Min(0.22f, Mathf.Max(0f, holdDuration * 0.55f));
+        return 0f;
     }
 
     void TriggerFinalExplosion()
@@ -622,6 +621,9 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
             rangeStart = rangeEnd;
             rangeEnd = swap;
         }
+
+        if (Mathf.Abs(rangeEnd - rangeStart) > 0.0001f)
+            return false;
 
         float rangedNormalized = Mathf.Lerp(rangeStart, rangeEnd, Mathf.Clamp01(normalizedTime));
         float sampleTime = Mathf.Clamp(rangedNormalized * clipLength, 0f, Mathf.Max(0f, clipLength - 0.0001f));

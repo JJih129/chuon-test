@@ -421,49 +421,49 @@ MonoBehaviour:
   freeLookDriver: {fileID: 1897136319}
   targetGroup: {fileID: 1283139512}
   playerPivot: {fileID: 258337763}
-  playerCameraAnchorLocalOffset: {x: 0, y: -0.48, z: 0}
+  playerCameraAnchorLocalOffset: {x: 0, y: -0.55, z: 0}
   useSolverDrivenLockOnFraming: 1
   disableCollisionExtensionWhileLocked: 1
-  solverCloseDistance: 2.5
-  solverFarDistance: 7.25
+  solverCloseDistance: 2.35
+  solverFarDistance: 6.25
   closeRangeFraming:
-    followOffset: {x: 0.92, y: 1.94, z: -3.95}
+    followOffset: {x: 0, y: 1.85, z: -3.55}
     trackedObjectOffset: {x: 0, y: -0.1, z: 0}
-    cameraDistance: 2.72
-    fieldOfView: 38
-    bodyScreenPosition: {x: 0.5, y: 0.55}
-    bodySoftZone: {x: 0.72, y: 0.22}
-    aimScreenPosition: {x: 0.5, y: 0.64}
+    cameraDistance: 3.55
+    fieldOfView: 46
+    bodyScreenPosition: {x: 0.5, y: 0.3}
+    bodySoftZone: {x: 0.48, y: 0.16}
+    aimScreenPosition: {x: 0.5, y: 0.5}
     aimTrackedObjectOffset: {x: 0, y: -0.15, z: 0}
     aimBias: {x: 0, y: 0}
-    lookHeightOffset: 0.54
+    lookHeightOffset: 0.28
   farRangeFraming:
-    followOffset: {x: 0.82, y: 2.62, z: -4.45}
+    followOffset: {x: 0, y: 2.05, z: -4.15}
     trackedObjectOffset: {x: 0, y: -0.2, z: 0}
-    cameraDistance: 3.35
-    fieldOfView: 39.5
-    bodyScreenPosition: {x: 0.5, y: 0.58}
-    bodySoftZone: {x: 0.78, y: 0.28}
-    aimScreenPosition: {x: 0.5, y: 0.67}
+    cameraDistance: 4.15
+    fieldOfView: 46
+    bodyScreenPosition: {x: 0.5, y: 0.3}
+    bodySoftZone: {x: 0.5, y: 0.18}
+    aimScreenPosition: {x: 0.5, y: 0.51}
     aimTrackedObjectOffset: {x: 0, y: -0.2, z: 0}
     aimBias: {x: 0, y: 0}
-    lookHeightOffset: 0.36
+    lookHeightOffset: 0.26
   lockOnFollowHeightOffset: -1
   restoreFollowOffsetOnEnd: 1
   useDedicatedLockOnFollowOffset: 1
-  dedicatedLockOnFollowOffset: {x: 0.82, y: 2.62, z: -4.45}
+  dedicatedLockOnFollowOffset: {x: 0, y: 2.05, z: -4.15}
   useDedicatedLockOnFieldOfView: 1
-  dedicatedLockOnFieldOfView: 39.5
+  dedicatedLockOnFieldOfView: 46
   useDedicatedLockOnTrackedObjectOffset: 1
   dedicatedLockOnTrackedObjectOffset: {x: 0, y: -0.2, z: 0}
   useDedicatedLockOnCameraDistance: 1
-  dedicatedLockOnCameraDistance: 3.35
+  dedicatedLockOnCameraDistance: 4.15
   useDedicatedLockOnBodyScreenPosition: 1
-  dedicatedLockOnBodyScreenPosition: {x: 0.5, y: 0.58}
+  dedicatedLockOnBodyScreenPosition: {x: 0.5, y: 0.3}
   useDedicatedLockOnBodySoftZone: 1
-  dedicatedLockOnBodySoftZone: {x: 0.78, y: 0.28}
+  dedicatedLockOnBodySoftZone: {x: 0.5, y: 0.18}
   useDedicatedLockOnAimScreenPosition: 1
-  dedicatedLockOnAimScreenPosition: {x: 0.5, y: 0.67}
+  dedicatedLockOnAimScreenPosition: {x: 0.5, y: 0.51}
   useDedicatedLockOnAimBias: 1
   dedicatedLockOnAimBias: {x: 0, y: -0.05}
   lockOnAnchorOffset: {x: 0, y: 0.15, z: 0}
@@ -472,25 +472,25 @@ MonoBehaviour:
   maxVelocityLookaheadDistance: 0.45
   reduceBodyDampingWhileLocked: 1
   lockedBodyDamping: {x: 0.08, y: 0.1, z: 0.08}
-  lookAnchorDistance: 5.2
+  lookAnchorDistance: 3.9
   lookAnchorDistanceRatio: 0.5
-  lookAnchorMinDistance: 1.5
-  lookAnchorHeightOffset: 0.36
+  lookAnchorMinDistance: 1.2
+  lookAnchorHeightOffset: 0.26
   lookAnchorResponsiveness: 18
   useCloseRangeCompensation: 1
-  closeRangeCompensationStartDistance: 4.1
-  closeRangeCompensationFullDistance: 2
-  closeRangeExtraHeight: 1.6
-  closeRangeExtraDistance: 1.15
-  closeRangeBodyScreenYOffset: 0.08
-  closeRangeAimScreenYOffset: 0.06
-  closeRangeLookHeightReduction: 0.1
+  closeRangeCompensationStartDistance: 3.4
+  closeRangeCompensationFullDistance: 1.8
+  closeRangeExtraHeight: 0.15
+  closeRangeExtraDistance: 0.15
+  closeRangeBodyScreenYOffset: 0
+  closeRangeAimScreenYOffset: 0
+  closeRangeLookHeightReduction: 0.04
   useCustomTransformLockOnRig: 1
   customRigPositionResponsiveness: 14
   customRigRotationResponsiveness: 18
   enemyAimBottomToCenterRatio: 0.82
   enemyAimVerticalOffset: 0
-  playerLookHeightOffset: 0.22
+  playerLookHeightOffset: 0.08
   customRigSolveInterval: 0.022222223
   customRigPlayerAnchorThreshold: 0.03
   customRigEnemyAnchorThreshold: 0.04
@@ -544,6 +544,7 @@ MonoBehaviour:
   suppressAutoAlignWhileMoving: 1
   movingSpeedThreshold: 0.15
   mouseInputDeadzone: 0.01
+  allowMouseWheelZoom: 0
   zoomStep: 0
   minFov: 30
   maxFov: 70
@@ -634,7 +635,7 @@ Transform:
   m_GameObject: {fileID: 95828440}
   serializedVersion: 2
   m_LocalRotation: {x: 0.10797846, y: -0.14690912, z: 0.01613561, w: 0.9831063}
-  m_LocalPosition: {x: 0.00000011920929, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -3609,7 +3610,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 5000
-  field of view: 40.312687
+  field of view: 40
   orthographic: 0
   orthographic size: 10
   m_Depth: -1
@@ -3635,8 +3636,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.6019835, y: 0.36533356, z: 0.3590125, w: 0.6125825}
-  m_LocalPosition: {x: -0.44233122, y: -5.2922297, z: -0.23894624}
+  m_LocalRotation: {x: 0.12579565, y: -0.14659221, z: 0.018798094, w: 0.98098564}
+  m_LocalPosition: {x: 1.1693562, y: 2.7, z: -3.825259}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -3756,6 +3757,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7e5475054914264498fc90579b75e058, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  allowMouseWheelZoom: 0
   freeLook: {fileID: 1897136319}
   vcamProxy: {fileID: 99273691}
   brain: {fileID: 963194233}
@@ -7350,7 +7352,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-    - {fileID: 2100000, guid: ffcea61cae8e7cc4bb5d8771e664eba9, type: 2}
+  - {fileID: 2100000, guid: ffcea61cae8e7cc4bb5d8771e664eba9, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -8227,6 +8229,7 @@ MonoBehaviour:
   suppressAutoAlignWhileMoving: 1
   movingSpeedThreshold: 0.15
   mouseInputDeadzone: 0.01
+  allowMouseWheelZoom: 0
   zoomStep: 0
   minFov: 30
   maxFov: 70
@@ -8242,6 +8245,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4ef73229481842e4f8a8cb3ec2ae8f63, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  allowMouseWheelZoom: 0
   freeLook: {fileID: 1897136317}
   step: 0.5
   invertScroll: 0
@@ -9702,13 +9706,33 @@ PrefabInstance:
       propertyPath: m_text
       value: 
       objectReference: {fileID: 0}
+    - target: {fileID: 1111037019116471794, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
+      propertyPath: m_margin.w
+      value: -5.774994
+      objectReference: {fileID: 0}
+    - target: {fileID: 1111037019116471794, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
+      propertyPath: m_margin.y
+      value: 0.87678665
+      objectReference: {fileID: 0}
+    - target: {fileID: 1111037019116471794, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
+      propertyPath: m_margin.z
+      value: 47.276123
+      objectReference: {fileID: 0}
+    - target: {fileID: 1739555457692025552, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
+      propertyPath: m_margin.w
+      value: 5.545948
+      objectReference: {fileID: 0}
     - target: {fileID: 1739555457692025552, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
       propertyPath: m_margin.y
       value: -14.58926
       objectReference: {fileID: 0}
     - target: {fileID: 1739555457692025552, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
+      propertyPath: m_margin.z
+      value: 22.75177
+      objectReference: {fileID: 0}
+    - target: {fileID: 1739555457692025552, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
       propertyPath: m_fontColor32.rgba
-      value: 4294964689
+      value: 4294967285
       objectReference: {fileID: 0}
     - target: {fileID: 6780415712688818372, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
       propertyPath: m_SizeDelta.x

@@ -191,7 +191,7 @@ public class TutorialPlayerRuntimeBridge : MonoBehaviour
         if (playerHealth.CurrentHP <= targetHp)
             return;
 
-        playerHealth.ApplyDamage(playerHealth.CurrentHP - targetHp);
+        playerHealth.ApplyChipDamage(playerHealth.CurrentHP - targetHp);
     }
 
     void AutoWire()

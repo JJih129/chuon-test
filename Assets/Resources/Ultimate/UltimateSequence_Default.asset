@@ -26,13 +26,13 @@ MonoBehaviour:
     allowGracefulFinishIfTargetDies: 1
   timings:
     preCastDuration: 0.1
-    introPoseDuration: 0.62
-    dashDuration: 0.24
+    introPoseDuration: 0.6
+    dashDuration: 0.01
     dashImpactNormalizedTime: 0.48
     defaultMultiSlashInterval: 0.16
     crackHoldDuration: 0.16
-    finalExplosionHoldDuration: 0.34
-    walkoutDuration: 0.82
+    finalExplosionHoldDuration: 2
+    walkoutDuration: 0.7
     recoverDuration: 0.12
   movement:
     introDistance: 2.2
@@ -74,11 +74,11 @@ MonoBehaviour:
     dashSlashClip: {fileID: 7400000, guid: f2c91788444039144b3029cb4bde2a9f, type: 2}
     walkoutClip: {fileID: 7400000, guid: f2c91788444039144b3029cb4bde2a9f, type: 2}
     introPoseClipStartNormalized: 0
-    introPoseClipEndNormalized: 0
-    dashSlashClipStartNormalized: 0.08
-    dashSlashClipEndNormalized: 0.237
-    walkoutClipStartNormalized: 0.815
-    walkoutClipEndNormalized: 1
+    introPoseClipEndNormalized: 0.13333334
+    dashSlashClipStartNormalized: 0.13333334
+    dashSlashClipEndNormalized: 0.13333334
+    walkoutClipStartNormalized: 0.33333334
+    walkoutClipEndNormalized: 0.4888889
     useSwordCloseupDuringIntro: 1
     introSwordCameraOffset: {x: 0, y: 0, z: 0}
     introSwordLookLocalOffset: {x: -0.04, y: -0.04, z: 0}

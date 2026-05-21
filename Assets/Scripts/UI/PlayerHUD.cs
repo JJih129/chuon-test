@@ -205,6 +205,8 @@ public class PlayerHUD : MonoBehaviour
     const string RuntimePunishWindowTextName = "_Text";
     const string RuntimePerformanceHudRootName = "_RuntimePerformanceHUD";
     const string RuntimePerformanceHudTextName = "_Text";
+    const string RuntimeAmpouleFocusTargetName = "_RuntimeAmpouleFocusTarget";
+    static readonly Vector3[] s_ampouleFocusCorners = new Vector3[4];
 
     void Update()
     {
@@ -338,6 +340,89 @@ public class PlayerHUD : MonoBehaviour
 
         if (useDangerFeedback || telegraphType == AttackTelegraphType.Danger)
             PlayDangerTelegraphFeedback();
+    }
+
+    public RectTransform GetAmpouleFocusTarget()
+    {
+        Canvas canvas = null;
+        for (int i = 0; i < ampouleSlots.Length; i++)
+        {
+            if (ampouleSlots[i] != null)
+            {
+                canvas = ampouleSlots[i].canvas;
+                break;
+            }
+        }
+
+        RectTransform canvasRect = canvas != null ? canvas.transform as RectTransform : null;
+        if (canvasRect != null && TryBuildAmpouleFocusProxy(canvas, canvasRect, out RectTransform proxy))
+            return proxy;
+
+        for (int i = 0; i < ampouleSlots.Length; i++)
+        {
+            Image slot = ampouleSlots[i];
+            if (slot == null)
+                continue;
+
+            return slot.rectTransform;
+        }
+
+        return hpFillImage != null ? hpFillImage.rectTransform : null;
+    }
+
+    public RectTransform GetUltimateGaugeFocusTarget()
+    {
+        EnsureUltimateGaugePercentVisual();
+
+        RectTransform parent = ResolveUltimateGaugeTextParent();
+        if (parent != null)
+            return parent;
+
+        return ultimateGaugePercentText != null ? ultimateGaugePercentText.rectTransform : null;
+    }
+
+    bool TryBuildAmpouleFocusProxy(Canvas canvas, RectTransform canvasRect, out RectTransform proxy)
+    {
+        proxy = canvasRect.Find(RuntimeAmpouleFocusTargetName) as RectTransform;
+        if (proxy == null)
+        {
+            GameObject proxyObject = new GameObject(RuntimeAmpouleFocusTargetName, typeof(RectTransform));
+            proxy = proxyObject.GetComponent<RectTransform>();
+            proxy.SetParent(canvasRect, false);
+        }
+
+        Camera eventCamera = canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+        Vector2 min = new Vector2(float.MaxValue, float.MaxValue);
+        Vector2 max = new Vector2(float.MinValue, float.MinValue);
+        bool hasSlot = false;
+
+        for (int i = 0; i < ampouleSlots.Length; i++)
+        {
+            Image slot = ampouleSlots[i];
+            if (slot == null || slot.rectTransform == null)
+                continue;
+
+            slot.rectTransform.GetWorldCorners(s_ampouleFocusCorners);
+            for (int corner = 0; corner < s_ampouleFocusCorners.Length; corner++)
+            {
+                Vector2 screen = RectTransformUtility.WorldToScreenPoint(eventCamera, s_ampouleFocusCorners[corner]);
+                if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screen, eventCamera, out Vector2 local))
+                    continue;
+
+                min = Vector2.Min(min, local);
+                max = Vector2.Max(max, local);
+                hasSlot = true;
+            }
+        }
+
+        if (!hasSlot || max.x <= min.x || max.y <= min.y)
+            return false;
+
+        proxy.anchorMin = proxy.anchorMax = proxy.pivot = new Vector2(0.5f, 0.5f);
+        proxy.anchoredPosition = (min + max) * 0.5f;
+        proxy.sizeDelta = max - min;
+        proxy.localScale = Vector3.one;
+        return true;
     }
 
     void BindGuard(PlayerGuardController guard)

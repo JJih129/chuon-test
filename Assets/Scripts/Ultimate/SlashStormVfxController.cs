@@ -66,6 +66,9 @@ public sealed class SlashStormVfxController : MonoBehaviour
 
     static Vector3 ResolveTargetLookPoint(UltimateTargetBinder binder)
     {
+        if (binder != null && binder.HasCinematicFrame)
+            return binder.CinematicFrame.TargetCenter;
+
         if (binder != null && binder.ActiveTarget != null && binder.ActiveTarget.TargetRoot != null)
             return binder.ActiveTarget.TargetRoot.position;
 

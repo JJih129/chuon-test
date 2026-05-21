@@ -135,7 +135,7 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         if (_data == null)
             return;
 
-        Vector3 forward = _binder != null && _binder.PlayerRoot != null ? _binder.PlayerRoot.forward : transform.forward;
+        Vector3 forward = ResolveSequenceForward();
         slashBurstSpawner?.EmitConvergenceBurst(position, forward, _sequenceSeed ^ 7919, _data.Vfx.crackLifetime, _data.Vfx, 1.05f, false);
 
         if (_data.Vfx.useScreenSpaceCrack)
@@ -158,7 +158,7 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         if (_data == null)
             return;
 
-        Vector3 forward = _binder != null && _binder.PlayerRoot != null ? _binder.PlayerRoot.forward : transform.forward;
+        Vector3 forward = ResolveSequenceForward();
         slashBurstSpawner?.EmitConvergenceBurst(position, forward, _sequenceSeed ^ 15401, _data.Vfx.explosionLifetime, _data.Vfx, 1.2f, true);
         SpawnWorldVfx(_data.Vfx.explosionVfxPrefab, position, Quaternion.identity, _data.Vfx.explosionLifetime);
         for (int i = 0; i < _data.Vfx.shardSpawnCount; i++)
@@ -192,6 +192,14 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         slashBurstSpawner.EmitOneSlash(index, totalCount, _sequenceSeed, origin, focusPoint, life, _data != null ? _data.Vfx : null, intensityScale);
     }
 
+    Vector3 ResolveSequenceForward()
+    {
+        if (_binder != null && _binder.HasCinematicFrame)
+            return _binder.CinematicFrame.Forward;
+
+        return _binder != null && _binder.PlayerRoot != null ? _binder.PlayerRoot.forward : transform.forward;
+    }
+
     void SpawnWorldVfx(GameObject prefab, Vector3 position, Quaternion rotation, float lifetime)
     {
         if (prefab == null)
@@ -213,6 +221,8 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
 
     Transform ResolveVfxRootInternal(UltimateTargetBinder binder)
     {
+        if (binder != null && binder.HasCinematicFrame)
+            return null;
         if (binder != null && binder.PlayerVfxRoot != null)
             return binder.PlayerVfxRoot;
         if (playerReferences != null && playerReferences.VFXRoot != null)

@@ -311,7 +311,7 @@ public class TutorialManager : MonoBehaviour
         currentStep = TutorialStep.Heal;
         ShowCenterKeyCue("Q", "HEAL", 999f);
         if (playerHealth != null)
-            playerHealth.ApplyDamage(50);
+            playerHealth.ApplyChipDamage(50);
 
         PunchEffect();
         UpdateQuestUI("회복", "Q 키를 눌러 앰플로 회복해");

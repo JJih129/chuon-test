@@ -20,6 +20,7 @@ public sealed class UltimateTargetBinder : MonoBehaviour
     [SerializeField] private PlayerMoveController moveController;
     [SerializeField] private CharacterController characterController;
     [SerializeField] private Animator playerAnimator;
+    [SerializeField] private UltimateTargetResolver targetResolver;
 
     [Header("이동 보정")]
     [SerializeField] private LayerMask movementCollisionMask = ~0;
@@ -34,6 +35,8 @@ public sealed class UltimateTargetBinder : MonoBehaviour
     UltimateSequenceData _data;
     BoundTarget _activeTarget;
     Vector3 _cachedVictimAnchorPosition;
+    UltimateCinematicFrame _cinematicFrame;
+    bool _hasCinematicFrame;
     bool _sequenceActive;
     bool _victimReleasedForFinalImpact;
     Transform _cachedAimTargetRoot;
@@ -65,6 +68,8 @@ public sealed class UltimateTargetBinder : MonoBehaviour
     public bool IsSequenceActive => _sequenceActive;
     public bool HasActiveTarget => _activeTarget != null && _activeTarget.TargetRoot != null;
     public bool IsTargetAlive => _activeTarget != null && _activeTarget.Health != null && !_activeTarget.Health.IsDead;
+    public bool HasCinematicFrame => _hasCinematicFrame && _cinematicFrame.IsValid;
+    public UltimateCinematicFrame CinematicFrame => _cinematicFrame;
     public Transform PlayerRoot => _cachedPlayerRoot != null ? _cachedPlayerRoot : transform;
     public Transform PlayerVfxRoot => _cachedPlayerVfxRoot != null ? _cachedPlayerVfxRoot : PlayerRoot;
     public Animator PlayerAnimator => _cachedPlayerAnimator;
@@ -147,6 +152,7 @@ public sealed class UltimateTargetBinder : MonoBehaviour
         _activeTarget = boundTarget;
         _sequenceActive = true;
         _victimReleasedForFinalImpact = false;
+        BuildCinematicFrame(owner, boundTarget);
         _cachedVictimAnchorPosition = boundTarget != null && boundTarget.TargetRoot != null
             ? boundTarget.TargetRoot.position
             : PlayerRoot.position + PlayerRoot.forward * 2f;
@@ -173,6 +179,8 @@ public sealed class UltimateTargetBinder : MonoBehaviour
         _data = null;
         _activeTarget = null;
         _sequenceActive = false;
+        _hasCinematicFrame = false;
+        _cinematicFrame = default;
         _victimReleasedForFinalImpact = false;
         _cachedPlayerIntroSwordEffectAnchor = null;
         InvalidateTargetAimCache();
@@ -227,6 +235,9 @@ public sealed class UltimateTargetBinder : MonoBehaviour
     public Vector3 GetPlayerCameraAnchor(Vector3 localOffset)
     {
         Transform root = ActivePlayerAnchorRoot;
+        if (HasCinematicFrame)
+            return root.position + _cinematicFrame.Right * localOffset.x + Vector3.up * localOffset.y + _cinematicFrame.Forward * localOffset.z;
+
         Quaternion yawRotation = Quaternion.Euler(0f, root.eulerAngles.y, 0f);
         return root.position + yawRotation * localOffset;
     }
@@ -242,6 +253,9 @@ public sealed class UltimateTargetBinder : MonoBehaviour
             : null;
         Transform activeFocus = mappedFocus != null ? mappedFocus : focusTransform;
         Transform activeRoot = ActivePlayerAnchorRoot;
+        if (HasCinematicFrame)
+            return activeFocus.position + _cinematicFrame.Right * localOffset.x + Vector3.up * localOffset.y + _cinematicFrame.Forward * localOffset.z;
+
         Quaternion yawRotation = Quaternion.Euler(0f, activeRoot.eulerAngles.y, 0f);
         return activeFocus.position + yawRotation * localOffset;
     }
@@ -264,6 +278,9 @@ public sealed class UltimateTargetBinder : MonoBehaviour
         Vector3 upperBodyAnchor = GetPlayerCameraAnchor(_data != null
             ? _data.CinematicAnimation.introSwordCloseupCamera.playerAnchorLocalOffset
             : Vector3.zero);
+        if (HasCinematicFrame)
+            return upperBodyAnchor + _cinematicFrame.Right * localOffset.x + Vector3.up * localOffset.y + _cinematicFrame.Forward * localOffset.z;
+
         Quaternion yawRotation = Quaternion.Euler(0f, root.eulerAngles.y, 0f);
         return upperBodyAnchor + yawRotation * localOffset;
     }
@@ -279,6 +296,9 @@ public sealed class UltimateTargetBinder : MonoBehaviour
             : null;
         Transform activeLook = mappedLook != null ? mappedLook : lookTransform;
         Transform activeRoot = ActivePlayerAnchorRoot;
+        if (HasCinematicFrame)
+            return activeLook.position + _cinematicFrame.Right * localOffset.x + Vector3.up * localOffset.y + _cinematicFrame.Forward * localOffset.z;
+
         Quaternion yawRotation = Quaternion.Euler(0f, activeRoot.eulerAngles.y, 0f);
         return activeLook.position + yawRotation * localOffset;
     }
@@ -350,6 +370,9 @@ public sealed class UltimateTargetBinder : MonoBehaviour
 
     public Vector3 GetFlattenedDirectionToTarget(Vector3 fallbackForward)
     {
+        if (HasCinematicFrame)
+            return _cinematicFrame.Forward;
+
         Vector3 targetAimPoint = GetTargetAimPoint(0.8f, 0f);
         Vector3 direction = targetAimPoint - PlayerRoot.position;
         direction.y = 0f;
@@ -365,6 +388,13 @@ public sealed class UltimateTargetBinder : MonoBehaviour
 
     public Vector3 GetIntroPosition(float distance, float sideOffset)
     {
+        if (HasCinematicFrame)
+        {
+            Vector3 framedPosition = _cinematicFrame.TargetCenter - _cinematicFrame.Forward * Mathf.Max(0.4f, distance) + _cinematicFrame.Right * sideOffset;
+            framedPosition.y = PlayerRoot.position.y;
+            return framedPosition;
+        }
+
         Vector3 aimPoint = GetTargetAimPoint(0.8f, 0f);
         Vector3 awayDirection = GetFlattenedDirection(PlayerRoot.position - aimPoint, -PlayerRoot.forward);
         Vector3 right = Vector3.Cross(Vector3.up, awayDirection).normalized;
@@ -375,6 +405,14 @@ public sealed class UltimateTargetBinder : MonoBehaviour
 
     public Vector3 GetDashDestination(float distance, float sideOffset)
     {
+        if (HasCinematicFrame)
+        {
+            float framedPassThroughDistance = Mathf.Max(0.25f, distance) + GetTargetPassThroughPadding();
+            Vector3 framedPosition = _cinematicFrame.TargetCenter + _cinematicFrame.Forward * framedPassThroughDistance + _cinematicFrame.Right * sideOffset;
+            framedPosition.y = PlayerRoot.position.y;
+            return framedPosition;
+        }
+
         Vector3 aimPoint = GetTargetAimPoint(0.82f, 0f);
         Vector3 awayDirection = GetFlattenedDirection(PlayerRoot.position - aimPoint, -PlayerRoot.forward);
         Vector3 throughDirection = -awayDirection;
@@ -387,6 +425,16 @@ public sealed class UltimateTargetBinder : MonoBehaviour
 
     public Vector3 GetSlashPosition(UltimateSequenceData.SlashStepData step)
     {
+        if (HasCinematicFrame)
+        {
+            Vector3 framedAwayDirection = -_cinematicFrame.Forward;
+            Vector3 framedOrbitDirection = Quaternion.AngleAxis(step.angle, Vector3.up) * framedAwayDirection;
+            Vector3 framedRight = Vector3.Cross(Vector3.up, framedOrbitDirection).normalized;
+            Vector3 framedPosition = _cinematicFrame.TargetCenter + framedOrbitDirection * Mathf.Max(0.2f, step.distance) + framedRight * step.sideOffset;
+            framedPosition.y = PlayerRoot.position.y + step.heightOffset;
+            return framedPosition;
+        }
+
         Vector3 aimPoint = GetTargetAimPoint(0.82f, 0f);
         Vector3 awayDirection = GetFlattenedDirection(PlayerRoot.position - aimPoint, -PlayerRoot.forward);
         Vector3 orbitDirection = Quaternion.AngleAxis(step.angle, Vector3.up) * awayDirection;
@@ -398,6 +446,13 @@ public sealed class UltimateTargetBinder : MonoBehaviour
 
     public Vector3 GetWalkoutPosition(float distance, float sideOffset)
     {
+        if (HasCinematicFrame)
+        {
+            Vector3 framedPosition = _cinematicFrame.TargetCenter - _cinematicFrame.Forward * Mathf.Max(0.4f, distance) + _cinematicFrame.Right * sideOffset;
+            framedPosition.y = PlayerRoot.position.y;
+            return framedPosition;
+        }
+
         Vector3 aimPoint = GetTargetAimPoint(0.8f, 0f);
         Vector3 awayDirection = GetFlattenedDirection(PlayerRoot.position - aimPoint, -PlayerRoot.forward);
         Vector3 right = Vector3.Cross(Vector3.up, awayDirection).normalized;
@@ -530,6 +585,31 @@ public sealed class UltimateTargetBinder : MonoBehaviour
         return Vector3.forward;
     }
 
+    void BuildCinematicFrame(PlayerUltimateController owner, BoundTarget boundTarget)
+    {
+        _hasCinematicFrame = false;
+        _cinematicFrame = default;
+
+        Transform targetRoot = boundTarget != null ? boundTarget.TargetRoot : null;
+        if (targetRoot == null)
+            return;
+
+        if (targetResolver == null && owner != null)
+            targetResolver = owner.GetComponent<UltimateTargetResolver>();
+
+        if (targetResolver != null && targetResolver.TryCreateFrame(owner, targetRoot, out _cinematicFrame))
+        {
+            _hasCinematicFrame = true;
+            return;
+        }
+
+        Transform playerRoot = PlayerRoot;
+        Vector3 targetCenter = GetTargetAimPoint(targetRoot, 0.8f, 0f);
+        Vector3 fallbackForward = playerRoot != null ? playerRoot.forward : transform.forward;
+        _cinematicFrame = UltimateCinematicFrame.Create(playerRoot != null ? playerRoot.position : transform.position, targetCenter, fallbackForward);
+        _hasCinematicFrame = _cinematicFrame.IsValid;
+    }
+
     Transform ResolvePlayerSwordFocusTransform()
     {
         if (_owner != null)
@@ -581,6 +661,8 @@ public sealed class UltimateTargetBinder : MonoBehaviour
             moveController = GetComponent<PlayerMoveController>();
         if (characterController == null)
             characterController = GetComponent<CharacterController>();
+        if (targetResolver == null)
+            targetResolver = GetComponent<UltimateTargetResolver>();
         Animator preferredAnimator = playerReferences != null ? playerReferences.MainAnimator : null;
         if (preferredAnimator != null)
         {

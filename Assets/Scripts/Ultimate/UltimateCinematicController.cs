@@ -23,11 +23,13 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
     [Header("Timing")]
     [SerializeField, Min(0f)] private float finalExplosionReturnDelay = 2f;
+    [SerializeField] private bool movePlayerToFinishBeforeStorm = true;
 
     [Header("Player Visual Control")]
     [SerializeField] private GameObject playerVisualRoot;
     [SerializeField] private Renderer[] playerRenderers;
     [SerializeField] private GameObject playerGhostHelper;
+    [SerializeField] private bool hideTargetDuringIntroDrawPose = true;
 
     [Header("Shot03 Orbit")]
     [SerializeField] private float shot03OrbitRadius = 5.8f;
@@ -35,6 +37,16 @@ public sealed class UltimateCinematicController : MonoBehaviour
     [SerializeField] private float shot03OrbitDegreesPerSecond = 46f;
     [SerializeField] private float shot03LookAtHeight = 1.05f;
     [SerializeField] private float shot03LookAhead = 0.08f;
+
+    [Header("Storyboard Frame Offsets")]
+    [SerializeField] private Vector3 playerStartOffset = new Vector3(0f, 0f, -2.4f);
+    [SerializeField] private Vector3 playerStrikeOffset = new Vector3(0f, 0f, -0.45f);
+    [SerializeField] private Vector3 playerFinishOffset = new Vector3(0f, 0f, 4.2f);
+    [SerializeField] private Vector3 startCameraOffset = new Vector3(-2f, 1.6f, -3.5f);
+    [SerializeField] private Vector3 dashCameraOffset = new Vector3(2.5f, 1.8f, -4f);
+    [SerializeField] private Vector3 slashStormCameraOffset = new Vector3(0f, 2f, -5f);
+    [SerializeField] private Vector3 finishCameraOffset = new Vector3(1.5f, 1.75f, -4.35f);
+    [SerializeField] private Vector3 lookAtOffset = new Vector3(0f, 1.2f, 0f);
 
     [Header("Signals")]
     [SerializeField] private SignalAsset sigCameraSessionBegin;
@@ -54,6 +66,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
     [Header("Debug")]
     [SerializeField] private bool debugLog;
+    [SerializeField] private bool showDebugGizmos;
 
     PlayerUltimateController _owner;
     UltimateSequenceData _data;
@@ -65,9 +78,18 @@ public sealed class UltimateCinematicController : MonoBehaviour
     bool _finalExplosionPlayed;
     bool _cleanupCompleted = true;
     bool _gameplayDamageCommitted;
+    bool _stormFinishPrepositioned;
+    Vector3 _stormFinishPosition;
+    UltimateCinematicFrame _storyboardFrame;
+    bool _hasStoryboardFrame;
     bool _cachedPlayerPoseValid;
     bool _cachedVisualRootPoseValid;
     bool _cachedAnimationTargetPoseValid;
+    bool _cachedAnimationTargetRootMotion;
+    bool _cachedAnimationTargetRootMotionValid;
+    Renderer[] _introHiddenTargetRenderers;
+    bool[] _introHiddenTargetRendererStates;
+    bool _targetHiddenForIntro;
     bool _suppressDirectorStoppedCallback;
     Vector3 _cachedPlayerWorldPosition;
     Quaternion _cachedPlayerWorldRotation = Quaternion.identity;
@@ -197,6 +219,8 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _cleanupCompleted = false;
         _gameplayDamageCommitted = false;
         _finalExplosionPlayed = false;
+        _stormFinishPrepositioned = false;
+        _hasStoryboardFrame = false;
         CacheInitialPlayerPose();
 
         if (!targetBinder.TryBind(owner, data, out _boundTarget, out string failureReason))
@@ -222,6 +246,10 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _owner.SetActiveUltimateCinematic(this);
 
         targetBinder.BeginSequence(owner, data, _boundTarget);
+        BuildStoryboardFrame();
+        DisableTimelineRootMotion();
+        RefreshCinematicFrameAnchors();
+        HideTargetForIntroIfNeeded();
         enemyCinematicState?.EnterCinematicState(_boundTarget);
         hitProcessor.BeginSequence(_boundTarget, data);
         vfxPresenter.BeginSequence(data, targetBinder, null);
@@ -233,6 +261,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
             targetBinder.SnapPlayerTo(introPosition, GetTargetLookPoint());
         }
 
+        RefreshCinematicFrameAnchors();
         RefreshIntroShotAnchors();
 
         playableDirector.enabled = true;
@@ -290,7 +319,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (_data == null)
             return;
 
-        Vector3 introPosition = targetBinder.GetIntroPosition(_data.Movement.introDistance, _data.Movement.introSideOffset);
+        Vector3 introPosition = _hasStoryboardFrame
+            ? _storyboardFrame.PlayerStartPoint
+            : targetBinder.GetIntroPosition(_data.Movement.introDistance, _data.Movement.introSideOffset);
         Vector3 targetLookPoint = GetTargetLookPoint();
         targetBinder.SnapPlayerTo(introPosition, targetLookPoint);
         targetBinder.FacePlayerTowardsImmediate(targetLookPoint);
@@ -310,20 +341,28 @@ public sealed class UltimateCinematicController : MonoBehaviour
             return;
 
         Vector3 lookTarget = GetTargetLookPoint();
-        Vector3 dashDestination = targetBinder.GetDashDestination(_data.Movement.dashEndDistance, _data.Movement.dashSideOffset);
-        targetBinder.SnapPlayerTo(dashDestination, lookTarget);
-        slashStormVfx?.PlayDrawRelease(targetBinder.PlayerRoot.position, lookTarget);
+        Vector3 releaseStart = targetBinder.PlayerRoot.position;
+        Vector3 strikePosition = _hasStoryboardFrame
+            ? _storyboardFrame.PlayerStrikePoint
+            : targetBinder.GetDashDestination(_data.Movement.dashEndDistance, _data.Movement.dashSideOffset);
+        targetBinder.SnapPlayerTo(strikePosition, lookTarget);
+        slashStormVfx?.PlayDrawRelease(releaseStart, lookTarget);
+        RefreshCinematicFrameAnchors();
         RefreshTargetAnchor();
     }
 
     public void OnSlashStormStart()
     {
+        RefreshCinematicFrameAnchors();
+        PrepositionPlayerForStormFinish();
         RefreshTargetAnchor();
         StartSlashStormCameraOrbit();
     }
 
     public void OnSlashStormSustainStart()
     {
+        RestoreTargetIntroVisibility();
+        RefreshCinematicFrameAnchors();
         slashStormVfx?.BeginStorm(_data, targetBinder);
     }
 
@@ -349,10 +388,15 @@ public sealed class UltimateCinematicController : MonoBehaviour
             StopCoroutine(_walkoutRoutine);
 
         Vector3 startPosition = targetBinder.PlayerRoot.position;
-        Vector3 endPosition = targetBinder.GetWalkoutPosition(_data.Movement.walkoutDistance, _data.Movement.walkoutSideOffset);
+        Vector3 endPosition = _stormFinishPrepositioned
+            ? _stormFinishPosition
+            : targetBinder.GetWalkoutPosition(_data.Movement.walkoutDistance, _data.Movement.walkoutSideOffset);
         PositionTargetForWalkout(startPosition, endPosition);
-        slashStormVfx?.PlayDrawRelease(startPosition, startPosition + (endPosition - startPosition).normalized * 2f);
-        vfxPresenter?.PlayWalkout(startPosition, endPosition - startPosition);
+        Vector3 walkDirection = endPosition - startPosition;
+        if (walkDirection.sqrMagnitude <= 0.0001f)
+            walkDirection = targetBinder.HasCinematicFrame ? targetBinder.CinematicFrame.Forward : targetBinder.PlayerRoot.forward;
+        slashStormVfx?.PlayDrawRelease(startPosition, startPosition + walkDirection.normalized * 2f);
+        vfxPresenter?.PlayWalkout(startPosition, walkDirection);
         _walkoutRoutine = StartCoroutine(CoWalkoutAndFinish(startPosition, endPosition, Mathf.Max(0.01f, _data.Timings.walkoutDuration)));
     }
 
@@ -446,7 +490,6 @@ public sealed class UltimateCinematicController : MonoBehaviour
             return;
         }
 
-        ConfigureTimelineAnimationClips(timelineAsset);
         Animator animationTarget = ResolveTimelineAnimationTarget();
 
         foreach (TrackAsset track in timelineAsset.GetOutputTracks())
@@ -723,8 +766,11 @@ public sealed class UltimateCinematicController : MonoBehaviour
             return;
 
         Vector3 center = GetTargetLookPoint();
-        Vector3 playerPosition = bindings.PlayerRoot != null ? bindings.PlayerRoot.position : center;
-        Vector3 toPlayer = playerPosition - center;
+        Vector3 toPlayer = targetBinder != null && targetBinder.HasCinematicFrame
+            ? -targetBinder.CinematicFrame.Forward
+            : bindings.PlayerRoot != null
+                ? bindings.PlayerRoot.position - center
+                : Vector3.back;
         toPlayer.y = 0f;
         if (toPlayer.sqrMagnitude <= 0.0001f)
             toPlayer = Vector3.back;
@@ -797,6 +843,146 @@ public sealed class UltimateCinematicController : MonoBehaviour
         enemyCinematicState.RefreshAnchor(targetPosition, bindings != null && bindings.PlayerRoot != null ? bindings.PlayerRoot.position : transform.position);
     }
 
+    void PrepositionPlayerForStormFinish()
+    {
+        if (!movePlayerToFinishBeforeStorm || _data == null || targetBinder == null || targetBinder.PlayerRoot == null)
+            return;
+        if (_stormFinishPrepositioned)
+            return;
+
+        Vector3 currentPosition = targetBinder.PlayerRoot.position;
+        Vector3 finishPosition = ComputeStormFinishPosition();
+        Vector3 lookTarget = GetAwayFromTargetLookPoint(finishPosition);
+        targetBinder.SnapPlayerTo(finishPosition, lookTarget);
+        _stormFinishPosition = finishPosition;
+        _stormFinishPrepositioned = true;
+
+        if ((finishPosition - currentPosition).sqrMagnitude > 0.01f)
+            slashStormVfx?.PlayDrawRelease(currentPosition, finishPosition);
+    }
+
+    Vector3 ComputeStormFinishPosition()
+    {
+        if (_hasStoryboardFrame)
+            return _storyboardFrame.PlayerFinishPoint;
+
+        if (targetBinder != null && targetBinder.HasCinematicFrame)
+        {
+            UltimateCinematicFrame frame = BuildFrameWithStoryboardPoints(targetBinder.CinematicFrame);
+            Vector3 position = frame.PlayerFinishPoint;
+            position.y = targetBinder.PlayerRoot != null ? targetBinder.PlayerRoot.position.y : position.y;
+            return position;
+        }
+
+        return targetBinder != null && _data != null
+            ? targetBinder.GetWalkoutPosition(_data.Movement.walkoutDistance, _data.Movement.walkoutSideOffset)
+            : transform.position + transform.forward * playerFinishOffset.z;
+    }
+
+    Vector3 GetAwayFromTargetLookPoint(Vector3 playerPosition)
+    {
+        Vector3 targetPoint = GetTargetLookPoint();
+        Vector3 away = playerPosition - targetPoint;
+        away.y = 0f;
+        if (away.sqrMagnitude <= 0.0001f)
+            away = targetBinder != null && targetBinder.HasCinematicFrame
+                ? targetBinder.CinematicFrame.Forward
+                : transform.forward;
+
+        return playerPosition + away.normalized * 2f;
+    }
+
+    void BuildStoryboardFrame()
+    {
+        _hasStoryboardFrame = false;
+        _storyboardFrame = default;
+
+        if (targetBinder == null || !targetBinder.HasCinematicFrame)
+            return;
+
+        _storyboardFrame = BuildFrameWithStoryboardPoints(targetBinder.CinematicFrame);
+        _hasStoryboardFrame = _storyboardFrame.IsValid;
+    }
+
+    UltimateCinematicFrame BuildFrameWithStoryboardPoints(UltimateCinematicFrame baseFrame)
+    {
+        Vector3 startPoint = baseFrame.TransformOffset(playerStartOffset);
+        Vector3 strikePoint = baseFrame.TransformOffset(playerStrikeOffset);
+        Vector3 finishPoint = baseFrame.TransformOffset(playerFinishOffset);
+        float y = targetBinder != null && targetBinder.PlayerRoot != null ? targetBinder.PlayerRoot.position.y : startPoint.y;
+        startPoint.y = y;
+        strikePoint.y = y;
+        finishPoint.y = y;
+        return baseFrame.WithPlayerPoints(startPoint, strikePoint, finishPoint);
+    }
+
+    void RefreshCinematicFrameAnchors()
+    {
+        if (bindings == null || targetBinder == null)
+            return;
+
+        Vector3 targetCenter = targetBinder.HasCinematicFrame
+            ? targetBinder.CinematicFrame.TargetCenter
+            : targetBinder.GetTargetAimPoint(0.8f, 0f);
+
+        if (bindings.TargetCenter != null)
+            bindings.TargetCenter.position = targetCenter;
+        if (bindings.TargetExplosionAnchor != null)
+            bindings.TargetExplosionAnchor.position = targetCenter;
+        if (bindings.SlashStormCenter != null)
+        {
+            bindings.SlashStormCenter.SetPositionAndRotation(
+                targetCenter,
+                targetBinder.HasCinematicFrame ? targetBinder.CinematicFrame.Rotation : Quaternion.identity);
+            bindings.SlashStormCenter.localScale = Vector3.one;
+        }
+
+        if (!targetBinder.HasCinematicFrame)
+            return;
+
+        UltimateCinematicFrame frame = _hasStoryboardFrame ? _storyboardFrame : BuildFrameWithStoryboardPoints(targetBinder.CinematicFrame);
+        Vector3 targetLook = frame.TargetCenter + frame.Up * lookAtOffset.y + frame.Right * lookAtOffset.x + frame.Forward * lookAtOffset.z;
+        Vector3 startCamera = frame.PlayerStartPoint
+            + frame.Right * startCameraOffset.x
+            + frame.Up * startCameraOffset.y
+            + frame.Forward * startCameraOffset.z;
+        Vector3 dashCamera = frame.PlayerStrikePoint
+            + frame.Right * dashCameraOffset.x
+            + frame.Up * dashCameraOffset.y
+            + frame.Forward * dashCameraOffset.z;
+        Vector3 finishLook = frame.PlayerFinishPoint
+            + frame.Up * lookAtOffset.y
+            - frame.Forward * 0.15f;
+        Vector3 finishCamera = frame.PlayerFinishPoint
+            + frame.Right * finishCameraOffset.x
+            + frame.Up * finishCameraOffset.y
+            + frame.Forward * Mathf.Abs(finishCameraOffset.z);
+
+        if (bindings.Shot01Pos != null)
+            bindings.Shot01Pos.position = startCamera;
+        if (bindings.Shot01LookAt != null)
+            bindings.Shot01LookAt.position = frame.PlayerStartPoint + frame.Up * lookAtOffset.y;
+        if (bindings.Shot02Pos != null)
+            bindings.Shot02Pos.position = dashCamera;
+        if (bindings.Shot02LookAt != null)
+            bindings.Shot02LookAt.position = Vector3.Lerp(frame.PlayerStrikePoint + frame.Up * lookAtOffset.y, targetLook, 0.35f);
+        if (bindings.Shot03Pos != null)
+            bindings.Shot03Pos.position = frame.TargetCenter
+                + frame.Right * slashStormCameraOffset.x
+                + frame.Up * slashStormCameraOffset.y
+                + frame.Forward * slashStormCameraOffset.z;
+        if (bindings.Shot03LookAt != null)
+            bindings.Shot03LookAt.position = targetLook;
+        if (bindings.Shot04Pos != null)
+            bindings.Shot04Pos.position = finishCamera;
+        if (bindings.Shot04LookAt != null)
+            bindings.Shot04LookAt.position = finishLook;
+        if (bindings.Shot05Pos != null)
+            bindings.Shot05Pos.position = finishCamera + frame.Up * 0.35f + frame.Forward * 0.65f;
+        if (bindings.Shot05LookAt != null)
+            bindings.Shot05LookAt.position = finishLook;
+    }
+
     void SetPlayerPresentationState(bool showRenderers, bool showGhost)
     {
         if (playerRenderers != null)
@@ -811,6 +997,48 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
         if (playerGhostHelper != null)
             playerGhostHelper.SetActive(showGhost);
+    }
+
+    void HideTargetForIntroIfNeeded()
+    {
+        if (!hideTargetDuringIntroDrawPose || _boundTarget == null || _boundTarget.TargetRoot == null)
+            return;
+
+        _introHiddenTargetRenderers = _boundTarget.TargetRoot.GetComponentsInChildren<Renderer>(true);
+        if (_introHiddenTargetRenderers == null || _introHiddenTargetRenderers.Length == 0)
+            return;
+
+        _introHiddenTargetRendererStates = new bool[_introHiddenTargetRenderers.Length];
+        for (int i = 0; i < _introHiddenTargetRenderers.Length; i++)
+        {
+            Renderer renderer = _introHiddenTargetRenderers[i];
+            if (renderer == null)
+                continue;
+
+            _introHiddenTargetRendererStates[i] = renderer.enabled;
+            renderer.enabled = false;
+        }
+
+        _targetHiddenForIntro = true;
+    }
+
+    void RestoreTargetIntroVisibility()
+    {
+        if (!_targetHiddenForIntro || _introHiddenTargetRenderers == null)
+            return;
+
+        for (int i = 0; i < _introHiddenTargetRenderers.Length; i++)
+        {
+            Renderer renderer = _introHiddenTargetRenderers[i];
+            if (renderer != null)
+                renderer.enabled = _introHiddenTargetRendererStates != null && i < _introHiddenTargetRendererStates.Length
+                    ? _introHiddenTargetRendererStates[i]
+                    : true;
+        }
+
+        _targetHiddenForIntro = false;
+        _introHiddenTargetRenderers = null;
+        _introHiddenTargetRendererStates = null;
     }
 
     void HandleDirectorStopped(PlayableDirector _)
@@ -898,6 +1126,12 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (bindings == null || bindings.PlayerRoot == null)
             return;
 
+        if (_hasStoryboardFrame)
+        {
+            RefreshCinematicFrameAnchors();
+            return;
+        }
+
         Transform shot01Pos = bindings.Shot01Pos;
         Transform shot01LookAt = bindings.Shot01LookAt;
         Transform shot02Pos = bindings.Shot02Pos;
@@ -925,10 +1159,10 @@ public sealed class UltimateCinematicController : MonoBehaviour
             : chest;
         Vector3 weaponLook = Vector3.Lerp(swordFocus, chest, 0.3f);
 
-        shot01Pos.position = swordFocus + forward * 1.65f - right * 0.42f + Vector3.up * 0.32f;
+        shot01Pos.position = swordFocus + right * startCameraOffset.x + Vector3.up * startCameraOffset.y + forward * startCameraOffset.z;
         shot01LookAt.position = weaponLook;
 
-        shot02Pos.position = chest + forward * 2.45f - right * 0.2f + Vector3.up * 0.36f;
+        shot02Pos.position = chest + right * dashCameraOffset.x + Vector3.up * dashCameraOffset.y + forward * dashCameraOffset.z;
         shot02LookAt.position = Vector3.Lerp(chest, head, 0.24f) - right * 0.02f;
     }
 
@@ -952,6 +1186,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _cachedPlayerPoseValid = false;
         _cachedVisualRootPoseValid = false;
         _cachedAnimationTargetPoseValid = false;
+        _cachedAnimationTargetRootMotionValid = false;
         _cachedAnimationTargetTransform = null;
 
         if (bindings == null || bindings.PlayerRoot == null)
@@ -976,8 +1211,26 @@ public sealed class UltimateCinematicController : MonoBehaviour
             _cachedAnimationTargetLocalPosition = animationTarget.transform.localPosition;
             _cachedAnimationTargetLocalRotation = animationTarget.transform.localRotation;
             _cachedAnimationTargetLocalScale = animationTarget.transform.localScale;
+            _cachedAnimationTargetRootMotion = animationTarget.applyRootMotion;
+            _cachedAnimationTargetRootMotionValid = true;
             _cachedAnimationTargetPoseValid = true;
         }
+    }
+
+    void DisableTimelineRootMotion()
+    {
+        Animator animationTarget = ResolveTimelineAnimationTarget();
+        if (animationTarget == null)
+            return;
+
+        if (!_cachedAnimationTargetRootMotionValid)
+        {
+            _cachedAnimationTargetRootMotion = animationTarget.applyRootMotion;
+            _cachedAnimationTargetRootMotionValid = true;
+        }
+
+        // Timeline owns the presentation pose during ultimate. Root motion on the gameplay root can otherwise accumulate offsets between uses.
+        animationTarget.applyRootMotion = false;
     }
 
     void RestoreInitialPlayerPoseIfNeeded()
@@ -1005,6 +1258,8 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
         if (animationTarget != null)
         {
+            if (_cachedAnimationTargetRootMotionValid)
+                animationTarget.applyRootMotion = _cachedAnimationTargetRootMotion;
             animationTarget.Rebind();
             animationTarget.Update(0f);
         }
@@ -1056,6 +1311,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         }
 
         SetPlayerPresentationState(true, false);
+        RestoreTargetIntroVisibility();
         slashStormVfx?.StopStorm(false);
         vfxPresenter?.EndSequence();
         hitProcessor?.EndSequence();
@@ -1078,12 +1334,50 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _cachedPlayerPoseValid = false;
         _cachedVisualRootPoseValid = false;
         _cachedAnimationTargetPoseValid = false;
+        _cachedAnimationTargetRootMotionValid = false;
         _cachedAnimationTargetTransform = null;
+        _hasStoryboardFrame = false;
 
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if (!showDebugGizmos || !_hasStoryboardFrame)
+            return;
+
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(_storyboardFrame.TargetCenter, 0.22f);
+        Gizmos.DrawLine(_storyboardFrame.TargetCenter, _storyboardFrame.TargetCenter + _storyboardFrame.Forward * 2f);
+
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(_storyboardFrame.PlayerStartPoint, 0.18f);
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(_storyboardFrame.PlayerStrikePoint, 0.18f);
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(_storyboardFrame.PlayerFinishPoint, 0.18f);
+
+        if (bindings == null)
+            return;
+
+        Gizmos.color = Color.white;
+        DrawAnchorGizmo(bindings.Shot01Pos);
+        DrawAnchorGizmo(bindings.Shot02Pos);
+        DrawAnchorGizmo(bindings.Shot03Pos);
+        DrawAnchorGizmo(bindings.Shot04Pos);
+        DrawAnchorGizmo(bindings.Shot05Pos);
+    }
+
+    static void DrawAnchorGizmo(Transform anchor)
+    {
+        if (anchor == null)
+            return;
+
+        Gizmos.DrawWireCube(anchor.position, Vector3.one * 0.15f);
     }
 
     void Warn(string message)
     {
-        Debug.LogWarning($"[UltimateCinematic] {message}", this);
+        if (debugLog)
+            Debug.LogWarning($"[UltimateCinematic] {message}", this);
     }
 }

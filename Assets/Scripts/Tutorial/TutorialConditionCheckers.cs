@@ -627,6 +627,7 @@ public class TutorialHealConditionChecker : TutorialConditionChecker
         if (playerBridge != null && _listeningForAmpoule)
             playerBridge.AmpouleUsed -= HandleAmpouleUsed;
         _listeningForAmpoule = false;
+        HudFocusCueController.HideGlobal();
     }
 
     IEnumerator CoDelayTutorialDamage()
@@ -642,11 +643,13 @@ public class TutorialHealConditionChecker : TutorialConditionChecker
         playerBridge.ReduceHealthForTutorial(normalizedHealthTarget);
         playerBridge.AmpouleUsed += HandleAmpouleUsed;
         _listeningForAmpoule = true;
+        HudFocusCueController.ShowGlobal(HudFocusCueId.Ampoule, 18f);
         ReportProgress("\uc570\ud50c\uc744 \uc0ac\uc6a9\ud574 \ud68c\ubcf5");
     }
 
     void HandleAmpouleUsed()
     {
+        HudFocusCueController.HideGlobal();
         Complete("\ud68c\ubcf5 \uc644\ub8cc");
     }
 }
@@ -674,6 +677,7 @@ public class TutorialUltimateConditionChecker : TutorialConditionChecker
 
         _ultimateStarted = false;
         playerBridge.FillUltimateGauge();
+        HudFocusCueController.ShowGlobal(HudFocusCueId.UltimateGauge, 18f);
         playerBridge.UltimateStarted += HandleUltimateStarted;
         playerBridge.UltimateEnded += HandleUltimateEnded;
         if (ultimateTarget != null && ultimateTarget.OnUltimateDamageApplied != null)
@@ -690,11 +694,14 @@ public class TutorialUltimateConditionChecker : TutorialConditionChecker
 
         if (ultimateTarget != null && ultimateTarget.OnUltimateDamageApplied != null)
             ultimateTarget.OnUltimateDamageApplied.RemoveListener(HandleUltimateDamageApplied);
+
+        HudFocusCueController.HideGlobal();
     }
 
     void HandleUltimateStarted()
     {
         _ultimateStarted = true;
+        HudFocusCueController.HideGlobal();
         ReportProgress("\uad81\uadf9\uae30 \uc5f0\ucd9c \uc9c4\ud589 \uc911");
     }
 
