@@ -89,6 +89,12 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     public void ConfigureRuntime(LobbyManager runtimeLobbyManager)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            DisableRuntimePanel();
+            return;
+        }
+
         lobbyManager = runtimeLobbyManager;
         CacheQuestTexts();
         EnsureRuntimeVisuals();
@@ -98,6 +104,12 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            DisableRuntimePanel();
+            return;
+        }
+
         CacheQuestTexts();
         EnsureRuntimeVisuals();
         RefreshSubscriptions();
@@ -224,6 +236,9 @@ public class LobbyObjectivePanelController : MonoBehaviour
 
     void EnsureRuntimeVisuals()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+            return;
+
         CanvasGroup questPanel = lobbyManager != null ? lobbyManager.questPanelGroup : null;
         if (questPanel == null)
             return;
@@ -256,6 +271,7 @@ public class LobbyObjectivePanelController : MonoBehaviour
         _runtimeRoot.sizeDelta = objectivePanelSize;
         _runtimeRoot.localScale = Vector3.one;
         _runtimeRoot.localRotation = Quaternion.identity;
+        _runtimeRoot.gameObject.SetActive(true);
         _runtimeRoot.SetAsLastSibling();
 
         _runtimeBackground = EnsurePanelImage(_runtimeRoot, "Background", out RectTransform backgroundRect);
@@ -1012,6 +1028,20 @@ public class LobbyObjectivePanelController : MonoBehaviour
             _sweepImage.color = new Color(1f, 1f, 1f, 0f);
         if (_iconRoot != null)
             _iconRoot.localScale = Vector3.one;
+    }
+
+    void DisableRuntimePanel()
+    {
+        ReleaseSubscriptions();
+        HideImmediate();
+        HideTransientCue();
+        if (_runtimeRoot != null)
+            _runtimeRoot.gameObject.SetActive(false);
+        if (_cueGroup != null)
+            _cueGroup.alpha = 0f;
+        SetLegacyQuestTextVisible(true);
+        SetLegacyQuestPanelVisible(true);
+        enabled = false;
     }
 
     static void StretchToParent(RectTransform rectTransform)

@@ -643,7 +643,13 @@ public class BossReferences : MonoBehaviour
             return false;
 
         return ShouldTreatPlaneNamedMeshesAsHelpers()
+            && !IsForcedVisiblePlane(rendererTransform)
             && rendererTransform.name.StartsWith("Plane", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    static bool IsForcedVisiblePlane(Transform rendererTransform)
+    {
+        return rendererTransform != null && rendererTransform.name == "Plane033";
     }
 
     void EnsureActiveHierarchy(Transform leaf)

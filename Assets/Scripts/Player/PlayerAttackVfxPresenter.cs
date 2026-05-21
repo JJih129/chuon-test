@@ -116,6 +116,8 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [Header("기본 VFX")]
     [SerializeField] GameObject defaultHitRangeVfxPrefab;
     [SerializeField] GameObject defaultWeaponTrailVfxPrefab;
+    [SerializeField] GameObject defaultHitImpactVfxPrefab;
+    [SerializeField, Min(0.05f)] float defaultHitImpactLifetime = 0.75f;
     [SerializeField] bool useProceduralTrailFallback = true;
     [SerializeField] bool useDrakkarTrailFallback = true;
     [SerializeField] bool useWeaponSocketForTrail = true;
@@ -392,10 +394,27 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
     public void PlayHitImpact(string attackKey, Vector3 hitPosition, Vector3 hitNormal)
     {
-        if (!TryGetAttackVfxProfile(attackKey, out AttackVfxProfile profile))
-            return;
+        AttackVfxProfile profile = null;
+        if (!string.IsNullOrWhiteSpace(attackKey))
+        {
+            if (_attackProfileByKey.Count == 0)
+                BuildProfileLookup();
+            _attackProfileByKey.TryGetValue(attackKey, out profile);
+        }
 
-        GameObject impactPrefab = profile.HitImpactPrefab;
+        PlayHitImpactInternal(profile, hitPosition, hitNormal);
+    }
+
+    public void PlayHitImpact(AttackData attackData, Vector3 hitPosition, Vector3 hitNormal)
+    {
+        PlayHitImpactInternal(null, hitPosition, hitNormal);
+    }
+
+    void PlayHitImpactInternal(AttackVfxProfile profile, Vector3 hitPosition, Vector3 hitNormal)
+    {
+        GameObject impactPrefab = profile != null && profile.HitImpactPrefab != null
+            ? profile.HitImpactPrefab
+            : defaultHitImpactVfxPrefab;
         if (impactPrefab == null)
             return;
 
@@ -403,17 +422,10 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             ? Quaternion.LookRotation(hitNormal.normalized, Vector3.up)
             : Quaternion.identity;
 
-        PooledVfxInstance instance = GetFromPool(impactPrefab);
-        if (instance == null || instance.Transform == null)
-            return;
-
-        instance.LeaseId++;
-        instance.Transform.SetParent(null, false);
-        instance.Transform.SetPositionAndRotation(hitPosition, rotation);
-        instance.Transform.localScale = impactPrefab.transform.localScale;
-        instance.GameObject.SetActive(true);
-        PlayParticles(instance);
-        StartCoroutine(ReturnAfterLifetime(impactPrefab, instance, profile.HitImpactLifetime));
+        float lifetime = profile != null
+            ? profile.HitImpactLifetime
+            : defaultHitImpactLifetime;
+        TransientVfxPool.Spawn(impactPrefab, hitPosition, rotation, null, lifetime);
     }
 
     void PlaySlashInternal(AttackVfxProfile profile)
@@ -1011,6 +1023,16 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(slashSpawnAnchorName))
             _resolvedSlashSpawnAnchor = FindChildRecursive(searchRoot, slashSpawnAnchorName);
 
+        if (_resolvedSlashSpawnAnchor == null && Application.isPlaying)
+        {
+            Transform swordTransform = FindSwordVisualTransform();
+            _resolvedSlashSpawnAnchor = PlayerWeaponVisualUtility.GetOrCreateBladeAnchor(
+                swordTransform,
+                string.IsNullOrWhiteSpace(slashSpawnAnchorName) ? "SwordSlashAnchor" : slashSpawnAnchorName,
+                PlayerWeaponBladeAnchorKind.Center,
+                GetSwordGripReference());
+        }
+
         return _resolvedSlashSpawnAnchor;
     }
 
@@ -1029,6 +1051,17 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(swordEndAnchorName))
             _resolvedSwordEndAnchor = FindChildRecursive(searchRoot, swordEndAnchorName);
 
+        if (_resolvedSwordEndAnchor == null && Application.isPlaying)
+        {
+            Transform swordTransform = FindSwordVisualTransform();
+            _resolvedSwordEndAnchor = PlayerWeaponVisualUtility.GetOrCreateBladeAnchor(
+                swordTransform,
+                string.IsNullOrWhiteSpace(swordEndAnchorName) ? "SwordEnd" : swordEndAnchorName,
+                PlayerWeaponBladeAnchorKind.Tip,
+                GetSwordGripReference(),
+                swordTipForwardPadding);
+        }
+
         return _resolvedSwordEndAnchor;
     }
 
@@ -1046,6 +1079,16 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         if (!string.IsNullOrWhiteSpace(swordEdgeAnchorName))
             _resolvedSwordEdgeAnchor = FindChildRecursive(searchRoot, swordEdgeAnchorName);
+
+        if (_resolvedSwordEdgeAnchor == null && Application.isPlaying)
+        {
+            Transform swordTransform = FindSwordVisualTransform();
+            _resolvedSwordEdgeAnchor = PlayerWeaponVisualUtility.GetOrCreateBladeAnchor(
+                swordTransform,
+                string.IsNullOrWhiteSpace(swordEdgeAnchorName) ? "SwordEdge" : swordEdgeAnchorName,
+                PlayerWeaponBladeAnchorKind.Edge,
+                GetSwordGripReference());
+        }
 
         return _resolvedSwordEdgeAnchor;
     }
@@ -1468,8 +1511,8 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             ? playerReferences.VisualRoot
             : transform;
 
-        Transform object002 = FindChildRecursive(searchRoot, "Object002");
-        if (object002 != null)
+        Transform object002 = PlayerWeaponVisualUtility.FindSwordVisualTransform(searchRoot);
+        if (object002 != null && string.Equals(object002.name, "Object002", StringComparison.OrdinalIgnoreCase))
             return object002;
 
         Transform weaponSocket = weaponSocketOverride != null
@@ -1503,6 +1546,21 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return object009;
 
         return null;
+    }
+
+    Transform GetSwordGripReference()
+    {
+        if (weaponSocketOverride != null)
+            return weaponSocketOverride;
+
+        if (playerReferences != null && playerReferences.WeaponSocket != null)
+            return playerReferences.WeaponSocket;
+
+        Transform swordTransform = FindSwordVisualTransform();
+        if (swordTransform != null && swordTransform.parent != null)
+            return swordTransform.parent;
+
+        return playerReferences != null && playerReferences.PlayerRoot != null ? playerReferences.PlayerRoot : transform;
     }
 
     Transform FindBestSwordLikeTransform(Transform searchRoot, Transform weaponSocket)
@@ -1573,38 +1631,13 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (existing != null)
             return existing;
 
-        Bounds localBounds;
-        if (!TryGetLocalMeshBounds(swordTransform, out localBounds))
-            return swordTransform;
-
-        Vector3 size = localBounds.size;
-        int axis = 0;
-        if (size.y > size.x && size.y >= size.z)
-            axis = 1;
-        else if (size.z > size.x && size.z >= size.y)
-            axis = 2;
-
-        Vector3 localPosition = localBounds.center;
-        switch (axis)
-        {
-            case 1:
-                localPosition.y = localBounds.max.y + swordTipForwardPadding;
-                break;
-            case 2:
-                localPosition.z = localBounds.max.z + swordTipForwardPadding;
-                break;
-            default:
-                localPosition.x = localBounds.max.x + swordTipForwardPadding;
-                break;
-        }
-
-        GameObject anchorObject = new GameObject(anchorName);
-        Transform anchor = anchorObject.transform;
-        anchor.SetParent(swordTransform, false);
-        anchor.localPosition = localPosition;
-        anchor.localRotation = Quaternion.identity;
-        anchor.localScale = Vector3.one;
-        return anchor;
+        Transform anchor = PlayerWeaponVisualUtility.GetOrCreateBladeAnchor(
+            swordTransform,
+            anchorName,
+            PlayerWeaponBladeAnchorKind.Tip,
+            GetSwordGripReference(),
+            swordTipForwardPadding);
+        return anchor != null ? anchor : swordTransform;
     }
 
     Transform CreateSwordBaseAnchor(Transform swordTransform)
@@ -1614,38 +1647,13 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (existing != null)
             return existing;
 
-        Bounds localBounds;
-        if (!TryGetLocalMeshBounds(swordTransform, out localBounds))
-            return swordTransform;
-
-        Vector3 size = localBounds.size;
-        int axis = 0;
-        if (size.y > size.x && size.y >= size.z)
-            axis = 1;
-        else if (size.z > size.x && size.z >= size.y)
-            axis = 2;
-
-        Vector3 localPosition = localBounds.center;
-        switch (axis)
-        {
-            case 1:
-                localPosition.y = localBounds.min.y - swordBaseBackwardPadding;
-                break;
-            case 2:
-                localPosition.z = localBounds.min.z - swordBaseBackwardPadding;
-                break;
-            default:
-                localPosition.x = localBounds.min.x - swordBaseBackwardPadding;
-                break;
-        }
-
-        GameObject anchorObject = new GameObject(anchorName);
-        Transform anchor = anchorObject.transform;
-        anchor.SetParent(swordTransform, false);
-        anchor.localPosition = localPosition;
-        anchor.localRotation = Quaternion.identity;
-        anchor.localScale = Vector3.one;
-        return anchor;
+        Transform anchor = PlayerWeaponVisualUtility.GetOrCreateBladeAnchor(
+            swordTransform,
+            anchorName,
+            PlayerWeaponBladeAnchorKind.Base,
+            GetSwordGripReference(),
+            swordBaseBackwardPadding);
+        return anchor != null ? anchor : swordTransform;
     }
 
     static bool TryGetLocalMeshBounds(Transform target, out Bounds bounds)

@@ -12,6 +12,7 @@ public class PauseMenuView : MonoBehaviour
 #endif
     const string UnifiedSettingsPrefabResourcePath = "UI/Title/PauseOptionsRoot_Title";
     const string SettingsContentHostName = "_SettingsContentHost";
+    const string RuntimeDimOverlayName = "_RuntimePauseDim";
 
     [Header("UI 연결")]
     public GameObject menuRoot;
@@ -35,11 +36,15 @@ public class PauseMenuView : MonoBehaviour
     RectTransform settingsOverlayHostRect;
     TitleSettingsOverlay unifiedSettingsOverlay;
     GameObject unifiedSettingsPrefab;
+    CanvasGroup dimOverlayGroup;
+    Canvas menuCanvas;
+    bool menuButtonsBound;
 
     void Awake()
     {
         EnsureDimOverlay();
         EnsureUnifiedSettingsOverlay();
+        BindMenuButtons();
 
         if (useUnifiedSettingsOverlay)
         {
@@ -67,6 +72,8 @@ public class PauseMenuView : MonoBehaviour
             return;
 
         EnsureDimOverlay();
+        EnsureRuntimeInput();
+        BindMenuButtons();
 
         if (unifiedSettingsOverlay != null)
             unifiedSettingsOverlay.Hide();
@@ -84,6 +91,11 @@ public class PauseMenuView : MonoBehaviour
 
         backgroundGroup.alpha = 0f;
         backgroundGroup.DOFade(1f, 0.3f).SetUpdate(true);
+        if (dimOverlayGroup != null && dimOverlayGroup != backgroundGroup)
+        {
+            dimOverlayGroup.alpha = 0f;
+            dimOverlayGroup.DOFade(1f, 0.3f).SetUpdate(true);
+        }
 
         menuContainer.localScale = Vector3.one * 0.8f;
         menuContainer.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetUpdate(true);
@@ -96,6 +108,62 @@ public class PauseMenuView : MonoBehaviour
         }
     }
 
+    void Update()
+    {
+        if (menuRoot == null || !menuRoot.activeInHierarchy || settingsPanel != null && settingsPanel.activeInHierarchy)
+            return;
+
+        if (!Input.GetMouseButtonDown(0))
+            return;
+
+        InvokeButtonUnderPointer();
+    }
+
+    void EnsureRuntimeInput()
+    {
+        RuntimeUiInputUtility.EnsureEventSystem();
+        RuntimeUiInputUtility.ForceMenuCursor();
+
+        menuCanvas = menuRoot != null ? menuRoot.GetComponentInParent<Canvas>() : GetComponentInParent<Canvas>();
+        if (menuCanvas == null)
+            return;
+
+        GraphicRaycaster raycaster = menuCanvas.GetComponent<GraphicRaycaster>();
+        if (raycaster == null)
+            raycaster = menuCanvas.gameObject.AddComponent<GraphicRaycaster>();
+        raycaster.enabled = true;
+
+        RuntimeUiInputUtility.BeginModalInput(menuCanvas);
+    }
+
+    void InvokeButtonUnderPointer()
+    {
+        if (menuContainer == null)
+            return;
+
+        Button[] buttons = menuContainer.GetComponentsInChildren<Button>(true);
+        if (buttons == null || buttons.Length == 0)
+            return;
+
+        System.Array.Sort(buttons, CompareButtonTopToBottom);
+        Camera eventCamera = menuCanvas != null && menuCanvas.renderMode != RenderMode.ScreenSpaceOverlay ? menuCanvas.worldCamera : null;
+        Vector2 pointerPosition = Input.mousePosition;
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button button = buttons[i];
+            if (button == null || !button.isActiveAndEnabled || !button.interactable)
+                continue;
+
+            RectTransform rect = button.transform as RectTransform;
+            if (rect == null || !RectTransformUtility.RectangleContainsScreenPoint(rect, pointerPosition, eventCamera))
+                continue;
+
+            button.onClick.Invoke();
+            return;
+        }
+    }
+
     void EnsureDimOverlay()
     {
         if (backgroundGroup == null)
@@ -105,8 +173,165 @@ public class PauseMenuView : MonoBehaviour
         if (dimImage == null)
             dimImage = backgroundGroup.gameObject.AddComponent<Image>();
 
-        dimImage.color = new Color(0f, 0f, 0f, 0.42f);
-        dimImage.raycastTarget = true;
+        if (dimImage.sprite == null)
+        {
+            dimImage.color = new Color(0f, 0f, 0f, 0.42f);
+            dimImage.raycastTarget = true;
+            dimOverlayGroup = backgroundGroup;
+            return;
+        }
+
+        dimImage.color = Color.white;
+        dimImage.raycastTarget = false;
+
+        RectTransform parent = menuRoot != null
+            ? menuRoot.transform as RectTransform
+            : backgroundGroup.transform.parent as RectTransform;
+        if (parent == null)
+            return;
+
+        RectTransform dimRect = parent.Find(RuntimeDimOverlayName) as RectTransform;
+        if (dimRect == null)
+        {
+            GameObject dimObject = new GameObject(RuntimeDimOverlayName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup));
+            dimObject.layer = backgroundGroup.gameObject.layer;
+            dimRect = dimObject.GetComponent<RectTransform>();
+            dimRect.SetParent(parent, false);
+        }
+
+        dimRect.SetAsFirstSibling();
+        dimRect.anchorMin = Vector2.zero;
+        dimRect.anchorMax = Vector2.one;
+        dimRect.offsetMin = Vector2.zero;
+        dimRect.offsetMax = Vector2.zero;
+        dimRect.localScale = Vector3.one;
+
+        Image runtimeDimImage = dimRect.GetComponent<Image>();
+        runtimeDimImage.color = new Color(0f, 0f, 0f, 0.42f);
+        runtimeDimImage.raycastTarget = true;
+
+        dimOverlayGroup = dimRect.GetComponent<CanvasGroup>();
+        dimOverlayGroup.interactable = false;
+        dimOverlayGroup.blocksRaycasts = true;
+    }
+
+    void BindMenuButtons()
+    {
+        if (menuContainer == null || menuButtonsBound)
+            return;
+
+        Button[] buttons = menuContainer.GetComponentsInChildren<Button>(true);
+        if (buttons == null || buttons.Length == 0)
+            return;
+
+        System.Array.Sort(buttons, CompareButtonTopToBottom);
+
+        bool resumeBound = false;
+        bool restartBound = false;
+        bool settingsBound = false;
+        bool titleBound = false;
+        bool quitBound = false;
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button button = buttons[i];
+            if (button == null)
+                continue;
+
+            string key = ResolveButtonKey(button);
+            if (!resumeBound && (ContainsAny(key, "resume", "continue", "계속") || i == 0))
+            {
+                BindButton(button, HandleResumeClick);
+                resumeBound = true;
+                continue;
+            }
+
+            if (!restartBound && (ContainsAny(key, "restart", "retry", "재시작") || i == 1))
+            {
+                BindButton(button, HandleRestartClick);
+                restartBound = true;
+                continue;
+            }
+
+            if (!settingsBound && (ContainsAny(key, "setting", "option", "설정") || i == 2))
+            {
+                BindButton(button, HandleSettingsClick);
+                settingsBound = true;
+                continue;
+            }
+
+            if (!titleBound && (ContainsAny(key, "title", "home", "타이틀") || i == 3))
+            {
+                BindButton(button, HandleTitleClick);
+                titleBound = true;
+                continue;
+            }
+
+            if (!quitBound && (ContainsAny(key, "quit", "exit", "종료") || i == 4))
+            {
+                BindButton(button, HandleQuitClick);
+                quitBound = true;
+            }
+        }
+
+        menuButtonsBound = resumeBound || restartBound || settingsBound || titleBound || quitBound;
+    }
+
+    static void BindButton(Button button, UnityEngine.Events.UnityAction action)
+    {
+        if (button == null || action == null)
+            return;
+
+        button.onClick.RemoveListener(action);
+        button.onClick.AddListener(action);
+        button.interactable = true;
+    }
+
+    void HandleResumeClick() => PauseManager.Instance?.OnClick_Resume();
+    void HandleRestartClick() => PauseManager.Instance?.OnClick_Restart();
+    void HandleSettingsClick() => PauseManager.Instance?.OnClick_Settings();
+    void HandleTitleClick() => PauseManager.Instance?.OnClick_ToTitle();
+    void HandleQuitClick() => PauseManager.Instance?.OnClick_Quit();
+
+    static int CompareButtonTopToBottom(Button a, Button b)
+    {
+        RectTransform ar = a != null ? a.transform as RectTransform : null;
+        RectTransform br = b != null ? b.transform as RectTransform : null;
+        float ay = ar != null ? ar.position.y : 0f;
+        float by = br != null ? br.position.y : 0f;
+        return by.CompareTo(ay);
+    }
+
+    static string ResolveButtonKey(Button button)
+    {
+        if (button == null)
+            return string.Empty;
+
+        string key = button.name ?? string.Empty;
+        Text legacyText = button.GetComponentInChildren<Text>(true);
+        if (legacyText != null)
+            key += " " + legacyText.text;
+
+        TMPro.TMP_Text tmpText = button.GetComponentInChildren<TMPro.TMP_Text>(true);
+        if (tmpText != null)
+            key += " " + tmpText.text;
+
+        return key.ToLowerInvariant();
+    }
+
+    static bool ContainsAny(string source, params string[] needles)
+    {
+        if (string.IsNullOrEmpty(source) || needles == null)
+            return false;
+
+        for (int i = 0; i < needles.Length; i++)
+        {
+            string needle = needles[i];
+            if (!string.IsNullOrEmpty(needle) && source.Contains(needle))
+                return true;
+        }
+
+        return false;
     }
 
     public void HideMenu(System.Action onComplete = null)
@@ -120,7 +345,12 @@ public class PauseMenuView : MonoBehaviour
         if (unifiedSettingsOverlay != null)
             unifiedSettingsOverlay.Hide();
 
+        RuntimeUiInputUtility.RestoreModalInput();
+
         backgroundGroup.DOFade(0f, 0.2f).SetUpdate(true);
+        if (dimOverlayGroup != null && dimOverlayGroup != backgroundGroup)
+            dimOverlayGroup.DOFade(0f, 0.2f).SetUpdate(true);
+
         menuContainer.DOScale(0.8f, 0.2f).SetEase(Ease.InQuad).SetUpdate(true);
 
         var menuCanvasGroup = menuContainer.GetComponent<CanvasGroup>();

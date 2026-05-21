@@ -2216,8 +2216,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21312174, y: -0.002468887, z: -0.00053854805, w: 0.9770224}
-  m_LocalPosition: {x: 0.031272992, y: -1.0392699, z: -28.187853}
+  m_LocalRotation: {x: -0.24091086, y: -0.002452499, z: -0.00060876546, w: 0.970544}
+  m_LocalPosition: {x: 0.030924402, y: -1.2474601, z: -28.118921}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -19030,6 +19030,7 @@ MonoBehaviour:
   visualRoot: {fileID: 540950371}
   mainAnimator: {fileID: 540950372}
   attackHitboxes: []
+  normalizeVisualRootLocalPose: 1
 --- !u!1 &990539166
 GameObject:
   m_ObjectHideFlags: 0
@@ -25298,6 +25299,10 @@ MonoBehaviour:
   - {fileID: 2074182986}
   - {fileID: 14622528}
   - {fileID: 2020581894}
+  ultimateGaugePercentText: {fileID: 0}
+  showUltimateGaugePercent: 1
+  ultimateGaugePercentFontSize: 18
+  ultimateGaugePercentTextColor: {r: 0.86, g: 1, b: 1, a: 0.98}
   guardStrainFillImage: {fileID: 0}
   guardStrainTrackImage: {fileID: 0}
   guardStrainBarHeight: 8
@@ -25511,7 +25516,8 @@ MonoBehaviour:
   useBossIntroTimeline: 1
   preferPlayableDirectorBossIntro: 1
   bossIntroDirector: {fileID: 902207461}
-  snapCameraBehindPlayerOnTimelineIntroEnd: 0
+  snapCameraBehindPlayerOnTimelineIntroEnd: 1
+  returnPlayerCameraImmediatelyAfterTimelineIntro: 1
   endTimelineWhenBossRevealWalkEnds: 1
   bossIntroSteps:
   - speaker: EGO
@@ -25621,10 +25627,10 @@ MonoBehaviour:
   moveBossFromHiddenStartOnReveal: 1
   bossRevealWalkOutDistance: 5.5
   bossRevealWalkOutDuration: 2
-  bossRevealWalkAnimationSpeed: 1
-  bossRevealWalkEndClip: {fileID: 0}
+  bossRevealWalkAnimationSpeed: 0.45
+  bossRevealWalkEndClip: {fileID: 7400002, guid: 8ab17f96fff7ca1458527c50e41b5940, type: 3}
   bossRevealWalkEndMaxDuration: 0.9
-  bossIntroHologramMaterial: {fileID: 0}
+  bossIntroHologramMaterial: {fileID: 2100000, guid: d31de14cef9a845eda8a2fe52a7f1e2f, type: 2}
   bossIntroHologramFadeIn: 0.2
   bossIntroHologramHoldBeforeReveal: 0.9
   bossIntroHologramRevealDuration: 0.6
@@ -25669,9 +25675,9 @@ MonoBehaviour:
   elevatorWalkOutDuration: 3
   elevatorWalkOutAnimSpeed: 0.45
   elevatorWalkOutSpeedParameter: speed
-  elevatorWalkStartClip: {fileID: 0}
-  elevatorWalkLoopClip: {fileID: 0}
-  elevatorWalkEndClip: {fileID: 0}
+  elevatorWalkStartClip: {fileID: 7400002, guid: dd806287ef4880140830977e9c0fd447, type: 3}
+  elevatorWalkLoopClip: {fileID: 7400002, guid: 79c65720e5263154bb25429f9a512d79, type: 3}
+  elevatorWalkEndClip: {fileID: 7400002, guid: 8ab17f96fff7ca1458527c50e41b5940, type: 3}
   elevatorWalkStartMaxDuration: 0.65
   elevatorWalkEndMaxDuration: 0.9
   holdElevatorWalkEndPoseUntilInputUnlock: 1
@@ -27049,7 +27055,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 6927828565773755332, guid: 280bc232aa2986f4a89c695617ba3202, type: 3}
+    - {fileID: 2100000, guid: ffcea61cae8e7cc4bb5d8771e664eba9, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -34346,14 +34352,16 @@ MonoBehaviour:
   attackHitbox: {fileID: 1072154996}
   useRuntimeForwardBoxAttackHitbox: 1
   disableOriginalAttackHitboxWhenUsingRuntimeBox: 1
-  runtimeForwardHitboxCenter: {x: 0, y: 0.92, z: 1.12}
-  runtimeForwardHitboxSize: {x: 2.25, y: 2.08, z: 1.75}
+  runtimeForwardHitboxCenter: {x: 0, y: 0.72, z: 1.32}
+  runtimeForwardHitboxSize: {x: 3.15, y: 2.65, z: 2.55}
+  gateMeleeAttackStartByRuntimeHitbox: 1
+  meleeAttackStartRangePadding: 0.32
   outgoingDamageMultiplier: 0.5
   playerTracker: {fileID: 0}
   currentState: 1
   introIdleDuration: 3
   combatIdleTime: 0.9
-  minimumPostAttackIdleDuration: 2.15
+  minimumPostAttackIdleDuration: 3.5
   useCombatIdleStrafe: 1
   combatIdleStrafeSpeedMultiplier: 0.42
   combatIdleApproachSpeedMultiplier: 0.34
@@ -34373,10 +34381,10 @@ MonoBehaviour:
   combatIdleRetreatTriggerDistance: 1.7
   combatIdleRetreatDuration: 0.42
   combatIdleRetreatSpeed: 4.4
-  globalPostAttackRecoveryPadding: 0.22
-  globalFollowUpDelayPadding: 0.14
+  globalPostAttackRecoveryPadding: 0.45
+  globalFollowUpDelayPadding: 0.45
   ultimateVictimRecoveryDuration: 1.2
-  maxAttackStateWaitTime: 2
+  maxAttackStateWaitTime: 6
   phaseTwoThresholdNormalized: 0.66
   phaseThreeThresholdNormalized: 0.33
   useDefaultPhaseModifierFallback: 1
@@ -34558,6 +34566,7 @@ MonoBehaviour:
   closeChaseTurnDistance: 1.8
   moveAnimDamp: 0.097
   useRunStartMotion: 1
+  suppressRunStartDuringChase: 1
   runStartTriggerName: RunStart
   runStartMinMoveBlend: 0.25
   useTurnStartMotion: 1
@@ -34738,13 +34747,13 @@ MonoBehaviour:
       rangedFallbackPatternId: 3
       dashFallbackPatternId: 2
     phaseModifiers: []
-    isParryable: 0
+    isParryable: 1
     canPerfectDodge: 1
-    canGuard: 0
-    isUnblockable: 1
-    causesGuardBreak: 1
+    canGuard: 1
+    isUnblockable: 0
+    causesGuardBreak: 0
     damageAmount: 24
-    telegraphType: 4
+    telegraphType: 1
     telegraphLeadTime: 0.92
     telegraphLabel: CRUSH
     timingStyle: 3
@@ -34807,13 +34816,13 @@ MonoBehaviour:
       rangedFallbackPatternId: 3
       dashFallbackPatternId: 2
     phaseModifiers: []
-    isParryable: 0
+    isParryable: 1
     canPerfectDodge: 1
-    canGuard: 0
+    canGuard: 1
     isUnblockable: 0
     causesGuardBreak: 0
     damageAmount: 20
-    telegraphType: 3
+    telegraphType: 1
     telegraphLeadTime: 0.58
     telegraphLabel: LUNGE
     timingStyle: 2
@@ -34876,13 +34885,13 @@ MonoBehaviour:
       rangedFallbackPatternId: 3
       dashFallbackPatternId: 2
     phaseModifiers: []
-    isParryable: 0
+    isParryable: 1
     canPerfectDodge: 1
     canGuard: 1
     isUnblockable: 0
     causesGuardBreak: 0
     damageAmount: 16
-    telegraphType: 2
+    telegraphType: 1
     telegraphLeadTime: 0.46
     telegraphLabel: PRESSURE
     timingStyle: 1
@@ -34945,13 +34954,13 @@ MonoBehaviour:
       rangedFallbackPatternId: 3
       dashFallbackPatternId: 2
     phaseModifiers: []
-    isParryable: 0
+    isParryable: 1
     canPerfectDodge: 1
     canGuard: 1
     isUnblockable: 0
     causesGuardBreak: 0
     damageAmount: 16
-    telegraphType: 3
+    telegraphType: 1
     telegraphLeadTime: 0.52
     telegraphLabel: SWEEP
     timingStyle: 2
@@ -35014,13 +35023,13 @@ MonoBehaviour:
       rangedFallbackPatternId: 3
       dashFallbackPatternId: 2
     phaseModifiers: []
-    isParryable: 0
+    isParryable: 1
     canPerfectDodge: 1
     canGuard: 1
     isUnblockable: 0
     causesGuardBreak: 0
     damageAmount: 18
-    telegraphType: 3
+    telegraphType: 1
     telegraphLeadTime: 0.18
     telegraphLabel: 
     timingStyle: 2
@@ -35086,11 +35095,12 @@ MonoBehaviour:
   engageBlockedAbortTime: 0.55
   attackTimingData: []
   useDefaultAttackTimingFallback: 1
+  forceAllPatternsParryable: 1
   defaultAttackTimingControlsParryWindow: 1
   defaultAttackTimingTelegraphScale: 1
-  defaultAttackTimingParryWindowScale: 0.78
-  parryWindowEaseLeadTime: 0.11
-  parryWindowEaseTailTime: 0.11
+  defaultAttackTimingParryWindowScale: 1
+  parryWindowEaseLeadTime: 0.18
+  parryWindowEaseTailTime: 0.16
   enableAttackTimingDebugLog: 0
   attackTimingCueShakeAmplitude: 0.045
   attackTimingCueShakeDuration: 0.14

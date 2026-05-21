@@ -14,6 +14,8 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
     [SerializeField] float length = 6.0f;
     [SerializeField] float thickness = 0.08f;
     [SerializeField] float coneAngle = 25f;
+    [SerializeField] bool alignSlashRollToObject002 = true;
+    [SerializeField, Range(0f, 1f)] float object002BladeRollWeight = 0.85f;
 
     [Header("Material props (optional)")]
     [SerializeField] string propIntensity = "_Intensity";
@@ -30,6 +32,8 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
     int _propIntensityId = -1;
     int _propScrollId = -1;
     int _propAlphaId = -1;
+    Transform _cachedWeaponRoot;
+    Transform _cachedWeaponTransform;
 
     public void PushPresentationOverride(Transform playerOverride, Transform spawnRootOverride)
     {
@@ -88,7 +92,8 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
         if (forwardToFocus.sqrMagnitude <= 0.0001f)
             forwardToFocus = activePlayer.forward;
 
-        Quaternion faceFwd = Quaternion.LookRotation(forwardToFocus.normalized, Vector3.up);
+        Vector3 slashForward = forwardToFocus.normalized;
+        Quaternion faceFwd = Quaternion.LookRotation(slashForward, ResolveSlashUpFromWeapon(activePlayer, slashForward));
         float yaw = index * Golden + Mathf.Lerp(-5f, 5f, Hash01(patternSeed, index, 11));
         float pitch = Mathf.Lerp(-coneAngle, coneAngle, Hash01(patternSeed, index, 29));
         Quaternion rot = faceFwd
@@ -158,7 +163,7 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
             Vector3 radial = Quaternion.AngleAxis(yaw, Vector3.up) * flatForward;
             Vector3 spawnPos = center + radial * radius + Vector3.up * height;
             Vector3 focusPoint = center + Vector3.up * focusHeight;
-            Quaternion inwardBasis = Quaternion.LookRotation((focusPoint - spawnPos).normalized, Vector3.up);
+            Quaternion inwardBasis = Quaternion.LookRotation((focusPoint - spawnPos).normalized, ResolveSlashUpFromWeapon(activePlayer: null, forward: focusPoint - spawnPos));
             float pitch = Mathf.Lerp(-style.beamPitchSpread, style.beamPitchSpread, Hash01(patternSeed, i, 83));
             Quaternion rotation = inwardBasis * Quaternion.AngleAxis(pitch, Vector3.right);
             SpawnSlashInstance(beamPrefab, spawnPos, rotation, life, thicknessScale, lengthScale, intensityScale * burstIntensity, style.beamAlpha);
@@ -212,6 +217,42 @@ public class UltimateSlashBurstSpawner : MonoBehaviour
         if (style != null && style.dashSlashVfxPrefab != null)
             return style.dashSlashVfxPrefab;
         return slashPrefab;
+    }
+
+    Vector3 ResolveSlashUpFromWeapon(Transform activePlayer, Vector3 forward)
+    {
+        if (!alignSlashRollToObject002)
+            return Vector3.up;
+
+        if (forward.sqrMagnitude <= 0.0001f)
+            return Vector3.up;
+
+        forward.Normalize();
+        Transform weapon = ResolveWeaponTransform(activePlayer);
+        Transform grip = activePlayer != null ? activePlayer : player;
+        if (weapon == null || !PlayerWeaponVisualUtility.TryGetBladeWorldPose(weapon, grip, out Vector3 bladeBase, out Vector3 bladeTip, out _))
+            return Vector3.up;
+
+        Vector3 bladeAxis = Vector3.ProjectOnPlane(bladeTip - bladeBase, forward);
+        if (bladeAxis.sqrMagnitude <= 0.0001f)
+            return Vector3.up;
+
+        Vector3 bladeUp = bladeAxis.normalized;
+        return Vector3.Slerp(Vector3.up, bladeUp, Mathf.Clamp01(object002BladeRollWeight)).normalized;
+    }
+
+    Transform ResolveWeaponTransform(Transform activePlayer)
+    {
+        Transform root = activePlayer != null ? activePlayer : player;
+        if (_cachedWeaponTransform != null && _cachedWeaponRoot == root)
+            return _cachedWeaponTransform;
+
+        _cachedWeaponRoot = root;
+        _cachedWeaponTransform = PlayerWeaponVisualUtility.FindSwordVisualTransform(root);
+        if (_cachedWeaponTransform == null && playerReferences != null && playerReferences.VisualRoot != null)
+            _cachedWeaponTransform = PlayerWeaponVisualUtility.FindSwordVisualTransform(playerReferences.VisualRoot);
+
+        return _cachedWeaponTransform;
     }
 
     GameObject ResolveLightBeamPrefab(UltimateSequenceData.VfxSettings style)

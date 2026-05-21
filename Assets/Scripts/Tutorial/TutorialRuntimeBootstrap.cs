@@ -11,6 +11,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 {
     const string TutorialScenePath = "Assets/Scenes/Tutorial.unity";
     const string CombatGirlEnemyPrefabPath = "Assets/Prefabs/Tutorial/TutorialCombatGirlEnemy.prefab";
+    const string RobotKylePrefabPath = "Assets/UnityTechnologies/SpaceRobotKyle/Prefabs/RobotKyle.prefab";
 
     TutorialFlowController _flowController;
     TutorialHintUIBridge _hintBridge;
@@ -99,10 +100,14 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         _egoGuideController = gameObject.AddComponent<EGOGuideController>();
         _egoGuideController.ConfigureRuntime(_hintBridge);
 
+        PlayerLockOn playerLockOn = player.GetComponent<PlayerLockOn>();
+        if (playerLockOn == null)
+            playerLockOn = player.AddComponent<PlayerLockOn>();
+
         ExistingLockOnAdapter lockOnAdapter = player.GetComponent<ExistingLockOnAdapter>();
         if (lockOnAdapter == null)
             lockOnAdapter = player.AddComponent<ExistingLockOnAdapter>();
-        lockOnAdapter.ConfigureRuntime(player.GetComponent<PlayerLockOn>());
+        lockOnAdapter.ConfigureRuntime(playerLockOn);
 
         _playerBridge = gameObject.AddComponent<TutorialPlayerRuntimeBridge>();
         _playerBridge.ConfigureRuntime(player, mainCamera, lockOnAdapter);
@@ -204,26 +209,35 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             exitZone,
             sceneMoveObject != null ? sceneMoveObject.GetComponent<SceneLoadInteractable>() : null);
 
-        TutorialSupportFeedbackController supportFeedbackController = gameObject.AddComponent<TutorialSupportFeedbackController>();
-        supportFeedbackController.ConfigureRuntime(
-            _flowController,
-            _playerBridge,
-            tutorialCanvas,
-            movementGoalZone != null ? movementGoalZone.transform : null,
-            attackDummy != null ? attackDummy.transform : null,
-            exitZone != null ? exitZone.transform : null);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeSupportPanelEnabled)
+        {
+            TutorialSupportFeedbackController supportFeedbackController = gameObject.AddComponent<TutorialSupportFeedbackController>();
+            supportFeedbackController.ConfigureRuntime(
+                _flowController,
+                _playerBridge,
+                tutorialCanvas,
+                movementGoalZone != null ? movementGoalZone.transform : null,
+                attackDummy != null ? attackDummy.transform : null,
+                exitZone != null ? exitZone.transform : null);
+        }
 
-        TutorialObjectivePanelController objectivePanelController = gameObject.AddComponent<TutorialObjectivePanelController>();
-        objectivePanelController.ConfigureRuntime(_flowController, _hintBridge);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialObjectiveControllerEnabled)
+        {
+            TutorialObjectivePanelController objectivePanelController = gameObject.AddComponent<TutorialObjectivePanelController>();
+            objectivePanelController.ConfigureRuntime(_flowController, _hintBridge);
+        }
 
-        TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
-        guideBeamController.ConfigureRuntime(
-            _flowController,
-            player.transform,
-            movementGoalZone != null ? movementGoalZone.transform : null,
-            exitZone != null ? exitZone.transform : null,
-            movementMarker,
-            exitMarker);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialGuidePathEnabled)
+        {
+            TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
+            guideBeamController.ConfigureRuntime(
+                _flowController,
+                player.transform,
+                movementGoalZone != null ? movementGoalZone.transform : null,
+                exitZone != null ? exitZone.transform : null,
+                movementMarker,
+                exitMarker);
+        }
 
         TutorialZoneHighlightController zoneHighlightController = gameObject.AddComponent<TutorialZoneHighlightController>();
         zoneHighlightController.ConfigureRuntime(_flowController, movementGoalZone, exitZone, player.transform);
@@ -347,6 +361,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             return null;
 
         TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
+        ApplyRobotKyleVisual(visualRig);
+        FreezeTutorialTargetMotion(dummyObject);
         TrainingDummyController controller = EnsureComponent<TrainingDummyController>(dummyObject);
         RemoveConflictingDamageReceivers(dummyObject, controller);
         Renderer renderer = visualRig != null && visualRig.PrimaryRenderer != null
@@ -360,6 +376,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             renderer,
             null);
         controller.ConfigureHitEffectRuntime(ResolveTutorialDummyHitEffectPrefab());
+        controller.ConfigureStaticWorldPose(true);
         controller.SetRuntimeProfiles(
             new TrainingDummyStepProfile { stepType = TutorialStepType.CameraFocus, active = true, loopAttack = false, invulnerable = true, stateColor = new Color(0.25f, 0.85f, 1f, 1f) },
             new TrainingDummyStepProfile { stepType = TutorialStepType.LockOn, active = true, loopAttack = false, invulnerable = true, stateColor = new Color(0.25f, 0.85f, 1f, 1f) },
@@ -418,6 +435,76 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 #else
         return Resources.Load<GameObject>("Tutorial/TutorialCombatGirlEnemy");
 #endif
+    }
+
+    GameObject ResolveRobotKylePrefab()
+    {
+#if UNITY_EDITOR
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(RobotKylePrefabPath);
+#else
+        return Resources.Load<GameObject>("Tutorial/RobotKyle");
+#endif
+    }
+
+    void ApplyRobotKyleVisual(TutorialEnemyVisualRig visualRig)
+    {
+        if (visualRig == null)
+            return;
+
+        GameObject robotKylePrefab = ResolveRobotKylePrefab();
+        if (robotKylePrefab == null)
+            return;
+
+        visualRig.ConfigureRuntimeVisual(robotKylePrefab, Vector3.zero, Vector3.zero, Vector3.one);
+    }
+
+    void FreezeTutorialTargetMotion(GameObject target)
+    {
+        if (target == null)
+            return;
+
+        Rigidbody[] bodies = target.GetComponentsInChildren<Rigidbody>(true);
+        for (int i = 0; i < bodies.Length; i++)
+        {
+            Rigidbody body = bodies[i];
+            if (body == null)
+                continue;
+
+            body.isKinematic = true;
+            body.useGravity = false;
+            body.constraints = RigidbodyConstraints.FreezeAll;
+        }
+
+        CharacterController[] controllers = target.GetComponentsInChildren<CharacterController>(true);
+        for (int i = 0; i < controllers.Length; i++)
+        {
+            CharacterController controller = controllers[i];
+            if (controller != null)
+                controller.enabled = false;
+        }
+
+        UnityEngine.AI.NavMeshAgent[] agents = target.GetComponentsInChildren<UnityEngine.AI.NavMeshAgent>(true);
+        for (int i = 0; i < agents.Length; i++)
+        {
+            UnityEngine.AI.NavMeshAgent agent = agents[i];
+            if (agent == null)
+                continue;
+
+            agent.isStopped = true;
+            agent.enabled = false;
+        }
+
+        Animator[] animators = target.GetComponentsInChildren<Animator>(true);
+        for (int i = 0; i < animators.Length; i++)
+        {
+            Animator animator = animators[i];
+            if (animator != null)
+            {
+                animator.applyRootMotion = false;
+                animator.speed = 0f;
+                animator.enabled = false;
+            }
+        }
     }
 
     TrainingDummyController ConfigureGuardDummy(GameObject player, GameObject dummyObject, GameObject projectilePrefab)
@@ -579,9 +666,38 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
     void ConfigureTutorialModernUltimate(GameObject player, GameObject ultimateTargetObject, Camera mainCamera)
     {
-        // Tutorial should use the normal scene placement and flow only.
-        // MainScene owns the authored ultimate timeline presentation.
-        return;
+        {
+            if (player == null || ultimateTargetObject == null)
+                return;
+
+            PlayerUltimateController runtimeUltimateController = EnsureComponent<PlayerUltimateController>(player);
+            UltimateSkillController runtimeSkillController = EnsureComponent<UltimateSkillController>(player);
+            UltimateTargetBinder runtimeTargetBinder = EnsureComponent<UltimateTargetBinder>(player);
+            UltimateHitProcessor runtimeHitProcessor = EnsureComponent<UltimateHitProcessor>(player);
+            UltimateVFXPresenter runtimeVfxPresenter = EnsureComponent<UltimateVFXPresenter>(player);
+            UltimateSlashBurstSpawner runtimeSlashSpawner = EnsureComponent<UltimateSlashBurstSpawner>(player);
+            UltimateSequencePlayer runtimeSequencePlayer = EnsureComponent<UltimateSequencePlayer>(player);
+            UltimateCameraDirector runtimeCameraDirector = EnsureComponent<UltimateCameraDirector>(player);
+            UltimateSequenceData runtimeSequenceData = Resources.Load<UltimateSequenceData>("Ultimate/UltimateSequence_Default");
+
+            if (runtimeUltimateController == null || runtimeSkillController == null || runtimeTargetBinder == null || runtimeHitProcessor == null || runtimeVfxPresenter == null || runtimeSlashSpawner == null || runtimeSequencePlayer == null || runtimeCameraDirector == null || runtimeSequenceData == null)
+                return;
+
+            ConfigureTutorialUltimateTarget(ultimateTargetObject);
+            runtimeUltimateController.director = null;
+            runtimeUltimateController.useScriptedSequence = true;
+            runtimeUltimateController.allowDirectorFallbackWhenScriptedUnavailable = false;
+            runtimeUltimateController.useUltimateStageRuntime = true;
+            runtimeUltimateController.slashBurstSpawner = runtimeSlashSpawner;
+            runtimeSkillController.ConfigureRuntimeModern(
+                runtimeUltimateController,
+                runtimeSequenceData,
+                null,
+                runtimeTargetBinder,
+                runtimeHitProcessor,
+                runtimeVfxPresenter);
+            return;
+        }
 #if !UNITY_EDITOR
         return;
 #else
@@ -723,6 +839,23 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             sigGameplayRestore);
         skillController.ConfigureRuntimeModern(ultimateController, sequenceData, cinematicController, targetBinder, hitProcessor, vfxPresenter);
 #endif
+    }
+
+    void ConfigureTutorialUltimateTarget(GameObject ultimateTargetObject)
+    {
+        if (ultimateTargetObject == null)
+            return;
+
+        UltimateTargetSimple ultimateTarget = EnsureComponent<UltimateTargetSimple>(ultimateTargetObject);
+        if (ultimateTarget == null)
+            return;
+
+        ultimateTarget.maxHP = Mathf.Max(ultimateTarget.maxHP, 100000);
+        ultimateTarget.currentHP = ultimateTarget.maxHP;
+        ultimateTarget.destroyOnDeath = false;
+        ultimateTarget.ignoreDefense = true;
+        if (ultimateTarget.vfxSpawnPoint == null)
+            ultimateTarget.vfxSpawnPoint = ultimateTargetObject.transform;
     }
 
     TutorialWorldMarker CreateWorldMarker(

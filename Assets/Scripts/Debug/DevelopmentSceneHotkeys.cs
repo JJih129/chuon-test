@@ -28,10 +28,10 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
 
     static readonly SceneHotkey[] SceneHotkeys =
     {
-        new SceneHotkey(KeyCode.F1, TitleSceneName, TitleScenePath),
-        new SceneHotkey(KeyCode.F2, TutorialSceneName, TutorialScenePath),
-        new SceneHotkey(KeyCode.F3, LobbySceneName, LobbyScenePath),
-        new SceneHotkey(KeyCode.F4, MainSceneName, MainScenePath),
+        new SceneHotkey(KeyCode.F1, TutorialSceneName, TutorialScenePath),
+        new SceneHotkey(KeyCode.F2, LobbySceneName, LobbyScenePath),
+        new SceneHotkey(KeyCode.F3, MainSceneName, MainScenePath),
+        new SceneHotkey(KeyCode.F4, TitleSceneName, TitleScenePath),
         new SceneHotkey(KeyCode.F5, OptionsSceneName, OptionsScenePath),
         new SceneHotkey(KeyCode.F6, CreditsSceneName, CreditsScenePath),
     };
@@ -42,9 +42,6 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void EnsureInstance()
     {
-        if (!Application.isEditor && !Debug.isDebugBuild)
-            return;
-
         if (_instance != null)
             return;
 
@@ -87,6 +84,9 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
             return;
 
         TutorialSceneTransitionState.ClearAll();
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
         _isLoading = true;
 
 #if UNITY_EDITOR

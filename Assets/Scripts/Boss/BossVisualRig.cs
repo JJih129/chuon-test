@@ -166,7 +166,13 @@ public class BossVisualRig : MonoBehaviour
     {
         return treatPlaneNamedMeshesAsHelpers
             && target != null
+            && !IsForcedVisiblePlane(target)
             && target.name.StartsWith("Plane", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    static bool IsForcedVisiblePlane(Transform target)
+    {
+        return target != null && target.name == "Plane033";
     }
 
     static bool HasValidObjects<T>(T[] objects) where T : UnityEngine.Object

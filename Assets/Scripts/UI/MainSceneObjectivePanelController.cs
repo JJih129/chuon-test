@@ -100,6 +100,12 @@ public class MainSceneObjectivePanelController : MonoBehaviour
         BossBreakController runtimeBossBreakController,
         PlayerUltimateController runtimePlayerUltimateController)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            DisableRuntimePanel();
+            return;
+        }
+
         bossUiController = runtimeBossUiController;
         bossController = runtimeBossController;
         bossHealth = runtimeBossController != null ? runtimeBossController.bossHealth : null;
@@ -115,6 +121,12 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            DisableRuntimePanel();
+            return;
+        }
+
         NormalizeCompactLayout();
         CacheInitialState();
         EnsureVisuals();
@@ -368,6 +380,9 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     void EnsureVisuals()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+            return;
+
         if (bossUiController == null)
             bossUiController = GameplaySceneCache.ResolveBossUIController();
 
@@ -398,6 +413,7 @@ public class MainSceneObjectivePanelController : MonoBehaviour
         _root.anchoredPosition = panelAnchoredPosition;
         _root.sizeDelta = panelSize;
         _root.localScale = Vector3.one;
+        _root.gameObject.SetActive(true);
         _root.SetAsLastSibling();
 
         _panelImage = _root.GetComponent<Image>();
@@ -478,6 +494,17 @@ public class MainSceneObjectivePanelController : MonoBehaviour
         _statusText.raycastTarget = false;
 
         EnsureProgressVisuals();
+    }
+
+    void DisableRuntimePanel()
+    {
+        ReleaseSubscriptions();
+        StopPulse();
+        StopSweep();
+        StopIconPulse();
+        if (_root != null)
+            _root.gameObject.SetActive(false);
+        enabled = false;
     }
 
     void EnsureIconVisuals()

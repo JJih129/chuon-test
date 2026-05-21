@@ -128,6 +128,9 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     [SerializeField, Min(0f)] private float hitEventCooldown = 0.08f;
     [SerializeField] private bool debugLogs;
 
+    [Header("Static Target")]
+    [SerializeField] private bool lockWorldPose;
+
     float _lastHitTime = float.NegativeInfinity;
     int _lastAttackSequenceId;
     int _lastAttackerInstanceId;
@@ -156,6 +159,9 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     bool _forcedParryPromptActive;
     bool _forcedPerfectDodgePromptActive;
     bool _forcedParrySucceeded;
+    bool _hasLockedWorldPose;
+    Vector3 _lockedWorldPosition;
+    Quaternion _lockedWorldRotation;
     float _forcedParryPreviousTimeScale = 1f;
     float _forcedParryPreviousFixedDeltaTime = 0.02f;
     float _forcedParryPreviousAnimatorSpeed = 1f;
@@ -214,6 +220,12 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         ClearPendingProjectiles();
     }
 
+    void LateUpdate()
+    {
+        if (lockWorldPose && _hasLockedWorldPose)
+            transform.SetPositionAndRotation(_lockedWorldPosition, _lockedWorldRotation);
+    }
+
     public void ConfigureRuntime(
         TutorialPlayerRuntimeBridge bridge,
         TutorialDummyRole dummyRole,
@@ -229,6 +241,11 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         primaryRenderer = renderer != null ? renderer : primaryRenderer;
         parryMarkerObject = parryMarker;
         projectileSpawnPoint = attackOrigin;
+        useHologramSpawnDespawn = true;
+        if (primaryRenderer == null)
+            primaryRenderer = GetComponentInChildren<Renderer>(true);
+        if (visualAnimator == null)
+            visualAnimator = GetComponentInChildren<Animator>(true);
         if (worldMarker == null)
             worldMarker = GetComponentInChildren<TutorialWorldMarker>(true);
         _initialScale = transform.localScale;
@@ -238,9 +255,36 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         SetEmission(idleEmission);
     }
 
+    public void ConfigureStaticWorldPose(bool enabled)
+    {
+        lockWorldPose = enabled;
+        if (!lockWorldPose)
+        {
+            _hasLockedWorldPose = false;
+            return;
+        }
+
+        _lockedWorldPosition = transform.position;
+        _lockedWorldRotation = transform.rotation;
+        _hasLockedWorldPose = true;
+        trackPlayerDuringLoopAttack = false;
+        useAttackLunge = false;
+        chaseMoveSpeed = 0f;
+        chaseTurnSpeed = 0f;
+        if (visualAnimator == null)
+            visualAnimator = GetComponentInChildren<Animator>(true);
+        if (visualAnimator != null)
+        {
+            visualAnimator.applyRootMotion = false;
+            visualAnimator.speed = 0f;
+            visualAnimator.enabled = false;
+        }
+    }
+
     public void ConfigureHitEffectRuntime(GameObject runtimeHitEffectPrefab)
     {
-        hitEffectPrefab = runtimeHitEffectPrefab;
+        if (runtimeHitEffectPrefab != null)
+            hitEffectPrefab = runtimeHitEffectPrefab;
     }
 
     public void ConfigureWorldMarker(TutorialWorldMarker runtimeMarker)
@@ -572,7 +616,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     void UpdateAttackLunge(float normalizedTime)
     {
-        if (!useAttackLunge || playerTarget == null || attackLungeSpeed <= 0f)
+        if (lockWorldPose || !useAttackLunge || playerTarget == null || attackLungeSpeed <= 0f)
             return;
 
         float start = Mathf.Clamp01(attackLungeStartNormalizedTime);
@@ -936,7 +980,8 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     bool ShouldUseMeleeTracking()
     {
-        return trackPlayerDuringLoopAttack &&
+        return !lockWorldPose &&
+               trackPlayerDuringLoopAttack &&
                playerTarget != null &&
                _activeProfile != null &&
                !_activeProfile.useProjectileAttack;
@@ -978,7 +1023,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     void PlayVisualState(string stateName)
     {
-        if (visualAnimator == null || string.IsNullOrWhiteSpace(stateName))
+        if (visualAnimator == null || !visualAnimator.enabled || string.IsNullOrWhiteSpace(stateName))
             return;
 
         if (string.Equals(_currentVisualState, stateName, System.StringComparison.Ordinal))
@@ -1622,6 +1667,9 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     {
         if (primaryRenderer == null || string.IsNullOrWhiteSpace(emissionProperty))
             return;
+
+        if (_propertyBlock == null)
+            _propertyBlock = new MaterialPropertyBlock();
 
         primaryRenderer.GetPropertyBlock(_propertyBlock);
         if (UsesAspCharacterShader(primaryRenderer))

@@ -237,6 +237,8 @@ public class PlayerUltimateController : MonoBehaviour
         _input = GetComponent<IInputBlocker>();
         _playerLockOn = GetComponent<PlayerLockOn>();
         _ultimateSkillController = GetComponent<UltimateSkillController>();
+        if (_ultimateSkillController == null)
+            _ultimateSkillController = gameObject.AddComponent<UltimateSkillController>();
         _ultimateHitProcessor = GetComponent<UltimateHitProcessor>();
         _combatStateReader = CombatStateReaderResolver.ResolveOrAttach(this);
         _lockOn = _playerLockOn as ILockOnController ?? GetComponent<ILockOnController>();

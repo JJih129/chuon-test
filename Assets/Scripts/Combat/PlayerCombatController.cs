@@ -135,6 +135,7 @@ public class PlayerCombatController : MonoBehaviour
     private PerfectDodgeAfterImageEffect perfectDodgeAfterImageEffect;
     private PlayerAttackVfxPresenter attackVfxPresenter;
     private Coroutine perfectDodgeAssistDashRoutine;
+    private AttackHitbox _subscribedHitEffectHitbox;
     private AttackHitbox _cachedWeaponHitboxDefaultsSource;
     private bool _cachedWeaponHitboxDefaults;
     private float _defaultWeaponHitboxDamage;
@@ -217,6 +218,11 @@ public class PlayerCombatController : MonoBehaviour
         hitStateRequestedAt = 0f;
         forcedHitStatePlay = false;
         deathLocked = false;
+    }
+
+    void OnDestroy()
+    {
+        UnsubscribeWeaponHitEffect();
     }
 
     void Update()
@@ -1329,6 +1335,7 @@ public class PlayerCombatController : MonoBehaviour
     private void SafeSetLayerWeight(int layerIndex, float weight01)
     {
         if (!animator) return;
+        if (animator.runtimeAnimatorController == null) return;
         if (layerIndex < 0 || layerIndex >= animator.layerCount) return;
         animator.SetLayerWeight(layerIndex, Mathf.Clamp01(weight01));
     }
@@ -1370,6 +1377,7 @@ public class PlayerCombatController : MonoBehaviour
     private void ActivateWeaponHitboxImmediate()
     {
         RefreshWeaponHitbox();
+        SubscribeWeaponHitEffect();
         if (weaponHitbox != null)
             weaponHitbox.ActivateWindow();
     }
@@ -1487,5 +1495,39 @@ public class PlayerCombatController : MonoBehaviour
         _cachedWeaponHitboxDefaultsSource.meshExpandedPaddingScale = _defaultWeaponHitboxMeshPaddingScale;
         _cachedWeaponHitboxDefaultsSource.expandedScanInterval = _defaultWeaponHitboxScanInterval;
         _cachedWeaponHitboxDefaultsSource.oneShotWindow = _defaultWeaponHitboxOneShotWindow;
+    }
+
+    private void SubscribeWeaponHitEffect()
+    {
+        if (_subscribedHitEffectHitbox == weaponHitbox)
+            return;
+
+        UnsubscribeWeaponHitEffect();
+
+        if (weaponHitbox == null)
+            return;
+
+        _subscribedHitEffectHitbox = weaponHitbox;
+        _subscribedHitEffectHitbox.HitApplied += HandleWeaponHitApplied;
+    }
+
+    private void UnsubscribeWeaponHitEffect()
+    {
+        if (_subscribedHitEffectHitbox == null)
+            return;
+
+        _subscribedHitEffectHitbox.HitApplied -= HandleWeaponHitApplied;
+        _subscribedHitEffectHitbox = null;
+    }
+
+    private void HandleWeaponHitApplied(HitPayload payload)
+    {
+        if (attackVfxPresenter == null)
+            return;
+
+        Vector3 hitNormal = payload.hitDirection.sqrMagnitude > 0.0001f
+            ? -payload.hitDirection.normalized
+            : (playerRoot != null ? playerRoot.forward : transform.forward);
+        attackVfxPresenter.PlayHitImpact(current, payload.hitPoint, hitNormal);
     }
 }

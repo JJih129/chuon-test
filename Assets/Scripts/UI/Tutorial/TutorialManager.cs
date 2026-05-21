@@ -63,6 +63,7 @@ public class TutorialManager : MonoBehaviour
     int maxAttackCount = 10;
     int currentGuardCount;
     int currentParryCount;
+    TutorialHintUIBridge hintBridge;
 
     void Awake()
     {
@@ -92,8 +93,11 @@ public class TutorialManager : MonoBehaviour
         if (comboGuidePanel != null)
             comboGuidePanel.SetActive(false);
 
-        EnsureMouseReferenceCue();
-        SetMouseReferenceCueVisible(false);
+        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled)
+        {
+            EnsureMouseReferenceCue();
+            SetMouseReferenceCueVisible(false);
+        }
 
         if (movementGoal != null) movementGoal.SetActive(false);
         if (attackDummy != null) attackDummy.SetActive(false);
@@ -254,6 +258,7 @@ public class TutorialManager : MonoBehaviour
             dialogueGroup.DOFade(0f, 0.5f);
 
         currentStep = TutorialStep.Defense;
+        ShowCenterKeyCue("Parry", "PARRY", 999f);
         PunchEffect();
         UpdateDefenseUI();
     }
@@ -293,6 +298,7 @@ public class TutorialManager : MonoBehaviour
         if (droneEnemy != null)
             droneEnemy.SetActive(false);
 
+        HideCenterKeyCue();
         StartCoroutine(Sequence_Heal());
     }
 
@@ -303,6 +309,7 @@ public class TutorialManager : MonoBehaviour
         yield return StartCoroutine(PlayDialogue("EGO", "Q키로 앰플을 사용해 체력을 회복할 수 있어.", healDelay));
 
         currentStep = TutorialStep.Heal;
+        ShowCenterKeyCue("Q", "HEAL", 999f);
         if (playerHealth != null)
             playerHealth.ApplyDamage(50);
 
@@ -315,6 +322,7 @@ public class TutorialManager : MonoBehaviour
         if (playerHealth != null)
             playerHealth.Heal(50);
 
+        HideCenterKeyCue();
         PunchEffect();
         StartCoroutine(Sequence_Complete());
     }
@@ -334,6 +342,17 @@ public class TutorialManager : MonoBehaviour
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            if (dialogueGroup != null)
+                dialogueGroup.alpha = 0f;
+            if (speakerText != null)
+                speakerText.text = string.Empty;
+            if (contentText != null)
+                contentText.text = string.Empty;
+            yield break;
+        }
+
         if (dialogueGroup != null)
             dialogueGroup.alpha = 1f;
         if (speakerText != null)
@@ -371,12 +390,41 @@ public class TutorialManager : MonoBehaviour
             questDescriptionText.text = desc;
     }
 
+    TutorialHintUIBridge ResolveHintBridge()
+    {
+        if (hintBridge == null)
+            hintBridge = FindObjectOfType<TutorialHintUIBridge>(true);
+        return hintBridge;
+    }
+
+    void ShowCenterKeyCue(string body, string speaker, float duration)
+    {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled)
+            return;
+
+        TutorialHintUIBridge bridge = ResolveHintBridge();
+        if (bridge != null)
+            bridge.ShowTimingCue(body, speaker, duration);
+    }
+
+    void HideCenterKeyCue()
+    {
+        TutorialHintUIBridge bridge = ResolveHintBridge();
+        if (bridge != null)
+            bridge.HideTimingCue();
+    }
+
     void EnsureMouseReferenceCue()
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled)
+            return;
+
         if (tutorialMouseReferenceCue != null)
             return;
 
         Sprite sprite = tutorialMouseReferenceSprite;
+        if (sprite == null)
+            sprite = Resources.Load<Sprite>("TutorialUI/\uB9C8\uC6B0\uC2A4");
 #if UNITY_EDITOR
         if (sprite == null)
             sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/마우스.png");
@@ -406,6 +454,13 @@ public class TutorialManager : MonoBehaviour
 
     void SetMouseReferenceCueVisible(bool visible)
     {
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeTutorialKeyCueEnabled)
+        {
+            if (tutorialMouseReferenceCue != null)
+                tutorialMouseReferenceCue.gameObject.SetActive(false);
+            return;
+        }
+
         EnsureMouseReferenceCue();
         if (tutorialMouseReferenceCue == null)
             return;

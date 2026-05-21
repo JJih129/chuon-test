@@ -190,7 +190,9 @@ public sealed class UltimateSequenceData : ScriptableObject
         [Range(0f, 1f)] public float introPoseClipStartNormalized = 0.8f;
         [Range(0f, 1f)] public float introPoseClipEndNormalized = 0.995f;
         [Range(0f, 1f)] public float dashSlashClipStartNormalized = 0.08f;
-        [Range(0f, 1f)] public float dashSlashClipEndNormalized = 0.68f;
+        [Range(0f, 1f)] public float dashSlashClipEndNormalized = 0.237f;
+        [Range(0f, 1f)] public float walkoutClipStartNormalized = 0.815f;
+        [Range(0f, 1f)] public float walkoutClipEndNormalized = 1f;
 
         [Header("인트로 검 클로즈업")]
         public bool useSwordCloseupDuringIntro = true;

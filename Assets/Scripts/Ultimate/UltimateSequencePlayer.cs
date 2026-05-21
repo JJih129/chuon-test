@@ -210,7 +210,7 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
                 break;
 
             case UltimateSequencePhase.Walkout:
-                SamplePhaseClip(_data.CinematicAnimation.walkoutClip, _phaseElapsed, Mathf.Max(0.01f, _data.Timings.walkoutDuration));
+                SampleWalkoutClip(_phaseElapsed);
                 TickWalkout();
                 break;
 
@@ -265,7 +265,7 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
             }
 
             case UltimateSequencePhase.Walkout:
-                SamplePhaseClip(_data.CinematicAnimation.walkoutClip, _phaseElapsed, Mathf.Max(0.01f, _data.Timings.walkoutDuration));
+                SampleWalkoutClip(_phaseElapsed);
                 break;
         }
     }
@@ -445,7 +445,7 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
                 if (!BeginPhaseClip(_data.CinematicAnimation.walkoutClip))
                     TryPlayAnimationCue(_data.WalkoutTrigger, _data.WalkoutFallbackState, _walkoutTriggerHash);
                 else
-                    SamplePhaseClip(_data.CinematicAnimation.walkoutClip, 0f, Mathf.Max(0.01f, _data.Timings.walkoutDuration));
+                    SampleWalkoutClip(0f);
                 break;
 
             case UltimateSequencePhase.Recover:
@@ -559,6 +559,16 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
     void SamplePhaseClip(AnimationClip clip, float elapsed, float duration)
     {
         SamplePhaseClip(clip, elapsed, duration, 0f, 1f);
+    }
+
+    void SampleWalkoutClip(float elapsed)
+    {
+        SamplePhaseClip(
+            _data.CinematicAnimation.walkoutClip,
+            elapsed,
+            Mathf.Max(0.01f, _data.Timings.walkoutDuration),
+            _data.CinematicAnimation.walkoutClipStartNormalized,
+            _data.CinematicAnimation.walkoutClipEndNormalized);
     }
 
     void SamplePhaseClip(AnimationClip clip, float elapsed, float duration, float clipStartNormalized, float clipEndNormalized)
@@ -683,6 +693,9 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
 
     void TryPlayAnimationCue(string triggerName, string fallbackState, int triggerHash)
     {
+        if (string.IsNullOrWhiteSpace(triggerName) && string.IsNullOrWhiteSpace(fallbackState))
+            return;
+
         UltimatePresentationClone presentationClone = targetBinder != null ? targetBinder.PlayerPresentationClone : null;
         if (presentationClone != null)
         {

@@ -367,29 +367,13 @@ public class BossBreakController : MonoBehaviour
         if (sourceMaterial == null)
             return;
 
-        Transform root = hologramRoot != null ? hologramRoot : (bossAnimator != null ? bossAnimator.transform : transform);
-        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
-        if (renderers == null || renderers.Length == 0)
-            return;
-
-        var validRenderers = new List<Renderer>(renderers.Length);
-        var originalMaterials = new List<Material[]>(renderers.Length);
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Renderer renderer = renderers[i];
-            if (renderer == null || renderer is ParticleSystemRenderer || renderer is LineRenderer || renderer is TrailRenderer)
-                continue;
-
-            Material[] materials = renderer.sharedMaterials;
-            if (materials == null || materials.Length == 0)
-                continue;
-
-            validRenderers.Add(renderer);
-            originalMaterials.Add(materials);
-        }
-
+        List<Renderer> validRenderers = CollectBreakHologramRenderers();
         if (validRenderers.Count == 0)
             return;
+
+        var originalMaterials = new List<Material[]>(validRenderers.Count);
+        for (int i = 0; i < validRenderers.Count; i++)
+            originalMaterials.Add(validRenderers[i].sharedMaterials);
 
         _runtimeHologramMaterial = new Material(sourceMaterial) { name = name + "_BreakHologram" };
         SetBreakHologramColor();
@@ -407,6 +391,42 @@ public class BossBreakController : MonoBehaviour
             for (int slot = 0; slot < hologramMaterials.Length; slot++)
                 hologramMaterials[slot] = _runtimeHologramMaterial;
             renderer.sharedMaterials = hologramMaterials;
+        }
+    }
+
+    List<Renderer> CollectBreakHologramRenderers()
+    {
+        var validRenderers = new List<Renderer>(32);
+        var seen = new HashSet<Renderer>();
+
+        AddBreakHologramRenderers(hologramRoot, validRenderers, seen);
+        BossReferences bossReferences = GetComponent<BossReferences>() ?? GetComponentInParent<BossReferences>();
+        if (bossReferences != null)
+            AddBreakHologramRenderers(bossReferences.VisualRoot, validRenderers, seen);
+        if (bossAnimator != null)
+            AddBreakHologramRenderers(bossAnimator.transform, validRenderers, seen);
+        AddBreakHologramRenderers(transform, validRenderers, seen);
+
+        return validRenderers;
+    }
+
+    static void AddBreakHologramRenderers(Transform root, List<Renderer> validRenderers, HashSet<Renderer> seen)
+    {
+        if (root == null)
+            return;
+
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || renderer is ParticleSystemRenderer || renderer is LineRenderer || renderer is TrailRenderer || !seen.Add(renderer))
+                continue;
+
+            Material[] materials = renderer.sharedMaterials;
+            if (materials == null || materials.Length == 0)
+                continue;
+
+            validRenderers.Add(renderer);
         }
     }
 

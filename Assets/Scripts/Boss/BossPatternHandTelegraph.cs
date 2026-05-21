@@ -6,17 +6,19 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
     const string PivotName = "PatternPivot";
     const string MaterialPath = "Assets/Eric VFX Studio/Resource/Materials/DungeonRingGuid.mat";
     const string TexturePath = "Assets/Eric VFX Studio/Resource/Textures/DungeonRingGuid.png";
+    const string MaterialResourcePath = "Boss/DungeonRingGuid";
+    const string TextureResourcePath = "Boss/DungeonRingGuid";
     const string OverlayShaderName = "ChuOn/AlwaysOnTopTransparent";
 
     [SerializeField] Transform patternPivot;
     [SerializeField] Material telegraphMaterial;
-    [SerializeField, Min(0.05f)] float baseScale = 1.12f;
-    [SerializeField, Min(0f)] float verticalOffset = 0.06f;
-    [SerializeField, Min(0f)] float cameraPullForward = 0.32f;
-    [SerializeField, Min(0f)] float pulseAmount = 0.22f;
-    [SerializeField, Min(0f)] float pulseSpeed = 11f;
-    [SerializeField, Min(0f)] float rotateSpeed = 155f;
-    [SerializeField] Color fallbackColor = new Color(1f, 0.92f, 0.02f, 1f);
+    [SerializeField, Min(0.05f)] float baseScale = 1.45f;
+    [SerializeField, Min(0f)] float verticalOffset = 0.03f;
+    [SerializeField, Min(0f)] float cameraPullForward = 0.58f;
+    [SerializeField, Min(0f)] float pulseAmount = 0.26f;
+    [SerializeField, Min(0f)] float pulseSpeed = 12f;
+    [SerializeField, Min(0f)] float rotateSpeed = 185f;
+    [SerializeField] Color fallbackColor = new Color(1f, 0.96f, 0.02f, 1f);
 
     GameObject _quad;
     Transform _quadTransform;
@@ -31,6 +33,14 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
         ResolvePivot();
         EnsureQuad();
         Hide();
+    }
+
+    void OnDestroy()
+    {
+        if (_quad != null)
+            Destroy(_quad);
+        if (_runtimeMaterial != null)
+            Destroy(_runtimeMaterial);
     }
 
     void LateUpdate()
@@ -73,11 +83,12 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
         if (patternPivot == null)
             ResolvePivot();
         EnsureQuad();
-        if (_quad == null)
+        if (_quad == null || patternPivot == null)
             return;
 
         _hideAt = Time.time + duration;
         _quad.SetActive(true);
+        LateUpdate();
     }
 
     public void Hide()
@@ -92,7 +103,9 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
         if (patternPivot != null)
             return;
 
-        Transform[] children = GetComponentsInChildren<Transform>(true);
+        Transform[] children = transform.root != null
+            ? transform.root.GetComponentsInChildren<Transform>(true)
+            : GetComponentsInChildren<Transform>(true);
         for (int i = 0; i < children.Length; i++)
         {
             if (children[i] != null && children[i].name == PivotName)
@@ -101,6 +114,25 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
                 return;
             }
         }
+
+        Transform best = null;
+        float bestSqrDistance = float.PositiveInfinity;
+        Transform[] sceneTransforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < sceneTransforms.Length; i++)
+        {
+            Transform candidate = sceneTransforms[i];
+            if (candidate == null || candidate.name != PivotName)
+                continue;
+
+            float sqrDistance = (candidate.position - transform.position).sqrMagnitude;
+            if (sqrDistance >= bestSqrDistance)
+                continue;
+
+            best = candidate;
+            bestSqrDistance = sqrDistance;
+        }
+
+        patternPivot = best;
     }
 
     void EnsureQuad()
@@ -111,7 +143,7 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
         _quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         _quad.name = "BossPatternHandTelegraph_Runtime";
         _quadTransform = _quad.transform;
-        _quadTransform.SetParent(transform, false);
+        _quadTransform.SetParent(null, false);
 
         Collider collider = _quad.GetComponent<Collider>();
         if (collider != null)
@@ -129,6 +161,10 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
 
     Material ResolveMaterial()
     {
+        if (telegraphMaterial != null)
+            return telegraphMaterial;
+
+        telegraphMaterial = Resources.Load<Material>(MaterialResourcePath);
         if (telegraphMaterial != null)
             return telegraphMaterial;
 
@@ -158,9 +194,10 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
         _runtimeMaterial.name = "BossPatternHandTelegraph_RuntimeMat";
         _runtimeMaterial.renderQueue = 5000;
 
-        Texture texture = null;
+        Texture texture = Resources.Load<Texture>(TextureResourcePath);
 #if UNITY_EDITOR
-        texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture>(TexturePath);
+        if (texture == null)
+            texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture>(TexturePath);
 #endif
         if (texture != null && _runtimeMaterial.HasProperty("_MainTex"))
             _runtimeMaterial.SetTexture("_MainTex", texture);

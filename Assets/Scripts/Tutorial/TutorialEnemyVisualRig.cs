@@ -19,6 +19,8 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
     [SerializeField, Range(0f, 1f)] float lockPivotHeightBias = 0.6f;
     [SerializeField] bool createLockOnProxyCollider = true;
     [SerializeField, Min(0.2f)] float lockOnProxyRadius = 1.15f;
+    [SerializeField] bool alignRuntimeVisualBottomToRoot = true;
+    [SerializeField] float runtimeVisualGroundOffset = 0.02f;
     [SerializeField] Vector3 visualLocalPosition = Vector3.zero;
     [SerializeField] Vector3 visualLocalEuler = Vector3.zero;
     [SerializeField] Vector3 visualLocalScale = Vector3.one;
@@ -29,6 +31,32 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
     public Renderer PrimaryRenderer => primaryRenderer;
     public Transform LockPivot => lockPivot;
     public Transform FirePoint => firePoint;
+
+    public void ConfigureRuntimeVisual(GameObject prefab, Vector3 localPosition, Vector3 localEuler, Vector3 localScale)
+    {
+        if (prefab == null)
+            return;
+
+        if (visualPrefab != prefab && _runtimeVisualInstance != null)
+        {
+            if (Application.isPlaying)
+                Destroy(_runtimeVisualInstance);
+            else
+                DestroyImmediate(_runtimeVisualInstance);
+
+            _runtimeVisualInstance = null;
+            primaryRenderer = null;
+        }
+
+        visualPrefab = prefab;
+        instantiateVisualPrefabAtRuntime = true;
+        disableRootRenderersWhenUsingVisualPrefab = true;
+        visualLocalPosition = localPosition;
+        visualLocalEuler = localEuler;
+        visualLocalScale = localScale;
+        primaryRenderer = null;
+        EnsureSetup();
+    }
 
     void Awake()
     {
@@ -53,6 +81,7 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
         EnsureReferencesOnly();
         EnsureVisualInstance();
         ResolvePrimaryRenderer();
+        AlignRuntimeVisualToGround();
         EnsureLockPivot();
         EnsureLockOnProxy();
     }
@@ -109,24 +138,74 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
         {
             _runtimeVisualInstance = Instantiate(visualPrefab, visualRoot, false);
             _runtimeVisualInstance.name = DefaultRuntimeVisualName;
-            _runtimeVisualInstance.transform.localPosition = visualLocalPosition;
-            _runtimeVisualInstance.transform.localRotation = Quaternion.Euler(visualLocalEuler);
-            _runtimeVisualInstance.transform.localScale = visualLocalScale;
         }
+
+        _runtimeVisualInstance.transform.localPosition = visualLocalPosition;
+        _runtimeVisualInstance.transform.localRotation = Quaternion.Euler(visualLocalEuler);
+        _runtimeVisualInstance.transform.localScale = visualLocalScale;
+        ApplyLayerRecursively(_runtimeVisualInstance.transform, gameObject.layer);
 
         if (disableRootRenderersWhenUsingVisualPrefab && visualRoot == transform)
         {
-            Renderer[] renderers = GetComponents<Renderer>();
+            Renderer[] renderers = visualRoot.GetComponentsInChildren<Renderer>(true);
             for (int i = 0; i < renderers.Length; i++)
             {
-                if (renderers[i] != null)
-                    renderers[i].enabled = false;
+                Renderer renderer = renderers[i];
+                if (renderer != null && !renderer.transform.IsChildOf(_runtimeVisualInstance.transform))
+                    renderer.enabled = false;
             }
         }
     }
 
+    void AlignRuntimeVisualToGround()
+    {
+        if (!alignRuntimeVisualBottomToRoot || _runtimeVisualInstance == null)
+            return;
+
+        Renderer[] renderers = _runtimeVisualInstance.GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            return;
+
+        Bounds bounds = default;
+        bool hasBounds = false;
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || !renderer.enabled)
+                continue;
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        if (!hasBounds)
+            return;
+
+        float targetBottomY = transform.position.y + runtimeVisualGroundOffset;
+        float deltaY = targetBottomY - bounds.min.y;
+        if (Mathf.Abs(deltaY) > 0.001f)
+            _runtimeVisualInstance.transform.position += Vector3.up * deltaY;
+    }
+
     void ResolvePrimaryRenderer()
     {
+        if (_runtimeVisualInstance != null)
+        {
+            Renderer runtimeRenderer = _runtimeVisualInstance.GetComponentInChildren<Renderer>(true);
+            if (runtimeRenderer != null)
+            {
+                primaryRenderer = runtimeRenderer;
+                return;
+            }
+        }
+
         if (primaryRenderer != null)
             return;
 
@@ -204,5 +283,15 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
         }
 
         return null;
+    }
+
+    static void ApplyLayerRecursively(Transform root, int layer)
+    {
+        if (root == null)
+            return;
+
+        root.gameObject.layer = layer;
+        for (int i = 0; i < root.childCount; i++)
+            ApplyLayerRecursively(root.GetChild(i), layer);
     }
 }

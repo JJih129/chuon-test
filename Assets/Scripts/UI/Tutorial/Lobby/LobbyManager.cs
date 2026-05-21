@@ -151,8 +151,15 @@ public class LobbyManager : MonoBehaviour
         if (_combatCoachController == null)
             _combatCoachController = gameObject.AddComponent<LobbyCombatCoachController>();
         _objectivePanelController = GetComponent<LobbyObjectivePanelController>();
-        if (_objectivePanelController == null)
-            _objectivePanelController = gameObject.AddComponent<LobbyObjectivePanelController>();
+        if (ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
+        {
+            if (_objectivePanelController == null)
+                _objectivePanelController = gameObject.AddComponent<LobbyObjectivePanelController>();
+        }
+        else if (_objectivePanelController != null)
+        {
+            _objectivePanelController.enabled = false;
+        }
     }
 
     void Start()
@@ -175,6 +182,8 @@ public class LobbyManager : MonoBehaviour
         ConfigurePresentationController();
         ConfigureCombatCoachController();
         ConfigureObjectivePanelController();
+        if (!ExhibitionPrototypePresentationPolicy.RuntimeLobbyGuidePathEnabled && guideSystem != null)
+            guideSystem.HidePath();
         _fromTutorialTransition = TutorialSceneTransitionState.ConsumeTutorialToLobby();
         SetPhase(LobbyFlowPhase.Arrival);
         StartCoroutine(SequenceArrival());
@@ -784,7 +793,7 @@ public class LobbyManager : MonoBehaviour
 
         UpdateQuestUI("\uc774\ub3d9", "\ubcf5\ub3c4 \ub05d \uc2b9\uac15\uae30\ub85c \uc774\ub3d9\ud574.");
 
-        if (guideSystem != null)
+        if (guideSystem != null && ExhibitionPrototypePresentationPolicy.RuntimeLobbyGuidePathEnabled)
         {
             _activeWaypoints.Clear();
             if (pathWaypoints != null)
@@ -821,7 +830,7 @@ public class LobbyManager : MonoBehaviour
 
     void UpdateNavigationPath()
     {
-        if (guideSystem == null)
+        if (guideSystem == null || !ExhibitionPrototypePresentationPolicy.RuntimeLobbyGuidePathEnabled)
             return;
 
         List<Transform> pathList = new List<Transform>(_activeWaypoints.Count + 1);
@@ -855,7 +864,7 @@ public class LobbyManager : MonoBehaviour
 
         UpdateQuestUI("\ud0d1\uc2b9", "\uc2b9\uac15\uae30 \uc548\uc73c\ub85c \ub4e4\uc5b4\uac00.");
 
-        if (guideSystem != null && triggerBoard != null)
+        if (guideSystem != null && triggerBoard != null && ExhibitionPrototypePresentationPolicy.RuntimeLobbyGuidePathEnabled)
             guideSystem.ShowPath(triggerBoard);
 
         _isBoarded = false;
@@ -968,6 +977,17 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
+        {
+            if (dialogueGroup != null)
+                dialogueGroup.alpha = 0f;
+            if (speakerText != null)
+                speakerText.text = string.Empty;
+            if (contentText != null)
+                contentText.text = string.Empty;
+            yield break;
+        }
+
         if (dialogueGroup != null)
             dialogueGroup.alpha = 1f;
 
@@ -1015,7 +1035,7 @@ public class LobbyManager : MonoBehaviour
         if (questPanelGroup == null)
             return;
 
-        if (_objectivePanelController != null)
+        if (_objectivePanelController != null && _objectivePanelController.enabled)
         {
             questPanelGroup.alpha = 0f;
             questPanelGroup.interactable = false;
@@ -1064,7 +1084,7 @@ public class LobbyManager : MonoBehaviour
 
     void ConfigureObjectivePanelController()
     {
-        if (_objectivePanelController == null)
+        if (_objectivePanelController == null || !_objectivePanelController.enabled)
             return;
 
         _objectivePanelController.ConfigureRuntime(this);
@@ -1074,7 +1094,7 @@ public class LobbyManager : MonoBehaviour
     {
         ShowQuestPanel();
 
-        if (_objectivePanelController != null)
+        if (_objectivePanelController != null && _objectivePanelController.enabled)
         {
             _objectivePanelController.ShowTransientCue(title, description);
         }
@@ -1095,7 +1115,7 @@ public class LobbyManager : MonoBehaviour
 
         yield return new WaitForSeconds(Mathf.Max(0.25f, holdDuration));
 
-        if (_objectivePanelController != null)
+        if (_objectivePanelController != null && _objectivePanelController.enabled)
         {
             _objectivePanelController.HideTransientCue();
         }

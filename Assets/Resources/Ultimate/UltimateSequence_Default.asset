@@ -70,13 +70,15 @@ MonoBehaviour:
     finalShakeAmplitude: 0.24
     finalShakeDuration: 0.2
   cinematicAnimation:
-    introPoseClip: {fileID: 7400000, guid: c9221b11d190c7d449c4dc7537108f8e, type: 2}
+    introPoseClip: {fileID: 7400000, guid: f2c91788444039144b3029cb4bde2a9f, type: 2}
     dashSlashClip: {fileID: 7400000, guid: f2c91788444039144b3029cb4bde2a9f, type: 2}
-    walkoutClip: {fileID: 7400000, guid: 9fc370413956a934da609bfc04344391, type: 2}
-    introPoseClipStartNormalized: 0.205
-    introPoseClipEndNormalized: 0.205
+    walkoutClip: {fileID: 7400000, guid: f2c91788444039144b3029cb4bde2a9f, type: 2}
+    introPoseClipStartNormalized: 0
+    introPoseClipEndNormalized: 0
     dashSlashClipStartNormalized: 0.08
-    dashSlashClipEndNormalized: 0.68
+    dashSlashClipEndNormalized: 0.237
+    walkoutClipStartNormalized: 0.815
+    walkoutClipEndNormalized: 1
     useSwordCloseupDuringIntro: 1
     introSwordCameraOffset: {x: 0, y: 0, z: 0}
     introSwordLookLocalOffset: {x: -0.04, y: -0.04, z: 0}
@@ -89,7 +91,7 @@ MonoBehaviour:
       targetVerticalOffset: 0
       positionSmoothing: 22
       rotationSmoothing: 24
-      fov: 21
+      fov: 16
       snapOnEnter: 1
       orbitAroundTarget: 0
       orbitClockwise: 1
@@ -168,15 +170,15 @@ MonoBehaviour:
     orbitFocusBias: 0.82
     holdStaticFraming: 0
   assaultStageCamera:
-    cameraLocalOffset: {x: 1.62, y: 1.62, z: -2.58}
+    cameraLocalOffset: {x: 1.15, y: 3.65, z: -6.15}
     playerAnchorLocalOffset: {x: 0, y: 0.9, z: 0}
-    lookAtBlend: 0.8
-    lookHeightOffset: 0.18
+    lookAtBlend: 0.72
+    lookHeightOffset: 0.28
     targetBottomToCenterRatio: 0.8
     targetVerticalOffset: 0
-    positionSmoothing: 20
-    rotationSmoothing: 22
-    fov: 35
+    positionSmoothing: 18
+    rotationSmoothing: 20
+    fov: 46
     snapOnEnter: 1
     orbitAroundTarget: 0
     orbitClockwise: 1
@@ -184,15 +186,15 @@ MonoBehaviour:
     orbitFocusBias: 0.88
     holdStaticFraming: 0
   finishStageCamera:
-    cameraLocalOffset: {x: 1.38, y: 1.54, z: -2.2}
-    playerAnchorLocalOffset: {x: 0, y: 0.92, z: 0}
-    lookAtBlend: 0.86
-    lookHeightOffset: 0.28
+    cameraLocalOffset: {x: 0.24, y: 1.42, z: -4.15}
+    playerAnchorLocalOffset: {x: 0, y: 1.02, z: 0}
+    lookAtBlend: 0.24
+    lookHeightOffset: 0.04
     targetBottomToCenterRatio: 0.82
     targetVerticalOffset: 0.04
     positionSmoothing: 18
     rotationSmoothing: 20
-    fov: 33
+    fov: 35
     snapOnEnter: 1
     orbitAroundTarget: 0
     orbitClockwise: 1
@@ -280,15 +282,15 @@ MonoBehaviour:
     orbitFocusBias: 0.82
     holdStaticFraming: 0
   finalExplosionCamera:
-    cameraLocalOffset: {x: 1.02, y: 0.98, z: -1.46}
-    playerAnchorLocalOffset: {x: 0.08, y: 1.1, z: 0}
-    lookAtBlend: 0.2
-    lookHeightOffset: 0.02
+    cameraLocalOffset: {x: 0.2, y: 1.42, z: -4.05}
+    playerAnchorLocalOffset: {x: 0, y: 1.02, z: 0}
+    lookAtBlend: 0.22
+    lookHeightOffset: 0.04
     targetBottomToCenterRatio: 0.8
     targetVerticalOffset: 0.18
     positionSmoothing: 26
     rotationSmoothing: 28
-    fov: 24
+    fov: 34
     snapOnEnter: 1
     orbitAroundTarget: 0
     orbitClockwise: 1
@@ -296,30 +298,30 @@ MonoBehaviour:
     orbitFocusBias: 0.82
     holdStaticFraming: 1
   walkoutCamera:
-    cameraLocalOffset: {x: 2.15, y: 1.02, z: -4.35}
-    playerAnchorLocalOffset: {x: 0.04, y: 0.98, z: 0}
-    lookAtBlend: 0.26
-    lookHeightOffset: -0.04
+    cameraLocalOffset: {x: 0.22, y: 1.42, z: -4.1}
+    playerAnchorLocalOffset: {x: 0, y: 1.02, z: 0}
+    lookAtBlend: 0.22
+    lookHeightOffset: 0.04
     targetBottomToCenterRatio: 0.82
     targetVerticalOffset: 0.24
     positionSmoothing: 10
     rotationSmoothing: 12
-    fov: 31
+    fov: 35
     snapOnEnter: 1
     orbitAroundTarget: 0
     orbitClockwise: 1
     orbitDegreesPerSecond: 28
     orbitFocusBias: 0.72
-    holdStaticFraming: 0
+    holdStaticFraming: 1
   introTrigger: Ultimate_Start
   dashTrigger: Ultimate_Dash
   multiSlashTrigger: Ultimate_Slash
-  finalExplosionTrigger: Ultimate_Finish
+  finalExplosionTrigger:
   walkoutTrigger: Ultimate_Walk
   introFallbackState: 
   dashFallbackState: Base Layer.H3_D
   multiSlashFallbackState: Base Layer.H4_C
-  finalExplosionFallbackState: Base Layer.H5_B
+  finalExplosionFallbackState:
   walkoutFallbackState: Base Layer.Locomotion
   animatorCrossFadeDuration: 0.08
   slashSteps:

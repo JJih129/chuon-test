@@ -125,6 +125,13 @@ public class BossAnimationEvents : MonoBehaviour
 
     bool TryResolveHitboxes(out AttackHitbox[] resolvedHitboxes)
     {
+        if (bossController != null && bossController.IsUsingRuntimeForwardAttackHitbox && bossController.attackHitbox != null)
+        {
+            hitboxes = new[] { bossController.attackHitbox };
+            resolvedHitboxes = hitboxes;
+            return true;
+        }
+
         RefreshHitboxesIfNeeded(force: false);
 
         if (hitboxes != null)
@@ -152,6 +159,12 @@ public class BossAnimationEvents : MonoBehaviour
 
     void RefreshHitboxesIfNeeded(bool force)
     {
+        if (bossController != null && bossController.IsUsingRuntimeForwardAttackHitbox && bossController.attackHitbox != null)
+        {
+            hitboxes = new[] { bossController.attackHitbox };
+            return;
+        }
+
         if (!force && hitboxes != null)
         {
             for (int i = 0; i < hitboxes.Length; i++)

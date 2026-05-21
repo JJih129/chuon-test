@@ -69,6 +69,7 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] bool preferPlayableDirectorBossIntro = true;
     [SerializeField] PlayableDirector bossIntroDirector;
     [SerializeField] bool snapCameraBehindPlayerOnTimelineIntroEnd = false;
+    [SerializeField] bool returnPlayerCameraImmediatelyAfterTimelineIntro = true;
     [SerializeField] bool endTimelineWhenBossRevealWalkEnds = true;
     [SerializeField] IntroStep[] bossIntroSteps =
     {
@@ -117,7 +118,7 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] bool moveBossFromHiddenStartOnReveal = true;
     [SerializeField, Min(0f)] float bossRevealWalkOutDistance = 5.5f;
     [SerializeField, Min(0.1f)] float bossRevealWalkOutDuration = 2.0f;
-    [SerializeField, Min(0.1f)] float bossRevealWalkAnimationSpeed = 1.0f;
+    [SerializeField, Min(0.1f)] float bossRevealWalkAnimationSpeed = 0.45f;
     [SerializeField] AnimationClip bossRevealWalkEndClip;
     [SerializeField, Min(0.05f)] float bossRevealWalkEndMaxDuration = 0.9f;
     [SerializeField] Material bossIntroHologramMaterial;
@@ -264,8 +265,13 @@ public class MainSceneArrivalController : MonoBehaviour
     Transform _timelineBossRevealTrackedBoss;
     Transform _timelineBossRevealTrackedPlayer;
     bool _timelineBossRevealCameraTracking;
+    bool _timelineBossRevealUsedFallbackCamera;
+    int _timelineBossRevealFallbackOldPriority;
     static readonly int HologramColorId = Shader.PropertyToID("_Hologram_Color");
     static readonly int TextureTintColorId = Shader.PropertyToID("_Texture_Tint_Color");
+    static readonly int BossMoveSpeedHash = Animator.StringToHash("MoveSpeed");
+    static readonly int BossMoveXHash = Animator.StringToHash("MoveX");
+    static readonly int BossMoveYHash = Animator.StringToHash("MoveY");
 
     public bool IsLobbyTransitionActive => _fromLobbyTransition;
 
@@ -345,8 +351,8 @@ public class MainSceneArrivalController : MonoBehaviour
     void OnDisable()
     {
         ReleaseSubscriptions();
-        StopTimelineBossRevealCameraTracking();
         StopBossRevealCloseUp();
+        StopTimelineBossRevealCameraTracking();
         StopAlarmSirenCue();
         StopBossRevealWalk();
         RestoreBossHologramVisuals();
@@ -371,8 +377,8 @@ public class MainSceneArrivalController : MonoBehaviour
     void OnDestroy()
     {
         ReleaseSubscriptions();
-        StopTimelineBossRevealCameraTracking();
         StopBossRevealCloseUp();
+        StopTimelineBossRevealCameraTracking();
         StopAlarmSirenCue();
         StopBossRevealWalk();
         RestoreBossHologramVisuals();
@@ -609,17 +615,16 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void RestoreGameplayAfterTimelineIntro()
     {
-        StopTimelineBossRevealCameraTracking();
         StopBossRevealCloseUp();
+        StopTimelineBossRevealCameraTracking();
         EndElevatorIntroCinematicCamera();
         SetBossIntroPaused(false);
         SetArrivalInputLocked(false);
         EndElevatorIntroCinematicCamera();
 
-        if (snapCameraBehindPlayerOnTimelineIntroEnd)
+        if (returnPlayerCameraImmediatelyAfterTimelineIntro || snapCameraBehindPlayerOnTimelineIntroEnd)
         {
             // Timeline/Cinemachine can write its final camera pose late in the frame.
-            // Keep this opt-in so the intro does not add a final player zoom by default.
             SnapCameraBehindPlayer(ResolvePlayerFacingRoot(), true);
         }
     }
@@ -1138,8 +1143,10 @@ public class MainSceneArrivalController : MonoBehaviour
             yield break;
 
         Animator animator = bossRoot.GetComponentInChildren<Animator>(true);
-        bool useClipPlayback = CanUseElevatorWalkClipPlayback(animator);
-        ElevatorWalkClipPlayback clipPlayback = default;
+        bool driveBossLocomotion = animator != null && animator.isActiveAndEnabled;
+        bool hasMoveSpeed = driveBossLocomotion && HasAnimatorFloatParameter(animator, BossMoveSpeedHash);
+        bool hasMoveX = driveBossLocomotion && HasAnimatorFloatParameter(animator, BossMoveXHash);
+        bool hasMoveY = driveBossLocomotion && HasAnimatorFloatParameter(animator, BossMoveYHash);
         bool originalApplyRootMotion = animator != null && animator.applyRootMotion;
         _bossRevealWalkAnimator = animator;
         _bossRevealWalkCachedApplyRootMotion = originalApplyRootMotion;
@@ -1147,14 +1154,14 @@ public class MainSceneArrivalController : MonoBehaviour
         Vector3 startPosition = bossRoot.position;
         Quaternion startRotation = bossRoot.rotation;
         float duration = Mathf.Max(0.1f, bossRevealWalkOutDuration);
+        float walkBlend = ResolveBossRevealWalkMoveBlend();
         float elapsed = 0f;
         bool completed = false;
 
-        if (useClipPlayback)
+        if (driveBossLocomotion)
         {
             animator.applyRootMotion = false;
-            clipPlayback = BeginElevatorWalkClipPlayback(animator);
-            _activeBossRevealWalkPlayback = clipPlayback;
+            SetBossRevealWalkAnimatorParams(animator, walkBlend, hasMoveSpeed, hasMoveX, hasMoveY);
         }
 
         try
@@ -1168,18 +1175,22 @@ public class MainSceneArrivalController : MonoBehaviour
                     Vector3.LerpUnclamped(startPosition, _bossRevealEndPosition, eased),
                     Quaternion.SlerpUnclamped(startRotation, _bossRevealEndRotation, eased));
 
-                if (clipPlayback.IsValid)
-                    UpdateBossRevealWalkClipPlayback(ref clipPlayback, elapsed);
+                if (driveBossLocomotion)
+                    SetBossRevealWalkAnimatorParams(animator, walkBlend, hasMoveSpeed, hasMoveX, hasMoveY);
+                UpdateTimelineBossRevealCameraTracking();
 
                 elapsed += Time.deltaTime;
                 yield return null;
             }
 
             SetBossWorldPose(bossRoot, _bossRevealEndPosition, _bossRevealEndRotation);
+            UpdateTimelineBossRevealCameraTracking();
 
-            if (clipPlayback.IsValid)
+            if (driveBossLocomotion)
+                SetBossRevealWalkAnimatorParams(animator, 0f, hasMoveSpeed, hasMoveX, hasMoveY);
+
+            if (bossRevealWalkEndClip != null)
             {
-                EndElevatorWalkClipPlayback(ref clipPlayback);
                 yield return CoPlayBossRevealWalkEnd(animator);
             }
 
@@ -1187,12 +1198,13 @@ public class MainSceneArrivalController : MonoBehaviour
         }
         finally
         {
-            EndElevatorWalkClipPlayback(ref clipPlayback);
             _activeBossRevealWalkPlayback = default;
             if (animator != null)
             {
+                SetBossRevealWalkAnimatorParams(animator, 0f, hasMoveSpeed, hasMoveX, hasMoveY);
                 animator.applyRootMotion = originalApplyRootMotion;
-                RestoreAnimatorControllerAfterRevealPlayback(animator);
+                if (bossRevealWalkEndClip != null)
+                    RestoreAnimatorControllerAfterRevealPlayback(animator);
             }
             _bossRevealWalkAnimator = null;
             _bossRevealWalkHasCachedAnimatorRootMotion = false;
@@ -1212,6 +1224,48 @@ public class MainSceneArrivalController : MonoBehaviour
 
         bossIntroDirector.Stop();
         TimelineIntroEnd();
+    }
+
+    float ResolveBossRevealWalkMoveBlend()
+    {
+        return Mathf.Clamp(bossRevealWalkAnimationSpeed, 0.18f, 0.55f);
+    }
+
+    static void SetBossRevealWalkAnimatorParams(Animator animator, float moveSpeed, bool hasMoveSpeed, bool hasMoveX, bool hasMoveY)
+    {
+        if (animator == null)
+            return;
+
+        float speed = Mathf.Clamp01(moveSpeed);
+        if (hasMoveSpeed)
+            animator.SetFloat(BossMoveSpeedHash, speed);
+        if (hasMoveX)
+            animator.SetFloat(BossMoveXHash, 0f);
+        if (hasMoveY)
+            animator.SetFloat(BossMoveYHash, speed);
+    }
+
+    static void SetBossRevealWalkAnimatorParams(Animator animator, float moveSpeed)
+    {
+        SetBossRevealWalkAnimatorParams(
+            animator,
+            moveSpeed,
+            animator != null && HasAnimatorFloatParameter(animator, BossMoveSpeedHash),
+            animator != null && HasAnimatorFloatParameter(animator, BossMoveXHash),
+            animator != null && HasAnimatorFloatParameter(animator, BossMoveYHash));
+    }
+
+    static bool HasAnimatorFloatParameter(Animator animator, int hash)
+    {
+        AnimatorControllerParameter[] parameters = animator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            AnimatorControllerParameter parameter = parameters[i];
+            if (parameter.nameHash == hash && parameter.type == AnimatorControllerParameterType.Float)
+                return true;
+        }
+
+        return false;
     }
 
     IEnumerator CoPlayBossRevealWalkEnd(Animator animator)
@@ -1281,7 +1335,10 @@ public class MainSceneArrivalController : MonoBehaviour
         EndElevatorWalkClipPlayback(ref _activeBossRevealWalkPlayback);
         EndBossRevealWalkEndPlayback();
         if (_bossRevealWalkAnimator != null && _bossRevealWalkHasCachedAnimatorRootMotion)
+        {
+            SetBossRevealWalkAnimatorParams(_bossRevealWalkAnimator, 0f);
             _bossRevealWalkAnimator.applyRootMotion = _bossRevealWalkCachedApplyRootMotion;
+        }
         RestoreAnimatorControllerAfterRevealPlayback(_bossRevealWalkAnimator);
         _bossRevealWalkAnimator = null;
         _bossRevealWalkHasCachedAnimatorRootMotion = false;
@@ -1495,7 +1552,7 @@ public class MainSceneArrivalController : MonoBehaviour
             return true;
 
         string objectName = renderer.transform != null ? renderer.transform.name : string.Empty;
-        bool isVisibleBossPlane = objectName == "Plane009";
+        bool isVisibleBossPlane = objectName == "Plane009" || objectName == "Plane033";
         return (!isVisibleBossPlane && objectName.StartsWith("Plane"))
             || objectName.Contains("Hitbox")
             || objectName.Contains("Anchor");
@@ -1658,6 +1715,16 @@ public class MainSceneArrivalController : MonoBehaviour
             return;
 
         _timelineBossRevealCamera = ResolveTimelineBossRevealCamera();
+        if (_timelineBossRevealCamera == null)
+        {
+            _timelineBossRevealCamera = EnsureBossRevealCloseUpCamera();
+            if (_timelineBossRevealCamera != null)
+            {
+                _timelineBossRevealFallbackOldPriority = _timelineBossRevealCamera.Priority;
+                _timelineBossRevealCamera.Priority = bossRevealCloseUpPriority;
+                _timelineBossRevealUsedFallbackCamera = true;
+            }
+        }
         _timelineBossRevealTrackedBoss = ResolveBossRoot();
         _timelineBossRevealTrackedPlayer = ResolvePlayerFacingRoot();
         _timelineBossRevealCameraTracking = _timelineBossRevealCamera != null && _timelineBossRevealTrackedBoss != null;
@@ -1668,7 +1735,11 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void StopTimelineBossRevealCameraTracking()
     {
+        if (_timelineBossRevealUsedFallbackCamera && _timelineBossRevealCamera != null)
+            _timelineBossRevealCamera.Priority = _timelineBossRevealFallbackOldPriority;
+
         _timelineBossRevealCameraTracking = false;
+        _timelineBossRevealUsedFallbackCamera = false;
         _timelineBossRevealTrackedBoss = null;
         _timelineBossRevealTrackedPlayer = null;
     }
@@ -1701,8 +1772,43 @@ public class MainSceneArrivalController : MonoBehaviour
         if (bossIntroDirector == null || string.IsNullOrWhiteSpace(timelineBossRevealCameraName))
             return null;
 
-        Transform cameraTransform = bossIntroDirector.transform.Find(timelineBossRevealCameraName);
+        Transform cameraTransform = FindDescendantByName(bossIntroDirector.transform, timelineBossRevealCameraName);
+        if (cameraTransform == null)
+        {
+            CinemachineCamera[] cameras = FindObjectsByType<CinemachineCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (int i = 0; i < cameras.Length; i++)
+            {
+                CinemachineCamera camera = cameras[i];
+                if (camera != null && camera.name == timelineBossRevealCameraName)
+                {
+                    cameraTransform = camera.transform;
+                    break;
+                }
+            }
+        }
         return cameraTransform != null ? cameraTransform.GetComponent<CinemachineCamera>() : null;
+    }
+
+    static Transform FindDescendantByName(Transform root, string targetName)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(targetName))
+            return null;
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child == null)
+                continue;
+
+            if (child.name == targetName)
+                return child;
+
+            Transform nested = FindDescendantByName(child, targetName);
+            if (nested != null)
+                return nested;
+        }
+
+        return null;
     }
 
     CinemachineCamera EnsureBossRevealCloseUpCamera()
@@ -2208,14 +2314,6 @@ public class MainSceneArrivalController : MonoBehaviour
 
     AnimationClip ResolveBossRevealWalkEndClip()
     {
-        if (bossRevealWalkEndClip != null)
-            return bossRevealWalkEndClip;
-
-#if UNITY_EDITOR
-        bossRevealWalkEndClip = LoadEditorAnimationClip(
-            "Assets/GhostSamurai_Animset/Animation/katana/Common/Root/GhostSamurai_Common_Walk_End_Root.FBX",
-            "GhostSamurai_Common_Walk_End_Root");
-#endif
         return bossRevealWalkEndClip;
     }
 
