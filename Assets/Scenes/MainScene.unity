@@ -2217,8 +2217,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 99273687}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21370204, y: -0.00246886, z: -0.0005400786, w: 0.97689563}
-  m_LocalPosition: {x: 0.031264886, y: -1.0456499, z: -28.185514}
+  m_LocalRotation: {x: -0.21314731, y: -0.0024688665, z: -0.00053861126, w: 0.9770168}
+  m_LocalPosition: {x: 0.031272355, y: -1.0395714, z: -28.187742}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -7877,6 +7877,7 @@ MonoBehaviour:
   explosionVfx: {fileID: 138652720}
   enemyCinematicState: {fileID: 57978579}
   finalExplosionReturnDelay: 2
+  movePlayerToFinishBeforeStorm: 1
   playerVisualRoot: {fileID: 0}
   playerRenderers:
   - {fileID: 0}
@@ -7884,11 +7885,20 @@ MonoBehaviour:
   - {fileID: 0}
   - {fileID: 0}
   playerGhostHelper: {fileID: 571111860}
+  hideTargetDuringIntroDrawPose: 1
   shot03OrbitRadius: 5.8
   shot03OrbitHeight: 3.05
   shot03OrbitDegreesPerSecond: 46
   shot03LookAtHeight: 1.05
   shot03LookAhead: 0.08
+  playerStartOffset: {x: 0, y: 0, z: -2.4}
+  playerStrikeOffset: {x: 0, y: 0, z: -0.45}
+  playerFinishOffset: {x: 0, y: 0, z: 4.2}
+  startCameraOffset: {x: -2, y: 1.6, z: -3.5}
+  dashCameraOffset: {x: 2.5, y: 1.8, z: -4}
+  slashStormCameraOffset: {x: 0, y: 2, z: -5}
+  finishCameraOffset: {x: 1.5, y: 1.6, z: -3}
+  lookAtOffset: {x: 0, y: 1.2, z: 0}
   sigCameraSessionBegin: {fileID: 11400000, guid: 62f5bfac92a226d4a845447a47f7ed3d, type: 2}
   sigDrawPoseStart: {fileID: 11400000, guid: 512762858cdac0c4ea2750c0b22d609d, type: 2}
   sigCloseUpStart: {fileID: 11400000, guid: a314609f151fefa42ba5ac9a36c06e3d, type: 2}
@@ -7904,6 +7914,7 @@ MonoBehaviour:
   sigCameraSessionEnd: {fileID: 11400000, guid: b587a7e02f1664d48b62a5bc3f86597f, type: 2}
   sigGameplayRestore: {fileID: 11400000, guid: 991160dbc36e29c48b637f215ade9619, type: 2}
   debugLog: 1
+  showDebugGizmos: 0
 --- !u!114 &410452537
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -18196,7 +18207,7 @@ Camera:
     height: 1
   near clip plane: 0.1
   far clip plane: 5000
-  field of view: 46.27864
+  field of view: 40
   orthographic: 0
   orthographic size: 10
   m_Depth: -1
@@ -18222,8 +18233,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.21370204, y: -0.00246886, z: -0.0005400786, w: 0.97689563}
-  m_LocalPosition: {x: 0.02979031, y: 0.10335028, z: -22.199583}
+  m_LocalRotation: {x: 0.10982443, y: -0.04470896, z: 0.004945083, w: 0.9929327}
+  m_LocalPosition: {x: 0.4621917, y: 2.7, z: -25.973207}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -19514,6 +19525,7 @@ MonoBehaviour:
   moveController: {fileID: 1023266509}
   characterController: {fileID: 1023266513}
   playerAnimator: {fileID: 1023266511}
+  targetResolver: {fileID: 0}
   movementCollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -19559,6 +19571,7 @@ MonoBehaviour:
   cameraDirector: {fileID: 1023266516}
   hitProcessor: {fileID: 1023266515}
   vfxPresenter: {fileID: 1023266514}
+  forceSequencePlayerOnly: 0
   director: {fileID: 410452538}
   ultimateTimelineAsset: {fileID: 11400000, guid: 46b52dcd334cb4341abdbfda385ce6ab, type: 2}
   useUnscaledDirectorTime: 1
@@ -34340,7 +34353,7 @@ MonoBehaviour:
   attackVfxPresenter: {fileID: 0}
   groundTelegraph: {fileID: 0}
   handPatternTelegraph: {fileID: 5866666021567638745}
-  defaultPreAttackPoseClip: {fileID: 7400000, guid: 9165d3451d5768041bfb931384318e10, type: 2}
+  defaultPreAttackPoseClip: {fileID: 0}
   useDefaultPreAttackPoseForNonParryable: 1
   defaultPreAttackPoseDuration: 0.42
   defaultPreAttackPoseLabel: READY
@@ -34476,6 +34489,13 @@ MonoBehaviour:
   parryStunTriggerName: Stagger
   parryStunStateName: Break
   parryStunTransitionDuration: 0.03
+  useBackstepAfterParry: 1
+  parryBackstepDuration: 0.22
+  parryBackstepDistance: 1.35
+  parryPostAttackLockDuration: 3
+  ultimateVictimPostAttackLockDuration: 5
+  ultimateVictimHitTriggerName: Hit
+  ultimateVictimHitStateName: Hit_Combat_B
   combatRecoverySettings:
     recoveryDuration: 0.35
     invulnerableDuration: 0.18
@@ -34564,6 +34584,7 @@ MonoBehaviour:
   moveArcSideHoldRange: {x: 0.9, y: 1.8}
   moveArcStrength: 0.38
   closeApproachSpeedMultiplier: 0.38
+  disableRangedPatterns: 1
   useDirectSwordWaveBranch: 1
   swordWaveDirectMinRange: 3.2
   swordWaveDirectMaxRange: 18
@@ -34571,6 +34592,23 @@ MonoBehaviour:
   swordWaveDirectChargeTime: 1.15
   noPatternFallbackAttackDelay: 0.65
   attackSelectionRetryDelay: 0.12
+  useChaseDashGapCloser: 1
+  chaseDashTriggerDistance: 4.8
+  chaseDashAttackEnterDistance: 2.6
+  chaseDashStopDistance: 2.25
+  chaseDashStepDistance: 2.4
+  chaseDashStepSpeed: 11.5
+  chaseDashStepDuration: 0.18
+  chaseDashStepCooldown: 0.06
+  maxChaseDashDuration: 1.6
+  chaseDashRepathInterval: 0.1
+  chaseDashRotationSpeed: 780
+  chaseDashMoveAnimSpeed: 1
+  chaseDashRetryCooldown: 0.18
+  enableChaseDashAfterimage: 1
+  chaseDashAfterimageDuration: 0.45
+  chaseDashAfterimageEffect: {fileID: 0}
+  enableChaseDashDebugLog: 0
   chaseTurnSpeed: 360
   closeChaseTurnSpeed: 540
   closeChaseTurnDistance: 1.8
@@ -34641,7 +34679,7 @@ MonoBehaviour:
     minRange: 0
     maxRange: 2.2
     forbiddenAfter: a
-    recoveryTime: 0.78
+    recoveryTime: 3
     punishWindowDuration: 0.42
     punishDamageMultiplier: 1.06
     firesSwordWaveProjectile: 0
@@ -34710,7 +34748,7 @@ MonoBehaviour:
     minRange: 0
     maxRange: 3.6
     forbiddenAfter: b
-    recoveryTime: 0.92
+    recoveryTime: 3
     punishWindowDuration: 0.58
     punishDamageMultiplier: 1.12
     firesSwordWaveProjectile: 0
@@ -34779,7 +34817,7 @@ MonoBehaviour:
     minRange: 0
     maxRange: 3.2
     forbiddenAfter: c
-    recoveryTime: 1.45
+    recoveryTime: 3
     punishWindowDuration: 1.35
     punishDamageMultiplier: 1.48
     firesSwordWaveProjectile: 0
@@ -34848,7 +34886,7 @@ MonoBehaviour:
     minRange: 0
     maxRange: 6.4
     forbiddenAfter: d
-    recoveryTime: 1.18
+    recoveryTime: 3
     punishWindowDuration: 0.82
     punishDamageMultiplier: 1.24
     firesSwordWaveProjectile: 0
@@ -34917,7 +34955,7 @@ MonoBehaviour:
     minRange: 0
     maxRange: 4.2
     forbiddenAfter: e
-    recoveryTime: 1.02
+    recoveryTime: 3
     punishWindowDuration: 0.56
     punishDamageMultiplier: 1.05
     firesSwordWaveProjectile: 0
@@ -34986,7 +35024,7 @@ MonoBehaviour:
     minRange: 0
     maxRange: 3.4
     forbiddenAfter: f
-    recoveryTime: 1.12
+    recoveryTime: 3
     punishWindowDuration: 0.72
     punishDamageMultiplier: 1.18
     firesSwordWaveProjectile: 0

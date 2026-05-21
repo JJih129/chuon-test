@@ -20,6 +20,7 @@ public sealed class UltimateSkillController : MonoBehaviour
     [SerializeField] private UltimateCameraDirector cameraDirector;
     [SerializeField] private UltimateHitProcessor hitProcessor;
     [SerializeField] private UltimateVFXPresenter vfxPresenter;
+    [SerializeField] private bool forceSequencePlayerOnly;
 
     [Header("레거시 Timeline 폴백")]
     [SerializeField] private PlayableDirector director;
@@ -127,7 +128,7 @@ public sealed class UltimateSkillController : MonoBehaviour
         SyncPrimaryControllerBindings();
 
         UltimateSequenceData resolvedData = sequenceData != null ? sequenceData : GetRuntimeFallbackData();
-        if (cinematicController != null && cinematicController.Play(owner, resolvedData))
+        if (!forceSequencePlayerOnly && cinematicController != null && cinematicController.Play(owner, resolvedData))
         {
             if (debugLog)
                 Debug.Log("[Ultimate] Started timeline cinematic ultimate sequence.", this);
@@ -333,6 +334,7 @@ public sealed class UltimateSkillController : MonoBehaviour
         useCodeDrivenSequence = true;
         sequenceData = runtimeSequenceData;
         cinematicController = runtimeCinematicController;
+        forceSequencePlayerOnly = runtimeCinematicController == null;
         targetBinder = runtimeTargetBinder;
         hitProcessor = runtimeHitProcessor;
         vfxPresenter = runtimeVfxPresenter;

@@ -49,11 +49,21 @@ public sealed class SlashStormVfxController : MonoBehaviour
 
     IEnumerator CoStorm(UltimateSequenceData data, UltimateTargetBinder binder)
     {
+        Vector3 lookTarget = ResolveTargetLookPoint(binder);
+        Quaternion stormRotation = binder.HasCinematicFrame
+            ? binder.CinematicFrame.Rotation
+            : Quaternion.identity;
+
+        if (data.Vfx.replaceMultiSlashWithAoe && vfxPresenter.PlaySlashStormAoe(lookTarget, stormRotation))
+        {
+            _stormRoutine = null;
+            yield break;
+        }
+
         int slashCount = Mathf.Max(1, data.SlashCount);
         for (int i = 0; i < slashCount; i++)
         {
             UltimateSequenceData.SlashStepData step = data.GetSlashStep(i);
-            Vector3 lookTarget = ResolveTargetLookPoint(binder);
             Vector3 slashPosition = binder.GetSlashPosition(step);
             vfxPresenter.PlayMultiSlash(i, slashCount, step, slashPosition, lookTarget);
 

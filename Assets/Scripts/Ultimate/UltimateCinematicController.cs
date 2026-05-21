@@ -397,6 +397,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
             walkDirection = targetBinder.HasCinematicFrame ? targetBinder.CinematicFrame.Forward : targetBinder.PlayerRoot.forward;
         slashStormVfx?.PlayDrawRelease(startPosition, startPosition + walkDirection.normalized * 2f);
         vfxPresenter?.PlayWalkout(startPosition, walkDirection);
+        PlayFinalExplosionOnce();
         _walkoutRoutine = StartCoroutine(CoWalkoutAndFinish(startPosition, endPosition, Mathf.Max(0.01f, _data.Timings.walkoutDuration)));
     }
 

@@ -1409,6 +1409,9 @@ public class PlayerUltimateController : MonoBehaviour
 
     Transform ResolvePlayerRoot()
     {
+        if (_playerReferences == null)
+            _playerReferences = GetComponent<PlayerReferences>();
+
         if (_playerReferences != null && _playerReferences.PlayerRoot != null)
             return _playerReferences.PlayerRoot;
 
@@ -1587,6 +1590,23 @@ public class PlayerUltimateController : MonoBehaviour
 
     Transform ResolvePlayerPresentationSource(Transform playerRoot)
     {
+        if (_playerReferences == null)
+            _playerReferences = GetComponent<PlayerReferences>();
+
+        if (_playerReferences != null)
+        {
+            Transform visualRoot = _playerReferences.VisualRoot;
+            if (visualRoot != null)
+                return visualRoot;
+
+            Animator mainAnimator = _playerReferences.MainAnimator;
+            if (mainAnimator != null)
+                return mainAnimator.transform;
+        }
+
+        if (scriptedAnimator != null)
+            return scriptedAnimator.transform;
+
         return playerRoot;
     }
 

@@ -114,10 +114,25 @@ public sealed class UltimateSequenceData : ScriptableObject
         public GameObject explosionVfxPrefab;
         public GameObject shardVfxPrefab;
         public GameObject walkoutVfxPrefab;
+        public GameObject slashStormAoeVfxPrefab;
 
         [Header("표현 옵션")]
         public bool useScreenSpaceCrack = true;
         public bool useAfterImageStyleSlash = true;
+        public bool suppressIntroPoseParticles;
+        public bool suppressIntroSwordCoreCharge;
+        public bool replaceMultiSlashWithAoe;
+        [Min(0.05f)] public float slashStormAoeLifetime = 1.25f;
+        [Range(0.05f, 2f)] public float slashStormAoePlaybackSpeed = 0.55f;
+        public bool suppressSlashStormAoeBlueParticles;
+        public bool tintSlashStormAoe = true;
+        public Color slashStormAoeTint = new Color(1f, 0.12f, 0.04f, 1f);
+        public Color slashStormAoeAccentTint = new Color(1f, 0.42f, 0.29f, 1f);
+        public Color slashStormAoeHighlightTint = new Color(1f, 0.82f, 0.82f, 1f);
+        public Color slashStormAoeTrailTint = new Color(0.85f, 0.05f, 0.04f, 1f);
+        public Color slashStormAoeEmission = new Color(2.4f, 0.18f, 0.05f, 1f);
+        public Vector3 slashStormAoeLocalOffset = Vector3.zero;
+        public Vector3 slashStormAoeLocalEuler = Vector3.zero;
         [Header("Slash Layering")]
         [Min(0)] public int supportSlashCount = 2;
         [Min(0)] public int lightBeamCount = 4;
@@ -163,6 +178,13 @@ public sealed class UltimateSequenceData : ScriptableObject
         [Min(0.05f)] public float dashSlashLifetime = 0.7f;
         [Min(0.05f)] public float crackLifetime = 0.9f;
         [Min(0.05f)] public float explosionLifetime = 1.15f;
+        [Min(0.1f)] public float explosionVfxScale = 1f;
+        public bool tintExplosionVfx = true;
+        public Color explosionPrimaryTint = new Color(0.85f, 0.12f, 0.08f, 1f);
+        public Color explosionAccentTint = new Color(1f, 0.38f, 0.16f, 1f);
+        public Color explosionHighlightTint = new Color(1f, 0.78f, 0.62f, 1f);
+        public Color explosionSmokeTint = new Color(0.48f, 0.08f, 0.06f, 0.72f);
+        public Color explosionEmissionTint = new Color(3f, 0.32f, 0.12f, 1f);
         [Min(0.05f)] public float walkoutLifetime = 0.8f;
     }
 

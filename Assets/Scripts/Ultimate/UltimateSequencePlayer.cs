@@ -49,6 +49,7 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
     Vector3 _phaseEndPosition;
     bool _sequenceActive;
     bool _dashHitApplied;
+    bool _slashStormAoePlayed;
     bool _finalExplosionApplied;
     UltimateSequenceData.CameraShotSettings _currentPhaseShot;
     float _currentTargetBottomToCenterRatio = 0.8f;
@@ -422,6 +423,8 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
             case UltimateSequencePhase.MultiSlash:
                 _slashIndex = 0;
                 _stepTimer = 0f;
+                _slashStormAoePlayed = false;
+                TryPlaySlashStormAoe();
                 if (!BeginPhaseClip(_data.CinematicAnimation.dashSlashClip))
                     TryPlayAnimationCue(_data.MultiSlashTrigger, _data.MultiSlashFallbackState, _multiSlashTriggerHash);
                 else
@@ -488,6 +491,7 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
         _hasIntroFallbackState = false;
         _hasDashFallbackState = false;
         _hasMultiSlashFallbackState = false;
+        _slashStormAoePlayed = false;
         _hasFinalFallbackState = false;
         _hasWalkoutFallbackState = false;
         _introFallbackLayerIndex = 0;
@@ -878,6 +882,21 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
     Vector3 GetAimPointForCurrentPhase()
     {
         return targetBinder.GetTargetAimPoint(_currentTargetBottomToCenterRatio, _currentTargetVerticalOffset);
+    }
+
+    void TryPlaySlashStormAoe()
+    {
+        if (_slashStormAoePlayed || _data == null || vfxPresenter == null || !_data.Vfx.replaceMultiSlashWithAoe)
+            return;
+
+        Vector3 center = targetBinder != null
+            ? targetBinder.GetTargetAimPoint(0.5f, 0f)
+            : transform.position;
+        Quaternion rotation = targetBinder != null && targetBinder.HasCinematicFrame
+            ? targetBinder.CinematicFrame.Rotation
+            : Quaternion.identity;
+
+        _slashStormAoePlayed = vfxPresenter.PlaySlashStormAoe(center, rotation);
     }
 
     void RefreshVictimAnchorIfNeeded()

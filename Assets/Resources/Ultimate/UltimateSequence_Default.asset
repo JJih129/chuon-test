@@ -31,7 +31,7 @@ MonoBehaviour:
     dashImpactNormalizedTime: 0.48
     defaultMultiSlashInterval: 0.16
     crackHoldDuration: 0.16
-    finalExplosionHoldDuration: 2
+    finalExplosionHoldDuration: 3.8
     walkoutDuration: 0.7
     recoverDuration: 0.12
   movement:
@@ -104,11 +104,26 @@ MonoBehaviour:
     lightBeamVfxPrefab: {fileID: 2411774245160808706, guid: 6354926733bd68948806832890f33e78, type: 3}
     crackWorldVfxPrefab: {fileID: 6366026470070092117, guid: 8a8ba7e20e37d8544a78a859054126a3, type: 3}
     crackScreenVfxPrefab: {fileID: 0}
-    explosionVfxPrefab: {fileID: 1381459172728124388, guid: 591d1bd705f6a8f4b820021876636083, type: 3}
+    explosionVfxPrefab: {fileID: 5994169781622799023, guid: 3fd4f4a70252fe940aa09834467733bf, type: 3}
     shardVfxPrefab: {fileID: 7229793754096018441, guid: be87923a1d00334438f3d93701889602, type: 3}
     walkoutVfxPrefab: {fileID: 8232990265197679967, guid: a615c46ec6f57fd4faebdb1e33dd9c9b, type: 3}
+    slashStormAoeVfxPrefab: {fileID: 6855955652325114174, guid: f8dc879bd6649cb4782409815764d676, type: 3}
     useScreenSpaceCrack: 0
     useAfterImageStyleSlash: 1
+    suppressIntroPoseParticles: 1
+    suppressIntroSwordCoreCharge: 1
+    replaceMultiSlashWithAoe: 1
+    slashStormAoeLifetime: 1.25
+    slashStormAoePlaybackSpeed: 0.45
+    suppressSlashStormAoeBlueParticles: 1
+    tintSlashStormAoe: 1
+    slashStormAoeTint: {r: 0.847, g: 0.227, b: 0.227, a: 1}
+    slashStormAoeAccentTint: {r: 1, g: 0.416, b: 0.29, a: 1}
+    slashStormAoeHighlightTint: {r: 1, g: 0.824, b: 0.824, a: 1}
+    slashStormAoeTrailTint: {r: 0.95, g: 0.06, b: 0.04, a: 1}
+    slashStormAoeEmission: {r: 2.8, g: 0.22, b: 0.16, a: 1}
+    slashStormAoeLocalOffset: {x: 0, y: 1.05, z: 0}
+    slashStormAoeLocalEuler: {x: 0, y: 0, z: 0}
     supportSlashCount: 0
     lightBeamCount: 4
     supportYawSpread: 10
@@ -146,11 +161,18 @@ MonoBehaviour:
     screenCrackBranchAngle: 18
     screenCrackBranchScale: 0.42
     screenCrackAlpha: 0.62
-    shardSpawnCount: 4
+    shardSpawnCount: 0
     introPoseLifetime: 0.7
     dashSlashLifetime: 0.7
     crackLifetime: 0.9
-    explosionLifetime: 1.15
+    explosionLifetime: 3.8
+    explosionVfxScale: 1.8
+    tintExplosionVfx: 1
+    explosionPrimaryTint: {r: 0.85, g: 0.12, b: 0.08, a: 1}
+    explosionAccentTint: {r: 1, g: 0.38, b: 0.16, a: 1}
+    explosionHighlightTint: {r: 1, g: 0.78, b: 0.62, a: 1}
+    explosionSmokeTint: {r: 0.48, g: 0.08, b: 0.06, a: 0.72}
+    explosionEmissionTint: {r: 3, g: 0.32, b: 0.12, a: 1}
     walkoutLifetime: 0.8
   useThreeStageCameraSplit: 1
   introStageCamera:

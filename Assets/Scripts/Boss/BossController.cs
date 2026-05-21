@@ -675,6 +675,13 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [SerializeField] private string parryStunTriggerName = "Stagger";
     [SerializeField] private string parryStunStateName = "Break";
     [SerializeField, Range(0f, 0.08f)] private float parryStunTransitionDuration = 0.03f;
+    [SerializeField] private bool useBackstepAfterParry = true;
+    [SerializeField, Min(0f)] private float parryBackstepDuration = 0.22f;
+    [SerializeField, Min(0f)] private float parryBackstepDistance = 1.35f;
+    [SerializeField, Min(0f)] private float parryPostAttackLockDuration = 3f;
+    [SerializeField, Min(0f)] private float ultimateVictimPostAttackLockDuration = 5f;
+    [SerializeField] private string ultimateVictimHitTriggerName = "Hit";
+    [SerializeField] private string ultimateVictimHitStateName = "Hit_Combat_B";
 
     [Header("Combat Recovery")]
     [SerializeField] private BossCombatRecoverySettings combatRecoverySettings = BossCombatRecoverySettings.CreateDefault();
@@ -785,6 +792,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [Range(0.15f, 1f)] [SerializeField] private float closeApproachSpeedMultiplier = 0.38f;
 
     [Header("Direct Sword Wave")]
+    [SerializeField] private bool disableRangedPatterns = true;
     [SerializeField] private bool useDirectSwordWaveBranch = true;
     [SerializeField] private float swordWaveDirectMinRange = 3.2f;
     [SerializeField] private float swordWaveDirectMaxRange = 18f;
@@ -792,6 +800,25 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [SerializeField] private float swordWaveDirectChargeTime = 1.15f;
     [SerializeField, Min(0f)] private float noPatternFallbackAttackDelay = 0.65f;
     [SerializeField, Min(0.01f)] private float attackSelectionRetryDelay = 0.12f;
+
+    [Header("Gap Closer Chase Dash")]
+    [SerializeField] private bool useChaseDashGapCloser = true;
+    [SerializeField, Min(0.1f)] private float chaseDashTriggerDistance = 4.8f;
+    [SerializeField, Min(0.1f)] private float chaseDashAttackEnterDistance = 2.6f;
+    [SerializeField, Min(0.1f)] private float chaseDashStopDistance = 2.25f;
+    [SerializeField, Min(0.1f)] private float chaseDashStepDistance = 2.4f;
+    [SerializeField, Min(0.1f)] private float chaseDashStepSpeed = 11.5f;
+    [SerializeField, Min(0.02f)] private float chaseDashStepDuration = 0.18f;
+    [SerializeField, Min(0f)] private float chaseDashStepCooldown = 0.06f;
+    [SerializeField, Min(0.1f)] private float maxChaseDashDuration = 1.6f;
+    [SerializeField, Min(0.02f)] private float chaseDashRepathInterval = 0.1f;
+    [SerializeField, Min(30f)] private float chaseDashRotationSpeed = 780f;
+    [SerializeField, Range(0.1f, 2.5f)] private float chaseDashMoveAnimSpeed = 1f;
+    [SerializeField, Min(0f)] private float chaseDashRetryCooldown = 0.18f;
+    [SerializeField] private bool enableChaseDashAfterimage = true;
+    [SerializeField, Min(0.05f)] private float chaseDashAfterimageDuration = 0.45f;
+    [SerializeField] private PerfectDodgeAfterImageEffect chaseDashAfterimageEffect;
+    [SerializeField] private bool enableChaseDashDebugLog = false;
 
     [Tooltip("일반 추적 중 회전 속도(도/초).")]
     [SerializeField] private float chaseTurnSpeed = 360f;
@@ -868,6 +895,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     private float _lastRunStopMoveBlend;
     private float _moveArcSign = 1f;
     private float _moveArcSideUntil = float.NegativeInfinity;
+    private bool _isChaseDashGapClosing;
+    private float _nextChaseDashAllowedAt;
+    private Vector3 _chaseDashStepTarget;
 
     [Header("공격 패턴 목록 (한글 설명)")]
     [Tooltip("보스가 사용할 수 있는 모든 공격 패턴 리스트")]
@@ -1330,6 +1360,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     {
         if (_stateRoutine != null)
         {
+            StopChaseDashGapCloser();
             StopCoroutine(_stateRoutine);
             _stateRoutine = null;
         }
@@ -1345,6 +1376,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         ReleaseParryStunAnimationFallback();
         StopRunStopMotion();
         StopPreAttackPosePlayback();
+        StopChaseDashGapCloser();
         DeactivateHitbox();
     }
 
@@ -2539,6 +2571,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             }
 
             AbortAttackExecution(clearPunishWindow: true);
+            StopChaseDashGapCloser();
             StopRunStopMotion();
             UpdateMoveAnimation(0f);
             SetCombatStrafeAnimation(false);
@@ -2556,6 +2589,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         _isDead = true;
         StopCombatRecovery();
         AbortAttackExecution(clearPunishWindow: true);
+        StopChaseDashGapCloser();
 
         if (_stateRoutine != null)
         {
@@ -2745,12 +2779,45 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             yield break;
         }
 
+        yield return StartCoroutine(Co_ParryBackstepRecovery());
+
         StageAttackRecovery(
             string.IsNullOrWhiteSpace(parryPunishSource) ? "PARRY" : parryPunishSource.Trim().ToUpperInvariant(),
-            Mathf.Max(combatIdleTime, parryRecoveryDuration),
+            Mathf.Max(combatIdleTime, parryRecoveryDuration, parryPostAttackLockDuration),
             Mathf.Max(minimumParryPunishWindow, parryPunishWindowDuration),
             Mathf.Max(1f, parryPunishDamageMultiplier));
+        BlockAttackSelectionFor(parryPostAttackLockDuration);
         TryStartCombatRecovery(BossRecoveryReason.ParryStun, BossState.CombatIdle, clearPunishWindow: false);
+    }
+
+    IEnumerator Co_ParryBackstepRecovery()
+    {
+        if (!useBackstepAfterParry || _isDead || _isUltimateVictim || parryBackstepDuration <= 0f)
+            yield break;
+
+        EnsureGameplayPlayerTarget();
+        FaceToPlayerInstant();
+
+        string retreatTrigger = ResolveBackstepTriggerName(backstepAnimTriggerName);
+        if (!string.IsNullOrEmpty(retreatTrigger))
+            PlayAnimTrigger(retreatTrigger);
+
+        float elapsed = 0f;
+        Vector3 backDir = -transform.forward;
+        float distance = Mathf.Max(0f, parryBackstepDistance);
+        if (useCollisionAwareMovement && distance > 0f)
+            distance = MeasureMovementClearance(rb != null ? rb.position : transform.position, backDir, distance);
+
+        while (!_isDead && elapsed < parryBackstepDuration)
+        {
+            float deltaTime = Time.deltaTime;
+            if (distance > 0f)
+                ApplyPressureMovementDelta(backDir * (distance * Mathf.Clamp01(deltaTime / parryBackstepDuration)));
+
+            elapsed += deltaTime;
+            UpdateMoveAnimation(0f);
+            yield return null;
+        }
     }
 
     /// <summary>
@@ -4069,6 +4136,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         if (TryStartDirectSwordWaveAttack(distance, "Detect"))
             yield break;
 
+        if (ShouldStartChaseDashGapCloser(distance))
+        {
+            SetState(BossState.Move);
+            yield break;
+        }
+
         bool canRequestAttack = CanRequestAttackSelection();
         bool hasPatternAtDistance = canRequestAttack && distance > attackDistance && HasAttackPlanAtDistance(distance);
 
@@ -4108,6 +4181,19 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
             bool canRequestAttack = CanRequestAttackSelection();
             float attackDecisionDistance = ResolveAttackDecisionDistance();
+            if (ShouldStartChaseDashGapCloser(distance))
+            {
+                yield return StartCoroutine(Co_ChaseDashGapCloser());
+                if (currentState == BossState.Move && !_isDead)
+                {
+                    float finalDistance = playerTarget != null
+                        ? Vector3.Distance(transform.position, playerTarget.position)
+                        : float.PositiveInfinity;
+                    SetState(finalDistance <= ResolveAttackDecisionDistance() ? BossState.Attack : BossState.Move, true);
+                }
+                yield break;
+            }
+
             if (canRequestAttack && distance <= attackDecisionDistance)
             {
                 UpdateMoveAnimation(0f);
@@ -4160,6 +4246,125 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         }
     }
 
+    bool ShouldStartChaseDashGapCloser(float distanceToPlayer)
+    {
+        if (!useChaseDashGapCloser || _isDead || _externalIntroPaused || currentState == BossState.Attack)
+            return false;
+        if (playerTarget == null || !IsValidGameplayPlayerTarget(playerTarget))
+            return false;
+        if (Time.time < _nextChaseDashAllowedAt)
+            return false;
+
+        float enterDistance = Mathf.Max(ResolveAttackDecisionDistance(), chaseDashAttackEnterDistance);
+        return distanceToPlayer >= Mathf.Max(chaseDashTriggerDistance, enterDistance + 0.15f);
+    }
+
+    IEnumerator Co_ChaseDashGapCloser()
+    {
+        _isChaseDashGapClosing = true;
+        StartChaseDashAfterimage();
+        if (enableChaseDashDebugLog)
+            Debug.Log("[BossGapCloser] ChaseDash started", this);
+
+        float elapsed = 0f;
+        float nextRepathAt = 0f;
+        float stepElapsed = 0f;
+        Vector3 stepDirection = Vector3.zero;
+        _chaseDashStepTarget = transform.position;
+
+        while (currentState == BossState.Move && !_isDead && elapsed < maxChaseDashDuration)
+        {
+            EnsureGameplayPlayerTarget();
+            if (playerTarget == null || !IsValidGameplayPlayerTarget(playerTarget))
+                break;
+
+            Vector3 toPlayer = playerTarget.position - transform.position;
+            toPlayer.y = 0f;
+            float distance = toPlayer.magnitude;
+            if (distance <= Mathf.Max(chaseDashStopDistance, chaseDashAttackEnterDistance))
+                break;
+
+            if (Time.time >= nextRepathAt || stepDirection.sqrMagnitude <= 0.0001f || stepElapsed >= chaseDashStepDuration)
+            {
+                stepDirection = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
+                float stepDistance = Mathf.Min(chaseDashStepDistance, Mathf.Max(0f, distance - chaseDashStopDistance));
+                _chaseDashStepTarget = transform.position + stepDirection * stepDistance;
+                nextRepathAt = Time.time + Mathf.Max(0.02f, chaseDashRepathInterval);
+                stepElapsed = 0f;
+            }
+
+            if (stepDirection.sqrMagnitude > 0.0001f)
+            {
+                Quaternion look = Quaternion.LookRotation(stepDirection, Vector3.up);
+                transform.rotation = Quaternion.RotateTowards(
+                    transform.rotation,
+                    look,
+                    chaseDashRotationSpeed * Time.deltaTime);
+
+                float moveThisFrame = chaseDashStepSpeed * Time.deltaTime;
+                Vector3 remaining = _chaseDashStepTarget - transform.position;
+                remaining.y = 0f;
+                if (remaining.sqrMagnitude > 0.0001f)
+                    moveThisFrame = Mathf.Min(moveThisFrame, remaining.magnitude);
+
+                ApplyPressureMovementDelta(stepDirection * moveThisFrame);
+                UpdateMoveAnimation(chaseDashMoveAnimSpeed, stepDirection, false);
+            }
+
+            stepElapsed += Time.deltaTime;
+            elapsed += Time.deltaTime;
+
+            if (stepElapsed >= chaseDashStepDuration && chaseDashStepCooldown > 0f)
+            {
+                float cooldown = 0f;
+                while (cooldown < chaseDashStepCooldown && currentState == BossState.Move && !_isDead)
+                {
+                    cooldown += Time.deltaTime;
+                    elapsed += Time.deltaTime;
+                    UpdateMoveAnimation(chaseDashMoveAnimSpeed, stepDirection, false);
+                    yield return null;
+                }
+            }
+
+            yield return null;
+        }
+
+        StopChaseDashGapCloser();
+        _nextChaseDashAllowedAt = Time.time + Mathf.Max(0f, chaseDashRetryCooldown);
+        if (enableChaseDashDebugLog)
+            Debug.Log("[BossGapCloser] ChaseDash ended", this);
+    }
+
+    void StartChaseDashAfterimage()
+    {
+        if (!enableChaseDashAfterimage)
+            return;
+
+        PerfectDodgeAfterImageEffect effect = ResolveChaseDashAfterimageEffect();
+        if (effect != null)
+            effect.StartContinuousTrail(Mathf.Max(chaseDashAfterimageDuration, maxChaseDashDuration + 0.05f));
+    }
+
+    void StopChaseDashGapCloser()
+    {
+        if (!_isChaseDashGapClosing && chaseDashAfterimageEffect == null)
+            return;
+
+        _isChaseDashGapClosing = false;
+        if (chaseDashAfterimageEffect != null)
+            chaseDashAfterimageEffect.StopContinuousTrail();
+        UpdateMoveAnimation(0f);
+    }
+
+    PerfectDodgeAfterImageEffect ResolveChaseDashAfterimageEffect()
+    {
+        if (chaseDashAfterimageEffect == null)
+            chaseDashAfterimageEffect = GetComponent<PerfectDodgeAfterImageEffect>();
+        if (chaseDashAfterimageEffect == null)
+            chaseDashAfterimageEffect = gameObject.AddComponent<PerfectDodgeAfterImageEffect>();
+        return chaseDashAfterimageEffect;
+    }
+
     IEnumerator Co_CombatIdle()
     {
         bool hasForcedIdleDuration = _pendingCombatIdleDuration > 0.01f;
@@ -4189,6 +4394,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
                 float distance = Vector3.Distance(transform.position, playerTarget.position);
                 if (!hasForcedIdleDuration && TryStartDirectSwordWaveAttack(distance, "CombatIdle"))
                     yield break;
+
+                if (!hasForcedIdleDuration && ShouldStartChaseDashGapCloser(distance))
+                {
+                    SetState(BossState.Move);
+                    yield break;
+                }
 
                 bool canRequestAttack = !hasForcedIdleDuration && CanRequestAttackSelection();
                 bool hasPatternAtDistance = false;
@@ -4696,6 +4907,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
                 continue;
 
             BossPatternData data = BuildSelectorData(pattern);
+            if (IsRangedPatternDisabled(pattern, data))
+                continue;
+
             if (!CanConsiderPatternForEngage(pattern, data))
                 continue;
 
@@ -4722,7 +4936,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         if (selectedPattern != null)
             return true;
 
-        if (TryGetExecutablePatternById(BossPatternId.SwordWave, distanceToPlayer, true, out selectedPattern))
+        if (!disableRangedPatterns &&
+            TryGetExecutablePatternById(BossPatternId.SwordWave, distanceToPlayer, true, out selectedPattern))
         {
             selectedData = BuildSelectorData(selectedPattern);
             return true;
@@ -4879,6 +5094,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             return false;
 
         float distance = Vector3.Distance(transform.position, playerTarget.position);
+        if (disableRangedPatterns && data.engageMode == BossPatternEngageMode.UseRangedFallback)
+            return false;
+
         if (data.engageMode == BossPatternEngageMode.UseRangedFallback &&
             TryGetExecutablePatternById(data.rangedFallbackPatternId, distance, true, out pattern))
             return true;
@@ -4905,6 +5123,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
             BossPatternData data = BuildSelectorData(candidate);
             if (data.patternId != patternId)
+                continue;
+            if (IsRangedPatternDisabled(candidate, data))
                 continue;
 
             if (requireSelectorNonRangeRules && !CanPassSelectorNonRangeRules(candidate, data))
@@ -5379,7 +5599,11 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         }
 
         EnsureGameplayPlayerTarget(forceRefresh: true);
-        _pendingCombatIdleDuration = Mathf.Max(0f, combatRecoverySettings.postRecoveryCombatIdleDuration);
+        _pendingCombatIdleDuration = Mathf.Max(_pendingCombatIdleDuration, Mathf.Max(0f, combatRecoverySettings.postRecoveryCombatIdleDuration));
+        if (reason == BossRecoveryReason.ParryStun)
+            _pendingCombatIdleDuration = Mathf.Max(_pendingCombatIdleDuration, Mathf.Max(0f, parryPostAttackLockDuration));
+        else if (reason == BossRecoveryReason.UltimateVictim)
+            _pendingCombatIdleDuration = Mathf.Max(_pendingCombatIdleDuration, Mathf.Max(0f, ultimateVictimPostAttackLockDuration));
 
         if (breakController != null && breakController.IsInBreak)
         {
@@ -6319,7 +6543,11 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
         AbortAttackExecution(clearPunishWindow: true);
         UpdateMoveAnimation(0f);
-        _pendingCombatIdleDuration = Mathf.Max(Mathf.Max(0f, combatIdleTime), Mathf.Max(0f, ultimateVictimRecoveryDuration));
+        PlayUltimateVictimHitReaction();
+        _pendingCombatIdleDuration = Mathf.Max(
+            Mathf.Max(0f, combatIdleTime),
+            Mathf.Max(Mathf.Max(0f, ultimateVictimRecoveryDuration), Mathf.Max(0f, ultimateVictimPostAttackLockDuration)));
+        BlockAttackSelectionFor(ultimateVictimPostAttackLockDuration);
         TryStartCombatRecovery(BossRecoveryReason.UltimateVictim, BossState.CombatIdle);
     }
 
@@ -6327,6 +6555,39 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     {
         EnsureGameplayPlayerTarget(forceRefresh: true);
         FaceToPlayerInstant();
+    }
+
+    void PlayUltimateVictimHitReaction()
+    {
+        if (bossAnimator == null || _isDead)
+            return;
+
+        if (HasAnimatorTrigger(ultimateVictimHitTriggerName))
+        {
+            PlayAnimTrigger(ultimateVictimHitTriggerName);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ultimateVictimHitStateName))
+            bossAnimator.CrossFadeInFixedTime(ultimateVictimHitStateName, 0.05f, 0);
+    }
+
+    bool HasAnimatorTrigger(string triggerName)
+    {
+        if (bossAnimator == null || string.IsNullOrWhiteSpace(triggerName))
+            return false;
+
+        AnimatorControllerParameter[] parameters = bossAnimator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (parameters[i].type == AnimatorControllerParameterType.Trigger &&
+                string.Equals(parameters[i].name, triggerName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void CacheUltimateVictimWorldPose()
@@ -6947,6 +7208,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         return Time.time >= _attackSelectionBlockedUntil && !IsPhaseTransitionAttackLocked();
     }
 
+    void BlockAttackSelectionFor(float duration)
+    {
+        if (duration <= 0f)
+            return;
+
+        _attackSelectionBlockedUntil = Mathf.Max(_attackSelectionBlockedUntil, Time.time + duration);
+    }
+
     void BlockAttackSelectionRetry()
     {
         _attackSelectionBlockedUntil = Time.time + Mathf.Max(0.01f, attackSelectionRetryDelay);
@@ -7001,6 +7270,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         foreach (var p in allPatterns)
         {
             if (p == null) continue;
+            if (IsRangedPatternDisabled(p))
+                continue;
             if (p.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
                 candidates.Add(p);
         }
@@ -7053,6 +7324,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             return false;
 
         selectedPattern = _selectorPatternLookup[selectedIndex];
+        if (IsRangedPatternDisabled(selectedPattern))
+            return false;
+
         return selectedPattern != null && selectedPattern.CanExecute(this, distanceToPlayer, _lastExecutedPattern);
     }
 
@@ -7131,6 +7405,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     {
         if (pattern == null)
             return "null";
+        if (IsRangedPatternDisabled(pattern, data))
+            return "ranged_disabled";
         if (pattern.currentCooldown > 0f)
             return "cooldown";
         if (data.patternId == BossPatternId.None)
@@ -7240,6 +7516,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     bool TryGetExecutableSwordWavePattern(float distanceToPlayer, out AttackPattern swordWavePattern)
     {
         swordWavePattern = null;
+        if (disableRangedPatterns)
+            return false;
 
         if (allPatterns == null || allPatterns.Count == 0)
             return false;
@@ -7269,6 +7547,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
     AttackPattern GetOrCreateSwordWavePattern()
     {
+        if (disableRangedPatterns)
+            return null;
+
         if (allPatterns == null)
             allPatterns = new List<AttackPattern>();
 
@@ -7298,6 +7579,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
     bool TryStartDirectSwordWaveAttack(float distanceToPlayer, string sourceState)
     {
+        if (disableRangedPatterns)
+            return false;
+
         if (!useDirectSwordWaveBranch || _externalIntroPaused || _isDead || currentState == BossState.Attack || IsPhaseTransitionAttackLocked())
             return false;
 
@@ -7352,6 +7636,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
     bool TryStartSwordWaveAttack(float distanceToPlayer, string sourceState)
     {
+        if (disableRangedPatterns)
+            return false;
+
         if (_externalIntroPaused || IsPhaseTransitionAttackLocked())
             return false;
 
@@ -7373,6 +7660,28 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         return enableVerboseCombatLogs && debugSwordWaveLogs;
     }
 
+    bool IsRangedPatternDisabled(AttackPattern pattern)
+    {
+        if (!disableRangedPatterns || pattern == null)
+            return false;
+
+        return pattern.firesSwordWaveProjectile ||
+               pattern.ResolveFiresSwordWaveProjectile() ||
+               ResolvePatternId(pattern) == BossPatternId.SwordWave ||
+               string.Equals(pattern.patternName, "SwordWave", StringComparison.OrdinalIgnoreCase);
+    }
+
+    bool IsRangedPatternDisabled(AttackPattern pattern, BossPatternData data)
+    {
+        if (!disableRangedPatterns || pattern == null)
+            return false;
+
+        return data.patternId == BossPatternId.SwordWave ||
+               pattern.firesSwordWaveProjectile ||
+               pattern.ResolveFiresSwordWaveProjectile() ||
+               string.Equals(pattern.patternName, "SwordWave", StringComparison.OrdinalIgnoreCase);
+    }
+
     bool HasExecutablePatternAtDistance(float distanceToPlayer)
     {
         SyncPatternCooldowns();
@@ -7387,6 +7696,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         {
             AttackPattern pattern = allPatterns[i];
             if (pattern == null)
+                continue;
+            if (IsRangedPatternDisabled(pattern))
                 continue;
 
             if (pattern.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
@@ -7406,6 +7717,9 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
     AttackPattern SelectPreferredRangedPattern(List<AttackPattern> candidates)
     {
+        if (disableRangedPatterns)
+            return null;
+
         if (candidates == null || candidates.Count == 0)
             return null;
 
@@ -7453,6 +7767,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         foreach (var pattern in allPatterns)
         {
             if (pattern == null)
+                continue;
+            if (IsRangedPatternDisabled(pattern))
                 continue;
 
             if (!pattern.IsAvailableInPhase(CurrentPhase))

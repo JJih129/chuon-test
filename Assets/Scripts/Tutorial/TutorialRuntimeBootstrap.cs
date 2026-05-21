@@ -739,10 +739,28 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (ultimateController == null || skillController == null || targetBinder == null || hitProcessor == null || vfxPresenter == null || playerReferences == null)
             return;
 
-        PlayableAsset timelineAsset = LoadRuntimeUltimateTimeline();
+        playerReferences.SyncSerializedReferences();
+        if (playerReferences.MainAnimator != null)
+            ultimateController.scriptedAnimator = playerReferences.MainAnimator;
+
         UltimateSequenceData sequenceData = Resources.Load<UltimateSequenceData>("Ultimate/UltimateSequence_Default");
+        if (sequenceData == null)
+            return;
+
+        if (UseMainSceneCodeDrivenTutorialUltimate())
+        {
+            EnsureComponent<UltimateCameraDirector>(player);
+            StopTutorialLegacyUltimateRoot();
+            ultimateController.director = null;
+            ultimateController.useScriptedSequence = false;
+            ultimateController.allowDirectorFallbackWhenScriptedUnavailable = false;
+            skillController.ConfigureRuntimeModern(ultimateController, sequenceData, null, targetBinder, hitProcessor, vfxPresenter);
+            return;
+        }
+
+        PlayableAsset timelineAsset = LoadRuntimeUltimateTimeline();
         CinemachineBrain brain = mainCamera.GetComponent<CinemachineBrain>();
-        if (timelineAsset == null || sequenceData == null || brain == null)
+        if (timelineAsset == null || brain == null)
             return;
 
         SignalAsset sigCameraSessionBegin = FindTimelineSignal(timelineAsset, "Sig_CameraSessionBegin");
@@ -867,6 +885,38 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         ultimateController.useScriptedSequence = false;
         ultimateController.allowDirectorFallbackWhenScriptedUnavailable = false;
         skillController.ConfigureRuntimeModern(ultimateController, sequenceData, cinematicController, targetBinder, hitProcessor, vfxPresenter);
+    }
+
+    static bool UseMainSceneCodeDrivenTutorialUltimate()
+    {
+        return true;
+    }
+
+    static void StopTutorialLegacyUltimateRoot()
+    {
+        GameObject root = GameObject.Find("TutorialUltimateCinematicRoot");
+        if (root == null)
+            return;
+
+        PlayableDirector director = root.GetComponent<PlayableDirector>();
+        if (director != null)
+        {
+            director.Stop();
+            director.playableAsset = null;
+            director.enabled = false;
+        }
+
+        UltimateCinematicController cinematic = root.GetComponent<UltimateCinematicController>();
+        if (cinematic != null)
+            cinematic.enabled = false;
+
+        SlashStormVfxController slashStorm = root.GetComponent<SlashStormVfxController>();
+        if (slashStorm != null)
+            slashStorm.StopStorm(false);
+
+        ExplosionVfxController explosion = root.GetComponent<ExplosionVfxController>();
+        if (explosion != null)
+            explosion.enabled = false;
     }
 
     void ConfigureTutorialUltimateTarget(GameObject ultimateTargetObject)
