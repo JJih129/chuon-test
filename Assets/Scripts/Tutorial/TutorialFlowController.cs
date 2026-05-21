@@ -188,9 +188,21 @@ public class TutorialFlowController : MonoBehaviour
 
         CurrentStepProgressText = progressText;
         StepProgressUpdated?.Invoke(CurrentStep, progressText);
-        hintUIBridge?.ShowHint(CurrentStep.hintLine1, progressText);
+        hintUIBridge?.ShowHint(CurrentStep.hintLine1, BuildQuestBody(CurrentStep, progressText));
         if (CurrentStep.showComboGuide)
             hintUIBridge?.UpdateComboGuideStatus(progressText);
+    }
+
+    string BuildQuestBody(TutorialStepDefinition step, string progressText)
+    {
+        string guide = step != null ? step.hintLine2 : string.Empty;
+        if (string.IsNullOrWhiteSpace(progressText) || progressText == "\uc644\ub8cc")
+            return guide;
+
+        if (string.IsNullOrWhiteSpace(guide))
+            return progressText;
+
+        return $"{guide}\n{progressText}";
     }
 
     void CompleteCurrentStep()

@@ -35,6 +35,7 @@ public class FreeLookCamera : MonoBehaviour
     public float mouseInputDeadzone = 0.01f;
 
     [Header("Zoom")]
+    public bool allowMouseWheelZoom = false;
     public float zoomStep = 5f;
     public float minFov = 30f;
     public float maxFov = 70f;

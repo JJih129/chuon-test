@@ -91,7 +91,7 @@ MonoBehaviour:
       targetVerticalOffset: 0
       positionSmoothing: 22
       rotationSmoothing: 24
-      fov: 16
+      fov: 9
       snapOnEnter: 1
       orbitAroundTarget: 0
       orbitClockwise: 1

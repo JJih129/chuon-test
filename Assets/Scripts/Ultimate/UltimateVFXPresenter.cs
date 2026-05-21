@@ -227,8 +227,10 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         Transform visualLayerSource = null;
         if (_binder != null)
         {
-            Vector3 swordCorePoint = _binder.GetPlayerIntroSwordLookPoint(Vector3.zero);
             Transform swordCoreAnchor = _binder.GetPlayerIntroSwordEffectAnchor();
+            Vector3 swordCorePoint = swordCoreAnchor != null
+                ? swordCoreAnchor.position
+                : _binder.GetPlayerIntroSwordLookPoint(Vector3.zero);
             visualLayerSource = _binder.PlayerPresentationClone != null && _binder.PlayerPresentationClone.CloneRoot != null
                 ? _binder.PlayerPresentationClone.CloneRoot
                 : swordCoreAnchor;

@@ -53,6 +53,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     public float fireCooldown = 2f;
     public float projectileSpeed = 15f;
     public int projectileDamage = 10;
+    [SerializeField, Min(0f)] float projectileSpawnForwardOffset = 0.65f;
 
     [Header("Health / VFX")]
     public int maxHP = 20;
@@ -214,6 +215,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         lightweightTickInterval = Mathf.Max(0.016f, tickInterval);
         _nextLightweightTickAt = Time.time;
         ApplySimulationMode();
+    }
+
+    public void SetProjectileSpawnForwardOffset(float offset)
+    {
+        projectileSpawnForwardOffset = Mathf.Max(0f, offset);
     }
 
     void ApplySimulationMode()
@@ -660,7 +666,8 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         if (projectilePrefab == null || fireOrigin == null)
             return;
 
-        GameObject bullet = RuntimeObjectPool.Acquire(projectilePrefab, fireOrigin.position, fireOrigin.rotation);
+        Vector3 spawnPosition = fireOrigin.position + fireOrigin.forward * projectileSpawnForwardOffset;
+        GameObject bullet = RuntimeObjectPool.Acquire(projectilePrefab, spawnPosition, fireOrigin.rotation);
         if (bullet == null)
             return;
 

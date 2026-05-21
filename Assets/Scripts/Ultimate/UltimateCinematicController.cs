@@ -21,6 +21,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
     [SerializeField] private ExplosionVfxController explosionVfx;
     [SerializeField] private UltimateEnemyCinematicState enemyCinematicState;
 
+    [Header("Timing")]
+    [SerializeField, Min(0f)] private float finalExplosionReturnDelay = 2f;
+
     [Header("Player Visual Control")]
     [SerializeField] private GameObject playerVisualRoot;
     [SerializeField] private Renderer[] playerRenderers;
@@ -59,6 +62,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
     Coroutine _safetyCleanupRoutine;
     Coroutine _directorStartVerifyRoutine;
     Coroutine _slashStormCameraRoutine;
+    bool _finalExplosionPlayed;
     bool _cleanupCompleted = true;
     bool _gameplayDamageCommitted;
     bool _cachedPlayerPoseValid;
@@ -192,6 +196,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         CleanupIfNeeded("Replay");
         _cleanupCompleted = false;
         _gameplayDamageCommitted = false;
+        _finalExplosionPlayed = false;
         CacheInitialPlayerPose();
 
         if (!targetBinder.TryBind(owner, data, out _boundTarget, out string failureReason))
@@ -285,11 +290,11 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (_data == null)
             return;
 
-        RefreshIntroShotAnchors();
         Vector3 introPosition = targetBinder.GetIntroPosition(_data.Movement.introDistance, _data.Movement.introSideOffset);
         Vector3 targetLookPoint = GetTargetLookPoint();
         targetBinder.SnapPlayerTo(introPosition, targetLookPoint);
         targetBinder.FacePlayerTowardsImmediate(targetLookPoint);
+        RefreshIntroShotAnchors();
         RefreshTargetAnchor();
         slashStormVfx?.PlayIntroPose();
     }
@@ -348,7 +353,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         PositionTargetForWalkout(startPosition, endPosition);
         slashStormVfx?.PlayDrawRelease(startPosition, startPosition + (endPosition - startPosition).normalized * 2f);
         vfxPresenter?.PlayWalkout(startPosition, endPosition - startPosition);
-        _walkoutRoutine = StartCoroutine(CoWalkout(startPosition, endPosition, Mathf.Max(0.01f, _data.Timings.walkoutDuration)));
+        _walkoutRoutine = StartCoroutine(CoWalkoutAndFinish(startPosition, endPosition, Mathf.Max(0.01f, _data.Timings.walkoutDuration)));
     }
 
     public void OnExplosionPrepare()
@@ -358,7 +363,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
     public void OnFinalExplosion()
     {
-        explosionVfx?.PlayFinalExplosion(GetExplosionPoint());
+        PlayFinalExplosionOnce();
     }
 
     public void OnCameraSessionEnd()
@@ -485,26 +490,63 @@ public sealed class UltimateCinematicController : MonoBehaviour
                 if (clip.displayName.Contains("IntroPose", StringComparison.OrdinalIgnoreCase) && _data.CinematicAnimation.introPoseClip != null)
                 {
                     animationAsset.clip = _data.CinematicAnimation.introPoseClip;
-                    clip.clipIn = Mathf.Clamp(
-                        _data.CinematicAnimation.introPoseClip.length * Mathf.Clamp01(_data.CinematicAnimation.introPoseClipStartNormalized),
-                        0f,
-                        Mathf.Max(0f, _data.CinematicAnimation.introPoseClip.length - 0.01f));
+                    ConfigureAnimationClipRange(
+                        clip,
+                        _data.CinematicAnimation.introPoseClip,
+                        _data.CinematicAnimation.introPoseClipStartNormalized,
+                        _data.CinematicAnimation.introPoseClipEndNormalized,
+                        true);
                 }
                 else if (clip.displayName.Contains("DrawSlash", StringComparison.OrdinalIgnoreCase) && _data.CinematicAnimation.dashSlashClip != null)
                 {
                     animationAsset.clip = _data.CinematicAnimation.dashSlashClip;
-                    clip.clipIn = Mathf.Clamp(
-                        _data.CinematicAnimation.dashSlashClip.length * Mathf.Clamp01(_data.CinematicAnimation.dashSlashClipStartNormalized),
-                        0f,
-                        Mathf.Max(0f, _data.CinematicAnimation.dashSlashClip.length - 0.01f));
+                    ConfigureAnimationClipRange(
+                        clip,
+                        _data.CinematicAnimation.dashSlashClip,
+                        _data.CinematicAnimation.dashSlashClipStartNormalized,
+                        _data.CinematicAnimation.dashSlashClipEndNormalized,
+                        false);
                 }
                 else if (clip.displayName.Contains("Walkout", StringComparison.OrdinalIgnoreCase) && _data.CinematicAnimation.walkoutClip != null)
                 {
                     animationAsset.clip = _data.CinematicAnimation.walkoutClip;
-                    clip.clipIn = 0f;
+                    ConfigureAnimationClipRange(
+                        clip,
+                        _data.CinematicAnimation.walkoutClip,
+                        _data.CinematicAnimation.walkoutClipStartNormalized,
+                        _data.CinematicAnimation.walkoutClipEndNormalized,
+                        false);
                 }
             }
         }
+    }
+
+    static void ConfigureAnimationClipRange(
+        TimelineClip timelineClip,
+        AnimationClip animationClip,
+        float startNormalized,
+        float endNormalized,
+        bool holdFrame)
+    {
+        if (timelineClip == null || animationClip == null)
+            return;
+
+        float clipLength = Mathf.Max(1f / 60f, animationClip.length);
+        float rangeStart = Mathf.Clamp01(startNormalized);
+        float rangeEnd = Mathf.Clamp01(endNormalized);
+        if (rangeEnd < rangeStart)
+        {
+            float swap = rangeStart;
+            rangeStart = rangeEnd;
+            rangeEnd = swap;
+        }
+
+        float startTime = Mathf.Clamp(rangeStart * clipLength, 0f, Mathf.Max(0f, clipLength - 0.0001f));
+        float rangeDuration = Mathf.Max(0f, (rangeEnd - rangeStart) * clipLength);
+        timelineClip.clipIn = startTime;
+        timelineClip.timeScale = holdFrame || rangeDuration <= 0.0001f
+            ? 0.0001d
+            : Mathf.Max(0.0001f, rangeDuration / Mathf.Max(0.0001f, (float)timelineClip.duration));
     }
 
     Animator ResolveTimelineAnimationTarget()
@@ -611,7 +653,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
             reaction.AddListener(action);
     }
 
-    IEnumerator CoWalkout(Vector3 startPosition, Vector3 endPosition, float duration)
+    IEnumerator CoWalkoutAndFinish(Vector3 startPosition, Vector3 endPosition, float duration)
     {
         float elapsed = 0f;
         while (elapsed < duration && _data != null)
@@ -624,6 +666,22 @@ public sealed class UltimateCinematicController : MonoBehaviour
         }
 
         _walkoutRoutine = null;
+        if (_cleanupCompleted || _data == null)
+            yield break;
+
+        PlayFinalExplosionOnce();
+        yield return new WaitForSecondsRealtime(finalExplosionReturnDelay);
+        CleanupIfNeeded("WalkoutExplosionEnd");
+    }
+
+    void PlayFinalExplosionOnce()
+    {
+        if (_finalExplosionPlayed)
+            return;
+
+        _finalExplosionPlayed = true;
+        explosionVfx?.PlayFinalExplosion(GetExplosionPoint());
+        CommitGameplayDamage();
     }
 
     void StartSlashStormCameraOrbit()
@@ -848,27 +906,30 @@ public sealed class UltimateCinematicController : MonoBehaviour
             return;
 
         Vector3 playerPosition = bindings.PlayerRoot.position;
-        Vector3 lookTarget = GetTargetLookPoint();
-        Vector3 forward = lookTarget - playerPosition;
+        Vector3 forward = bindings.PlayerRoot.forward;
         forward.y = 0f;
         if (forward.sqrMagnitude <= 0.0001f)
-            forward = bindings.PlayerRoot.forward;
+            forward = GetTargetLookPoint() - playerPosition;
 
         forward.Normalize();
-        Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+        Vector3 right = bindings.PlayerRoot.right;
+        right.y = 0f;
+        if (right.sqrMagnitude <= 0.0001f)
+            right = Vector3.Cross(Vector3.up, forward);
+        right.Normalize();
         Vector3 chest = playerPosition + Vector3.up * 1.08f;
         Vector3 head = playerPosition + Vector3.up * 1.38f;
 
         Vector3 swordFocus = targetBinder != null
             ? targetBinder.GetPlayerIntroSwordLookPoint(new Vector3(-0.04f, -0.04f, 0f))
             : chest;
-        Vector3 weaponLook = swordFocus + forward * 0.08f - right * 0.16f - Vector3.up * 0.12f;
+        Vector3 weaponLook = Vector3.Lerp(swordFocus, chest, 0.3f);
 
-        shot01Pos.position = swordFocus + right * 0.62f - forward * 0.03f + Vector3.up * 0.06f;
+        shot01Pos.position = swordFocus + forward * 1.65f - right * 0.42f + Vector3.up * 0.32f;
         shot01LookAt.position = weaponLook;
 
-        shot02Pos.position = head + forward * 0.82f + right * 0.02f;
-        shot02LookAt.position = head + right * 0.01f;
+        shot02Pos.position = chest + forward * 2.45f - right * 0.2f + Vector3.up * 0.36f;
+        shot02LookAt.position = Vector3.Lerp(chest, head, 0.24f) - right * 0.02f;
     }
 
     IEnumerator CoSafetyCleanupWatchdog(float timeout)
@@ -1013,6 +1074,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _data = null;
         _boundTarget = null;
         _gameplayDamageCommitted = false;
+        _finalExplosionPlayed = false;
         _cachedPlayerPoseValid = false;
         _cachedVisualRootPoseValid = false;
         _cachedAnimationTargetPoseValid = false;

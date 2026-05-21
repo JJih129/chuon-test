@@ -5,7 +5,7 @@ using UnityEngine.Playables;
 public sealed class UltimateSkillController : MonoBehaviour
 {
     const string DefaultSequenceResourcePath = "Ultimate/UltimateSequence_Default";
-    const string IntroPoseClipResourcePath = "Ultimate/Clips/Sp_Idle_IntroPose";
+    const string IntroPoseClipResourcePath = "Ultimate/Clips/Sp_Skill3_Ultimate";
     const string DashSlashClipResourcePath = "Ultimate/Clips/Sp_Skill3_Ultimate";
 
     [Header("기본 참조")]

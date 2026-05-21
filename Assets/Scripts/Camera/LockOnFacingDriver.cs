@@ -1,73 +1,139 @@
 using UnityEngine;
 
-// ===== 변수 헤더(한글 설명) =====
-// lockOn : PlayerLockOn 참조(타겟 읽기)
-// playerRoot : 회전시킬 루트
-// yawSpeedDeg : 초당 회전 속도(도)
-// autoUnlockWhenFar : 너무 멀면 자동 해제할지
-// maxDistance : 자동 해제 거리
 [DisallowMultipleComponent]
 public class LockOnFacingDriver : MonoBehaviour
 {
-    [Header("참조")]
-    [SerializeField] private PlayerLockOn lockOn;      // [조절값]
-    [SerializeField] private Transform playerRoot;     // [조절값]
+    [Header("References")]
+    [SerializeField] private PlayerLockOn lockOn;
+    [SerializeField] private Transform playerRoot;
 
-    [Header("튜닝")]
-    [SerializeField, Range(90f,1080f)] private float yawSpeedDeg = 540f; // [조절값]
-    [SerializeField] private bool autoUnlockWhenFar = true;              // [조절값]
-    [SerializeField] private float maxDistance = 30f;                    // [조절값]
+    [Header("Facing")]
+    [SerializeField, Range(180f, 3600f)] private float yawSpeedDeg = 1440f;
+    [SerializeField, Range(0f, 180f)] private float snapAngleDeg = 75f;
+    [SerializeField] private bool rotateOwnerRoot = true;
+    [SerializeField] private bool autoUnlockWhenFar = true;
+    [SerializeField, Min(0.1f)] private float maxDistance = 30f;
+
     float _maxDistanceSqr;
 
     void Reset()
     {
-        if (!playerRoot) playerRoot = transform;
-        if (!lockOn) lockOn = GetComponent<PlayerLockOn>();
-        _maxDistanceSqr = maxDistance * maxDistance;
+        ResolveReferences();
     }
 
     void Awake()
     {
-        _maxDistanceSqr = maxDistance * maxDistance;
+        ResolveReferences();
+        RefreshDistanceCache();
         RefreshTickState();
     }
 
-    void OnEnable()
+    void LateUpdate()
     {
-        RefreshTickState();
-    }
+        if (lockOn == null || !lockOn.IsLocked || playerRoot == null)
+        {
+            RefreshTickState();
+            return;
+        }
 
-    void Update()
-    {
-        if (lockOn == null || !lockOn.IsLocked || playerRoot == null) return;
-
-        var t = lockOn.CurrentTarget;
-        if (!t)
+        Transform target = lockOn.CurrentTarget;
+        if (!target || !target.gameObject.activeInHierarchy)
         {
             lockOn.Unlock();
             return;
         }
 
-        if (autoUnlockWhenFar && (playerRoot.position - t.position).sqrMagnitude > _maxDistanceSqr)
+        Vector3 origin = rotateOwnerRoot ? transform.position : playerRoot.position;
+        if (autoUnlockWhenFar && (origin - target.position).sqrMagnitude > _maxDistanceSqr)
         {
             lockOn.Unlock();
             return;
         }
 
-        Vector3 dir = t.position - playerRoot.position;
-        dir.y = 0f; if (dir.sqrMagnitude < 0.0001f) return;
+        Vector3 direction = target.position - origin;
+        direction.y = 0f;
+        if (direction.sqrMagnitude <= 0.0001f)
+            return;
 
-        Quaternion target = Quaternion.LookRotation(dir.normalized, Vector3.up);
-        playerRoot.rotation = Quaternion.RotateTowards(playerRoot.rotation, target, yawSpeedDeg * Time.deltaTime);
+        Quaternion desired = Quaternion.LookRotation(direction.normalized, Vector3.up);
+        Quaternion current = rotateOwnerRoot ? transform.rotation : playerRoot.rotation;
+        float angle = Quaternion.Angle(current, desired);
+        float step = angle >= snapAngleDeg
+            ? 3600f * Time.deltaTime
+            : yawSpeedDeg * Time.deltaTime;
+        ApplyFacingRotation(Quaternion.RotateTowards(current, desired, step));
     }
 
     void OnValidate()
     {
-        _maxDistanceSqr = maxDistance * maxDistance;
+        RefreshDistanceCache();
+    }
+
+    public void ConfigureRuntime(PlayerLockOn sourceLockOn, Transform root)
+    {
+        lockOn = sourceLockOn != null ? sourceLockOn : lockOn;
+        playerRoot = ResolveFacingRoot(root);
+        ResolveReferences();
+        RefreshDistanceCache();
+        RefreshTickState();
+    }
+
+    public void FaceCurrentTargetImmediate()
+    {
+        if (lockOn == null || !lockOn.IsLocked || lockOn.CurrentTarget == null || playerRoot == null)
+            return;
+
+        Vector3 origin = rotateOwnerRoot ? transform.position : playerRoot.position;
+        Vector3 direction = lockOn.CurrentTarget.position - origin;
+        direction.y = 0f;
+        if (direction.sqrMagnitude <= 0.0001f)
+            return;
+
+        ApplyFacingRotation(Quaternion.LookRotation(direction.normalized, Vector3.up));
     }
 
     public void RefreshTickState()
     {
+        ResolveReferences();
         enabled = lockOn != null && lockOn.IsLocked && playerRoot != null;
+    }
+
+    void ResolveReferences()
+    {
+        if (lockOn == null)
+            lockOn = GetComponent<PlayerLockOn>();
+
+        if (playerRoot == null)
+            playerRoot = ResolveFacingRoot(null);
+    }
+
+    void RefreshDistanceCache()
+    {
+        _maxDistanceSqr = maxDistance * maxDistance;
+    }
+
+    Transform ResolveFacingRoot(Transform fallback)
+    {
+        PlayerMoveController movement = GetComponent<PlayerMoveController>();
+        if (movement != null && movement.FacingRoot != null)
+            return movement.FacingRoot;
+
+        if (fallback != null)
+            return fallback;
+
+        PlayerReferences references = GetComponent<PlayerReferences>();
+        if (references != null && references.VisualRoot != null)
+            return references.VisualRoot;
+
+        return transform;
+    }
+
+    void ApplyFacingRotation(Quaternion rotation)
+    {
+        if (rotateOwnerRoot)
+            transform.rotation = rotation;
+
+        if (playerRoot != null)
+            playerRoot.rotation = rotation;
     }
 }

@@ -49,6 +49,8 @@ public class PlayerCombatController : MonoBehaviour
     [SerializeField] private CharacterController characterController;
     [SerializeField] private PlayerLockOn playerLockOn;
     [SerializeField] private PerfectDodgeController perfectDodgeController;
+    [SerializeField] private bool remapAttackRootMotionDuringLockOn = true;
+    [SerializeField] private bool forceUnlockedAttackRootMotionForward = true;
 
     [Header("Perfect Dodge Attack Assist")]
     [SerializeField] private bool usePerfectDodgeAttackAssist = true;
@@ -378,6 +380,7 @@ public class PlayerCombatController : MonoBehaviour
         attackStartTime = Time.time;
         lastAttackPlayTime = Time.time;
 
+        FaceCombatDirectionImmediate();
         SafeSetLayerWeight(actionLayerIndex, 1f);
 
         if (lockMovementWhileAttacking && !movementLocked)
@@ -784,6 +787,21 @@ public class PlayerCombatController : MonoBehaviour
         if (delta.sqrMagnitude <= 0.000001f)
             return;
 
+        Transform facingRoot = ResolveCombatFacingRoot();
+        bool remappedRootMotion = false;
+
+        if (remapAttackRootMotionDuringLockOn)
+        {
+            if (TryRemapLockOnAttackRootMotionDelta(delta, facingRoot, out Vector3 lockOnDelta))
+            {
+                delta = lockOnDelta;
+                remappedRootMotion = true;
+            }
+        }
+
+        if (!remappedRootMotion && forceUnlockedAttackRootMotionForward)
+            delta = RemapUnlockedAttackRootMotionDelta(delta);
+
         if (characterController != null && characterController.enabled)
         {
             characterController.Move(delta);
@@ -791,6 +809,106 @@ public class PlayerCombatController : MonoBehaviour
         }
 
         transform.position += delta;
+    }
+
+    private bool TryRemapLockOnAttackRootMotionDelta(Vector3 sourceDelta, Transform facingRoot, out Vector3 remappedDelta)
+    {
+        remappedDelta = sourceDelta;
+        sourceDelta.y = 0f;
+
+        if (sourceDelta.sqrMagnitude <= 0.000001f || playerLockOn == null || !playerLockOn.HasTarget)
+            return false;
+
+        Transform target = playerLockOn.CurrentTarget;
+        if (target == null)
+            return false;
+
+        Vector3 lockForward = target.position - transform.position;
+        lockForward.y = 0f;
+        if (lockForward.sqrMagnitude <= 0.000001f)
+            return false;
+
+        lockForward.Normalize();
+        Vector3 lockRight = Vector3.Cross(Vector3.up, lockForward);
+        Transform basisRoot = facingRoot != null ? facingRoot : transform;
+
+        Vector3 basisForward = basisRoot.forward;
+        basisForward.y = 0f;
+        if (basisForward.sqrMagnitude <= 0.000001f)
+            basisForward = lockForward;
+        basisForward.Normalize();
+
+        Vector3 basisRight = basisRoot.right;
+        basisRight.y = 0f;
+        if (basisRight.sqrMagnitude <= 0.000001f)
+            basisRight = Vector3.Cross(Vector3.up, basisForward);
+        basisRight.Normalize();
+
+        float forwardAmount = Vector3.Dot(sourceDelta, basisForward);
+        float rightAmount = Vector3.Dot(sourceDelta, basisRight);
+        remappedDelta = lockForward * forwardAmount + lockRight * rightAmount;
+        if (remappedDelta.sqrMagnitude <= 0.000001f)
+            remappedDelta = lockForward * sourceDelta.magnitude;
+
+        Quaternion targetRotation = Quaternion.LookRotation(lockForward, Vector3.up);
+        transform.rotation = targetRotation;
+        if (facingRoot != null)
+            facingRoot.rotation = targetRotation;
+
+        return true;
+    }
+
+    private Vector3 RemapUnlockedAttackRootMotionDelta(Vector3 sourceDelta)
+    {
+        sourceDelta.y = 0f;
+        if (sourceDelta.sqrMagnitude <= 0.000001f)
+            return Vector3.zero;
+
+        Vector3 combatForward = transform.forward;
+        combatForward.y = 0f;
+        if (combatForward.sqrMagnitude <= 0.000001f)
+            combatForward = ResolveCombatFacingRoot().forward;
+        combatForward.y = 0f;
+        if (combatForward.sqrMagnitude <= 0.000001f)
+            combatForward = Vector3.forward;
+
+        return combatForward.normalized * sourceDelta.magnitude;
+    }
+
+    private bool FaceCombatDirectionImmediate()
+    {
+        Transform facingRoot = ResolveCombatFacingRoot();
+        Vector3 direction;
+
+        if (playerLockOn != null && playerLockOn.HasTarget && playerLockOn.CurrentTarget != null)
+        {
+            direction = playerLockOn.CurrentTarget.position - transform.position;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.000001f)
+                return false;
+        }
+        else
+        {
+            direction = facingRoot != null ? facingRoot.forward : transform.forward;
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.000001f)
+                return false;
+        }
+
+        Quaternion targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+        transform.rotation = targetRotation;
+
+        if (facingRoot != null)
+            facingRoot.rotation = targetRotation;
+
+        return true;
+    }
+
+    private Transform ResolveCombatFacingRoot()
+    {
+        return moveController != null && moveController.FacingRoot != null
+            ? moveController.FacingRoot
+            : (playerRoot != null ? playerRoot : transform);
     }
 
     private void MovePerfectDodgeAttackAssistStep(Vector3 delta)

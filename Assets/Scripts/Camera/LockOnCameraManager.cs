@@ -341,6 +341,7 @@ public class LockOnCameraManager : MonoBehaviour
     public bool IsLockOnActive => isLockOnActive;
 
     Transform _currentEnemyPivot;
+    Transform _playerFacingRoot;
     Transform _lockOnComponentOwner;
     Renderer _currentEnemyRenderer;
     Vector3 _customRigPosition;
@@ -473,34 +474,34 @@ public class LockOnCameraManager : MonoBehaviour
         if (!useKhazanStyleLockOnPreset)
             return;
 
-        playerCameraAnchorLocalOffset = new Vector3(0f, -0.48f, 0f);
-        solverCloseDistance = 2.5f;
-        solverFarDistance = 7.25f;
+        playerCameraAnchorLocalOffset = new Vector3(0f, -0.55f, 0f);
+        solverCloseDistance = 2.35f;
+        solverFarDistance = 6.25f;
         closeRangeFraming = new LockOnCameraFramingProfile
         {
-            followOffset = new Vector3(0.92f, 1.94f, -3.95f),
+            followOffset = new Vector3(0f, 1.85f, -3.55f),
             trackedObjectOffset = new Vector3(0f, -0.1f, 0f),
-            cameraDistance = 2.72f,
-            fieldOfView = 38f,
-            bodyScreenPosition = new Vector2(0.5f, 0.55f),
-            bodySoftZone = new Vector2(0.72f, 0.22f),
-            aimScreenPosition = new Vector2(0.5f, 0.64f),
+            cameraDistance = 3.55f,
+            fieldOfView = 46f,
+            bodyScreenPosition = new Vector2(0.5f, 0.30f),
+            bodySoftZone = new Vector2(0.48f, 0.16f),
+            aimScreenPosition = new Vector2(0.5f, 0.50f),
             aimTrackedObjectOffset = new Vector3(0f, -0.15f, 0f),
             aimBias = new Vector2(0f, 0f),
-            lookHeightOffset = 0.54f
+            lookHeightOffset = 0.28f
         };
         farRangeFraming = new LockOnCameraFramingProfile
         {
-            followOffset = new Vector3(0.82f, 2.62f, -4.45f),
+            followOffset = new Vector3(0f, 2.05f, -4.15f),
             trackedObjectOffset = new Vector3(0f, -0.2f, 0f),
-            cameraDistance = 3.35f,
-            fieldOfView = 39.5f,
-            bodyScreenPosition = new Vector2(0.5f, 0.58f),
-            bodySoftZone = new Vector2(0.78f, 0.28f),
-            aimScreenPosition = new Vector2(0.5f, 0.67f),
+            cameraDistance = 4.15f,
+            fieldOfView = 46f,
+            bodyScreenPosition = new Vector2(0.5f, 0.30f),
+            bodySoftZone = new Vector2(0.50f, 0.18f),
+            aimScreenPosition = new Vector2(0.5f, 0.51f),
             aimTrackedObjectOffset = new Vector3(0f, -0.2f, 0f),
             aimBias = new Vector2(0f, 0f),
-            lookHeightOffset = 0.36f
+            lookHeightOffset = 0.26f
         };
 
         dedicatedLockOnFollowOffset = farRangeFraming.followOffset;
@@ -511,18 +512,18 @@ public class LockOnCameraManager : MonoBehaviour
         dedicatedLockOnBodySoftZone = farRangeFraming.bodySoftZone;
         dedicatedLockOnAimScreenPosition = farRangeFraming.aimScreenPosition;
         dedicatedLockOnAimBias = new Vector2(0f, -0.05f);
-        lookAnchorDistance = 5.2f;
+        lookAnchorDistance = 3.9f;
         lookAnchorDistanceRatio = 0.5f;
-        lookAnchorMinDistance = 1.5f;
+        lookAnchorMinDistance = 1.2f;
         lookAnchorHeightOffset = farRangeFraming.lookHeightOffset;
-        closeRangeCompensationStartDistance = 4.1f;
-        closeRangeCompensationFullDistance = 2.0f;
-        closeRangeExtraHeight = 1.6f;
-        closeRangeExtraDistance = 1.15f;
-        closeRangeBodyScreenYOffset = 0.08f;
-        closeRangeAimScreenYOffset = 0.06f;
-        closeRangeLookHeightReduction = 0.1f;
-        playerLookHeightOffset = 0.22f;
+        closeRangeCompensationStartDistance = 3.4f;
+        closeRangeCompensationFullDistance = 1.8f;
+        closeRangeExtraHeight = 0.15f;
+        closeRangeExtraDistance = 0.15f;
+        closeRangeBodyScreenYOffset = 0f;
+        closeRangeAimScreenYOffset = 0f;
+        closeRangeLookHeightReduction = 0.04f;
+        playerLookHeightOffset = 0.08f;
         enemyAimBottomToCenterRatio = 0.82f;
     }
 
@@ -813,6 +814,7 @@ public class LockOnCameraManager : MonoBehaviour
     public void SetPlayerPivot(Transform pivot)
     {
         playerPivot = pivot;
+        ResolvePlayerFacingRoot();
         _lastPlayerPivotPosition = GetPlayerCameraAnchorPosition();
         _smoothedPlayerVelocity = Vector3.zero;
         _customRigInitialized = false;
@@ -1653,11 +1655,33 @@ public class LockOnCameraManager : MonoBehaviour
         if (playerPivot == null)
             return Quaternion.identity;
 
-        Vector3 planarForward = Vector3.ProjectOnPlane(playerPivot.forward, Vector3.up);
+        if (_playerFacingRoot == null)
+            ResolvePlayerFacingRoot();
+
+        Transform yawSource = _playerFacingRoot != null ? _playerFacingRoot : playerPivot;
+        Vector3 planarForward = Vector3.ProjectOnPlane(yawSource.forward, Vector3.up);
         if (planarForward.sqrMagnitude <= 0.0001f)
             planarForward = Vector3.forward;
 
         return Quaternion.LookRotation(planarForward.normalized, Vector3.up);
+    }
+
+    void ResolvePlayerFacingRoot()
+    {
+        _playerFacingRoot = null;
+        if (playerPivot == null)
+            return;
+
+        PlayerMoveController movement = playerPivot.GetComponentInParent<PlayerMoveController>();
+        if (movement != null && movement.FacingRoot != null)
+        {
+            _playerFacingRoot = movement.FacingRoot;
+            return;
+        }
+
+        PlayerReferences references = playerPivot.GetComponentInParent<PlayerReferences>();
+        if (references != null && references.VisualRoot != null)
+            _playerFacingRoot = references.VisualRoot;
     }
 
     void SetPriority(bool freeLookHigh)

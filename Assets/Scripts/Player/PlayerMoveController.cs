@@ -9,6 +9,7 @@ public class PlayerMoveController : MonoBehaviour
     public Vector3 CurrentWishDirection => _currentWishDirection;
     public Vector3 CurrentPlanarVelocity => _velXZ;
     public Vector3 LastNonZeroMoveDirection => _lastNonZeroMoveDirection;
+    public Transform FacingRoot => playerRoot != null ? playerRoot : transform;
 
     // ─────────[① 참조 설정]─────────
     [Header("① 참조 설정")]
@@ -101,6 +102,9 @@ public class PlayerMoveController : MonoBehaviour
         _playerHealth = GetComponent<PlayerHealth>();
         _combatStateReader = CombatStateReaderResolver.ResolveOrAttach(this);
         _inputBlocker = GetComponent<IInputBlocker>();
+
+        if (GetComponent<PlayerCombatTargetStandOff>() == null)
+            gameObject.AddComponent<PlayerCombatTargetStandOff>();
     }
 
     void OnEnable()

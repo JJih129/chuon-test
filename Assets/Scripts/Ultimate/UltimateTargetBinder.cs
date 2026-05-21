@@ -46,6 +46,7 @@ public sealed class UltimateTargetBinder : MonoBehaviour
     bool _hasCachedAimPoint;
     Transform _cachedPlayerRoot;
     Transform _cachedPlayerVfxRoot;
+    Transform _cachedPlayerIntroSwordEffectAnchor;
     Animator _cachedPlayerAnimator;
     Animator _cachedPlayerPresentationAnimator;
     Transform _presentationPlayerRootOverride;
@@ -173,6 +174,7 @@ public sealed class UltimateTargetBinder : MonoBehaviour
         _activeTarget = null;
         _sequenceActive = false;
         _victimReleasedForFinalImpact = false;
+        _cachedPlayerIntroSwordEffectAnchor = null;
         InvalidateTargetAimCache();
     }
 
@@ -283,18 +285,24 @@ public sealed class UltimateTargetBinder : MonoBehaviour
 
     public Transform GetPlayerIntroSwordEffectAnchor()
     {
-        Transform lookTransform = ResolvePlayerIntroSwordLookTargetTransform();
-        if (lookTransform == null)
-            lookTransform = ResolvePlayerSwordFocusTransform();
+        if (_cachedPlayerIntroSwordEffectAnchor != null && _cachedPlayerIntroSwordEffectAnchor)
+            return _cachedPlayerIntroSwordEffectAnchor;
 
-        if (lookTransform == null)
-            return ActivePlayerAnchorRoot;
+        Transform effectAnchor = ResolvePlayerSwordFocusTransform();
+        if (effectAnchor == null)
+            effectAnchor = ResolvePlayerIntroSwordLookTargetTransform();
 
-        Transform mappedLook = PlayerPresentationClone != null
-            ? PlayerPresentationClone.ResolveMappedTransform(lookTransform)
+        Transform mappedAnchor = PlayerPresentationClone != null
+            ? PlayerPresentationClone.ResolveMappedTransform(effectAnchor)
             : null;
 
-        return mappedLook != null ? mappedLook : lookTransform;
+        _cachedPlayerIntroSwordEffectAnchor = mappedAnchor != null && mappedAnchor != PlayerPresentationClone?.CloneRoot
+            ? mappedAnchor
+            : effectAnchor != null
+                ? effectAnchor
+                : ActivePlayerAnchorRoot;
+
+        return _cachedPlayerIntroSwordEffectAnchor;
     }
 
     public Vector3 GetTargetAimPoint(float bottomToCenterRatio, float verticalOffset)

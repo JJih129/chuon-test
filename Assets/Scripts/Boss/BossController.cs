@@ -533,8 +533,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     const float CombatIdleAttackRequestDelay = 0.25f;
     const float MaxCombatIdleAttackRetryDelay = 0.95f;
     const float MaxCombatIdleRetreatPause = 0.18f;
-    const float MaxReactiveBackstepDistance = 1.15f;
-    const float MinReactiveBackstepCooldown = 5.0f;
+    const float MaxReactiveBackstepDistance = 2.2f;
+    const float MinReactiveBackstepCooldown = 3.0f;
     const int MaxConsecutiveMovementPostActions = 1;
     const float MinEffectiveSwordWaveRange = 7.0f;
     const float MaxEffectiveSwordWaveRange = 13.5f;
@@ -602,7 +602,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
     [Tooltip("공격 후 CombatIdle 상태 유지 시간(초). 0이면 바로 다음 상태로 이동.")]
     public float combatIdleTime = 0.3f;
-    [SerializeField, Min(0f)] private float minimumPostAttackIdleDuration = 5.0f;
+    [SerializeField, Min(0f)] private float minimumPostAttackIdleDuration = 3.0f;
+    [SerializeField, Min(0f)] private float postPatternDelayAfterAnimation = 3.0f;
     [SerializeField] private bool useCombatIdleStrafe = true;
     [SerializeField, Range(0.1f, 1f)] private float combatIdleStrafeSpeedMultiplier = 0.42f;
     [SerializeField, Range(0.1f, 1f)] private float combatIdleApproachSpeedMultiplier = 0.34f;
@@ -626,6 +627,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [Header("Attack Tempo Tuning")]
     [SerializeField, Min(0f)] private float globalPostAttackRecoveryPadding = 0.14f;
     [SerializeField, Min(0f)] private float globalFollowUpDelayPadding = 0.08f;
+    [SerializeField, Min(0f)] private float minimumPatternCooldown = 3.0f;
 
     [Tooltip("궁극기 victim 상태 해제 직후 AI가 다시 패턴을 잡기 전 쉬는 시간(초).")]
     [SerializeField] private float ultimateVictimRecoveryDuration = 1.2f;
@@ -665,7 +667,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     [SerializeField] private float minimumDodgePunishWindow = 0.46f;
     [SerializeField] private float minimumDangerPunishWindow = 0.62f;
     [Header("Parry Reaction")]
-    [SerializeField, Range(0.04f, 0.35f)] private float parryStunDuration = 0.22f;
+    [SerializeField, Range(0.04f, 0.8f)] private float parryStunDuration = 0.38f;
     [SerializeField, Min(0.1f)] private float parryRecoveryDuration = 0.55f;
     [SerializeField, Min(0.1f)] private float parryPunishWindowDuration = 0.55f;
     [SerializeField, Range(1f, 3f)] private float parryPunishDamageMultiplier = 1.35f;
@@ -1024,7 +1026,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     public bool useBackstepWhenTooClose = true;
 
     [Tooltip("이 거리보다 가까워지면 백스텝을 시도 (m)")]
-    public float backstepTriggerDistance = 1.0f;
+    public float backstepTriggerDistance = 1.65f;
 
     [Tooltip("지정 거리 안에서 이 시간 이상 압박을 받아야 백스텝을 허용합니다.")]
     [SerializeField] private float backstepPressureHoldTime = 0.12f;
@@ -2638,7 +2640,10 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         if (breakController != null && !_isDead && !_isUltimateVictim && !IsCombatRecoveryLockoutActive && !IsCombatRecoverySuperArmorActive && !breakController.IsInBreak)
             breakController.AddBreak(0f, BossBreakController.BreakSource.Parry);
 
-        NotifyParried(stunDuration);
+        float resolvedStunDuration = stunDuration > 0.001f
+            ? stunDuration
+            : Mathf.Max(parryStunDuration, 0.38f);
+        NotifyParried(resolvedStunDuration);
     }
 
     public void OnPerfectDodged(GameObject dodger)
@@ -2926,7 +2931,8 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         _activeAttackTimingData = timingData;
         _hasActiveAttackTimingData = true;
         _timingDataControlsHitbox = timingData.useTimingDataHitboxControl;
-        _attackTimingControlsParryWindow = timingData.parryWindowEndTime > timingData.parryWindowStartTime + 0.001f;
+        _attackTimingControlsParryWindow = !forceAllPatternsParryable &&
+            timingData.parryWindowEndTime > timingData.parryWindowStartTime + 0.001f;
         if (_attackTimingControlsParryWindow && attackHitbox != null)
         {
             _attackTimingCachedCanParry = attackHitbox.canParry;
@@ -3190,6 +3196,15 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     void CloseAttackTimingParryWindow()
     {
         _attackTimingParryWindowOpen = false;
+        if (forceAllPatternsParryable && attackHitbox != null)
+        {
+            attackHitbox.canParry = true;
+            attackHitbox.canGuard = true;
+            attackHitbox.unblockable = false;
+            attackHitbox.causesGuardBreak = false;
+            return;
+        }
+
         if (_attackTimingControlsParryWindow && attackHitbox != null)
             attackHitbox.canParry = false;
     }
@@ -3198,6 +3213,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     {
         if (_attackTimingHasCachedCanParry && attackHitbox != null)
             attackHitbox.canParry = _attackTimingCachedCanParry;
+
+        if (forceAllPatternsParryable && attackHitbox != null)
+        {
+            attackHitbox.canParry = true;
+            attackHitbox.canGuard = true;
+            attackHitbox.unblockable = false;
+            attackHitbox.causesGuardBreak = false;
+        }
 
         _attackTimingHasCachedCanParry = false;
         _attackTimingCachedCanParry = false;
@@ -3208,7 +3231,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         if (pattern == null)
             return;
 
-        float cooldown = Mathf.Max(0f, BuildSelectorData(pattern).cooldown);
+        float cooldown = Mathf.Max(minimumPatternCooldown, BuildSelectorData(pattern).cooldown);
         pattern.currentCooldown = cooldown;
         pattern.cooldownReadyAt = cooldown > 0f ? now + cooldown : 0f;
     }
@@ -3766,6 +3789,18 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
             return;
         }
 
+        if (_hasQuickshiftBTrigger)
+        {
+            PlayAnimTrigger("Quickshift_B");
+            return;
+        }
+
+        if (bossAnimator.HasState(0, AnimParam_QuickshiftB))
+        {
+            bossAnimator.CrossFadeInFixedTime(AnimParam_QuickshiftB, parryStunTransitionDuration, 0);
+            return;
+        }
+
         if (_parryStunStateHash != 0 && bossAnimator.HasState(0, _parryStunStateHash))
         {
             bossAnimator.CrossFadeInFixedTime(_parryStunStateHash, parryStunTransitionDuration, 0);
@@ -3888,7 +3923,13 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         float innerRatio = Mathf.Clamp(backstepInnerDistanceRatio, 0.1f, 1f);
         float attackDistance = ResolveAttackDecisionDistance();
         float triggerDistance = backstepTriggerDistance > 0.01f ? backstepTriggerDistance : attackDistance * innerRatio;
-        return Mathf.Min(triggerDistance, attackDistance * innerRatio, MaxReactiveBackstepDistance);
+        float desiredDistance = Mathf.Max(triggerDistance, attackDistance * innerRatio);
+        return Mathf.Min(desiredDistance, MaxReactiveBackstepDistance);
+    }
+
+    bool IsImmediateBackstepDistance(float distanceToPlayer)
+    {
+        return distanceToPlayer <= ResolveBackstepDecisionDistance() * 0.88f;
     }
 
     void UpdateClosePressureState(float distanceToPlayer)
@@ -3958,10 +3999,12 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         if (distanceToPlayer > ResolveBackstepDecisionDistance())
             return false;
 
-        if (!HasSatisfiedBackstepPressureHold())
+        bool immediateBackstep = IsImmediateBackstepDistance(distanceToPlayer);
+
+        if (!immediateBackstep && !HasSatisfiedBackstepPressureHold())
             return false;
 
-        if (!IsPlayerInsideBackstepFrontArc())
+        if (!immediateBackstep && !IsPlayerInsideBackstepFrontArc())
             return false;
 
         return HasBackstepClearance();
@@ -4147,7 +4190,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
                 if (!hasForcedIdleDuration && TryStartDirectSwordWaveAttack(distance, "CombatIdle"))
                     yield break;
 
-                bool canRequestAttack = CanRequestAttackSelection();
+                bool canRequestAttack = !hasForcedIdleDuration && CanRequestAttackSelection();
                 bool hasPatternAtDistance = false;
                 if (canRequestAttack && elapsed >= CombatIdleAttackRequestDelay)
                     hasPatternAtDistance = HasAttackPlanAtDistance(distance);
@@ -4337,6 +4380,14 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
         bool canGuard = pattern.ResolveCanGuard();
         bool isUnblockable = pattern.ResolveIsUnblockable();
         bool causesGuardBreak = pattern.ResolveCausesGuardBreak();
+        if (forceAllPatternsParryable)
+        {
+            canParry = true;
+            canGuard = true;
+            isUnblockable = false;
+            causesGuardBreak = false;
+            telegraphType = AttackTelegraphType.Parry;
+        }
         float recoveryTime = ResolvePatternRecoveryTime(pattern, isQueuedFollowUp);
         float punishWindowDuration = ResolvePatternPunishWindow(pattern, recoveryTime, isQueuedFollowUp);
         float punishDamageMultiplier = pattern.ResolvePunishDamageMultiplier();
@@ -4975,7 +5026,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
     float ResolvePatternRecoveryTime(AttackPattern pattern, bool isQueuedFollowUp)
     {
         if (pattern == null)
-            return Mathf.Max(combatIdleTime, minimumPostAttackIdleDuration);
+            return Mathf.Max(combatIdleTime, minimumPostAttackIdleDuration, postPatternDelayAfterAnimation);
 
         float recovery = Mathf.Max(0f, pattern.ResolveRecoveryTime());
         if (isQueuedFollowUp)
@@ -4983,7 +5034,7 @@ public class BossController : MonoBehaviour, IUltimateVictimState, IParryReact, 
 
         recovery *= ResolvePhaseRecoveryDurationMultiplier(pattern);
         recovery += Mathf.Max(0f, globalPostAttackRecoveryPadding);
-        return Mathf.Max(Mathf.Max(combatIdleTime, minimumPostAttackIdleDuration), recovery);
+        return Mathf.Max(Mathf.Max(combatIdleTime, minimumPostAttackIdleDuration, postPatternDelayAfterAnimation), recovery);
     }
 
     float ResolveMinimumPunishWindow(AttackPattern pattern, bool isQueuedFollowUp)

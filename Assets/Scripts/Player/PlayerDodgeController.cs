@@ -90,6 +90,7 @@ public class PlayerDodgeController : MonoBehaviour
     [SerializeField] bool disableRootMotionOnDodge = false;
     [SerializeField] bool useDirectionalRootMotionDodge = true;
     [SerializeField] bool smoothDirectionalRootMotionDodge = true;
+    [SerializeField] bool remapRootMotionDodgeDuringLockOn = true;
     [SerializeField, Range(0.01f, 0.12f)] float rootMotionDodgeSpeedSmoothTime = 0.045f;
 
     [Header("Events")]
@@ -764,6 +765,15 @@ public class PlayerDodgeController : MonoBehaviour
         if (delta.sqrMagnitude <= 0.000001f)
             return;
 
+        if (remapRootMotionDodgeDuringLockOn)
+        {
+            Transform facingRoot = playerRoot != null ? playerRoot : (move != null ? move.FacingRoot : transform);
+            if (TryRemapLockOnDodgeRootMotionDelta(delta, facingRoot, out Vector3 lockOnDelta))
+            {
+                delta = lockOnDelta;
+            }
+        }
+
         if (smoothDirectionalRootMotionDodge)
         {
             float rawSpeed = delta.magnitude / Mathf.Max(Time.deltaTime, 0.0001f);
@@ -779,6 +789,53 @@ public class PlayerDodgeController : MonoBehaviour
         }
 
         cc.Move(delta);
+    }
+
+    bool TryRemapLockOnDodgeRootMotionDelta(Vector3 sourceDelta, Transform facingRoot, out Vector3 remappedDelta)
+    {
+        remappedDelta = sourceDelta;
+        sourceDelta.y = 0f;
+
+        if (sourceDelta.sqrMagnitude <= 0.000001f || playerLockOn == null || !playerLockOn.HasTarget)
+            return false;
+
+        Transform target = playerLockOn.CurrentTarget;
+        if (target == null)
+            return false;
+
+        Vector3 lockForward = target.position - transform.position;
+        lockForward.y = 0f;
+        if (lockForward.sqrMagnitude <= 0.000001f)
+            return false;
+
+        lockForward.Normalize();
+        Vector3 lockRight = Vector3.Cross(Vector3.up, lockForward);
+        Transform basisRoot = facingRoot != null ? facingRoot : transform;
+
+        Vector3 basisForward = basisRoot.forward;
+        basisForward.y = 0f;
+        if (basisForward.sqrMagnitude <= 0.000001f)
+            basisForward = lockForward;
+        basisForward.Normalize();
+
+        Vector3 basisRight = basisRoot.right;
+        basisRight.y = 0f;
+        if (basisRight.sqrMagnitude <= 0.000001f)
+            basisRight = Vector3.Cross(Vector3.up, basisForward);
+        basisRight.Normalize();
+
+        float forwardAmount = Vector3.Dot(sourceDelta, basisForward);
+        float rightAmount = Vector3.Dot(sourceDelta, basisRight);
+        remappedDelta = lockForward * forwardAmount + lockRight * rightAmount;
+        if (remappedDelta.sqrMagnitude <= 0.000001f)
+            remappedDelta = lockForward * sourceDelta.magnitude;
+
+        Quaternion targetRotation = Quaternion.LookRotation(lockForward, Vector3.up);
+        transform.rotation = targetRotation;
+        if (facingRoot != null)
+            facingRoot.rotation = targetRotation;
+
+        return true;
     }
 
     void PlayDodgeStartSound()

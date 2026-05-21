@@ -333,8 +333,29 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
             targetBinder.FacePlayerTowardsImmediate(_finalExplosionLookTarget);
         }
 
+        if (!_finalExplosionApplied && _phaseElapsed >= GetFinalExplosionDelay())
+            TriggerFinalExplosion();
+
         if (_phaseElapsed >= _data.Timings.finalExplosionHoldDuration)
             ChangePhase(UltimateSequencePhase.Recover);
+    }
+
+    float GetFinalExplosionDelay()
+    {
+        float holdDuration = _data != null ? _data.Timings.finalExplosionHoldDuration : 0f;
+        return Mathf.Min(0.22f, Mathf.Max(0f, holdDuration * 0.55f));
+    }
+
+    void TriggerFinalExplosion()
+    {
+        if (_finalExplosionApplied)
+            return;
+
+        _finalExplosionApplied = true;
+        hitProcessor.ApplyFinalExplosionHit();
+        hitProcessor.FlushBufferedDamage();
+        vfxPresenter.PlayFinalExplosion(GetAimPointForCurrentPhase());
+        TryApplyHitStop(_data.TimeFx.useFinalExplosionSlow, _data.TimeFx.finalExplosionTimeScale, _data.TimeFx.finalExplosionSlowDuration);
     }
 
     void ChangePhase(UltimateSequencePhase nextPhase)
@@ -427,18 +448,9 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
                     Vector3 playerPosition = targetBinder != null ? targetBinder.PlayerRoot.position : Vector3.zero;
                     _finalExplosionLookTarget = playerPosition + preservedForward * 4f;
                 }
-                if (!_finalExplosionApplied)
-                {
-                    _finalExplosionApplied = true;
-                    hitProcessor.ApplyFinalExplosionHit();
-                    vfxPresenter.PlayFinalExplosion(GetAimPointForCurrentPhase());
-                    TryApplyHitStop(_data.TimeFx.useFinalExplosionSlow, _data.TimeFx.finalExplosionTimeScale, _data.TimeFx.finalExplosionSlowDuration);
-                }
-                TryPlayAnimationCue(_data.FinalExplosionTrigger, _data.FinalExplosionFallbackState, _finalTriggerHash);
                 break;
 
             case UltimateSequencePhase.Walkout:
-                hitProcessor.FlushBufferedDamage();
                 _phaseStartPosition = targetBinder.PlayerRoot.position;
                 _phaseEndPosition = targetBinder.GetWalkoutPosition(_data.Movement.walkoutDistance, _data.Movement.walkoutSideOffset);
                 vfxPresenter.PlayWalkout(_phaseStartPosition, _phaseEndPosition - _phaseStartPosition);

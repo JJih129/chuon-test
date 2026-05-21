@@ -227,7 +227,14 @@ public class PlayerReferences : MonoBehaviour
 
         var rootAttackHitbox = allowRuntimeCreate ? EnsureDefaultForwardHitbox() : null;
         if (rootAttackHitbox != null)
+        {
             attackHitboxes = new[] { rootAttackHitbox };
+            attackHitboxes = FilterValidObjects(attackHitboxes);
+#if UNITY_EDITOR
+            EnsureEditorVisualPrefabFallback();
+#endif
+            return;
+        }
 
         var activeChildHitboxes = FilterActiveHitboxes(GetComponentsInChildren<AttackHitbox>(true));
         var preferredHitboxes = GetPreferredAttackHitboxes();

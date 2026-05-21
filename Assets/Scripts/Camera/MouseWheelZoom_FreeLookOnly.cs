@@ -13,6 +13,9 @@ using Unity.Cinemachine;
 [DisallowMultipleComponent]
 public class MouseWheelZoom_FreeLookOnly : MonoBehaviour
 {
+    [Header("전시 빌드 고정")]
+    [SerializeField] bool allowMouseWheelZoom = false;
+
     [Header("대상 참조")]
     public CinemachineVirtualCameraBase freeLook;
 
@@ -32,6 +35,9 @@ public class MouseWheelZoom_FreeLookOnly : MonoBehaviour
 
     void Update()
     {
+        if (!allowMouseWheelZoom)
+            return;
+
         if (!freeLook) return;
 
         float wheel = Input.mouseScrollDelta.y;

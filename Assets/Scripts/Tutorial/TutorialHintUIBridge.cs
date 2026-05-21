@@ -632,6 +632,10 @@ public class TutorialHintUIBridge : MonoBehaviour
         if (keySprite != null)
             return keySprite;
 
+        keySprite = LoadRuntimeSpriteFromTexture("TutorialUI/" + filePrefix);
+        if (keySprite != null)
+            return keySprite;
+
         string localizedName = filePrefix == "E"
             ? "E\uD0A4"
             : (filePrefix == "Shift" ? "Shift\uD0A4" : string.Empty);
@@ -640,11 +644,19 @@ public class TutorialHintUIBridge : MonoBehaviour
             keySprite = Resources.Load<Sprite>("TutorialUI/" + localizedName);
             if (keySprite != null)
                 return keySprite;
+
+            keySprite = LoadRuntimeSpriteFromTexture("TutorialUI/" + localizedName);
+            if (keySprite != null)
+                return keySprite;
         }
 
         if (filePrefix == "Q")
         {
             keySprite = Resources.Load<Sprite>("TutorialUI/q-Photoroom");
+            if (keySprite != null)
+                return keySprite;
+
+            keySprite = LoadRuntimeSpriteFromTexture("TutorialUI/q-Photoroom");
             if (keySprite != null)
                 return keySprite;
         }
@@ -670,6 +682,19 @@ public class TutorialHintUIBridge : MonoBehaviour
         }
 #endif
         return null;
+    }
+
+    static Sprite LoadRuntimeSpriteFromTexture(string resourcePath)
+    {
+        Texture2D texture = Resources.Load<Texture2D>(resourcePath);
+        if (texture == null)
+            return null;
+
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
     }
 
     static void SetGraphicEnabled(Graphic graphic, bool enabled)

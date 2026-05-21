@@ -95,7 +95,14 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         EnsureCameraManagerResolved();
 
         _facingDriver = GetComponent<LockOnFacingDriver>();
-        _facingDriver?.RefreshTickState();
+        if (_facingDriver == null)
+            _facingDriver = gameObject.AddComponent<LockOnFacingDriver>();
+
+        PlayerMoveController movement = GetComponent<PlayerMoveController>();
+        Transform facingRoot = movement != null && movement.FacingRoot != null
+            ? movement.FacingRoot
+            : _playerReferences != null ? _playerReferences.VisualRoot : transform;
+        _facingDriver.ConfigureRuntime(this, facingRoot);
 
         _cam = GameplaySceneCache.ResolveMainCameraTransform();
     }
@@ -150,6 +157,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         _hasMaintainCheckSample = false;
         _cachedMaintainable = true;
         _facingDriver?.RefreshTickState();
+        _facingDriver?.FaceCurrentTargetImmediate();
 
         if (!_timelineOwnsCamera)
             RefreshCameraTarget();
@@ -236,6 +244,8 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
                 _currentTargetRoot = root;
                 CurrentTarget = pivot;
                 _lockModeActive = true;
+                _facingDriver?.RefreshTickState();
+                _facingDriver?.FaceCurrentTargetImmediate();
             }
         }
 

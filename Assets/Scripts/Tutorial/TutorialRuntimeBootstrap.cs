@@ -12,6 +12,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
     const string TutorialScenePath = "Assets/Scenes/Tutorial.unity";
     const string CombatGirlEnemyPrefabPath = "Assets/Prefabs/Tutorial/TutorialCombatGirlEnemy.prefab";
     const string RobotKylePrefabPath = "Assets/UnityTechnologies/SpaceRobotKyle/Prefabs/RobotKyle.prefab";
+    const string UltimateTimelineResourcePath = "Cinematics/Ultimate/TL_Ultimate_PlayerSword";
 
     TutorialFlowController _flowController;
     TutorialHintUIBridge _hintBridge;
@@ -22,6 +23,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
     Quaternion _tutorialStartRotation;
     float _stabilizeStartUntil;
     bool _startStabilizationComplete;
+    readonly RaycastHit[] _groundProbeHits = new RaycastHit[12];
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void RegisterSceneBootstrap()
@@ -227,17 +229,18 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             objectivePanelController.ConfigureRuntime(_flowController, _hintBridge);
         }
 
-        if (ExhibitionPrototypePresentationPolicy.RuntimeTutorialGuidePathEnabled)
-        {
-            TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
-            guideBeamController.ConfigureRuntime(
-                _flowController,
-                player.transform,
-                movementGoalZone != null ? movementGoalZone.transform : null,
-                exitZone != null ? exitZone.transform : null,
-                movementMarker,
-                exitMarker);
-        }
+        TutorialGuideBeamController guideBeamController = gameObject.AddComponent<TutorialGuideBeamController>();
+        guideBeamController.ConfigureRuntime(
+            _flowController,
+            player.transform,
+            movementGoalZone != null ? movementGoalZone.transform : null,
+            attackDummyObject != null ? attackDummyObject.transform : null,
+            guardDummyObject != null ? guardDummyObject.transform : null,
+            exitZone != null ? exitZone.transform : null,
+            movementMarker,
+            attackDummyMarker,
+            guardDummyMarker,
+            exitMarker);
 
         TutorialZoneHighlightController zoneHighlightController = gameObject.AddComponent<TutorialZoneHighlightController>();
         zoneHighlightController.ConfigureRuntime(_flowController, movementGoalZone, exitZone, player.transform);
@@ -360,8 +363,11 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (dummyObject == null)
             return null;
 
+        SnapTutorialObjectRootToGround(dummyObject);
         TutorialEnemyVisualRig visualRig = PrepareTutorialLockOnTarget(dummyObject);
         ApplyRobotKyleVisual(visualRig);
+        if (visualRig != null)
+            visualRig.EnsureSetup();
         FreezeTutorialTargetMotion(dummyObject);
         TrainingDummyController controller = EnsureComponent<TrainingDummyController>(dummyObject);
         RemoveConflictingDamageReceivers(dummyObject, controller);
@@ -395,6 +401,61 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
         dummyObject.SetActive(false);
         return controller;
+    }
+
+    void SnapTutorialObjectRootToGround(GameObject target)
+    {
+        if (target == null)
+            return;
+
+        Transform root = target.transform;
+        Vector3 position = root.position;
+        if (TryProjectToGroundIgnoring(position, root, out Vector3 groundedPosition))
+        {
+            position.y = groundedPosition.y;
+            root.position = position;
+        }
+    }
+
+    bool TryProjectToGroundIgnoring(Vector3 position, Transform ignoredRoot, out Vector3 groundedPosition)
+    {
+        groundedPosition = position;
+        Vector3 origin = position + Vector3.up * 5f;
+        int hitCount = Physics.RaycastNonAlloc(
+            origin,
+            Vector3.down,
+            _groundProbeHits,
+            16f,
+            ~0,
+            QueryTriggerInteraction.Ignore);
+
+        float bestDistance = float.PositiveInfinity;
+        bool found = false;
+        for (int i = 0; i < hitCount; i++)
+        {
+            RaycastHit hit = _groundProbeHits[i];
+            if (hit.collider == null)
+                continue;
+
+            Transform hitTransform = hit.collider.transform;
+            if (ignoredRoot != null && (hitTransform == ignoredRoot || hitTransform.IsChildOf(ignoredRoot)))
+                continue;
+
+            if (hit.distance >= bestDistance)
+                continue;
+
+            bestDistance = hit.distance;
+            groundedPosition = hit.point;
+            found = true;
+        }
+
+        if (!found)
+        {
+            groundedPosition.y = 0f;
+            return true;
+        }
+
+        return true;
     }
 
     GameObject CreateCombatGirlGuardDummy(GameObject legacyDrone)
@@ -455,7 +516,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (robotKylePrefab == null)
             return;
 
-        visualRig.ConfigureRuntimeVisual(robotKylePrefab, Vector3.zero, Vector3.zero, Vector3.one);
+        visualRig.ConfigureRuntimeVisual(robotKylePrefab, Vector3.zero, new Vector3(0f, 180f, 0f), Vector3.one);
     }
 
     void FreezeTutorialTargetMotion(GameObject target)
@@ -666,41 +727,6 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
     void ConfigureTutorialModernUltimate(GameObject player, GameObject ultimateTargetObject, Camera mainCamera)
     {
-        {
-            if (player == null || ultimateTargetObject == null)
-                return;
-
-            PlayerUltimateController runtimeUltimateController = EnsureComponent<PlayerUltimateController>(player);
-            UltimateSkillController runtimeSkillController = EnsureComponent<UltimateSkillController>(player);
-            UltimateTargetBinder runtimeTargetBinder = EnsureComponent<UltimateTargetBinder>(player);
-            UltimateHitProcessor runtimeHitProcessor = EnsureComponent<UltimateHitProcessor>(player);
-            UltimateVFXPresenter runtimeVfxPresenter = EnsureComponent<UltimateVFXPresenter>(player);
-            UltimateSlashBurstSpawner runtimeSlashSpawner = EnsureComponent<UltimateSlashBurstSpawner>(player);
-            UltimateSequencePlayer runtimeSequencePlayer = EnsureComponent<UltimateSequencePlayer>(player);
-            UltimateCameraDirector runtimeCameraDirector = EnsureComponent<UltimateCameraDirector>(player);
-            UltimateSequenceData runtimeSequenceData = Resources.Load<UltimateSequenceData>("Ultimate/UltimateSequence_Default");
-
-            if (runtimeUltimateController == null || runtimeSkillController == null || runtimeTargetBinder == null || runtimeHitProcessor == null || runtimeVfxPresenter == null || runtimeSlashSpawner == null || runtimeSequencePlayer == null || runtimeCameraDirector == null || runtimeSequenceData == null)
-                return;
-
-            ConfigureTutorialUltimateTarget(ultimateTargetObject);
-            runtimeUltimateController.director = null;
-            runtimeUltimateController.useScriptedSequence = true;
-            runtimeUltimateController.allowDirectorFallbackWhenScriptedUnavailable = false;
-            runtimeUltimateController.useUltimateStageRuntime = true;
-            runtimeUltimateController.slashBurstSpawner = runtimeSlashSpawner;
-            runtimeSkillController.ConfigureRuntimeModern(
-                runtimeUltimateController,
-                runtimeSequenceData,
-                null,
-                runtimeTargetBinder,
-                runtimeHitProcessor,
-                runtimeVfxPresenter);
-            return;
-        }
-#if !UNITY_EDITOR
-        return;
-#else
         if (player == null || ultimateTargetObject == null || mainCamera == null)
             return;
 
@@ -713,26 +739,26 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (ultimateController == null || skillController == null || targetBinder == null || hitProcessor == null || vfxPresenter == null || playerReferences == null)
             return;
 
-        PlayableAsset timelineAsset = LoadEditorAsset<PlayableAsset>("Assets/Cinematics/Ultimate/TL_Ultimate_PlayerSword.playable");
+        PlayableAsset timelineAsset = LoadRuntimeUltimateTimeline();
         UltimateSequenceData sequenceData = Resources.Load<UltimateSequenceData>("Ultimate/UltimateSequence_Default");
         CinemachineBrain brain = mainCamera.GetComponent<CinemachineBrain>();
         if (timelineAsset == null || sequenceData == null || brain == null)
             return;
 
-        SignalAsset sigCameraSessionBegin = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_CameraSessionBegin.asset");
-        SignalAsset sigDrawPoseStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_DrawPoseStart.asset");
-        SignalAsset sigCloseUpStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_CloseUpStart.asset");
-        SignalAsset sigDrawSlashRelease = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_DrawSlashRelease.asset");
-        SignalAsset sigSlashStormStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_SlashStormStart.asset");
-        SignalAsset sigSlashStormSustainStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_SlashStormSustainStart.asset");
-        SignalAsset sigPlayerHideForStorm = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_PlayerHideForStorm.asset");
-        SignalAsset sigPlayerShowForWalkout = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_PlayerShowForWalkout.asset");
-        SignalAsset sigWalkoutStart = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_WalkoutStart.asset");
-        SignalAsset sigGameplayCommitDamage = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_GameplayCommitDamage.asset");
-        SignalAsset sigExplosionPrepare = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_ExplosionPrepare.asset");
-        SignalAsset sigFinalExplosion = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_FinalExplosion.asset");
-        SignalAsset sigCameraSessionEnd = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_CameraSessionEnd.asset");
-        SignalAsset sigGameplayRestore = LoadEditorAsset<SignalAsset>("Assets/Cinematics/Ultimate/Signals/Sig_GameplayRestore.asset");
+        SignalAsset sigCameraSessionBegin = FindTimelineSignal(timelineAsset, "Sig_CameraSessionBegin");
+        SignalAsset sigDrawPoseStart = FindTimelineSignal(timelineAsset, "Sig_DrawPoseStart");
+        SignalAsset sigCloseUpStart = FindTimelineSignal(timelineAsset, "Sig_CloseUpStart");
+        SignalAsset sigDrawSlashRelease = FindTimelineSignal(timelineAsset, "Sig_DrawSlashRelease");
+        SignalAsset sigSlashStormStart = FindTimelineSignal(timelineAsset, "Sig_SlashStormStart");
+        SignalAsset sigSlashStormSustainStart = FindTimelineSignal(timelineAsset, "Sig_SlashStormSustainStart");
+        SignalAsset sigPlayerHideForStorm = FindTimelineSignal(timelineAsset, "Sig_PlayerHideForStorm");
+        SignalAsset sigPlayerShowForWalkout = FindTimelineSignal(timelineAsset, "Sig_PlayerShowForWalkout");
+        SignalAsset sigWalkoutStart = FindTimelineSignal(timelineAsset, "Sig_WalkoutStart");
+        SignalAsset sigGameplayCommitDamage = FindTimelineSignal(timelineAsset, "Sig_GameplayCommitDamage");
+        SignalAsset sigExplosionPrepare = FindTimelineSignal(timelineAsset, "Sig_ExplosionPrepare");
+        SignalAsset sigFinalExplosion = FindTimelineSignal(timelineAsset, "Sig_FinalExplosion");
+        SignalAsset sigCameraSessionEnd = FindTimelineSignal(timelineAsset, "Sig_CameraSessionEnd");
+        SignalAsset sigGameplayRestore = FindTimelineSignal(timelineAsset, "Sig_GameplayRestore");
 
         GameObject root = GameObject.Find("TutorialUltimateCinematicRoot");
         if (root == null)
@@ -837,8 +863,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             sigFinalExplosion,
             sigCameraSessionEnd,
             sigGameplayRestore);
+        ultimateController.director = null;
+        ultimateController.useScriptedSequence = false;
+        ultimateController.allowDirectorFallbackWhenScriptedUnavailable = false;
         skillController.ConfigureRuntimeModern(ultimateController, sequenceData, cinematicController, targetBinder, hitProcessor, vfxPresenter);
-#endif
     }
 
     void ConfigureTutorialUltimateTarget(GameObject ultimateTargetObject)
@@ -1094,8 +1122,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "movement",
             TutorialStepType.Movement,
-            "\uc9c0\uc815 \uc704\uce58\ub85c \uc774\ub3d9\ud574",
-            "\uc804\ubc29 \uccb4\ud06c \uc9c0\uc810\uae4c\uc9c0 \ubab8\uc744 \ud480\uc5b4",
+            "이동",
+            "WASD 키를 눌러 지정 위치로 이동해",
             new[] { movementChecker },
             Guide(EGOGuideMessageType.Briefing, "\uac00\ubccd\uac8c \ubab8\uc744 \ud480\uc5b4. \uc804\ubc29 \uccb4\ud06c \uc9c0\uc810\uae4c\uc9c0 \uc774\ub3d9\ud574.", 2.2f),
             Guide(EGOGuideMessageType.Success, "\uc88b\uc544. \ubab8\uc774 \ud480\ub9ac\uae30 \uc2dc\uc791\ud588\uc5b4.", 1.9f),
@@ -1107,8 +1135,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "camera",
             TutorialStepType.CameraFocus,
-            "\uc801\uc744 \uc2dc\uc57c\uc5d0 \ub2f4\uc544",
-            "\uc804\ud22c\ub294 \uc2dc\uc57c \ud655\ubcf4\ubd80\ud130 \uc2dc\uc791\ub3fc",
+            "시야 조정",
+            "마우스를 움직여 적을 화면 중앙에 둬",
             new[] { lookChecker },
             Guide(EGOGuideMessageType.Briefing, "\ud45c\uc801\uc744 \ucc3e\uace0 \uc2dc\uc120\uc744 \ub9de\ucdb0. \uc804\ud669 \uc778\uc2dd\ubd80\ud130 \uc2dc\uc791\ud55c\ub2e4.", 2.4f),
             Guide(EGOGuideMessageType.Success, "\uc88b\uc544. \ud45c\uc801 \uc778\uc2dd \uc644\ub8cc.", 1.7f),
@@ -1120,8 +1148,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "lockon",
             TutorialStepType.LockOn,
-            "\ud45c\uc801\uc5d0 \uc9d1\uc911\ud574",
-            "\ub77d\uc628\uc73c\ub85c \uc804\ud22c \ucd95\uc744 \uace0\uc815\ud574",
+            "락온",
+            "휠 클릭 키를 눌러 적을 락온해",
             new[] { lockOnChecker },
             Guide(EGOGuideMessageType.Tactical, "\uc2dc\uc120\uc744 \ubd99\uc7a1\uc544. \ud0c0\uac9f\uc744 \ub193\uce58\uc9c0 \ub9c8.", 2.0f),
             Guide(EGOGuideMessageType.Success, "\uace0\uc815 \uc88b\ub2e4. \uc774\uc81c \ubca0\uc5b4\ub0bc \uc218 \uc788\uc5b4.", 1.8f),
@@ -1133,8 +1161,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "basic_attack",
             TutorialStepType.BasicAttack,
-            "\uc57d\uacf5\uacfc \uac15\uacf5\uc744 \uc11e\uc5b4",
-            "\uc88c\ud074\ub9ad\uacfc \uc6b0\ud074\ub9ad\uc744 \uac01\uac01 10\ud68c \uc801\uc911\uc2dc\ucf1c",
+            "기본 공격",
+            "좌클릭/우클릭 키를 눌러 약공과 강공을 각각 10회 적중시켜",
             new[] { attackChecker },
             Guide(EGOGuideMessageType.Briefing, "\uba3c\uc800 \ubca0\uc5b4. \uc57d\uacf5\uacfc \uac15\uacf5\uc744 \uac01\uac01 10\ud68c\uc529 \ubc18\ubcf5\ud574 \uac10\uac01\uc744 \ub9de\ucdb0.", 2.5f),
             Guide(EGOGuideMessageType.Success, "\ud0c0\uaca9 \uac10\uac01 \ud655\uc778 \uc644\ub8cc.", 1.8f),
@@ -1149,8 +1177,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "guard",
             TutorialStepType.Guard,
-            "\uc774\ubc88\uc5d4 \ubc1b\uc544\ub0b4",
-            "\uacbd\uace0\uc120\uacfc \ub9c8\ucee4\ub97c \ubcf4\uace0 \ubc29\uc5b4\ud574",
+            "방어",
+            "E 키를 눌러 적 공격을 방어해",
             new[] { guardChecker },
             Guide(EGOGuideMessageType.Briefing, "\ubd89\uc740 \uacbd\uace0\uc120\uc774 \ub728\uba74 \ubc29\uc5b4\ud574. \uc774\ubc88\uc5d4 \uc548\uc815\uc801\uc73c\ub85c \ubc1b\uc544\ub0b8\ub2e4.", 2.6f),
             Guide(EGOGuideMessageType.Success, "\uc88b\uc544. \ubc29\uc5b4 \ub9ac\ub4ec\uc774 \uc7a1\ud614\uc5b4.", 1.9f),
@@ -1162,8 +1190,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "parry",
             TutorialStepType.Parry,
-            "\uc815\ud655\ud558\uac8c \ub04a\uc5b4\ub0b4",
-            "\ube5b\uacfc \ub9c8\ucee4\uac00 \uacb9\uce60 \ub54c \ub9c9\uc544",
+            "패링",
+            "E 키를 타이밍에 맞춰 눌러 공격을 패링해",
             new[] { parryChecker },
             Guide(EGOGuideMessageType.Briefing, "\uc774\ubc88\uc5d4 \ud758\ub9ac\ub294 \uac8c \uc544\ub2c8\ub77c \ub04a\ub294 \uac70\ub2e4. \uacbd\uace0\uac00 \uacb9\uce60 \ub54c \ub9de\ucdb0 \ud299\uaca8\ub0b4.", 2.7f),
             Guide(EGOGuideMessageType.Success, "\uc88b\uc740 \ud0c0\uc774\ubc0d. \uadf8 \uac10\uac01\uc744 \uae30\uc5b5\ud574.", 1.9f),
@@ -1175,8 +1203,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "dodge",
             TutorialStepType.Dodge,
-            "\uc606\uc73c\ub85c \ud758\ub824",
-            "\ub9c8\ucee4 \ubc14\uae65\uc73c\ub85c \ube60\uc838",
+            "회피",
+            "Shift 키를 눌러 공격 범위 밖으로 회피해",
             new[] { dodgeChecker },
             Guide(EGOGuideMessageType.Briefing, "\uc774\uac74 \ubc1b\uc544\ub0b4\uc9c0 \ub9d0\uace0 \uacf5\uaca9 \ubc29\ud5a5\uc5d0\uc11c \ubc97\uc5b4\ub098\ub4ef \ud53c\ud574.", 2.6f),
             Guide(EGOGuideMessageType.Success, "\uc88b\uc544. \ubc29\uc5b4\uc640 \ub2e4\ub978 \ub2f5\uc744 \uc120\ud0dd\ud588\uc5b4.", 2.0f),
@@ -1188,8 +1216,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "perfect_dodge",
             TutorialStepType.PerfectDodge,
-            "\uc9c0\uae08\uc774\uc57c",
-            "\ub9c8\ucee4\uac00 \ub2ff\uae30 \uc9c1\uc804\uc5d0 \ud68c\ud53c\ud574",
+            "퍼펙트 회피",
+            "Shift 키를 타이밍에 맞춰 눌러 퍼펙트 회피해",
             new[] { perfectChecker },
             Guide(EGOGuideMessageType.Briefing, "\ud22c\uc0ac\uccb4\uac00 \ub2ff\uae30 \uc9c1\uc804 \ud55c \ubc15\uc790 \ub2a6\uac8c \ud53c\ud574.", 2.5f),
             Guide(EGOGuideMessageType.Success, "\uc88b\uc544. \uadf8\uac8c \ud37c\ud399\ud2b8 \ud68c\ud53c\ub2e4.", 1.8f),
@@ -1201,8 +1229,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "heal",
             TutorialStepType.Heal,
-            "\uc9c0\uae08 \ubcf4\ucda9\ud574",
-            "\uc2e4\uc804\uc774\ub77c\uba74 \uc774 \ud310\ub2e8\ub3c4 \uc0dd\uc874\uc758 \uc77c\ubd80\ub2e4",
+            "회복",
+            "Q 키를 눌러 앰플로 회복해",
             new[] { healChecker },
             Guide(EGOGuideMessageType.Briefing, "\ube48\ud2c8\uc774 \uc0dd\uacbc\ub2e4. \uc9c0\uae08 \uc570\ud50c\uc744 \ud22c\uc785\ud574.", 2.0f),
             Guide(EGOGuideMessageType.Success, "\uc88b\uc544. \ud68c\ubcf5 \ud0c0\uc774\ubc0d \ud310\ub2e8\ub3c4 \uc804\uc220\uc774\uc57c.", 2.0f),
@@ -1214,8 +1242,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         steps.Add(CreateStep(
             "ultimate",
             TutorialStepType.Ultimate,
-            "\uac8c\uc774\uc9c0\ub97c \ud138\uc5b4",
-            "\uad81\uadf9\uae30\ub85c \uc804\ud22c \ub9ac\ub4ec\uc744 \ubc14\uafd4",
+            "궁극기",
+            "R 키를 눌러 궁극기를 사용해",
             new[] { ultimateChecker },
             Guide(EGOGuideMessageType.Briefing, "\ucda9\ubd84\ud558\ub2e4. \uc774\ubc88\uc5d4 \ud310 \uc790\uccb4\ub97c \ub4a4\uc9d1\uc790.", 2.1f),
             Guide(EGOGuideMessageType.Success, "\ud655\uc2e4\ud558\ub124. \ud074\ub77c\uc774\ub9e5\uc2a4 \uc6b4\uc6a9 \uac10\uac01\uae4c\uc9c0 \ud655\uc778\ub410\uc5b4.", 2.2f),
@@ -1229,8 +1257,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             steps.Add(CreateStep(
                 "exit",
                 TutorialStepType.Exit,
-                "\ud604\uc2e4\ub85c \ubcf5\uadc0\ud574",
-                "\ucd9c\uad6c\ub85c \uc774\ub3d9\ud574 \ub2e4\uc74c \uad6c\uac04\uc5d0 \uc9c4\uc785\ud574",
+                "훈련 종료",
+                "WASD 키를 눌러 출구로 이동해",
                 new[] { exitChecker },
                 Guide(EGOGuideMessageType.Briefing, "\ud6c8\ub828 \uc885\ub8cc. \uc774\uc81c \ud604\uc2e4\ub85c \ub3cc\uc544\uac00.", 2.2f),
                 Guide(EGOGuideMessageType.Success, "\uc900\ube44\ub294 \ub05d\ub0ac\ub2e4. \uc9c4\uc9dc\ub85c \uac04\ub2e4.", 2.0f),
@@ -1469,6 +1497,43 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         }
 
         return LoadEditorAsset<GameObject>("Assets/Effects/111/FX_Slash_02.prefab");
+#else
+        return null;
+#endif
+    }
+
+    static PlayableAsset LoadRuntimeUltimateTimeline()
+    {
+        PlayableAsset timeline = Resources.Load<PlayableAsset>(UltimateTimelineResourcePath);
+#if UNITY_EDITOR
+        if (timeline == null)
+            timeline = LoadEditorAsset<PlayableAsset>("Assets/Cinematics/Ultimate/TL_Ultimate_PlayerSword.playable");
+#endif
+        return timeline;
+    }
+
+    static SignalAsset FindTimelineSignal(PlayableAsset playableAsset, string signalName)
+    {
+        if (playableAsset is TimelineAsset timeline)
+        {
+            foreach (TrackAsset track in timeline.GetOutputTracks())
+            {
+                if (track == null)
+                    continue;
+
+                foreach (IMarker marker in track.GetMarkers())
+                {
+                    if (marker is SignalEmitter emitter && emitter.asset != null &&
+                        string.Equals(emitter.asset.name, signalName, StringComparison.Ordinal))
+                    {
+                        return emitter.asset;
+                    }
+                }
+            }
+        }
+
+#if UNITY_EDITOR
+        return LoadEditorAsset<SignalAsset>($"Assets/Cinematics/Ultimate/Signals/{signalName}.asset");
 #else
         return null;
 #endif

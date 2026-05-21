@@ -727,15 +727,20 @@ public class TutorialObjectivePanelController : MonoBehaviour
         if (step == null)
             return string.Empty;
 
-        string currentProgressText = flowController != null ? flowController.CurrentStepProgressText : string.Empty;
-        if (!string.IsNullOrWhiteSpace(currentProgressText) && currentProgressText != "\uc644\ub8cc")
-            return currentProgressText;
-
         if (!string.IsNullOrWhiteSpace(_bridgeHintBody))
             return _bridgeHintBody;
 
+        string currentProgressText = flowController != null ? flowController.CurrentStepProgressText : string.Empty;
         if (!string.IsNullOrWhiteSpace(step.hintLine2))
+        {
+            if (!string.IsNullOrWhiteSpace(currentProgressText) && currentProgressText != "\uc644\ub8cc")
+                return $"{step.hintLine2}\n{currentProgressText}";
+
             return step.hintLine2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentProgressText) && currentProgressText != "\uc644\ub8cc")
+            return currentProgressText;
 
         return string.Empty;
     }

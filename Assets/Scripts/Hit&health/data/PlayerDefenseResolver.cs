@@ -58,7 +58,7 @@ public static class PlayerDefenseResolver
         }
 
         bool hasGuard = guard != null;
-        bool isFront = hasGuard && IsFront(defender, hitPoint, attacker, frontArcDegrees);
+        bool isFront = hasGuard && IsFront(defender, guard, hitPoint, attacker, frontArcDegrees);
         bool canParryDefense = hasGuard && isFront && !unblockable && allowParry;
         bool canBlockDefense = hasGuard && isFront && !unblockable && allowGuard;
         bool canDefense = canParryDefense || canBlockDefense;
@@ -91,27 +91,45 @@ public static class PlayerDefenseResolver
             0f);
     }
 
-    static bool IsFront(Transform defender, Vector3 hitPoint, Transform attacker, float frontArcDegrees)
+    static bool IsFront(
+        Transform defender,
+        PlayerGuardController guard,
+        Vector3 hitPoint,
+        Transform attacker,
+        float frontArcDegrees)
     {
-        if (defender == null)
+        if (defender == null && guard == null)
             return false;
 
+        Vector3 origin = guard != null ? guard.GetGuardOrigin() : defender.position;
         Vector3 defenseDirection = attacker != null
-            ? attacker.position - defender.position
-            : hitPoint - defender.position;
+            ? attacker.position - origin
+            : hitPoint - origin;
 
-        defenseDirection.y = 0f;
+        bool flatten = guard == null || guard.flattenToGround;
+        if (flatten)
+            defenseDirection.y = 0f;
+
         if (defenseDirection.sqrMagnitude < 0.0001f)
             return true;
 
         defenseDirection.Normalize();
 
-        Vector3 forward = defender.forward;
-        forward.y = 0f;
+        Vector3 forward = guard != null ? guard.GetGuardForward() : defender.forward;
+        if (guard != null && guard.invertForward)
+            forward = -forward;
+
+        if (flatten)
+            forward.y = 0f;
+
+        if (forward.sqrMagnitude < 0.0001f)
+            return true;
+
         forward.Normalize();
 
         float dot = Vector3.Dot(forward, defenseDirection);
         float angle = Mathf.Acos(Mathf.Clamp(dot, -1f, 1f)) * Mathf.Rad2Deg;
-        return angle <= frontArcDegrees * 0.5f;
+        float arc = guard != null ? Mathf.Max(frontArcDegrees, guard.frontArcDegrees) : frontArcDegrees;
+        return angle <= arc * 0.5f;
     }
 }

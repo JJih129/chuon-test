@@ -2726,6 +2726,11 @@ Transform:
   - {fileID: 281043601}
   m_Father: {fileID: 634751832}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &575877117 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: cab3c791cf861b849837ce6e2a181a46, type: 3}
+  m_PrefabInstance: {fileID: 195918998}
+  m_PrefabAsset: {fileID: 0}
 --- !u!224 &597969487 stripped
 RectTransform:
   m_CorrespondingSourceObject: {fileID: 7712484080110946931, guid: 61234a0b4cf4e404a96a75cfbeeabd0d, type: 3}
@@ -4078,6 +4083,9 @@ MonoBehaviour:
   showEscalationQuestCue: 1
   elevatorPanel: {fileID: 1245720330}
   nextSceneName: MainScene
+  elevatorLiftRoot: {fileID: 575877117}
+  elevatorLowerDistance: 4.5
+  elevatorLowerDuration: 0.85
   elevatorThreatLine: "\uBE44\uC0C1 \uACBD\uB85C \uC804\uC6A9 \uC2B9\uAC15\uAE30\uC57C.
     \uB204\uAD70\uAC00 \uBA3C\uC800 \uC774 \uB9C1\uD06C\uB97C \uAE68\uC6CC\uB1A8\uC5B4."
   elevatorResponseLine: "\uBA3C\uC800 \uAE30\uB2E4\uB9AC\uACE0 \uC788\uB2E4\uB294

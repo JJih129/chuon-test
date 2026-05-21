@@ -22,6 +22,8 @@ public enum UltimateActivationBlockReason
 
 public class PlayerUltimateController : MonoBehaviour
 {
+    const string ScriptedIntroPoseClipResourcePath = "Ultimate/Clips/Sp_Skill3_Ultimate";
+
     [Header("Gauge")]
     [Tooltip("Maximum ultimate gauge value.")]
     public float gaugeMax = 100f;
@@ -111,6 +113,10 @@ public class PlayerUltimateController : MonoBehaviour
     public int scriptedMultiHitCount = 4;
     [Tooltip("Unscaled time spent on the opening sword close-up.")]
     public float scriptedCloseupDuration = 0.32f;
+    [Tooltip("Hold this normalized Sp_skill3 frame during the opening sword close-up.")]
+    [Range(0f, 1f)] public float scriptedIntroHoldFrameNormalized = 0f;
+    [Tooltip("Freeze the opening close-up on the draw-ready Sp_skill3 frame before starting the attack motion.")]
+    public bool holdScriptedIntroPoseFrame = true;
     [Tooltip("Unscaled time spent transitioning to the wide shot.")]
     public float scriptedWideDuration = 0.72f;
     [Tooltip("Unscaled delay between each repeated slash hit.")]
@@ -231,6 +237,9 @@ public class PlayerUltimateController : MonoBehaviour
     bool _externalSessionInvulnerable;
     bool _externalSessionFreezeTime;
     bool _externalSessionRestoreCamera;
+    bool _scriptedSequenceOwnsAnimationEvents;
+    bool _holdScriptedIntroPoseActive;
+    AnimationClip _scriptedIntroPoseClip;
 
     void Awake()
     {
@@ -281,6 +290,12 @@ public class PlayerUltimateController : MonoBehaviour
         if (!ShouldConsumeActivationInput()) return;
 
         TryActivate();
+    }
+
+    void LateUpdate()
+    {
+        if (_holdScriptedIntroPoseActive)
+            SampleScriptedIntroPoseFrame();
     }
 
     public void AddGauge(float amount)
@@ -825,8 +840,16 @@ public class PlayerUltimateController : MonoBehaviour
             if (useScriptedSequence && TryResolveUltimateTarget(out IUltimateTarget scriptedTarget, out Transform scriptedTargetTransform))
             {
                 PrepareScriptedAnimator();
-                yield return Co_ScriptedSequence(scriptedTarget, scriptedTargetTransform);
-                RestoreScriptedAnimator();
+                _scriptedSequenceOwnsAnimationEvents = true;
+                try
+                {
+                    yield return Co_ScriptedSequence(scriptedTarget, scriptedTargetTransform);
+                }
+                finally
+                {
+                    _scriptedSequenceOwnsAnimationEvents = false;
+                    RestoreScriptedAnimator();
+                }
                 ranScriptedSequence = true;
             }
 
@@ -885,12 +908,18 @@ public class PlayerUltimateController : MonoBehaviour
 
     public void OnMultiHit()
     {
+        if (_scriptedSequenceOwnsAnimationEvents)
+            return;
+
         ApplyBurstDamage(null, multihitFixedDamage);
         screenFX?.PulseMinor();
     }
 
     public void OnFinisher()
     {
+        if (_scriptedSequenceOwnsAnimationEvents)
+            return;
+
         ApplyBurstDamage(null, finisherFixedDamage);
         SpawnFinisherImpact(null);
         screenFX?.PulseMajor();
@@ -919,6 +948,7 @@ public class PlayerUltimateController : MonoBehaviour
     {
         Transform playerRoot = ResolvePlayerRoot();
         Transform swordFocus = ResolveSwordFocus(playerRoot);
+        Transform sourceSwordLookTarget = ResolveIntroSwordLookTarget(playerRoot);
         UltimateStageRuntime activeStage = ResolveUltimateStageRuntime();
         CinemachineVirtualCameraBase sequenceCam = ResolveSequenceCamera();
         if (sequenceCam == null || playerRoot == null || targetTransform == null)
@@ -994,21 +1024,34 @@ public class PlayerUltimateController : MonoBehaviour
                 ? activeStage.SequenceCameraShake
                 : sequenceCam.GetComponent<CameraShake>();
 
-        Vector3 swordFocusPoint = activeStage != null
-            ? ResolvePresentationSwordFocus(activeStage, swordFocus)
-            : swordFocus.position;
-        Vector3 closeupLookTarget = activeStage != null ? stageTargetFocus : swordFocusPoint + approachDirection * 0.35f;
-        Vector3 closeupRight = activeStage != null && activeStage.PlayerAnchor != null ? activeStage.PlayerAnchor.right : playerRoot.right;
-        Vector3 closeupPos = swordFocusPoint - approachDirection * scriptedCloseupDistance + closeupRight * 0.28f + Vector3.up * 0.18f;
-        Quaternion closeupRot = Quaternion.LookRotation((closeupLookTarget - closeupPos).normalized, Vector3.up);
-        if (TryGetStageShotPose(activeStage != null ? activeStage.OpenShotAnchor : null, out Vector3 stagedOpenPos, out Quaternion stagedOpenRot))
-        {
-            closeupPos = stagedOpenPos;
-            closeupRot = stagedOpenRot;
-        }
-        sequenceCam.transform.SetPositionAndRotation(closeupPos, closeupRot);
-        TrySetAnimatorTrigger(scriptedStartTrigger);
-        yield return WaitForSecondsRealtimeSafe(scriptedCloseupDuration);
+            Vector3 swordFocusPoint = activeStage != null
+                ? ResolvePresentationSwordFocus(activeStage, swordFocus)
+                : swordFocus.position;
+            Vector3 swordLookPoint = ResolvePresentationPoint(sourceSwordLookTarget, swordFocusPoint);
+            Vector3 closeupRight = activeStage != null && activeStage.PlayerAnchor != null ? activeStage.PlayerAnchor.right : playerRoot.right;
+            Vector3 chestFocusPoint = (activeStage != null && activeStage.PlayerAnchor != null ? activeStage.PlayerAnchor.position : playerRoot.position)
+                + Vector3.up * 0.62f
+                + approachDirection * 0.08f;
+            Vector3 closeupLookTarget = Vector3.Lerp(swordLookPoint, chestFocusPoint, 0.08f);
+            Vector3 closeupPos = swordFocusPoint
+                + approachDirection * Mathf.Max(0.1f, scriptedCloseupDistance * 0.22f)
+                + closeupRight * 0.42f
+                + Vector3.up * 0.02f;
+            Quaternion closeupRot = Quaternion.LookRotation((closeupLookTarget - closeupPos).normalized, Vector3.up);
+            if (TryGetStageShotPose(activeStage != null ? activeStage.OpenShotAnchor : null, out Vector3 stagedOpenPos, out Quaternion stagedOpenRot))
+            {
+                closeupPos = stagedOpenPos;
+                closeupRot = stagedOpenRot;
+            }
+            sequenceCam.transform.SetPositionAndRotation(closeupPos, closeupRot);
+            bool heldIntroPose = BeginScriptedIntroPoseHold();
+            if (!heldIntroPose)
+                TrySetAnimatorTrigger(scriptedStartTrigger);
+
+            yield return WaitForSecondsRealtimeSafe(scriptedCloseupDuration);
+            EndScriptedIntroPoseHold();
+            if (heldIntroPose)
+                TrySetAnimatorTrigger(scriptedStartTrigger);
 
         targetFocus = GetTargetFocusPoint(targetTransform);
         victimAnchorPosition = ResolveVictimAnchorPosition(activeStage, playerRoot, targetTransform, approachDirection);
@@ -1025,7 +1068,7 @@ public class PlayerUltimateController : MonoBehaviour
             ? activeStage.FocusAnchor.position
             : targetFocus + Vector3.up * 1.15f;
         Vector3 wideSide = Vector3.Cross(Vector3.up, approachDirection).normalized;
-        Vector3 widePos = wideLookTarget - approachDirection * scriptedWideDistance + wideSide * 1.35f + Vector3.up * 0.9f;
+        Vector3 widePos = wideLookTarget - approachDirection * (scriptedWideDistance + 2.25f) + wideSide * 1.1f + Vector3.up * 3.85f;
         Quaternion wideRot = Quaternion.LookRotation((wideLookTarget - widePos).normalized, Vector3.up);
         if (TryGetStageShotPose(activeStage != null ? activeStage.WideShotAnchor : null, out Vector3 stagedWidePos, out Quaternion stagedWideRot))
         {
@@ -1063,7 +1106,7 @@ public class PlayerUltimateController : MonoBehaviour
             Vector3 dynamicLookTarget = activeStage != null && activeStage.FocusAnchor != null
                 ? activeStage.FocusAnchor.position
                 : targetFocus + Vector3.up * 1.05f;
-            Vector3 dynamicPos = dynamicLookTarget - radialDir * (scriptedWideDistance - 0.6f) + Vector3.up * 0.75f;
+            Vector3 dynamicPos = dynamicLookTarget - radialDir * (scriptedWideDistance + 2.1f) + Vector3.up * 3.75f;
             Quaternion dynamicRot = Quaternion.LookRotation((dynamicLookTarget - dynamicPos).normalized, Vector3.up);
             Transform dynamicShotAnchor = activeStage != null
                 ? (i % 2 == 0 ? activeStage.SlashLeftShotAnchor : activeStage.SlashRightShotAnchor)
@@ -1091,10 +1134,18 @@ public class PlayerUltimateController : MonoBehaviour
             UpdatePresentationActors(activeStage, stagePlayerPosition, stageTargetFocus, stageVictimPosition, stagePlayerPosition, stagePlayerPosition);
         }
 
+        Vector3 walkDirection = finisherDir;
+        Vector3 walkStart = finisherPos;
+        Vector3 walkEnd = walkStart + walkDirection * 1.8f;
+        Vector3 finalShotLookTarget = Vector3.Lerp(walkEnd, targetFocus, 0.32f) + Vector3.up * 1.16f;
+        Vector3 finalShotSide = Vector3.Cross(Vector3.up, walkDirection).normalized;
         Vector3 finisherLookTarget = activeStage != null && activeStage.VictimAnchor != null
-            ? activeStage.VictimAnchor.position + Vector3.up * 0.8f
-            : targetFocus + Vector3.up * 0.8f;
-        Vector3 finisherPosCam = finisherLookTarget - finisherDir * 5.35f + Vector3.Cross(Vector3.up, finisherDir) * 2.35f + Vector3.up * 1.75f;
+            ? Vector3.Lerp(walkEnd, activeStage.VictimAnchor.position, 0.32f) + Vector3.up * 1.16f
+            : finalShotLookTarget;
+        Vector3 finisherPosCam = walkEnd
+            + walkDirection * (scriptedWalkCameraDistance + 3.55f)
+            + finalShotSide * 0.18f
+            + Vector3.up * (scriptedWalkCameraHeight + 0.9f);
         Quaternion finisherRot = Quaternion.LookRotation((finisherLookTarget - finisherPosCam).normalized, Vector3.up);
         if (TryGetStageShotPose(activeStage != null ? activeStage.FinisherShotAnchor : null, out Vector3 stagedFinisherPos, out Quaternion stagedFinisherRot))
         {
@@ -1103,18 +1154,11 @@ public class PlayerUltimateController : MonoBehaviour
         }
         yield return Co_MoveCamera(sequenceCam.transform, sequenceCam.transform.position, sequenceCam.transform.rotation, finisherPosCam, finisherRot, 0.16f);
 
-        ApplyBurstDamage(target, finisherFixedDamage);
-        TriggerVictimPresentationHit(true);
-        SpawnFinisherImpact(activeStage != null ? stageTargetFocus : targetFocus);
-        screenFX?.PulseMajor();
-        PulseSequenceCamera(0.16f, 0.09f);
-        yield return WaitForSecondsRealtimeSafe(scriptedFinisherHold);
-
-        Vector3 walkDirection = finisherDir;
-        Vector3 walkStart = finisherPos;
-        Vector3 walkEnd = walkStart + walkDirection * 1.8f;
-        Vector3 walkLookTarget = walkStart + Vector3.up * 1.35f;
-        Vector3 walkCamPos = walkStart - walkDirection * scriptedWalkCameraDistance + Vector3.up * scriptedWalkCameraHeight;
+        Vector3 walkLookTarget = finalShotLookTarget;
+        Vector3 walkCamPos = walkEnd
+            + walkDirection * (scriptedWalkCameraDistance + 3.55f)
+            + finalShotSide * 0.18f
+            + Vector3.up * (scriptedWalkCameraHeight + 0.9f);
         Quaternion walkCamRot = Quaternion.LookRotation((walkLookTarget - walkCamPos).normalized, Vector3.up);
         if (TryGetStageShotPose(activeStage != null ? activeStage.WalkOutShotAnchor : null, out Vector3 stagedWalkPos, out Quaternion stagedWalkRot))
         {
@@ -1130,7 +1174,6 @@ public class PlayerUltimateController : MonoBehaviour
             Vector3 stageWalkEnd = stageWalkStart + walkDirection * 1.8f;
             UpdatePresentationActors(activeStage, stageWalkStart, stageWalkStart + walkDirection, stageVictimPosition, stageWalkStart, stageWalkEnd);
         }
-        TrySetAnimatorTrigger(scriptedWalkTrigger);
         if (preserveGameplayPlayerPose)
         {
             yield return Co_MovePresentationActors(activeStage, stagePlayerPosition, stagePlayerPosition + walkDirection * 1.8f, walkDirection, scriptedWalkOutDuration, stageVictimPosition);
@@ -1140,9 +1183,17 @@ public class PlayerUltimateController : MonoBehaviour
             yield return Co_MovePlayerWithPresentation(playerRoot, walkStart, walkEnd, targetFocus, scriptedWalkOutDuration, activeStage, stagePlayerPosition, stagePlayerPosition + walkDirection * 1.8f, stageVictimPosition);
         }
 
+        ApplyBurstDamage(target, finisherFixedDamage);
+        TriggerVictimPresentationHit(true);
+        SpawnFinisherImpact(activeStage != null ? stageTargetFocus : targetFocus);
+        screenFX?.PulseMajor();
+        PulseSequenceCamera(0.16f, 0.09f);
+        yield return WaitForSecondsRealtimeSafe(scriptedFinisherHold);
+
         }
         finally
         {
+            EndScriptedIntroPoseHold();
             if (cameraStateCached)
                 RestoreSequenceCamera(sequenceCam, cameraState);
             if (victimStateActive)
@@ -1642,6 +1693,21 @@ public class PlayerUltimateController : MonoBehaviour
         return sourceSwordFocus != null ? sourceSwordFocus.position : transform.position + transform.forward;
     }
 
+    Vector3 ResolvePresentationPoint(Transform sourceTransform, Vector3 fallback)
+    {
+        if (sourceTransform == null)
+            return fallback;
+
+        if (_playerPresentationClone != null && _playerPresentationClone.CloneRoot != null)
+        {
+            Transform mapped = _playerPresentationClone.ResolveMappedTransform(sourceTransform);
+            if (mapped != null && mapped != _playerPresentationClone.CloneRoot)
+                return mapped.position;
+        }
+
+        return sourceTransform.position;
+    }
+
     Vector3 ResolveStageVictimPosition(UltimateStageRuntime activeStage)
     {
         if (activeStage == null)
@@ -1859,6 +1925,47 @@ public class PlayerUltimateController : MonoBehaviour
         _cachedAnimatorStateValid = false;
     }
 
+    bool BeginScriptedIntroPoseHold()
+    {
+        if (!holdScriptedIntroPoseFrame || ResolveScriptedIntroPoseClip() == null)
+            return false;
+
+        _holdScriptedIntroPoseActive = true;
+        SampleScriptedIntroPoseFrame();
+        return true;
+    }
+
+    void EndScriptedIntroPoseHold()
+    {
+        _holdScriptedIntroPoseActive = false;
+    }
+
+    AnimationClip ResolveScriptedIntroPoseClip()
+    {
+        if (_scriptedIntroPoseClip == null)
+            _scriptedIntroPoseClip = Resources.Load<AnimationClip>(ScriptedIntroPoseClipResourcePath);
+
+        return _scriptedIntroPoseClip;
+    }
+
+    bool SampleScriptedIntroPoseFrame()
+    {
+        if (!holdScriptedIntroPoseFrame)
+            return false;
+
+        AnimationClip clip = ResolveScriptedIntroPoseClip();
+        Transform sampleRoot = _playerPresentationClone != null && _playerPresentationClone.CloneRoot != null
+            ? _playerPresentationClone.CloneRoot
+            : ResolvePlayerRoot();
+        if (clip == null || sampleRoot == null)
+            return false;
+
+        float sampleTime = Mathf.Clamp01(scriptedIntroHoldFrameNormalized) * Mathf.Max(0f, clip.length);
+        sampleTime = Mathf.Clamp(sampleTime, 0f, Mathf.Max(0f, clip.length - 0.0001f));
+        clip.SampleAnimation(sampleRoot.gameObject, sampleTime);
+        return true;
+    }
+
     void TrySetAnimatorTrigger(string triggerName)
     {
         if (string.IsNullOrWhiteSpace(triggerName))
@@ -2034,6 +2141,7 @@ public class PlayerUltimateController : MonoBehaviour
 
     void ForceCleanupScriptedPresentation()
     {
+        EndScriptedIntroPoseHold();
         LogUltimateCameraState("cleanup-before");
         slashBurstSpawner?.ClearPresentationOverride();
         ReleasePresentationClones();

@@ -17,6 +17,9 @@ using Unity.Cinemachine;
 [DisallowMultipleComponent]
 public class MouseWheelZoom : MonoBehaviour
 {
+    [Header("전시 빌드 고정")]
+    [SerializeField] bool allowMouseWheelZoom = false;
+
     [Header("대상 참조")]
     public FreeLookCamera freeLook;       // 선택: 락온 아닐 때 사용  // ref: FreeLookCamera.cs
     public VCamTransposerProxy vcamProxy; // 선택: 락온 경로 우선    // ref: VCamTransposerProxy.cs
@@ -42,6 +45,9 @@ public class MouseWheelZoom : MonoBehaviour
 
     void Update()
     {
+        if (!allowMouseWheelZoom)
+            return;
+
         float wheel = Input.mouseScrollDelta.y;
         if (Mathf.Abs(wheel) < 0.01f) return;
         if (invertScroll) wheel = -wheel;

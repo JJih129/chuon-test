@@ -175,6 +175,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [Header("공격별 오버라이드")]
     [SerializeField] AttackVfxEntry[] attackVfxEntries = Array.Empty<AttackVfxEntry>();
 
+    [Header("Heavy Attack VFX")]
+    [SerializeField] Color heavyAttackVfxTint = new Color(1f, 0.06f, 0.02f, 1f);
+
     [Header("디버그")]
     [SerializeField] bool debugLog;
 
@@ -469,6 +472,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             instance.Transform.SetParent(spawnPoint, true);
 
         instance.GameObject.SetActive(true);
+        ApplySpawnedVfxTint(instance.GameObject, IsHeavyAttackProfile(profile));
         PlayParticles(instance);
         StartCoroutine(ReturnAfterLifetime(slashPrefab, instance, slashProfile.Lifetime));
     }
@@ -543,7 +547,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (spawned == null)
             return;
 
-        ConfigureOneShotParticleVfx(spawned);
+        ConfigureOneShotParticleVfx(spawned, IsHeavyAttackVfx(attackData, input));
 
         if (parent != null)
         {
@@ -562,10 +566,12 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             Debug.Log($"[PlayerAttackVfxPresenter] attack={attackData.name}, combo={comboDepth}, input={input}, prefab={rangePrefab.name}, anchor={rangeAnchor.name}", this);
     }
 
-    static void ConfigureOneShotParticleVfx(GameObject spawned)
+    void ConfigureOneShotParticleVfx(GameObject spawned, bool heavyAttack)
     {
         if (spawned == null)
             return;
+
+        ApplySpawnedVfxTint(spawned, heavyAttack);
 
         ParticleSystem[] particles = spawned.GetComponentsInChildren<ParticleSystem>(true);
         for (int i = 0; i < particles.Length; i++)
@@ -579,6 +585,38 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             main.loop = false;
             particle.Play(true);
         }
+    }
+
+    void ApplySpawnedVfxTint(GameObject spawned, bool heavyAttack)
+    {
+        RuntimeVfxTintCache cache = spawned != null ? spawned.GetComponent<RuntimeVfxTintCache>() : null;
+        if (cache == null && spawned != null)
+            cache = spawned.AddComponent<RuntimeVfxTintCache>();
+
+        if (cache != null)
+            cache.Apply(heavyAttack, heavyAttackVfxTint);
+    }
+
+    bool IsHeavyAttackProfile(AttackVfxProfile profile)
+    {
+        if (_currentInput == AttackInput.Heavy)
+            return true;
+
+        string key = profile != null ? profile.AttackKey : string.Empty;
+        return !string.IsNullOrWhiteSpace(key)
+            && key.IndexOf("H", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    static bool IsHeavyAttackVfx(AttackData attackData, AttackInput input)
+    {
+        if (input == AttackInput.Heavy)
+            return true;
+
+        string name = attackData != null ? attackData.name : string.Empty;
+        return !string.IsNullOrWhiteSpace(name)
+            && (name.IndexOf("AD_H", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("_H", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Heavy", StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     void AutoWire()

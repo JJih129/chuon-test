@@ -20,6 +20,7 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
     [SerializeField] bool createLockOnProxyCollider = true;
     [SerializeField, Min(0.2f)] float lockOnProxyRadius = 1.15f;
     [SerializeField] bool alignRuntimeVisualBottomToRoot = true;
+    [SerializeField] bool lockRuntimeVisualLocalRotation = true;
     [SerializeField] float runtimeVisualGroundOffset = 0.02f;
     [SerializeField] Vector3 visualLocalPosition = Vector3.zero;
     [SerializeField] Vector3 visualLocalEuler = Vector3.zero;
@@ -66,6 +67,14 @@ public sealed class TutorialEnemyVisualRig : MonoBehaviour
     void OnEnable()
     {
         EnsureSetup();
+    }
+
+    void LateUpdate()
+    {
+        if (!lockRuntimeVisualLocalRotation || _runtimeVisualInstance == null)
+            return;
+
+        _runtimeVisualInstance.transform.localRotation = Quaternion.Euler(visualLocalEuler);
     }
 
 #if UNITY_EDITOR

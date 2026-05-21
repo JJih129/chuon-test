@@ -59,6 +59,8 @@ public class LobbyManager : MonoBehaviour
     public bool simplifyLobbyDroneVisual = false;
     public bool useLightweightLobbyDroneSimulation = true;
     [Range(0.016f, 0.12f)] public float lightweightLobbyDroneTickInterval = 0.05f;
+    [Range(0.1f, 1f)] public float lobbyDroneMoveSpeedMultiplier = 0.45f;
+    [Min(0f)] public float lobbyDroneProjectileSpawnForwardOffset = 0.95f;
     [Header("Combat Roles")]
     public LobbyDroneWaveProfile lobbyDroneWaveProfile = LobbyDroneWaveProfile.MixedPressure;
     public bool useRoleAwareSpawnPlan = true;
@@ -78,6 +80,9 @@ public class LobbyManager : MonoBehaviour
     [Header("Elevator")]
     public GameObject elevatorPanel;
     public string nextSceneName = "MainScene";
+    public Transform elevatorLiftRoot;
+    [Min(0f)] public float elevatorLowerDistance = 4.5f;
+    [Min(0.05f)] public float elevatorLowerDuration = 0.85f;
 
     [Header("Elevator Tension")]
     [TextArea] public string elevatorThreatLine = "\ube44\uc0c1 \uacbd\ub85c \uc804\uc6a9 \uc2b9\uac15\uae30\uc57c. \ub204\uad70\uac00 \uba3c\uc800 \uc774 \ub9c1\ud06c\ub97c \uae68\uc6cc\ub1a8\uc5b4.";
@@ -133,6 +138,8 @@ public class LobbyManager : MonoBehaviour
     LobbyFlowPhase _currentPhase;
     readonly List<DroneController> _activeLobbyDrones = new List<DroneController>();
     int _combatEscalationStage;
+    Vector3 _elevatorLiftInitialLocalPosition;
+    bool _elevatorLiftInitialLocalPositionValid;
 
     public bool IsDoorReached => _isDoorReached;
     public bool IsBoarded => _isBoarded;
@@ -179,6 +186,7 @@ public class LobbyManager : MonoBehaviour
         if (elevatorPanel != null)
             elevatorPanel.SetActive(false);
 
+        ResolveElevatorLiftRoot();
         ConfigurePresentationController();
         ConfigureCombatCoachController();
         ConfigureObjectivePanelController();
@@ -290,6 +298,7 @@ public class LobbyManager : MonoBehaviour
             {
                 DroneCombatRole role = i < rolePlan.Length ? rolePlan[i] : DroneCombatRole.Standard;
                 controller.SetCombatRole(role);
+                ApplyLobbyDroneRuntimeTuning(controller);
                 controller.target = playerTransform;
                 controller.SetLightweightSimulation(useLightweightLobbyDroneSimulation, lightweightLobbyDroneTickInterval);
                 controller.SetAttackTelegraph(droneAttackTelegraphLeadTime);
@@ -354,6 +363,7 @@ public class LobbyManager : MonoBehaviour
 
             DroneCombatRole escalatedRole = ResolveEscalatedCombatRole(controller.CombatRole, stage);
             controller.SetCombatRole(escalatedRole);
+            ApplyLobbyDroneRuntimeTuning(controller);
             controller.SetAttackTelegraph(droneAttackTelegraphLeadTime * telegraphScale);
         }
 
@@ -729,6 +739,15 @@ public class LobbyManager : MonoBehaviour
         }
     }
 
+    void ApplyLobbyDroneRuntimeTuning(DroneController controller)
+    {
+        if (controller == null)
+            return;
+
+        controller.moveSpeed *= Mathf.Clamp(lobbyDroneMoveSpeedMultiplier, 0.1f, 1f);
+        controller.SetProjectileSpawnForwardOffset(lobbyDroneProjectileSpawnForwardOffset);
+    }
+
     void SimplifyLobbyDroneVisual(GameObject drone)
     {
         Transform[] children = drone.GetComponentsInChildren<Transform>(true);
@@ -900,48 +919,77 @@ public class LobbyManager : MonoBehaviour
     IEnumerator SequenceInside()
     {
         SetPhase(LobbyFlowPhase.Elevator);
-        yield return StartCoroutine(PlayDialogue("EGO", elevatorThreatLine, 2f));
-        yield return StartCoroutine(PlayDialogue("ChuOn", elevatorResponseLine, 1.9f));
-        yield return StartCoroutine(PlayDialogue("EGO", elevatorInstructionLine, 2.1f));
-
         if (dialogueGroup != null)
-            dialogueGroup.DOFade(0f, 0.5f);
+            dialogueGroup.DOFade(0f, 0.15f);
 
-        UpdateQuestUI("\uc811\uc18d \ub178\ub4dc", "\ud328\ub110\uc744 \uc870\uc791\ud574 \ub2e4\uc74c \uce35\uc73c\ub85c \uc774\ub3d9\ud574.");
+        UpdateQuestUI("\ud558\uac15", "\uc2b9\uac15\uae30\ub85c \ub2e4\uc74c \uad6c\uc5ed\uc73c\ub85c \uc774\ub3d9 \uc911.");
 
-        ShowTransientQuestCue(
-            elevatorThreatCueTitle,
-            elevatorThreatCueDescription,
-            elevatorThreatCueHold,
-            true);
+        if (presentationController != null)
+        {
+            presentationController.HideElevatorPanelGuide();
+            presentationController.HideObjectiveMarker();
+        }
 
         if (elevatorPanel != null)
-        {
-            elevatorPanel.SetActive(true);
-            elevatorPanel.transform.DOPunchScale(Vector3.one * 0.2f, 0.5f);
+            elevatorPanel.SetActive(false);
 
-            BaseInteractable elevatorInteractable = elevatorPanel.GetComponent<BaseInteractable>();
-            if (elevatorInteractable != null && !string.IsNullOrWhiteSpace(elevatorPromptText))
-                elevatorInteractable.promptText = elevatorPromptText;
+        if (_isElevatorTransitioning)
+            yield break;
+
+        _isElevatorTransitioning = true;
+        yield return StartCoroutine(CoLowerElevator());
+        yield return StartCoroutine(CoTransitionFromElevator(false));
+    }
+
+    IEnumerator CoLowerElevator()
+    {
+        Transform liftRoot = ResolveElevatorLiftRoot();
+        if (liftRoot == null || elevatorLowerDistance <= 0f)
+            yield break;
+
+        GameObject player = GameObject.FindWithTag("Player");
+        Transform playerRoot = player != null ? player.transform : null;
+        Transform originalParent = playerRoot != null ? playerRoot.parent : null;
+
+        if (playerRoot != null && !playerRoot.IsChildOf(liftRoot))
+            playerRoot.SetParent(liftRoot, true);
+
+        Vector3 start = _elevatorLiftInitialLocalPositionValid
+            ? _elevatorLiftInitialLocalPosition
+            : liftRoot.localPosition;
+        Vector3 end = start + Vector3.down * elevatorLowerDistance;
+
+        float duration = Mathf.Max(0.05f, elevatorLowerDuration);
+        Tween tween = liftRoot.DOLocalMove(end, duration).SetEase(Ease.InOutSine);
+        yield return tween.WaitForCompletion();
+
+        if (playerRoot != null && originalParent != liftRoot)
+            playerRoot.SetParent(originalParent, true);
+    }
+
+    Transform ResolveElevatorLiftRoot()
+    {
+        if (elevatorLiftRoot != null)
+        {
+            CacheElevatorLiftRootStart();
+            return elevatorLiftRoot;
         }
 
-        if (presentationController != null)
-        {
-            presentationController.ShowElevatorPanelGuide();
-            presentationController.PulseElevatorInteractable();
-        }
+        GameObject liftObject = GameObject.Find("elevator");
+        if (liftObject != null)
+            elevatorLiftRoot = liftObject.transform;
 
-        if (elevatorPanelCueDelay > 0f)
-            yield return new WaitForSeconds(elevatorPanelCueDelay);
+        CacheElevatorLiftRootStart();
+        return elevatorLiftRoot;
+    }
 
-        if (presentationController != null)
-            presentationController.PulseElevatorInteractable();
+    void CacheElevatorLiftRootStart()
+    {
+        if (_elevatorLiftInitialLocalPositionValid || elevatorLiftRoot == null)
+            return;
 
-        ShowTransientQuestCue(
-            elevatorPanelCueTitle,
-            elevatorPanelCueDescription,
-            elevatorPanelCueHold,
-            false);
+        _elevatorLiftInitialLocalPosition = elevatorLiftRoot.localPosition;
+        _elevatorLiftInitialLocalPositionValid = true;
     }
 
     public void OnInteractElevator()
@@ -972,7 +1020,7 @@ public class LobbyManager : MonoBehaviour
             elevatorSyncCueHold,
             false);
 
-        StartCoroutine(CoTransitionFromElevator());
+        StartCoroutine(CoTransitionFromElevator(true));
     }
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
@@ -1131,9 +1179,9 @@ public class LobbyManager : MonoBehaviour
         _transientQuestCueRoutine = null;
     }
 
-    IEnumerator CoTransitionFromElevator()
+    IEnumerator CoTransitionFromElevator(bool playSyncLine = true)
     {
-        if (!string.IsNullOrWhiteSpace(elevatorSyncLine))
+        if (playSyncLine && !string.IsNullOrWhiteSpace(elevatorSyncLine))
             yield return StartCoroutine(PlayDialogue("EGO", elevatorSyncLine, Mathf.Min(0.45f, elevatorSyncCueHold)));
 
         if (dialogueGroup != null)

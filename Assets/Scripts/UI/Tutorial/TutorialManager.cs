@@ -174,8 +174,8 @@ public class TutorialManager : MonoBehaviour
 
     void UpdateMovementUI()
     {
-        string goalState = isGoalReached ? "<color=green>(완료)</color>" : "(진행중)";
-        UpdateQuestUI("기초 이동", $"WASD로 지정 위치로 이동 {goalState}\nShift로 회피 ({currentDodgeCount}/{targetDodgeCount})");
+        string goalState = isGoalReached ? "<color=green>(완료)</color>" : "(진행 중)";
+        UpdateQuestUI("이동", $"WASD 키를 눌러 지정 위치로 이동해 {goalState}\nShift 키를 눌러 회피해 ({currentDodgeCount}/{targetDodgeCount})");
     }
 
     void CheckMovementComplete()
@@ -236,7 +236,7 @@ public class TutorialManager : MonoBehaviour
 
     void UpdateAttackUI()
     {
-        UpdateQuestUI("기본 공격", $"마우스 좌클릭으로 공격해\n허수아비 공격 ({currentAttackCount}/{maxAttackCount})");
+        UpdateQuestUI("기본 공격", $"좌클릭 키를 눌러 기본 공격을 사용해\n허수아비 공격 ({currentAttackCount}/{maxAttackCount})");
     }
 
     IEnumerator Sequence_MidTalk()
@@ -287,7 +287,7 @@ public class TutorialManager : MonoBehaviour
 
     void UpdateDefenseUI()
     {
-        UpdateQuestUI("방어 훈련", $"E키로 방어 ({currentGuardCount}/{targetGuardCount})\n공격 타이밍에 E키로 패링 ({currentParryCount}/{targetParryCount})");
+        UpdateQuestUI("방어와 패링", $"E 키를 눌러 방어해 ({currentGuardCount}/{targetGuardCount})\n공격 타이밍에 E 키를 눌러 패링해 ({currentParryCount}/{targetParryCount})");
     }
 
     void CheckDefenseComplete()
@@ -314,7 +314,7 @@ public class TutorialManager : MonoBehaviour
             playerHealth.ApplyDamage(50);
 
         PunchEffect();
-        UpdateQuestUI("회복 훈련", "Q키로 앰플을 사용해\n체력을 회복해");
+        UpdateQuestUI("회복", "Q 키를 눌러 앰플로 회복해");
     }
 
     void OnHealAction()
@@ -336,7 +336,7 @@ public class TutorialManager : MonoBehaviour
             dialogueGroup.DOFade(0f, 0.5f);
 
         SetMouseReferenceCueVisible(true);
-        UpdateQuestUI("튜토리얼 완료", "마우스 좌클릭/우클릭으로 공격해\nE 방어, Shift 회피, Q 회복");
+        UpdateQuestUI("튜토리얼 완료", "좌클릭/우클릭 키를 눌러 공격해\nE 키 방어, Shift 키 회피, Q 키 회복");
         PunchEffect();
     }
 
@@ -425,6 +425,8 @@ public class TutorialManager : MonoBehaviour
         Sprite sprite = tutorialMouseReferenceSprite;
         if (sprite == null)
             sprite = Resources.Load<Sprite>("TutorialUI/\uB9C8\uC6B0\uC2A4");
+        if (sprite == null)
+            sprite = LoadRuntimeSpriteFromTexture("TutorialUI/\uB9C8\uC6B0\uC2A4");
 #if UNITY_EDITOR
         if (sprite == null)
             sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/마우스.png");
@@ -468,6 +470,19 @@ public class TutorialManager : MonoBehaviour
         tutorialMouseReferenceCue.gameObject.SetActive(visible);
         if (visible)
             tutorialMouseReferenceCue.transform.DOPunchScale(Vector3.one * 0.06f, 0.25f);
+    }
+
+    static Sprite LoadRuntimeSpriteFromTexture(string resourcePath)
+    {
+        Texture2D texture = Resources.Load<Texture2D>(resourcePath);
+        if (texture == null)
+            return null;
+
+        return Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
     }
 
     void PunchEffect()
