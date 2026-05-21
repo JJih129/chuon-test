@@ -18,6 +18,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
     TutorialHintUIBridge _hintBridge;
     EGOGuideController _egoGuideController;
     TutorialPlayerRuntimeBridge _playerBridge;
+    PlayerLockOn _playerLockOn;
+    Transform _postAttackAutoLockTarget;
     GameObject _playerObject;
     Vector3 _tutorialStartPosition;
     Quaternion _tutorialStartRotation;
@@ -58,6 +60,12 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
     void Start()
     {
         _flowController?.StartFlow();
+    }
+
+    void OnDestroy()
+    {
+        if (_flowController != null)
+            _flowController.StepStarted -= HandleTutorialStepStarted;
     }
 
     void BuildRuntimePrototype()
@@ -105,6 +113,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         PlayerLockOn playerLockOn = player.GetComponent<PlayerLockOn>();
         if (playerLockOn == null)
             playerLockOn = player.AddComponent<PlayerLockOn>();
+        _playerLockOn = playerLockOn;
 
         ExistingLockOnAdapter lockOnAdapter = player.GetComponent<ExistingLockOnAdapter>();
         if (lockOnAdapter == null)
@@ -126,6 +135,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         GameObject guardDummyObject = CreateCombatGirlGuardDummy(droneObject);
         TrainingDummyController attackDummy = ConfigureAttackDummy(player, attackDummyObject);
         TrainingDummyController guardDummy = ConfigureGuardDummy(player, guardDummyObject, null);
+        _postAttackAutoLockTarget = guardDummyObject != null ? guardDummyObject.transform : null;
         ConfigureTutorialModernUltimate(player, attackDummyObject, mainCamera);
         TutorialZoneTrigger exitZone = BuildExitZone(sceneMoveObject, player.transform);
 
@@ -265,6 +275,23 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             _hintBridge,
             runtimeSteps,
             new[] { attackDummy, guardDummy });
+        _flowController.StepStarted += HandleTutorialStepStarted;
+    }
+
+    void HandleTutorialStepStarted(TutorialStepDefinition step)
+    {
+        if (step == null || step.stepType != TutorialStepType.Guard)
+            return;
+
+        TryAutoLockOnTutorialTarget(_postAttackAutoLockTarget);
+    }
+
+    void TryAutoLockOnTutorialTarget(Transform target)
+    {
+        if (_playerLockOn == null || target == null || !target.gameObject.activeInHierarchy)
+            return;
+
+        _playerLockOn.LockTo(target);
     }
 
     void LateUpdate()
@@ -795,6 +822,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         explosionVfx.ConfigureRuntime(vfxPresenter);
         UltimateEnemyCinematicState enemyState = EnsureComponent<UltimateEnemyCinematicState>(root);
         UltimateCinematicController cinematicController = EnsureComponent<UltimateCinematicController>(root);
+        cinematicController.SetRuntimeIntroPoseClipHold(false);
+        cinematicController.SetRuntimeConfigureTimelineClipRanges(true);
 
         Transform playerRoot = player.transform;
         Transform visualRoot = playerReferences.VisualRoot != null ? playerReferences.VisualRoot : player.transform;
@@ -889,7 +918,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
     static bool UseMainSceneCodeDrivenTutorialUltimate()
     {
-        return true;
+        return false;
     }
 
     static void StopTutorialLegacyUltimateRoot()

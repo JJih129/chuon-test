@@ -27,12 +27,24 @@ public class GameSceneBinder : MonoBehaviour
 
         arrivalController.ConfigureRuntime(hud, boss, ph, bossBreak, ultimate);
 
-        var bossStatusController = GetComponent<MainSceneBossStatusController>();
-        if (bossStatusController == null)
-            bossStatusController = gameObject.AddComponent<MainSceneBossStatusController>();
-
         var bossUiController = FindObjectOfType<BossUIController>(true);
-        bossStatusController.ConfigureRuntime(bossUiController, boss, bossBreak, ultimate);
+        MainSceneBossStatusController bossStatusController = null;
+        if (ExhibitionPrototypePresentationPolicy.RuntimeBossStatusPanelEnabled)
+        {
+            bossStatusController = GetComponent<MainSceneBossStatusController>();
+            if (bossStatusController == null)
+                bossStatusController = gameObject.AddComponent<MainSceneBossStatusController>();
+
+            bossStatusController.ConfigureRuntime(bossUiController, boss, bossBreak, ultimate);
+        }
+        else
+        {
+            bossStatusController = GetComponent<MainSceneBossStatusController>();
+            if (bossStatusController != null)
+                bossStatusController.enabled = false;
+            RemoveRuntimeBossStatusPanel();
+            bossStatusController = null;
+        }
 
         MainSceneObjectivePanelController bossObjectiveController = null;
         if (ExhibitionPrototypePresentationPolicy.RuntimeObjectivePanelEnabled)
@@ -101,6 +113,17 @@ public class GameSceneBinder : MonoBehaviour
         {
             RectTransform rect = rects[i];
             if (rect != null && rect.name == "RuntimeBossObjective")
+                Destroy(rect.gameObject);
+        }
+    }
+
+    static void RemoveRuntimeBossStatusPanel()
+    {
+        RectTransform[] rects = FindObjectsByType<RectTransform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < rects.Length; i++)
+        {
+            RectTransform rect = rects[i];
+            if (rect != null && rect.name == "RuntimeBossStatus")
                 Destroy(rect.gameObject);
         }
     }

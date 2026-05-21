@@ -89,6 +89,8 @@ public class PlayerUltimateController : MonoBehaviour
     public bool useScriptedSequence = true;
     [Tooltip("Allow falling back to the legacy PlayableDirector path when the scripted sequence cannot resolve a target.")]
     public bool allowDirectorFallbackWhenScriptedUnavailable = false;
+    [Tooltip("Block the old scripted/director ultimate path. The project should use UltimateSequencePlayer only.")]
+    [SerializeField] private bool disableLegacyUltimatePath = true;
     [Tooltip("Camera priority used while the scripted sequence is active.")]
     public int scriptedCameraPriority = 100;
     [Tooltip("Optional animator used for the ultimate presentation. Falls back to PlayerReferences.MainAnimator.")]
@@ -467,15 +469,8 @@ public class PlayerUltimateController : MonoBehaviour
             return started;
         }
 
-        if (useScriptedSequence && !allowDirectorFallbackWhenScriptedUnavailable &&
-            !TryResolveUltimateTarget(out _, out _))
-        {
-            NotifyActivationRejected(UltimateActivationBlockReason.TargetUnavailable, "No valid ultimate target.");
-            return false;
-        }
-
-        StartCoroutine(Co_Cinematic());
-        return true;
+        NotifyActivationRejected(UltimateActivationBlockReason.SequenceStartFailed, "Legacy ultimate path is disabled.");
+        return false;
     }
 
     void NotifyActivationRejected(UltimateActivationBlockReason blockReason, string message)
@@ -776,6 +771,9 @@ public class PlayerUltimateController : MonoBehaviour
 
     IEnumerator Co_Cinematic()
     {
+        if (disableLegacyUltimatePath)
+            yield break;
+
         _isCinematic = true;
         DidApplyInputBlockThisCinematic = false;
         DidFreezeWorldTimeThisCinematic = false;

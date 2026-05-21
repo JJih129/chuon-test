@@ -32,7 +32,7 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private Vector2 objectivePanelSize = new Vector2(700f, 220f);
     [SerializeField] private Vector2 comboPanelAnchoredPosition = new Vector2(32f, -160f);
     [SerializeField] private Vector2 comboPanelSize = new Vector2(680f, 500f);
-    [SerializeField] private Vector2 timingCuePanelAnchoredPosition = Vector2.zero;
+    [SerializeField] private Vector2 timingCuePanelAnchoredPosition = new Vector2(0f, 220f);
     [SerializeField] private Vector2 timingCuePanelSize = new Vector2(280f, 280f);
     [SerializeField] private Vector2 keyCueSize = new Vector2(220f, 220f);
 
@@ -533,9 +533,9 @@ public class TutorialHintUIBridge : MonoBehaviour
         CanvasGroup panelGroup = CreatePanelGroup(
             "TimingCuePanel",
             _runtimeHudRoot,
-            new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f),
             timingCuePanelAnchoredPosition,
             timingCuePanelSize,
             timingCuePanelColor);

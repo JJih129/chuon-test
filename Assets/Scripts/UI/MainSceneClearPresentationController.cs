@@ -1,10 +1,15 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 [DisallowMultipleComponent]
 public class MainSceneClearPresentationController : MonoBehaviour
 {
+    const string DefaultCreditsDataResourcePath = "UI/Title/TitleCredits_Default";
+
     [SerializeField] private MainSceneArrivalController arrivalController;
     [SerializeField] private PlayerHUD playerHud;
     [SerializeField] private BossHealth bossHealth;
@@ -36,6 +41,12 @@ public class MainSceneClearPresentationController : MonoBehaviour
     [SerializeField] private Color overlayAccentColor = new Color(0.74f, 1f, 0.84f, 0.98f);
     [SerializeField] private Color overlayBodyColor = new Color(0.90f, 0.97f, 1f, 0.96f);
 
+    [Header("Credits")]
+    [SerializeField] private bool showCreditsAfterClear = true;
+    [SerializeField] private string creditsDataResourcePath = DefaultCreditsDataResourcePath;
+    [SerializeField, Min(0f)] private float creditsDelayAfterOverlay = 0.45f;
+    [SerializeField] private string quitButtonLabel = "게임 종료";
+
     bool _subscribed;
     bool _fromLobbyTransition;
     bool _clearSequenceStarted;
@@ -46,6 +57,8 @@ public class MainSceneClearPresentationController : MonoBehaviour
     Image _overlayAccent;
     Text _overlayTitleText;
     Text _overlaySubtitleText;
+    TitleCreditsOverlay _creditsOverlay;
+    TitleCreditsData _creditsData;
 
     public void ConfigureRuntime(
         MainSceneArrivalController runtimeArrivalController,
@@ -92,7 +105,7 @@ public class MainSceneClearPresentationController : MonoBehaviour
             playerHud = FindObjectOfType<PlayerHUD>(true);
         if (bossHealth == null)
             bossHealth = FindObjectOfType<BossHealth>(true);
-        if (bossStatusController == null)
+        if (bossStatusController == null && ExhibitionPrototypePresentationPolicy.RuntimeBossStatusPanelEnabled)
             bossStatusController = GetComponent<MainSceneBossStatusController>();
         if (objectivePanelController == null)
             objectivePanelController = GetComponent<MainSceneObjectivePanelController>();
@@ -153,6 +166,15 @@ public class MainSceneClearPresentationController : MonoBehaviour
 
         if (playerHud != null)
             playerHud.ShowRuntimeTelegraphMessage(syncMessage, syncTelegraphType, syncHold, false, clearCuePriority);
+
+        if (showCreditsAfterClear)
+        {
+            float delay = Mathf.Max(0f, overlayHoldDuration + overlayFadeOutDuration + creditsDelayAfterOverlay);
+            if (delay > 0f)
+                yield return new WaitForSecondsRealtime(delay);
+
+            ShowCreditsOverlay();
+        }
 
         _clearRoutine = null;
     }
@@ -238,6 +260,51 @@ public class MainSceneClearPresentationController : MonoBehaviour
         _overlaySubtitleText.fontStyle = FontStyle.Normal;
         _overlaySubtitleText.color = overlayBodyColor;
         _overlaySubtitleText.text = overlaySubtitle;
+    }
+
+    void ShowCreditsOverlay()
+    {
+        EnsureCreditsOverlay();
+        if (_creditsOverlay == null)
+            return;
+
+        Time.timeScale = 0f;
+        _creditsOverlay.ConfigureQuitButton(true, quitButtonLabel, QuitGame);
+        _creditsOverlay.Show(_creditsData);
+    }
+
+    void EnsureCreditsOverlay()
+    {
+        if (_creditsOverlay != null)
+            return;
+
+        if (playerHud == null || playerHud.hpFillImage == null || playerHud.hpFillImage.canvas == null)
+            return;
+
+        _creditsData = Resources.Load<TitleCreditsData>(creditsDataResourcePath);
+        if (_creditsData == null)
+            _creditsData = TitleCreditsData.CreateRuntimeFallback();
+
+        Transform parent = playerHud.hpFillImage.canvas.transform;
+        GameObject overlayObject = new GameObject(
+            "MainSceneClearCreditsOverlay",
+            typeof(RectTransform),
+            typeof(CanvasGroup),
+            typeof(Image),
+            typeof(Button),
+            typeof(TitleCreditsOverlay));
+        _creditsOverlay = overlayObject.GetComponent<TitleCreditsOverlay>();
+        _creditsOverlay.Initialize(parent);
+        _creditsOverlay.ConfigureQuitButton(true, quitButtonLabel, QuitGame);
+    }
+
+    void QuitGame()
+    {
+#if UNITY_EDITOR
+        EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     void PlayOverlay()

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Text;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
@@ -24,6 +25,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
     RectTransform _viewportRect;
     RectTransform _contentRect;
     Button _closeButton;
+    Button _quitButton;
     Text _titleText;
     Text _subtitleText;
     TitleCreditsData _boundData;
@@ -32,6 +34,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
     bool _structureBuilt;
     float _manualPauseTimer;
     float _scrollPixelsPerSecond;
+    UnityAction _quitAction;
 
     public bool IsVisible => _isVisible;
 
@@ -44,6 +47,22 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         BuildStructure();
         _structureBuilt = true;
         gameObject.SetActive(false);
+    }
+
+    public void ConfigureQuitButton(bool visible, string label, UnityAction action)
+    {
+        _quitAction = action;
+        if (!_structureBuilt || _quitButton == null)
+            return;
+
+        _quitButton.gameObject.SetActive(visible);
+        _quitButton.onClick.RemoveAllListeners();
+        if (visible && _quitAction != null)
+            _quitButton.onClick.AddListener(_quitAction);
+
+        Text labelText = _quitButton.GetComponentInChildren<Text>(true);
+        if (labelText != null)
+            labelText.text = string.IsNullOrWhiteSpace(label) ? "게임 종료" : label;
     }
 
     public void Show(TitleCreditsData data)
@@ -140,6 +159,10 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         _closeButton = CreateButton("BackButton", _frameRect, "\uB4A4\uB85C");
         ConfigureRect(_closeButton.transform as RectTransform, new Vector2(0.84f, 0.92f), new Vector2(0.95f, 0.97f));
         _closeButton.onClick.AddListener(Hide);
+
+        _quitButton = CreateButton("QuitButton", _frameRect, "게임 종료");
+        ConfigureRect(_quitButton.transform as RectTransform, new Vector2(0.70f, 0.92f), new Vector2(0.83f, 0.97f));
+        _quitButton.gameObject.SetActive(false);
 
         _viewportRect = CreateRect("Viewport", _frameRect);
         ConfigureRect(_viewportRect, new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.80f));

@@ -24,6 +24,8 @@ public sealed class UltimateCinematicController : MonoBehaviour
     [Header("Timing")]
     [SerializeField, Min(0f)] private float finalExplosionReturnDelay = 2f;
     [SerializeField] private bool movePlayerToFinishBeforeStorm = true;
+    [SerializeField] private bool holdIntroPoseClipFrame = true;
+    [SerializeField] private bool configureTimelineClipRangesOnPlay;
 
     [Header("Player Visual Control")]
     [SerializeField] private GameObject playerVisualRoot;
@@ -330,6 +332,16 @@ public sealed class UltimateCinematicController : MonoBehaviour
         slashStormVfx?.PlayIntroPose();
     }
 
+    public void SetRuntimeIntroPoseClipHold(bool holdFrame)
+    {
+        holdIntroPoseClipFrame = holdFrame;
+    }
+
+    public void SetRuntimeConfigureTimelineClipRanges(bool enabled)
+    {
+        configureTimelineClipRangesOnPlay = enabled;
+    }
+
     public void OnCloseUpStart()
     {
         RefreshTargetAnchor();
@@ -513,6 +525,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
             }
         }
 
+        if (configureTimelineClipRangesOnPlay)
+            ConfigureTimelineAnimationClips(timelineAsset);
+
         BindCinemachineShotReferences(timelineAsset);
     }
 
@@ -539,7 +554,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
                         _data.CinematicAnimation.introPoseClip,
                         _data.CinematicAnimation.introPoseClipStartNormalized,
                         _data.CinematicAnimation.introPoseClipEndNormalized,
-                        true);
+                        holdIntroPoseClipFrame);
                 }
                 else if (clip.displayName.Contains("DrawSlash", StringComparison.OrdinalIgnoreCase) && _data.CinematicAnimation.dashSlashClip != null)
                 {

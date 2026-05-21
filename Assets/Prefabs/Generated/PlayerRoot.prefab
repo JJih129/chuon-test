@@ -2358,11 +2358,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerReferences: {fileID: 245853775745863209}
   combatController: {fileID: 3625136038103508255}
+  lockOnTargetProvider: {fileID: 3629856975197315660}
   slashSpawnPoint: {fileID: 0}
   directionRoot: {fileID: 9217704258761649807}
   weaponTrails: []
   attackProfileEntries: []
   prewarmCount: 3
+  useUnifiedSlashVfx: 1
+  unifiedSlashVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
+  useLockOnDirectionForSlashVfx: 1
+  useObject002BladePoseForSlashVfx: 1
+  object002BladeRollWeight: 1
+  unifiedSlashEulerOffset: {x: 0, y: 180, z: 0}
+  unifiedSlashScaleMultiplier: {x: 1, y: 1, z: 1}
+  debugDrawSlashDirection: 0
   weaponSocketOverride: {fileID: 0}
   swordTrailAnchorOverride: {fileID: 0}
   slashSpawnAnchorOverride: {fileID: 0}
@@ -2385,12 +2394,12 @@ MonoBehaviour:
   slashSpawnBladeAxisOffset: 0
   slashSpawnHorizontalOutwardOffset: 0
   slashSpawnVerticalOffset: 0.22
-  slashSpawnForwardOffset: 0.38
+  slashSpawnForwardOffset: -0.14
   enforceSlashSpawnInFrontOfPlayer: 1
-  slashSpawnMinPlayerForwardDistance: 0.62
+  slashSpawnMinPlayerForwardDistance: 0
   slashSpawnPlaneRightOffset: 0.18
   slashSpawnPlaneUpOffset: 0.22
-  defaultHitRangeVfxPrefab: {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
+  defaultHitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
   defaultWeaponTrailVfxPrefab: {fileID: 0}
   defaultHitImpactVfxPrefab: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
   defaultHitImpactLifetime: 0.75
@@ -2428,7 +2437,7 @@ MonoBehaviour:
   rangeFlashLifetime: 0.12
   attackVfxEntries:
   - attackData: {fileID: 11400000, guid: 3a9f06ed13cc7cc47b6a05eaf9e80db1, type: 2}
-    hitRangeVfxPrefab: {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.02, z: 0}
     localEulerOffset: {x: 0, y: 0, z: -24}
@@ -2437,7 +2446,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.28
   - attackData: {fileID: 11400000, guid: e0f8db546142e7546bf745f5e467e114, type: 2}
-    hitRangeVfxPrefab: {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.02, z: 0.01}
     localEulerOffset: {x: 0, y: 0, z: 28}
@@ -2446,7 +2455,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.28
   - attackData: {fileID: 11400000, guid: d7864872463564b41ae1e0602e1ec8de, type: 2}
-    hitRangeVfxPrefab: {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.03, z: 0}
     localEulerOffset: {x: 0, y: 0, z: 92}
@@ -2455,7 +2464,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.28
   - attackData: {fileID: 11400000, guid: 6d1c7965d746f8e448c8092106f83ae4, type: 2}
-    hitRangeVfxPrefab: {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.025, z: 0.02}
     localEulerOffset: {x: 0, y: 0, z: -8}
@@ -2464,7 +2473,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.28
   - attackData: {fileID: 11400000, guid: 372410184e048ca49b466cd9c081651f, type: 2}
-    hitRangeVfxPrefab: {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.02, z: 0.01}
     localEulerOffset: {x: 0, y: 0, z: -38}
@@ -2473,7 +2482,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.28
   - attackData: {fileID: 11400000, guid: a57588628443c984c8007adf0ef47739, type: 2}
-    hitRangeVfxPrefab: {fileID: 5545173171955001552, guid: 7ac879c2caac1ca41b6c438e77d8b25d, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.025, z: 0.01}
     localEulerOffset: {x: 0, y: 0, z: 58}
@@ -2482,7 +2491,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.28
   - attackData: {fileID: 11400000, guid: dca78e9929952bf4bab1a2cd6984b8f6, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.03, z: 0.02}
     localEulerOffset: {x: 0, y: 0, z: -12}
@@ -2491,7 +2500,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
   - attackData: {fileID: 11400000, guid: b46132e41a86ac24ea91ef68ef58d503, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.035, z: 0.02}
     localEulerOffset: {x: 0, y: 0, z: 36}
@@ -2500,7 +2509,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
   - attackData: {fileID: 11400000, guid: e8b1fd3fb923d3d4a8a736486c7f71b1, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.04, z: 0.02}
     localEulerOffset: {x: 0, y: 0, z: 84}
@@ -2509,7 +2518,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
   - attackData: {fileID: 11400000, guid: 995b96ea2313a01478c6b66cf4e5d524, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.03, z: 0.02}
     localEulerOffset: {x: 0, y: 0, z: -52}
@@ -2518,7 +2527,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
   - attackData: {fileID: 11400000, guid: 30cff410ee3fbc645b42857ae2b00126, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.04, z: 0.025}
     localEulerOffset: {x: 0, y: 0, z: 18}
@@ -2527,7 +2536,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
   - attackData: {fileID: 11400000, guid: 14d22a5bdfcee3443a671eba3723acff, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.045, z: 0.025}
     localEulerOffset: {x: 0, y: 0, z: 112}
@@ -2536,7 +2545,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
   - attackData: {fileID: 11400000, guid: c889046bce7be8749bbc7628f7876aa7, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.04, z: 0.025}
     localEulerOffset: {x: 0, y: 0, z: -72}
@@ -2545,7 +2554,7 @@ MonoBehaviour:
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
   - attackData: {fileID: 11400000, guid: 1963dd76be7ea2f46b150e25374c58c1, type: 2}
-    hitRangeVfxPrefab: {fileID: 9177886612219991525, guid: f90fc7acf1ef2fa4c85896a9afc17028, type: 3}
+    hitRangeVfxPrefab: {fileID: 1004038278230665889, guid: 4a3f5dad39cb5084e982602bb505a400, type: 3}
     weaponTrailVfxPrefab: {fileID: 0}
     localPositionOffset: {x: 0, y: 0.05, z: 0.03}
     localEulerOffset: {x: 0, y: 0, z: 6}
@@ -2553,6 +2562,7 @@ MonoBehaviour:
     parentRangeVfxToHitbox: 0
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
+  lightAttackVfxTint: {r: 0.92, g: 0.16, b: 0.08, a: 1}
   debugLog: 0
 --- !u!1 &3795597417212057411
 GameObject:

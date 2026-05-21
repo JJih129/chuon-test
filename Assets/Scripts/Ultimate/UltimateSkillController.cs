@@ -230,10 +230,12 @@ public sealed class UltimateSkillController : MonoBehaviour
         if (!HasPrimaryController)
             return;
 
-        if (useCodeDrivenSequence && cinematicController != null)
+        if (useCodeDrivenSequence)
         {
             if (primaryController.director == director)
                 primaryController.director = null;
+            primaryController.useScriptedSequence = false;
+            primaryController.allowDirectorFallbackWhenScriptedUnavailable = false;
             return;
         }
 

@@ -41,6 +41,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         public readonly GameObject GameObject;
         public readonly Transform Transform;
         public readonly ParticleSystem[] Particles;
+        public readonly TrailRenderer[] Trails;
         public int LeaseId;
 
         public PooledVfxInstance(GameObject gameObject)
@@ -50,6 +51,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             Particles = gameObject != null
                 ? gameObject.GetComponentsInChildren<ParticleSystem>(true)
                 : Array.Empty<ParticleSystem>();
+            Trails = gameObject != null
+                ? gameObject.GetComponentsInChildren<TrailRenderer>(true)
+                : Array.Empty<TrailRenderer>();
         }
     }
 
@@ -66,6 +70,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [Header("참조")]
     [SerializeField] PlayerReferences playerReferences;
     [SerializeField] PlayerCombatController combatController;
+    [SerializeField] PlayerLockOn lockOnTargetProvider;
 
     [Header("Animation Event VFX")]
     [Tooltip("Slash VFX spawn point. Place this around the chest/waist area in front of the player.")]
@@ -84,6 +89,21 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [Header("Profile VFX Pooling")]
     [Tooltip("Number of slash/impact VFX instances to prewarm per prefab.")]
     [SerializeField, Min(1)] int prewarmCount = 3;
+
+    [Header("Unified Player Slash VFX")]
+    [Tooltip("If enabled, every player attack slash/range VFX uses this prefab while keeping attack-specific offsets below.")]
+    [SerializeField] bool useUnifiedSlashVfx = true;
+    [SerializeField] GameObject unifiedSlashVfxPrefab;
+    [Tooltip("Use the current lock-on target as the horizontal VFX direction when available.")]
+    [SerializeField] bool useLockOnDirectionForSlashVfx = true;
+    [Tooltip("Use Object002 blade pose/motion to roll the slash plane so it follows the actual sword arc.")]
+    [SerializeField] bool useObject002BladePoseForSlashVfx = true;
+    [SerializeField, Range(0f, 1f)] float object002BladeRollWeight = 1f;
+    [Tooltip("Global correction for Slash_C only. Use this when the imported prefab axis does not match the weapon plane.")]
+    [SerializeField] Vector3 unifiedSlashEulerOffset = Vector3.zero;
+    [SerializeField] Vector3 unifiedSlashScaleMultiplier = Vector3.one;
+    [Tooltip("Debug only: draw the resolved slash direction in Scene View.")]
+    [SerializeField] bool debugDrawSlashDirection;
 
     [SerializeField] Transform weaponSocketOverride;
     [SerializeField] Transform swordTrailAnchorOverride;
@@ -176,7 +196,8 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [SerializeField] AttackVfxEntry[] attackVfxEntries = Array.Empty<AttackVfxEntry>();
 
     [Header("Heavy Attack VFX")]
-    [SerializeField] Color heavyAttackVfxTint = new Color(1f, 0.06f, 0.02f, 1f);
+    [SerializeField] Color heavyAttackVfxTint = new Color(1f, 0.12f, 0.04f, 1f);
+    [SerializeField] Color lightAttackVfxTint = new Color(0.92f, 0.16f, 0.08f, 1f);
 
     [Header("디버그")]
     [SerializeField] bool debugLog;
@@ -298,6 +319,17 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         MarkEntryLookupDirty();
     }
 #endif
+
+    void OnDrawGizmosSelected()
+    {
+        if (!debugDrawSlashDirection)
+            return;
+
+        Transform origin = slashSpawnPoint != null ? slashSpawnPoint : transform;
+        Vector3 forward = ResolveBaseAttackForward(null);
+        Gizmos.color = Color.red;
+        Gizmos.DrawLine(origin.position, origin.position + forward * 1.4f);
+    }
 
     public void NotifyAttackStarted(AttackData attackData, int comboDepth, AttackInput input)
     {
@@ -443,7 +475,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return;
         }
 
-        GameObject slashPrefab = slashProfile.SlashPrefab;
+        GameObject slashPrefab = ResolveSlashVfxPrefab(slashProfile);
         if (slashPrefab == null)
         {
             Debug.LogWarning($"[PlayerAttackVfxPresenter] Slash profile '{slashProfile.name}' has no slash prefab.", this);
@@ -462,11 +494,12 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return;
 
         ResolveProfileSlashPose(spawnPoint, slashProfile, out Vector3 worldPosition, out Quaternion worldRotation);
+        worldRotation = ApplyUnifiedSlashRotation(worldRotation);
 
         instance.LeaseId++;
         instance.Transform.SetParent(null, false);
         instance.Transform.SetPositionAndRotation(worldPosition, worldRotation);
-        instance.Transform.localScale = slashProfile.LocalScale;
+        instance.Transform.localScale = ApplyUnifiedSlashScale(slashProfile.LocalScale);
 
         if (slashProfile.FollowOwner)
             instance.Transform.SetParent(spawnPoint, true);
@@ -520,7 +553,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (!swordMotionTrailStarted && (useDrakkarTrailFallback || ShouldUseProceduralTrailFallback()))
             EnableProceduralTrail();
 
-        GameObject rangePrefab = entry.hitRangeVfxPrefab != null ? entry.hitRangeVfxPrefab : defaultHitRangeVfxPrefab;
+        GameObject rangePrefab = ResolveRangeVfxPrefab(entry);
         if (rangePrefab == null)
         {
             if (useProceduralRangeFlashFallback && hitbox != null)
@@ -535,7 +568,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         bool useDetachedSlashAnchor = IsConfiguredSlashSpawnAnchor(rangeAnchor) && !entry.parentRangeVfxToHitbox;
         Transform parent = entry.parentRangeVfxToHitbox && hitbox != null ? hitbox.transform : useDetachedSlashAnchor ? null : rangeAnchor;
         Quaternion anchorRotation = ResolveRangeVfxRotation(rangeAnchor, hitbox);
-        Quaternion rotation = anchorRotation * Quaternion.Euler(entry.localEulerOffset);
+        Quaternion rotation = ApplyUnifiedSlashRotation(anchorRotation * Quaternion.Euler(entry.localEulerOffset));
         Vector3 spawnPosition = ResolveRangeVfxPosition(rangeAnchor);
         if (IsConfiguredSlashSpawnAnchor(rangeAnchor))
             spawnPosition += anchorRotation * new Vector3(slashSpawnPlaneRightOffset, slashSpawnPlaneUpOffset, 0f);
@@ -559,7 +592,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             spawned.transform.SetPositionAndRotation(spawnPosition, rotation);
         }
 
-        Vector3 baseScale = ResolveBaseScale(entry, hitbox);
+        Vector3 baseScale = ApplyUnifiedSlashScale(ResolveBaseScale(entry, hitbox));
         spawned.transform.localScale = baseScale;
 
         if (debugLog)
@@ -594,7 +627,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             cache = spawned.AddComponent<RuntimeVfxTintCache>();
 
         if (cache != null)
-            cache.Apply(heavyAttack, heavyAttackVfxTint);
+            cache.Apply(true, heavyAttack ? heavyAttackVfxTint : lightAttackVfxTint);
     }
 
     bool IsHeavyAttackProfile(AttackVfxProfile profile)
@@ -619,6 +652,42 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
                 || name.IndexOf("Heavy", StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
+    GameObject ResolveSlashVfxPrefab(AttackSlashProfile slashProfile)
+    {
+        if (useUnifiedSlashVfx && unifiedSlashVfxPrefab != null)
+            return unifiedSlashVfxPrefab;
+
+        return slashProfile != null ? slashProfile.SlashPrefab : null;
+    }
+
+    GameObject ResolveRangeVfxPrefab(AttackVfxEntry entry)
+    {
+        if (useUnifiedSlashVfx && unifiedSlashVfxPrefab != null)
+            return unifiedSlashVfxPrefab;
+
+        return entry.hitRangeVfxPrefab != null ? entry.hitRangeVfxPrefab : defaultHitRangeVfxPrefab;
+    }
+
+    Quaternion ApplyUnifiedSlashRotation(Quaternion rotation)
+    {
+        if (!useUnifiedSlashVfx || unifiedSlashVfxPrefab == null)
+            return rotation;
+
+        return rotation * Quaternion.Euler(unifiedSlashEulerOffset);
+    }
+
+    Vector3 ApplyUnifiedSlashScale(Vector3 scale)
+    {
+        if (!useUnifiedSlashVfx || unifiedSlashVfxPrefab == null)
+            return scale;
+
+        Vector3 multiplier = unifiedSlashScaleMultiplier;
+        if (multiplier == Vector3.zero)
+            multiplier = Vector3.one;
+
+        return Vector3.Scale(scale, multiplier);
+    }
+
     void AutoWire()
     {
         if (playerReferences == null)
@@ -626,6 +695,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         if (combatController == null)
             combatController = GetComponent<PlayerCombatController>() ?? GetComponentInParent<PlayerCombatController>(true);
+
+        if (lockOnTargetProvider == null)
+            lockOnTargetProvider = GetComponent<PlayerLockOn>() ?? GetComponentInParent<PlayerLockOn>(true);
 
         if (slashSpawnPoint == null)
             slashSpawnPoint = ResolveSlashSpawnAnchor();
@@ -1235,6 +1307,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
     Vector3 ResolveSampledSlashUp(BladePoseSample latestPose, Vector3 forward)
     {
+        if (!useObject002BladePoseForSlashVfx)
+            return Vector3.up;
+
         Vector3 up = Vector3.zero;
         Vector3 bladeUp = Vector3.zero;
 
@@ -1285,7 +1360,10 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             }
         }
 
-        return up.sqrMagnitude > 0.0001f ? up : Vector3.up;
+        if (up.sqrMagnitude <= 0.0001f)
+            return Vector3.up;
+
+        return Vector3.Slerp(Vector3.up, up.normalized, Mathf.Clamp01(object002BladeRollWeight)).normalized;
     }
 
     bool TryCaptureBladePose(out BladePoseSample pose)
@@ -1358,6 +1436,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
     Vector3 ResolveSlashUp(Transform slashAnchor, Vector3 forward)
     {
+        if (!useObject002BladePoseForSlashVfx)
+            return Vector3.up;
+
         Vector3 up = Vector3.zero;
         Vector3 bladeUp = Vector3.zero;
 
@@ -1408,7 +1489,10 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             }
         }
 
-        return up.sqrMagnitude > 0.0001f ? up : Vector3.up;
+        if (up.sqrMagnitude <= 0.0001f)
+            return Vector3.up;
+
+        return Vector3.Slerp(Vector3.up, up.normalized, Mathf.Clamp01(object002BladeRollWeight)).normalized;
     }
 
     bool TryResolveBladeAxis(Transform slashAnchor, out Vector3 bladeAxis)
@@ -1448,6 +1532,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
     Vector3 ResolveBaseAttackForward(AttackHitbox hitbox)
     {
+        if (useLockOnDirectionForSlashVfx && TryResolveLockOnAttackForward(out Vector3 lockOnForward))
+            return lockOnForward;
+
         if (TryResolveHorizontalForward(hitbox != null ? hitbox.transform : null, out Vector3 hitboxForward))
             return hitboxForward;
 
@@ -1459,6 +1546,27 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return fallbackForward;
 
         return Vector3.forward;
+    }
+
+    bool TryResolveLockOnAttackForward(out Vector3 forward)
+    {
+        forward = Vector3.zero;
+        if (lockOnTargetProvider == null || !lockOnTargetProvider.HasTarget)
+            return false;
+
+        Transform target = lockOnTargetProvider.CurrentTarget;
+        Transform playerRoot = playerReferences != null && playerReferences.PlayerRoot != null
+            ? playerReferences.PlayerRoot
+            : transform;
+        if (target == null || playerRoot == null)
+            return false;
+
+        forward = Vector3.ProjectOnPlane(target.position - playerRoot.position, Vector3.up);
+        if (forward.sqrMagnitude <= 0.0001f)
+            return false;
+
+        forward.Normalize();
+        return true;
     }
 
     bool TryResolveSwordTipMotionForward(out Vector3 forward)
@@ -1845,6 +1953,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     {
         _prewarmedProfilePrefabs.Clear();
 
+        if (useUnifiedSlashVfx && unifiedSlashVfxPrefab != null)
+            PrewarmPool(unifiedSlashVfxPrefab);
+
         if (_attackProfileByKey.Count == 0)
             BuildProfileLookup();
 
@@ -1948,30 +2059,63 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
     static void PlayParticles(PooledVfxInstance instance)
     {
-        if (instance == null || instance.Particles == null)
+        if (instance == null)
             return;
 
-        for (int i = 0; i < instance.Particles.Length; i++)
+        if (instance.Particles != null)
         {
-            ParticleSystem particle = instance.Particles[i];
-            if (particle == null)
-                continue;
+            for (int i = 0; i < instance.Particles.Length; i++)
+            {
+                ParticleSystem particle = instance.Particles[i];
+                if (particle == null)
+                    continue;
 
-            particle.Clear(true);
-            particle.Play(true);
+                particle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                particle.Clear(true);
+                particle.Play(true);
+            }
+        }
+
+        if (instance.Trails != null)
+        {
+            for (int i = 0; i < instance.Trails.Length; i++)
+            {
+                TrailRenderer trail = instance.Trails[i];
+                if (trail == null)
+                    continue;
+
+                trail.Clear();
+                trail.emitting = true;
+            }
         }
     }
 
     static void StopParticles(PooledVfxInstance instance)
     {
-        if (instance == null || instance.Particles == null)
+        if (instance == null)
             return;
 
-        for (int i = 0; i < instance.Particles.Length; i++)
+        if (instance.Particles != null)
         {
-            ParticleSystem particle = instance.Particles[i];
-            if (particle != null)
-                particle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            for (int i = 0; i < instance.Particles.Length; i++)
+            {
+                ParticleSystem particle = instance.Particles[i];
+                if (particle != null)
+                    particle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            }
+        }
+
+        if (instance.Trails != null)
+        {
+            for (int i = 0; i < instance.Trails.Length; i++)
+            {
+                TrailRenderer trail = instance.Trails[i];
+                if (trail == null)
+                    continue;
+
+                trail.emitting = false;
+                trail.Clear();
+            }
         }
     }
 
@@ -2021,11 +2165,19 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
     void EnsureDefaultMappings(bool force)
     {
+        GameObject slashCPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Slash_C.prefab");
+        if (unifiedSlashVfxPrefab == null)
+            unifiedSlashVfxPrefab = slashCPrefab;
+
         if (!force && attackVfxEntries != null && attackVfxEntries.Length > 0)
             return;
 
-        GameObject lightSlashPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Free Slash VFX/Prefabs/Slash VFX.prefab");
-        GameObject heavySlashPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab");
+        GameObject lightSlashPrefab = slashCPrefab != null
+            ? slashCPrefab
+            : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Free Slash VFX/Prefabs/Slash VFX.prefab");
+        GameObject heavySlashPrefab = slashCPrefab != null
+            ? slashCPrefab
+            : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab");
         defaultHitRangeVfxPrefab = lightSlashPrefab;
         defaultWeaponTrailVfxPrefab = null;
 

@@ -64,6 +64,7 @@ public class TutorialManager : MonoBehaviour
     int currentGuardCount;
     int currentParryCount;
     TutorialHintUIBridge hintBridge;
+    PlayerLockOn cachedPlayerLockOn;
 
     void Awake()
     {
@@ -252,7 +253,10 @@ public class TutorialManager : MonoBehaviour
         yield return StartCoroutine(PlayDialogue("EGO", "E키로 방어하고, 공격 타이밍에 맞추면 패링이 발동돼.", defenseDelay));
 
         if (droneEnemy != null)
+        {
             droneEnemy.SetActive(true);
+            TryAutoLockOn(droneEnemy.transform);
+        }
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
@@ -283,6 +287,21 @@ public class TutorialManager : MonoBehaviour
         PunchEffect();
         UpdateDefenseUI();
         CheckDefenseComplete();
+    }
+
+    void TryAutoLockOn(Transform target)
+    {
+        if (target == null || !target.gameObject.activeInHierarchy)
+            return;
+
+        if (cachedPlayerLockOn == null)
+        {
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            if (player != null)
+                cachedPlayerLockOn = player.GetComponent<PlayerLockOn>();
+        }
+
+        cachedPlayerLockOn?.LockTo(target);
     }
 
     void UpdateDefenseUI()

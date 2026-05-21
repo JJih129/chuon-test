@@ -46,6 +46,7 @@ public class PlayerHUD : MonoBehaviour
     public Color guardStrainHighColor = new Color(1.00f, 0.34f, 0.18f, 1.00f);
 
     [Header("Combat Telegraph")]
+    [SerializeField] private bool showCombatTelegraphText = false;
     [Tooltip("보스 공격 대응 힌트 텍스트")]
     public Text combatTelegraphText;
     [Tooltip("보스 공격 대응 힌트 배경")]
@@ -230,6 +231,8 @@ public class PlayerHUD : MonoBehaviour
 
         if (ShouldTickCombatTelegraph())
             UpdateCombatTelegraphVisual();
+        else if (!showCombatTelegraphText)
+            HideCombatTelegraphText();
 
         UpdatePerformanceHud();
     }
@@ -318,6 +321,14 @@ public class PlayerHUD : MonoBehaviour
 
     public void ShowRuntimeTelegraphMessage(string message, AttackTelegraphType telegraphType = AttackTelegraphType.Auto, float holdTime = 0.72f, bool useDangerFeedback = false, int priority = 0)
     {
+        if (!showCombatTelegraphText)
+        {
+            HideCombatTelegraphText();
+            if (useDangerFeedback || telegraphType == AttackTelegraphType.Danger)
+                PlayDangerTelegraphFeedback();
+            return;
+        }
+
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -753,6 +764,14 @@ public class PlayerHUD : MonoBehaviour
 
     void HandleAttackTelegraph(AttackTelegraphType telegraphType, float leadTime, string label)
     {
+        if (!showCombatTelegraphText)
+        {
+            HideCombatTelegraphText();
+            if (telegraphType == AttackTelegraphType.Danger)
+                PlayDangerTelegraphFeedback();
+            return;
+        }
+
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -782,6 +801,12 @@ public class PlayerHUD : MonoBehaviour
 
     void HandlePunishWindowOpened(float duration, float damageMultiplier, string patternName)
     {
+        if (!showCombatTelegraphText)
+        {
+            HideCombatTelegraphText();
+            return;
+        }
+
         EnsureCombatTelegraphVisuals();
         EnsurePunishWindowVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
@@ -805,6 +830,12 @@ public class PlayerHUD : MonoBehaviour
 
     void HandlePunishWindowClosed()
     {
+        if (!showCombatTelegraphText)
+        {
+            HideCombatTelegraphText();
+            return;
+        }
+
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null)
             return;
 
@@ -827,6 +858,14 @@ public class PlayerHUD : MonoBehaviour
 
     void HandleBossPhaseChanged(int phase, float hpNormalized)
     {
+        if (!showCombatTelegraphText)
+        {
+            HideCombatTelegraphText();
+            if (phase >= 3)
+                PlayDangerTelegraphFeedback();
+            return;
+        }
+
         EnsureCombatTelegraphVisuals();
         if (_combatTelegraphCanvasGroup == null || combatTelegraphText == null || combatTelegraphPanelImage == null)
             return;
@@ -867,6 +906,7 @@ public class PlayerHUD : MonoBehaviour
             _combatTelegraphTween = null;
         }
 
+        _combatTelegraphRoot.gameObject.SetActive(true);
         _combatTelegraphRoot.DOKill();
         _combatTelegraphCanvasGroup.alpha = 0f;
         _combatTelegraphRoot.localScale = new Vector3(0.96f, 0.96f, 1f);
@@ -916,6 +956,12 @@ public class PlayerHUD : MonoBehaviour
 
     void UpdateCombatTelegraphVisual()
     {
+        if (!showCombatTelegraphText)
+        {
+            HideCombatTelegraphText();
+            return;
+        }
+
         if (_combatTelegraphCanvasGroup == null || _combatTelegraphRoot == null)
             return;
 
@@ -957,6 +1003,34 @@ public class PlayerHUD : MonoBehaviour
         }
 
         _combatTelegraphRoot.localScale = new Vector3(scale, scale, 1f);
+    }
+
+    void HideCombatTelegraphText()
+    {
+        _combatTelegraphVisible = false;
+        _combatTelegraphPriority = 0;
+        _combatTelegraphCurrentMessage = null;
+        _combatTelegraphShowStartTime = 0f;
+        _combatTelegraphFadeOutStartTime = 0f;
+        _combatTelegraphHideTime = 0f;
+        _combatTelegraphPunchUntilTime = 0f;
+        _combatTelegraphPunchStrength = 0f;
+
+        if (_combatTelegraphTween != null)
+        {
+            _combatTelegraphTween.Kill();
+            _combatTelegraphTween = null;
+        }
+
+        if (_combatTelegraphRoot != null)
+        {
+            _combatTelegraphRoot.DOKill();
+            _combatTelegraphRoot.localScale = Vector3.one;
+            _combatTelegraphRoot.gameObject.SetActive(false);
+        }
+
+        if (_combatTelegraphCanvasGroup != null)
+            _combatTelegraphCanvasGroup.alpha = 0f;
     }
 
     void NormalizeRuntimeHudLayout()

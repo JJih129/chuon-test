@@ -9,6 +9,7 @@ public class MainSceneBossStatusController : MonoBehaviour
     [SerializeField] private BossController bossController;
     [SerializeField] private BossBreakController bossBreakController;
     [SerializeField] private PlayerUltimateController playerUltimateController;
+    [SerializeField] private bool showStatusPanel = false;
 
     [Header("Layout")]
     [SerializeField] private Vector2 panelAnchoredPosition = new Vector2(0f, -136f);
@@ -72,6 +73,12 @@ public class MainSceneBossStatusController : MonoBehaviour
         bossController = runtimeBossController;
         bossBreakController = runtimeBossBreakController;
         playerUltimateController = runtimePlayerUltimateController;
+        if (!ShouldShowStatusPanel())
+        {
+            HideVisuals();
+            return;
+        }
+
         NormalizeCompactLayout();
         EnsureVisuals();
         RefreshSubscriptions();
@@ -80,6 +87,12 @@ public class MainSceneBossStatusController : MonoBehaviour
 
     void OnEnable()
     {
+        if (!ShouldShowStatusPanel())
+        {
+            HideVisuals();
+            return;
+        }
+
         NormalizeCompactLayout();
         EnsureVisuals();
         RefreshSubscriptions();
@@ -99,6 +112,9 @@ public class MainSceneBossStatusController : MonoBehaviour
 
     void RefreshSubscriptions()
     {
+        if (!ShouldShowStatusPanel())
+            return;
+
         ReleaseSubscriptions();
 
         if (bossUiController == null)
@@ -241,6 +257,12 @@ public class MainSceneBossStatusController : MonoBehaviour
 
     void EnsureVisuals()
     {
+        if (!ShouldShowStatusPanel())
+        {
+            HideVisuals();
+            return;
+        }
+
         if (bossUiController == null)
             bossUiController = FindObjectOfType<BossUIController>(true);
 
@@ -456,6 +478,18 @@ public class MainSceneBossStatusController : MonoBehaviour
             _root.localScale = Vector3.one;
         if (_panelImage != null)
             _panelImage.color = panelColor;
+    }
+
+    bool ShouldShowStatusPanel()
+    {
+        return showStatusPanel && ExhibitionPrototypePresentationPolicy.RuntimeBossStatusPanelEnabled;
+    }
+
+    void HideVisuals()
+    {
+        StopPulse();
+        if (_root != null)
+            _root.gameObject.SetActive(false);
     }
 
     Color ResolvePhaseColor(int phase)

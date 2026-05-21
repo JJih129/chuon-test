@@ -115,6 +115,8 @@ public class LobbyManager : MonoBehaviour
     public Transform triggerBoard;
     public Transform[] pathWaypoints;
     public LobbyPresentationController presentationController;
+    [SerializeField] private Color elevatorRouteMarkerColor = new Color(0.18f, 0.85f, 1f, 0.9f);
+    [SerializeField] private Color elevatorBoardMarkerColor = new Color(0.28f, 1f, 0.72f, 0.95f);
 
     [Header("Atmosphere")]
     [TextArea] public string routeSuspicionLine = "\ub204\uad70\uac00 \uba3c\uc800 \uc774 \uae38\uc744 \uc5f4\uc5b4\ub1a8\uc5b4. \uc548\uc804\ud558\ub2e4\uace0 \uac00\uc815\ud558\uc9c0 \ub9c8.";
@@ -137,6 +139,8 @@ public class LobbyManager : MonoBehaviour
     LobbyObjectivePanelController _objectivePanelController;
     LobbyFlowPhase _currentPhase;
     readonly List<DroneController> _activeLobbyDrones = new List<DroneController>();
+    TutorialWorldMarker _approachWorldMarker;
+    TutorialWorldMarker _boardWorldMarker;
     int _combatEscalationStage;
     Vector3 _elevatorLiftInitialLocalPosition;
     bool _elevatorLiftInitialLocalPositionValid;
@@ -187,6 +191,7 @@ public class LobbyManager : MonoBehaviour
             elevatorPanel.SetActive(false);
 
         ResolveElevatorLiftRoot();
+        ConfigureLobbyWorldMarkers();
         ConfigurePresentationController();
         ConfigureCombatCoachController();
         ConfigureObjectivePanelController();
@@ -833,6 +838,8 @@ public class LobbyManager : MonoBehaviour
 
         if (presentationController != null)
             presentationController.ShowApproachMarker();
+        ShowLobbyWorldMarker(_approachWorldMarker, true);
+        ShowLobbyWorldMarker(_boardWorldMarker, false);
 
         yield return new WaitUntil(() => _isDoorReached);
         StartCoroutine(SequenceAtElevator());
@@ -867,6 +874,8 @@ public class LobbyManager : MonoBehaviour
 
         if (presentationController != null)
             presentationController.ShowBoardMarker();
+        ShowLobbyWorldMarker(_approachWorldMarker, false);
+        ShowLobbyWorldMarker(_boardWorldMarker, true);
     }
 
     IEnumerator SequenceAtElevator()
@@ -914,6 +923,8 @@ public class LobbyManager : MonoBehaviour
 
         if (presentationController != null)
             presentationController.HideObjectiveMarker();
+        ShowLobbyWorldMarker(_approachWorldMarker, false);
+        ShowLobbyWorldMarker(_boardWorldMarker, false);
     }
 
     IEnumerator SequenceInside()
@@ -1118,6 +1129,46 @@ public class LobbyManager : MonoBehaviour
             triggerApproach,
             triggerBoard,
             elevatorInteractable);
+    }
+
+    void ConfigureLobbyWorldMarkers()
+    {
+        _approachWorldMarker = EnsureLobbyWorldMarker(triggerApproach, "LobbyElevatorApproachWorldMarker", elevatorRouteMarkerColor);
+        _boardWorldMarker = EnsureLobbyWorldMarker(triggerBoard, "LobbyElevatorBoardWorldMarker", elevatorBoardMarkerColor);
+        ShowLobbyWorldMarker(_approachWorldMarker, false);
+        ShowLobbyWorldMarker(_boardWorldMarker, false);
+    }
+
+    static TutorialWorldMarker EnsureLobbyWorldMarker(Transform target, string markerName, Color markerColor)
+    {
+        if (target == null)
+            return null;
+
+        Transform existing = target.Find(markerName);
+        TutorialWorldMarker marker = existing != null ? existing.GetComponent<TutorialWorldMarker>() : null;
+        if (marker == null)
+        {
+            GameObject markerObject = new GameObject(markerName);
+            markerObject.layer = target.gameObject.layer;
+            markerObject.transform.SetParent(target, false);
+            marker = markerObject.AddComponent<TutorialWorldMarker>();
+        }
+
+        marker.ConfigureRuntime(
+            target,
+            markerColor,
+            new Vector3(1.05f, 0.025f, 1.05f),
+            new Vector3(0f, 0.72f, 0f),
+            new Vector3(0.09f, 0.42f, 0.09f),
+            new Vector3(0f, 1.32f, 0f),
+            new Vector3(0.26f, 0.12f, 0.26f));
+        return marker;
+    }
+
+    static void ShowLobbyWorldMarker(TutorialWorldMarker marker, bool visible)
+    {
+        if (marker != null)
+            marker.SetVisible(visible);
     }
 
     void ConfigureCombatCoachController()
