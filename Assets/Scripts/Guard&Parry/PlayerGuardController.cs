@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using System;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using System.Collections;
@@ -15,6 +16,8 @@ using Combat;
 [AddComponentMenu("ChuOn/Combat/Player Guard Controller")]
 public class PlayerGuardController : MonoBehaviour
 {
+    public static event Action<PlayerGuardController> GlobalParrySuccess;
+
     // ─────────────────────────────────────────────────────────────────────
     // ① 입력 설정
     // ─────────────────────────────────────────────────────────────────────
@@ -36,6 +39,9 @@ public class PlayerGuardController : MonoBehaviour
     public string guardBlockTrigger = "GuardBlock";
     [Tooltip("패링 성공 Trigger")]
     public string parrySuccessTrigger = "ParrySuccess";
+
+    [Header("Debug")]
+    public bool parryDebugLogs = true;
 
     // ─────────────────────────────────────────────────────────────────────
     // ③ 가드 전방 기준/판정
@@ -94,17 +100,25 @@ public class PlayerGuardController : MonoBehaviour
     [Tooltip("패링 창은 '새 가드 입력'에만 열림")]
     public bool requireFreshGuardPressForParry = true;
     [Tooltip("가드 입력 후 이 시간 안에 들어온 애니메이션 이벤트만 패링 창을 열 수 있음")]
-    public float parryPressValidityWindow = 0.18f;
+    public float parryPressValidityWindow = 0.08f;
     [Tooltip("가드를 놓은 뒤 이 시간 이상 지나야 다음 패링 시도를 재무장")]
-    public float parryRearmReleaseTime = 0.08f;
+    public float parryRearmReleaseTime = 0.12f;
     [Tooltip("패링 시도 재개방 최소 간격. 가드 탭 스팸 방지용")]
-    public float parryAttemptCooldown = 0.20f;
+    public float parryAttemptCooldown = 0.35f;
     [Tooltip("가드 진입 후 이 시간 안의 애니메이션 이벤트만 패링 창을 열 수 있음")]
     public float parryEventOpenGraceFromGuardStart = 0.10f;
     [Tooltip("애니메이션 이벤트 대신 입력 기준으로 패링 창을 한 번만 연다")]
     public bool useInputDrivenParryWindow = true;
     [Tooltip("입력 기반 패링 창 길이")]
-    public float inputDrivenParryWindow = 0.12f;
+    public float inputDrivenParryWindow = 0.05f;
+    [Tooltip("패링 창이 비었을 때 실패 후딜 적용")]
+    public bool punishParryMiss = true;
+    [Tooltip("패링 실패 후 다시 가드/패링에 들어가기 전까지의 벌점 시간")]
+    public float parryMissRecovery = 0.45f;
+    [Tooltip("패링 실패 시 이동 잠금 적용")]
+    public bool lockMoveOnParryMiss = true;
+    [Tooltip("패링 성공 후 다시 패링을 열기 전까지의 짧은 회복 시간")]
+    public float parrySuccessRecovery = 0.22f;
 
     // ─────────────────────────────────────────────────────────────────────
     // ⑥ 리액션 중 이동 잠금
@@ -164,7 +178,7 @@ public class PlayerGuardController : MonoBehaviour
     // 내부 상태
     public bool IsGuarding  { get; private set; }
     public bool IsAttacking { get; private set; }
-    public bool IsParryWindowOpen => _parryOpen && _guardDefenseActive;
+    public bool IsParryWindowOpen => _parryOpen;
     public bool CanGuardHits => _guardDefenseActive;
 
     // 해시 및 존재 여부 캐시
@@ -177,14 +191,25 @@ public class PlayerGuardController : MonoBehaviour
     bool _guardDefenseActive;
     Coroutine _guardStartupCo;
     Coroutine _guardAutoCloseCo;
+    WaitForSeconds _cachedParryWait;
+    float _cachedParryWaitSeconds = -1f;
+    WaitForSeconds _cachedGuardStartupWait;
+    float _cachedGuardStartupWaitSeconds = -1f;
+    WaitForSeconds _cachedAutoCloseWait;
+    float _cachedAutoCloseWaitSeconds = -1f;
+    WaitForSeconds _cachedUnlockWait;
+    float _cachedUnlockWaitSeconds = -1f;
     float _guardStateStartedTime = float.NegativeInfinity;
     bool _guardHeldLastFrame;
+    bool _guardStartedFromInputPress;
     bool _parryArmedFromCurrentPress;
     bool _parryWindowConsumedThisGuard;
     bool _requireGuardReleaseAfterBlockedPress;
+    bool _parryResolvedThisWindow;
     float _lastGuardPressTime = float.NegativeInfinity;
     float _lastGuardReleaseTime = float.NegativeInfinity;
     float _lastParryAttemptTime = float.NegativeInfinity;
+    float _parryLockUntil = float.NegativeInfinity;
     float _guardCooldownUntil = float.NegativeInfinity;
     float _forcedGuardHoldUntil = float.NegativeInfinity;
 
@@ -282,16 +307,31 @@ public class PlayerGuardController : MonoBehaviour
     {
         if (_parryCo != null) StopCoroutine(_parryCo);
         _lastParryAttemptTime = Time.time;
+        _guardCooldownUntil = Mathf.Max(_guardCooldownUntil, Time.time + Mathf.Max(0f, parryAttemptCooldown));
         _parryArmedFromCurrentPress = false;
         _parryWindowConsumedThisGuard = true;
+        _parryResolvedThisWindow = false;
         _parryCo = StartCoroutine(CoParry(seconds));
     }
     IEnumerator CoParry(float seconds)
     {
         _parryOpen = true;
-        yield return new WaitForSeconds(seconds);
+        yield return GetParryWait(seconds);
         _parryOpen = false;
         _parryCo = null;
+
+        if (!_parryResolvedThisWindow)
+        {
+            if (ShouldTransitionToHoldGuardAfterParryAttempt())
+            {
+                _parryResolvedThisWindow = true;
+                ResumeGuardDefenseAfterParryAttempt();
+            }
+            else
+            {
+                HandleParryMiss();
+            }
+        }
     }
 
     // ───────────────────── 리액션 트리거(이벤트 포함) ─────────────────────
@@ -304,10 +344,16 @@ public class PlayerGuardController : MonoBehaviour
 
     public void PlayParrySuccess()
     {
+        if (parryDebugLogs)
+            Debug.Log($"[ParryDebug][Guard] PlayParrySuccess frame={Time.frameCount} time={Time.time:0.000} guarding={IsGuarding} parryOpen={_parryOpen}", this);
+
+        _parryResolvedThisWindow = true;
+        _parryLockUntil = Mathf.Max(_parryLockUntil, Time.time + Mathf.Max(0f, parrySuccessRecovery));
         CloseParryWindow();
         if (_hasParryTrig && animator) animator.SetTrigger(_hashParryTrig);
         if (lockMoveOnParry) LockMoveFor(parryMoveLock);
         if (grantUltimateOnParry && ultimate) ultimate.AddGauge(ultimateGainOnParry);
+        GlobalParrySuccess?.Invoke(this);
         OnParrySuccess?.Invoke();
     }
 
@@ -319,7 +365,6 @@ public class PlayerGuardController : MonoBehaviour
     {
         isParry = false; isBlock = false; chipMul = chipDamageOnBlock;
 
-        if (!CanGuardHits) return false;
         if (!CanMaintainGuardState()) return false;
 
         Vector3 fwd = GetGuardForward().normalized;
@@ -333,6 +378,7 @@ public class PlayerGuardController : MonoBehaviour
         if (!inFront) return false;
 
         if (enablePerfectGuard && _parryOpen) { isParry = true;  return true; }
+        if (!CanGuardHits) return false;
         isBlock = true;  return true;
     }
 
@@ -383,7 +429,8 @@ public class PlayerGuardController : MonoBehaviour
         }
 
         bool releaseReady = (Time.time - _lastGuardReleaseTime) >= parryRearmReleaseTime;
-        bool cooldownReady = (Time.time - _lastParryAttemptTime) >= parryAttemptCooldown;
+        bool cooldownReady = (Time.time - _lastParryAttemptTime) >= parryAttemptCooldown
+                          && Time.time >= _parryLockUntil;
         _parryArmedFromCurrentPress = !requireFreshGuardPressForParry || (releaseReady && cooldownReady);
     }
 
@@ -391,6 +438,13 @@ public class PlayerGuardController : MonoBehaviour
     {
         _lastGuardReleaseTime = Time.time;
         _guardHeldLastFrame = false;
+
+        if (_parryOpen && !_parryResolvedThisWindow)
+        {
+            HandleParryMiss();
+            _requireGuardReleaseAfterBlockedPress = false;
+            return;
+        }
 
         if (useTapGuard && IsGuarding && Time.time < _forcedGuardHoldUntil)
             return;
@@ -413,7 +467,9 @@ public class PlayerGuardController : MonoBehaviour
 
         float effectiveGuardDuration = Mathf.Max(0.01f, Mathf.Max(tapGuardDuration, forcedGuardHoldDuration));
         _forcedGuardHoldUntil = Time.time + effectiveGuardDuration;
+        _guardStartedFromInputPress = true;
         SetGuarding(true);
+        _guardStartedFromInputPress = false;
 
         if (_guardAutoCloseCo != null)
             StopCoroutine(_guardAutoCloseCo);
@@ -425,7 +481,9 @@ public class PlayerGuardController : MonoBehaviour
     {
         if (!CanEnterGuard()) return;
         if (!CanMaintainGuardState()) return;
+        _guardStartedFromInputPress = true;
         SetGuarding(true);
+        _guardStartedFromInputPress = false;
     }
 
     void ApplyGuardState(bool on, bool fromAnimatorSync)
@@ -450,7 +508,17 @@ public class PlayerGuardController : MonoBehaviour
             _guardStateStartedTime = Time.time;
             _guardCooldownUntil = Time.time + Mathf.Max(0f, guardReenterCooldown);
             _parryWindowConsumedThisGuard = false;
-            BeginGuardStartup();
+            _guardDefenseActive = false;
+
+            bool openedInputParry = false;
+            if (_guardStartedFromInputPress && enablePerfectGuard && useInputDrivenParryWindow)
+            {
+                TryStartInputDrivenParryWindow();
+                openedInputParry = _parryOpen;
+            }
+
+            if (!openedInputParry)
+                BeginGuardStartup();
         }
         else
             EndGuardState();
@@ -466,18 +534,48 @@ public class PlayerGuardController : MonoBehaviour
         if (guardStartupDuration <= 0f)
         {
             _guardDefenseActive = true;
-            TryStartInputDrivenParryWindow();
             return;
         }
 
         _guardStartupCo = StartCoroutine(CoGuardStartup());
     }
 
+    void ResumeGuardDefenseAfterParryAttempt()
+    {
+        if (!IsGuarding)
+            return;
+
+        if (!CanMaintainGuardState())
+        {
+            SetGuarding(false);
+            return;
+        }
+
+        if (_guardStartupCo != null)
+            StopCoroutine(_guardStartupCo);
+
+        float resumeStartup = Mathf.Max(0f, guardStartupDuration);
+        if (resumeStartup <= 0f)
+        {
+            _guardDefenseActive = true;
+            _guardStartupCo = null;
+            return;
+        }
+
+        _guardStartupCo = StartCoroutine(CoResumeGuardDefenseAfter(resumeStartup));
+    }
+
+    IEnumerator CoResumeGuardDefenseAfter(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        _guardDefenseActive = IsGuarding && CanMaintainGuardState();
+        _guardStartupCo = null;
+    }
+
     IEnumerator CoGuardStartup()
     {
-        yield return new WaitForSeconds(guardStartupDuration);
+        yield return GetGuardStartupWait();
         _guardDefenseActive = IsGuarding;
-        TryStartInputDrivenParryWindow();
         _guardStartupCo = null;
     }
 
@@ -493,6 +591,7 @@ public class PlayerGuardController : MonoBehaviour
         _guardDefenseActive = false;
         _parryArmedFromCurrentPress = false;
         _parryWindowConsumedThisGuard = false;
+        _parryResolvedThisWindow = false;
         _forcedGuardHoldUntil = float.NegativeInfinity;
         if (_guardStartupCo != null)
             StopCoroutine(_guardStartupCo);
@@ -503,9 +602,29 @@ public class PlayerGuardController : MonoBehaviour
         CloseParryWindow();
     }
 
+    void HandleParryMiss()
+    {
+        if (!punishParryMiss)
+            return;
+
+        _parryResolvedThisWindow = true;
+        _parryArmedFromCurrentPress = false;
+        _requireGuardReleaseAfterBlockedPress = true;
+
+        float recovery = Mathf.Max(0f, parryMissRecovery);
+        _parryLockUntil = Mathf.Max(_parryLockUntil, Time.time + recovery);
+        if (lockMoveOnParryMiss && recovery > 0f)
+            LockMoveFor(recovery);
+
+        if (IsGuarding)
+            SetGuarding(false);
+
+        _guardCooldownUntil = Mathf.Max(_guardCooldownUntil, Time.time + recovery);
+    }
+
     IEnumerator CoAutoCloseGuard(float seconds)
     {
-        yield return new WaitForSeconds(seconds);
+        yield return GetAutoCloseWait(seconds);
         _guardAutoCloseCo = null;
         if (IsGuarding)
             SetGuarding(false);
@@ -558,6 +677,9 @@ public class PlayerGuardController : MonoBehaviour
         if ((Time.time - _lastParryAttemptTime) < parryAttemptCooldown)
             return false;
 
+        if (Time.time < _parryLockUntil)
+            return false;
+
         if ((Time.time - _guardStateStartedTime) > parryEventOpenGraceFromGuardStart)
             return false;
 
@@ -580,11 +702,13 @@ public class PlayerGuardController : MonoBehaviour
     {
         if (!enablePerfectGuard) return false;
         if (!IsGuarding) return false;
-        if (!_guardDefenseActive) return false;
         if (_parryWindowConsumedThisGuard) return false;
         if (!CanMaintainGuardState()) return false;
 
         if ((Time.time - _lastParryAttemptTime) < parryAttemptCooldown)
+            return false;
+
+        if (Time.time < _parryLockUntil)
             return false;
 
         if (!requireFreshGuardPressForParry)
@@ -599,9 +723,22 @@ public class PlayerGuardController : MonoBehaviour
         return true;
     }
 
+    bool ShouldTransitionToHoldGuardAfterParryAttempt()
+    {
+        if (useTapGuard)
+            return false;
+
+        bool canUseInputAction = guardAction && guardAction.action != null;
+        bool rawHolding = canUseInputAction ? guardAction.action.IsPressed() : Input.GetKey(legacyGuardKey);
+        if (!rawHolding)
+            return false;
+
+        return IsGuarding && CanMaintainGuardState();
+    }
+
     IEnumerator CoUnlockAfter(float seconds)
     {
-        yield return new WaitForSeconds(seconds);
+        yield return GetUnlockWait(seconds);
         _moveLockRef = Mathf.Max(0, _moveLockRef - 1);
 
         if (_moveLockRef == 0)
@@ -610,6 +747,54 @@ public class PlayerGuardController : MonoBehaviour
             if (disableRootMotionDuringLock && animator)
                 animator.applyRootMotion = _prevRootMotion;
         }
+    }
+
+    WaitForSeconds GetParryWait(float seconds)
+    {
+        seconds = Mathf.Max(0f, seconds);
+        if (_cachedParryWait == null || !Mathf.Approximately(_cachedParryWaitSeconds, seconds))
+        {
+            _cachedParryWaitSeconds = seconds;
+            _cachedParryWait = new WaitForSeconds(seconds);
+        }
+
+        return _cachedParryWait;
+    }
+
+    WaitForSeconds GetGuardStartupWait()
+    {
+        float seconds = Mathf.Max(0f, guardStartupDuration);
+        if (_cachedGuardStartupWait == null || !Mathf.Approximately(_cachedGuardStartupWaitSeconds, seconds))
+        {
+            _cachedGuardStartupWaitSeconds = seconds;
+            _cachedGuardStartupWait = new WaitForSeconds(seconds);
+        }
+
+        return _cachedGuardStartupWait;
+    }
+
+    WaitForSeconds GetAutoCloseWait(float seconds)
+    {
+        seconds = Mathf.Max(0f, seconds);
+        if (_cachedAutoCloseWait == null || !Mathf.Approximately(_cachedAutoCloseWaitSeconds, seconds))
+        {
+            _cachedAutoCloseWaitSeconds = seconds;
+            _cachedAutoCloseWait = new WaitForSeconds(seconds);
+        }
+
+        return _cachedAutoCloseWait;
+    }
+
+    WaitForSeconds GetUnlockWait(float seconds)
+    {
+        seconds = Mathf.Max(0f, seconds);
+        if (_cachedUnlockWait == null || !Mathf.Approximately(_cachedUnlockWaitSeconds, seconds))
+        {
+            _cachedUnlockWaitSeconds = seconds;
+            _cachedUnlockWait = new WaitForSeconds(seconds);
+        }
+
+        return _cachedUnlockWait;
     }
 
     // ───────────────────── 애니 파라미터 캐시/검증 ─────────────────────

@@ -1,23 +1,18 @@
-// BulletProjectile.cs
-using System.Collections;
 using UnityEngine;
 
 [DisallowMultipleComponent]
 public class BulletProjectile : MonoBehaviour
 {
-    [Header("발사체 기본")]
-    [Tooltip("발사자(런타임에 Init에서 설정)")]
+    [Header("Projectile")]
     public GameObject owner;
-    [Tooltip("이동 속도 (m/s)")]
     public float speed = 12f;
-    [Tooltip("데미지")]
     public int damage = 15;
-    [Tooltip("수명(초)")]
     public float lifetime = 6f;
+    [SerializeField] bool debugLog = false;
 
     Collider[] _myCols;
     Collider[] _ownerCols;
-    bool _ignored = false;
+    bool _ignored;
 
     void Awake()
     {
@@ -35,21 +30,23 @@ public class BulletProjectile : MonoBehaviour
             _ownerCols = owner.GetComponentsInChildren<Collider>(true);
             if (_ownerCols != null && _myCols != null)
             {
-                foreach (var oc in _ownerCols) if (oc != null)
-                    foreach (var mc in _myCols) if (mc != null)
+                foreach (var oc in _ownerCols)
+                {
+                    if (oc == null) continue;
+                    foreach (var mc in _myCols)
+                    {
+                        if (mc == null) continue;
                         Physics.IgnoreCollision(oc, mc, true);
+                    }
+                }
                 _ignored = true;
             }
         }
 
-        StartCoroutine(Life());
-        Debug.Log($"[BulletProjectile] Init owner={(owner? owner.name : "null")} speed={speed} dmg={damage}", this);
-    }
+        Destroy(gameObject, lifetime);
 
-    IEnumerator Life()
-    {
-        yield return new WaitForSeconds(lifetime);
-        Destroy(gameObject);
+        if (debugLog)
+            Debug.Log($"[BulletProjectile] Init owner={(owner ? owner.name : "null")} speed={speed} dmg={damage}", this);
     }
 
     void Update()
@@ -62,70 +59,83 @@ public class BulletProjectile : MonoBehaviour
         if (other == null) return;
         if (owner != null && (other.gameObject == owner || other.transform.IsChildOf(owner.transform))) return;
 
-        Debug.Log($"[BulletProjectile] Collided with {other.gameObject.name}", this);
+        if (debugLog)
+            Debug.Log($"[BulletProjectile] Collided with {other.gameObject.name}", this);
 
         var hitReceiver = other.GetComponentInParent<IHitReceiver>();
         if (hitReceiver != null)
         {
-            var hd = CreateHitData();
-            hitReceiver.ReceiveHit(hd);
-            Debug.Log("[BulletProjectile] Delivered hit to IHitReceiver on " + other.gameObject.name, this);
+            hitReceiver.ReceiveHit(CreateHitData());
+            if (debugLog)
+                Debug.Log("[BulletProjectile] Delivered hit to IHitReceiver on " + other.gameObject.name, this);
             Destroy(gameObject);
             return;
         }
 
-        var pdr = other.GetComponentInParent<PlayerDamageReceiver>();
-        if (pdr != null)
+        var damageReceiver = other.GetComponentInParent<PlayerDamageReceiver>();
+        if (damageReceiver != null)
         {
-            var hd = CreateHitData();
-            pdr.ReceiveHit(damage, owner ? owner.transform : null, transform.position, /*isParryable*/ false);
-            Debug.Log("[BulletProjectile] Delivered hit to PlayerDamageReceiver on " + other.gameObject.name, this);
+            damageReceiver.ReceiveHit(damage, owner ? owner.transform : null, transform.position, false);
+            if (debugLog)
+                Debug.Log("[BulletProjectile] Delivered hit to PlayerDamageReceiver on " + other.gameObject.name, this);
             Destroy(gameObject);
             return;
         }
 
-        var h = other.GetComponentInParent<IHealth>();
-        if (h != null)
+        var health = other.GetComponentInParent<IHealth>();
+        if (health != null)
         {
             try
             {
-                h.ApplyDamage(damage);
-                Debug.Log("[BulletProjectile] Applied damage via IHealth on " + other.gameObject.name, this);
+                health.ApplyDamage(damage);
+                if (debugLog)
+                    Debug.Log("[BulletProjectile] Applied damage via IHealth on " + other.gameObject.name, this);
             }
             catch
             {
-                Debug.LogWarning("[BulletProjectile] IHealth.ApplyDamage threw or not supported on " + other.gameObject.name, this);
+                if (debugLog)
+                    Debug.LogWarning("[BulletProjectile] IHealth.ApplyDamage threw or not supported on " + other.gameObject.name, this);
             }
+
             Destroy(gameObject);
             return;
         }
 
-        Debug.Log("[BulletProjectile] No damage target found for " + other.gameObject.name, this);
+        if (debugLog)
+            Debug.Log("[BulletProjectile] No damage target found for " + other.gameObject.name, this);
         Destroy(gameObject);
     }
 
     HitData CreateHitData()
     {
-        var hd = new HitData();
+        var data = new HitData();
         try
         {
-            hd.attacker = owner;
-            hd.damage = damage;
-            hd.hitPoint = transform.position;
-            hd.hitType = HitType.Normal;
-            hd.isParryable = false;
+            data.attacker = owner;
+            data.damage = damage;
+            data.hitPoint = transform.position;
+            data.hitType = HitType.Normal;
+            data.isParryable = false;
         }
-        catch { }
-        return hd;
+        catch
+        {
+        }
+
+        return data;
     }
 
     void OnDestroy()
     {
-        if (_ignored && _ownerCols != null && _myCols != null)
+        if (!_ignored || _ownerCols == null || _myCols == null) return;
+
+        foreach (var oc in _ownerCols)
         {
-            foreach (var oc in _ownerCols) if (oc != null)
-                foreach (var mc in _myCols) if (mc != null)
-                    Physics.IgnoreCollision(oc, mc, false);
+            if (oc == null) continue;
+            foreach (var mc in _myCols)
+            {
+                if (mc == null) continue;
+                Physics.IgnoreCollision(oc, mc, false);
+            }
         }
     }
 
@@ -133,6 +143,8 @@ public class BulletProjectile : MonoBehaviour
     {
         owner = newOwner ?? owner;
         transform.forward = -transform.forward;
-        Debug.Log("[BulletProjectile] Reflected. newOwner=" + (owner ? owner.name : "null"), this);
+
+        if (debugLog)
+            Debug.Log("[BulletProjectile] Reflected. newOwner=" + (owner ? owner.name : "null"), this);
     }
 }

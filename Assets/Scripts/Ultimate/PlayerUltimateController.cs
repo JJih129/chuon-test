@@ -80,6 +80,7 @@ public class PlayerUltimateController : MonoBehaviour
     private Transform _originalFinisherLookAt;
     private float _originalFinisherFov;
     private bool _finisherOverrideCaptured;
+    private MonoBehaviour _cachedFallbackUltimateTargetSource;
 
     private void Awake()
     {
@@ -179,9 +180,7 @@ public class PlayerUltimateController : MonoBehaviour
             return;
         }
 
-        var boss = GameObject.FindWithTag("Boss");
-        if (boss != null && boss.TryGetComponent<IUltimateTarget>(out var fallbackTarget))
-            fallbackTarget.ApplyUltimateDamage(damage);
+        ResolveFallbackUltimateTarget()?.ApplyUltimateDamage(damage);
     }
 
     private void ResolveCinematicCameras()
@@ -291,6 +290,28 @@ public class PlayerUltimateController : MonoBehaviour
             finisherCam.m_Lens.FieldOfView = _originalFinisherFov;
             _finisherOverrideCaptured = false;
         }
+    }
+
+    private IUltimateTarget ResolveFallbackUltimateTarget()
+    {
+        if (_cachedFallbackUltimateTargetSource != null)
+            return _cachedFallbackUltimateTargetSource as IUltimateTarget;
+
+        var boss = GameObject.FindWithTag("Boss");
+        if (boss == null)
+            return null;
+
+        var behaviours = boss.GetComponents<MonoBehaviour>();
+        for (int i = 0; i < behaviours.Length; i++)
+        {
+            if (behaviours[i] is IUltimateTarget fallbackTarget)
+            {
+                _cachedFallbackUltimateTargetSource = behaviours[i];
+                return fallbackTarget;
+            }
+        }
+
+        return null;
     }
 
     private static Transform FindChildRecursive(Transform root, string childName)

@@ -56,6 +56,9 @@ public class BossHitReaction : MonoBehaviour
     [Tooltip("같은 사운드가 반복될 때의 단조로움을 줄이기 위한 랜덤 피치 범위 (x = 최소, y = 최대). 둘 다 1이면 피치 고정.")]
     public Vector2 randomPitchRange = new Vector2(0.95f, 1.05f); // [조절값]
 
+    int _hitTriggerHash;
+    int _staggerTriggerHash;
+
     void Awake()
     {
         if (!bossHealth)
@@ -71,6 +74,8 @@ public class BossHitReaction : MonoBehaviour
             return;
         }
 
+        CacheTriggerHashes();
+
         // 히트 이벤트 구독
         // IHealth.OnDamagedWithType: Action<int, HitType> 형태라고 가정
         bossHealth.OnDamagedWithType += HandleDamagedWithType;
@@ -84,6 +89,13 @@ public class BossHitReaction : MonoBehaviour
         if (bossHealth != null)
             bossHealth.OnDamagedWithType -= HandleDamagedWithType;
     }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        CacheTriggerHashes();
+    }
+#endif
 
     /// <summary>
     /// BossHealth에서 데미지를 받은 직후 호출되는 콜백.
@@ -126,18 +138,18 @@ public class BossHitReaction : MonoBehaviour
         if (!bossAnimator) return;
 
         // 경직 공격이면 Stagger 우선
-        if (hitType == staggerHitType && !string.IsNullOrEmpty(staggerTriggerName))
+        if (hitType == staggerHitType && _staggerTriggerHash != 0)
         {
-            bossAnimator.ResetTrigger(staggerTriggerName);
-            bossAnimator.SetTrigger(staggerTriggerName);
+            bossAnimator.ResetTrigger(_staggerTriggerHash);
+            bossAnimator.SetTrigger(_staggerTriggerHash);
             return;
         }
 
         // 그 외에는 일반 Hit
-        if (!string.IsNullOrEmpty(hitTriggerName))
+        if (_hitTriggerHash != 0)
         {
-            bossAnimator.ResetTrigger(hitTriggerName);
-            bossAnimator.SetTrigger(hitTriggerName);
+            bossAnimator.ResetTrigger(_hitTriggerHash);
+            bossAnimator.SetTrigger(_hitTriggerHash);
         }
     }
 
@@ -170,7 +182,9 @@ public class BossHitReaction : MonoBehaviour
         float pitch = 1f;
         if (randomPitchRange.y > 0f && randomPitchRange.y >= randomPitchRange.x)
         {
-            pitch = Random.Range(randomPitchRange.x, randomPitchRange.y);
+            pitch = Mathf.Approximately(randomPitchRange.x, randomPitchRange.y)
+                ? randomPitchRange.x
+                : Random.Range(randomPitchRange.x, randomPitchRange.y);
         }
 
         audioSource.pitch = pitch;
@@ -198,7 +212,16 @@ public class BossHitReaction : MonoBehaviour
         if (clips == null || clips.Length == 0)
             return null;
 
+        if (clips.Length == 1)
+            return clips[0];
+
         int idx = Random.Range(0, clips.Length);
         return clips[idx];
+    }
+
+    void CacheTriggerHashes()
+    {
+        _hitTriggerHash = string.IsNullOrEmpty(hitTriggerName) ? 0 : Animator.StringToHash(hitTriggerName);
+        _staggerTriggerHash = string.IsNullOrEmpty(staggerTriggerName) ? 0 : Animator.StringToHash(staggerTriggerName);
     }
 }

@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class TutorialProjectile : MonoBehaviour
 {
+    Transform _tr;
+
     [Header("설정")]
     public float speed = 10.0f;     // 총알 속도
     public float damage = 10.0f;    // 데미지
@@ -14,6 +16,11 @@ public class TutorialProjectile : MonoBehaviour
     // 발사한 주인 (드론) - 패링 시 방향 판정을 위해 필요
     [HideInInspector] public Transform owner; 
 
+    void Awake()
+    {
+        _tr = transform;
+    }
+
     void Start()
     {
         // 일정 시간 지나면 자동 삭제
@@ -23,7 +30,7 @@ public class TutorialProjectile : MonoBehaviour
     void Update()
     {
         // 앞으로 이동
-        transform.Translate(Vector3.forward * speed * Time.deltaTime);
+        _tr.Translate(Vector3.forward * speed * Time.deltaTime);
     }
 
     void OnTriggerEnter(Collider other)
@@ -38,8 +45,12 @@ public class TutorialProjectile : MonoBehaviour
                 // 공격 정보 생성
                 HitPayload payload = new HitPayload();
                 payload.damage = damage;
-                payload.hitPoint = transform.position;
-                payload.hitDirection = transform.forward;
+                payload.hitPoint = _tr.position;
+                payload.canParry = false;
+                payload.canGuard = true;
+                payload.isUnblockable = false;
+                payload.causesGuardBreak = false;
+                payload.hitDirection = _tr.forward;
                 payload.attacker = owner; // 공격자(드론)를 알려줘야 패링 방향 계산 가능
                 payload.hitType = HitType.Normal; // 일반 공격
 

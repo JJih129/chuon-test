@@ -73,6 +73,7 @@ public class UltimateTargetSimple : MonoBehaviour, IUltimateTarget
         }
         if (!vfxSpawnPoint) vfxSpawnPoint = transform;
         currentHP = Mathf.Clamp(currentHP, 0, maxHP);
+        enabled = _hitStopRemain > 0f;
     }
 
     void Update()
@@ -81,6 +82,11 @@ public class UltimateTargetSimple : MonoBehaviour, IUltimateTarget
         if (_hitStopRemain > 0f)
         {
             _hitStopRemain -= Time.unscaledDeltaTime;
+            if (_hitStopRemain <= 0f)
+            {
+                _hitStopRemain = 0f;
+                enabled = false;
+            }
             // 필요 시 Animator.speed, AI 업데이트, 파티클 등을 개별 일시정지하는 방식으로 확장 가능
         }
     }
@@ -109,7 +115,11 @@ public class UltimateTargetSimple : MonoBehaviour, IUltimateTarget
         ApplySimpleReaction();
 
         // 5) 히트스톱(간단)
-        if (hitStop > 0f) _hitStopRemain = hitStop;
+        if (hitStop > 0f)
+        {
+            _hitStopRemain = hitStop;
+            enabled = true;
+        }
     }
 
     // ================================ 내부 처리 함수 ================================

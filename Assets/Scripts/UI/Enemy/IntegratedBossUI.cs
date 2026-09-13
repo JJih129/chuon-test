@@ -5,6 +5,18 @@ using UnityEngine;
 
 public class IntegratedBossUI : MonoBehaviour
 {
+    struct CandidateEntry
+    {
+        public ProximityBossUI comp;
+        public float sqr;
+
+        public CandidateEntry(ProximityBossUI comp, float sqr)
+        {
+            this.comp = comp;
+            this.sqr = sqr;
+        }
+    }
+
     public Transform player;
     public Camera mainCamera;
     public EnemyHPBarPool hpBarPool;
@@ -20,10 +32,12 @@ public class IntegratedBossUI : MonoBehaviour
     static IntegratedBossUI _instance;
     List<ProximityBossUI> registered = new List<ProximityBossUI>();
     Dictionary<ProximityBossUI, EnemyHPBar> activeBars = new Dictionary<ProximityBossUI, EnemyHPBar>();
+    readonly List<CandidateEntry> evaluationBuffer = new List<CandidateEntry>(8);
 
     ILockOnController lockOnController;
     float showSqr;
     float hideSqr;
+    ProximityBossUI currentTopBoss;
 
     void Awake()
     {
@@ -56,6 +70,8 @@ public class IntegratedBossUI : MonoBehaviour
     {
         if (_instance == null) return;
         _instance.registered.Remove(comp);
+        if (_instance.currentTopBoss == comp)
+            _instance.UnbindTopHUD();
         if (_instance.activeBars.TryGetValue(comp, out var bar))
         {
             if (_instance.hpBarPool != null)
@@ -81,24 +97,23 @@ public class IntegratedBossUI : MonoBehaviour
     {
         if (player == null) return;
 
-        var list = new List<(ProximityBossUI comp, float sqr, float dist)>();
+        evaluationBuffer.Clear();
         foreach (var c in registered)
         {
             if (c == null) continue;
             float sqr = (player.position - c.transform.position).sqrMagnitude;
-            float dist = Mathf.Sqrt(sqr);
-            list.Add((c, sqr, dist));
+            evaluationBuffer.Add(new CandidateEntry(c, sqr));
         }
-        list.Sort((a, b) => a.sqr.CompareTo(b.sqr));
+        evaluationBuffer.Sort((a, b) => a.sqr.CompareTo(b.sqr));
 
         Transform currentLock = lockOnController != null ? lockOnController.GetCurrentTarget() : null;
 
         int shownWorld = 0;
-        var toShowTop = list.Count > 0 ? list[0].comp : null;
+        var toShowTop = evaluationBuffer.Count > 0 ? evaluationBuffer[0].comp : null;
 
-        for (int i = 0; i < list.Count; i++)
+        for (int i = 0; i < evaluationBuffer.Count; i++)
         {
-            var entry = list[i];
+            var entry = evaluationBuffer[i];
             if (entry.comp == null) continue;
 
             bool lockok = true;
@@ -118,7 +133,7 @@ public class IntegratedBossUI : MonoBehaviour
             {
                 if (activeBars.ContainsKey(entry.comp) && withinHide && lockok)
                 {
-                    // 유지
+                    // Keep the current bar active.
                 }
                 else
                 {
@@ -177,16 +192,31 @@ public class IntegratedBossUI : MonoBehaviour
     void BindTopHUD(ProximityBossUI comp)
     {
         if (topBossHUD == null || topBossHUDRoot == null) return;
+        if (comp == currentTopBoss)
+        {
+            if (!topBossHUDRoot.activeSelf) topBossHUDRoot.SetActive(true);
+            return;
+        }
+
         var ih = comp.healthBehaviour as IHealth;
         if (ih == null) return;
+
+        if (currentTopBoss != null)
+            topBossHUD.Unbind();
+
         topBossHUD.Bind(ih);
         topBossHUDRoot.SetActive(true);
+        currentTopBoss = comp;
     }
 
     void UnbindTopHUD()
     {
         if (topBossHUD == null || topBossHUDRoot == null) return;
-        topBossHUD.Unbind();
-        topBossHUDRoot.SetActive(false);
+        if (currentTopBoss != null)
+        {
+            topBossHUD.Unbind();
+            currentTopBoss = null;
+        }
+        if (topBossHUDRoot.activeSelf) topBossHUDRoot.SetActive(false);
     }
 }

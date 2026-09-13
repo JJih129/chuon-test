@@ -42,19 +42,36 @@ public class PauseManager : MonoBehaviour
 
     public void PauseGame()
     {
+        if (isPaused)
+            return;
+
         isPaused = true;
         Time.timeScale = 0f; // 시간 정지
         
         uiView.ShowMenu(); // 메뉴 보이기
 
         // ★ [핵심] 커서를 보이게 하고, 잠금을 풉니다.
-        Cursor.visible = true;
-        Cursor.lockState = CursorLockMode.None;
+        if (!Cursor.visible)
+            Cursor.visible = true;
+        if (Cursor.lockState != CursorLockMode.None)
+            Cursor.lockState = CursorLockMode.None;
     }
 
     public void ResumeGame()
     {
+        if (!isPaused && !isSettingsOpen)
+        {
+            if (Time.timeScale != 1f)
+                Time.timeScale = 1f;
+            if (Cursor.visible)
+                Cursor.visible = false;
+            if (Cursor.lockState != CursorLockMode.Locked)
+                Cursor.lockState = CursorLockMode.Locked;
+            return;
+        }
+
         isPaused = false;
+        isSettingsOpen = false;
         
         // 메뉴 숨기기 연출 후 실행
         uiView.HideMenu(() => 
@@ -62,8 +79,10 @@ public class PauseManager : MonoBehaviour
             Time.timeScale = 1f; // 시간 재개
             
             // ★ [핵심] 게임으로 돌아가면 커서를 다시 중앙에 고정하고 숨깁니다.
-            Cursor.visible = false;
-            Cursor.lockState = CursorLockMode.Locked;
+            if (Cursor.visible)
+                Cursor.visible = false;
+            if (Cursor.lockState != CursorLockMode.Locked)
+                Cursor.lockState = CursorLockMode.Locked;
         });
     }
 

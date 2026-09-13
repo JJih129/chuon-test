@@ -10,6 +10,7 @@ public class PlayerConsumables : MonoBehaviour
     public int currentAmpoule = 4;
     [Range(0f, 1f)] public float healRatio = 0.4f;
     public bool allowUseAtFullHP = true;
+    [SerializeField] bool debugLog = false;
 
     public int MaxAmpoule => maxAmpoule;
     public int CurrentAmpoule => currentAmpoule;
@@ -36,9 +37,9 @@ public class PlayerConsumables : MonoBehaviour
 
     public void TryUseAmpoule()
     {
-        if (currentAmpoule <= 0) { Debug.Log("[Consumables] No ampoule"); return; }
-        if (health.IsDead) { Debug.Log("[Consumables] Player dead"); return; }
-        if (!allowUseAtFullHP && health.CurrentHP >= health.MaxHP) { Debug.Log("[Consumables] HP full"); return; }
+        if (currentAmpoule <= 0) { if (debugLog) Debug.Log("[Consumables] No ampoule"); return; }
+        if (health.IsDead) { if (debugLog) Debug.Log("[Consumables] Player dead"); return; }
+        if (!allowUseAtFullHP && health.CurrentHP >= health.MaxHP) { if (debugLog) Debug.Log("[Consumables] HP full"); return; }
 
         currentAmpoule--;
         int amount = Mathf.RoundToInt(health.MaxHP * healRatio);

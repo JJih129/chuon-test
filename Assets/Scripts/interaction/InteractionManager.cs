@@ -1,4 +1,4 @@
-using System;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -60,6 +60,12 @@ public class InteractionManager : MonoBehaviour
 
     float _lastHitTime = -10f;
     float _startTime;
+    UnityEngine.Object _cachedInputRouter;
+    MethodInfo _cachedInteractPressedMethod;
+    MethodInfo _cachedIsAimingMethod;
+    UnityEngine.Object _cachedLockOnReader;
+    PropertyInfo _cachedIsLockedOnProperty;
+    MethodInfo _cachedIsLockedOnMethod;
 
     public Transform PlayerRoot
     {
@@ -77,6 +83,8 @@ public class InteractionManager : MonoBehaviour
         _startTime = Time.time;
         _cam = Camera.main;
         if (!cameraTransform && _cam) cameraTransform = _cam.transform;
+        CacheInputRouterMembers();
+        CacheLockOnMembers();
 
         if (promptPrefab)
         {
@@ -123,9 +131,6 @@ public class InteractionManager : MonoBehaviour
                     LayoutRebuilder.ForceRebuildLayoutImmediate(_promptUI.background);
             }
 
-            var names = string.Join(", ", Array.ConvertAll(cloneGO.GetComponentsInChildren<Transform>(true),
-                                                           t => t.name));
-            Debug.Log("[InteractionManager] prompt clone children: " + names);
         }
 
         _promptAnchor = new GameObject("InteractionPromptAnchor").transform;
@@ -223,11 +228,10 @@ public class InteractionManager : MonoBehaviour
     {
         if (inputRouter != null)
         {
-            var t = inputRouter.GetType();
-            var m = t.GetMethod("IsInteractPressed");
-            if (m != null)
+            CacheInputRouterMembers();
+            if (_cachedInteractPressedMethod != null)
             {
-                var r = m.Invoke(inputRouter, null);
+                var r = _cachedInteractPressedMethod.Invoke(inputRouter, null);
                 if (r is bool b) return b;
             }
         }
@@ -238,17 +242,15 @@ public class InteractionManager : MonoBehaviour
     {
         if (lockOnReader != null)
         {
-            var t = lockOnReader.GetType();
-            var p = t.GetProperty("IsLockedOn");
-            if (p != null)
+            CacheLockOnMembers();
+            if (_cachedIsLockedOnProperty != null)
             {
-                var v = p.GetValue(lockOnReader, null);
+                var v = _cachedIsLockedOnProperty.GetValue(lockOnReader, null);
                 if (v is bool b) return b;
             }
-            var m = t.GetMethod("IsLockedOn");
-            if (m != null)
+            if (_cachedIsLockedOnMethod != null)
             {
-                var r = m.Invoke(lockOnReader, null);
+                var r = _cachedIsLockedOnMethod.Invoke(lockOnReader, null);
                 if (r is bool b2) return b2;
             }
         }
@@ -259,14 +261,43 @@ public class InteractionManager : MonoBehaviour
     {
         if (inputRouter != null)
         {
-            var t = inputRouter.GetType();
-            var m = t.GetMethod("IsAiming");
-            if (m != null)
+            CacheInputRouterMembers();
+            if (_cachedIsAimingMethod != null)
             {
-                var r = m.Invoke(inputRouter, null);
+                var r = _cachedIsAimingMethod.Invoke(inputRouter, null);
                 if (r is bool b) return b;
             }
         }
         return false;
+    }
+
+    void CacheInputRouterMembers()
+    {
+        if (_cachedInputRouter == inputRouter) return;
+
+        _cachedInputRouter = inputRouter;
+        _cachedInteractPressedMethod = null;
+        _cachedIsAimingMethod = null;
+
+        if (inputRouter == null) return;
+
+        var type = inputRouter.GetType();
+        _cachedInteractPressedMethod = type.GetMethod("IsInteractPressed");
+        _cachedIsAimingMethod = type.GetMethod("IsAiming");
+    }
+
+    void CacheLockOnMembers()
+    {
+        if (_cachedLockOnReader == lockOnReader) return;
+
+        _cachedLockOnReader = lockOnReader;
+        _cachedIsLockedOnProperty = null;
+        _cachedIsLockedOnMethod = null;
+
+        if (lockOnReader == null) return;
+
+        var type = lockOnReader.GetType();
+        _cachedIsLockedOnProperty = type.GetProperty("IsLockedOn");
+        _cachedIsLockedOnMethod = type.GetMethod("IsLockedOn");
     }
 }

@@ -6,13 +6,23 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class LockPivotFollower : MonoBehaviour
 {
+    const float PositionEpsilonSqr = 0.000001f;
     public Renderer sourceRenderer; // [조절값]
     public float yOffset = 0f;      // [조절값]
+
+    Transform _tr;
+
+    void Awake()
+    {
+        _tr = transform;
+    }
 
     void LateUpdate()
     {
         if (!sourceRenderer) return;
         var c = sourceRenderer.bounds.center;
-        transform.position = new Vector3(c.x, c.y + yOffset, c.z);
+        Vector3 targetPosition = new Vector3(c.x, c.y + yOffset, c.z);
+        if ((_tr.position - targetPosition).sqrMagnitude > PositionEpsilonSqr)
+            _tr.position = targetPosition;
     }
 }

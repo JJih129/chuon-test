@@ -1,20 +1,19 @@
-// HomingProjectile.cs
-using System;
 using UnityEngine;
 
 [RequireComponent(typeof(Collider))]
 public class HomingProjectile : MonoBehaviour
 {
-    [Header("유도/운동")]
+    [Header("Movement")]
     public Transform target;
     public float speed = 12f;
     public float turnSpeedDeg = 720f;
     public float lifeTime = 8f;
     public int damage = 15;
 
-    [Header("발사자/그레이스")]
+    [Header("Owner Grace")]
     public GameObject owner;
     public float graceDuration = 0.12f;
+    [SerializeField] bool debugLog = false;
 
     Collider _col;
     Rigidbody _rb;
@@ -38,11 +37,16 @@ public class HomingProjectile : MonoBehaviour
         if (owner != null && _col != null)
         {
             var attackerCols = owner.GetComponentsInChildren<Collider>(true);
-            foreach (var ac in attackerCols) if (ac != null)
-                try { Physics.IgnoreCollision(_col, ac, true); } catch { }
+            foreach (var attackerCol in attackerCols)
+            {
+                if (attackerCol == null) continue;
+                try { Physics.IgnoreCollision(_col, attackerCol, true); } catch { }
+            }
         }
 
-        Debug.Log($"[HomingProjectile] Init target={(t? t.name : "null")} speed={initialSpeed} owner={(from? from.name : "null")} dmg={damage}", this);
+        if (debugLog)
+            Debug.Log($"[HomingProjectile] Init target={(t ? t.name : "null")} speed={initialSpeed} owner={(from ? from.name : "null")} dmg={damage}", this);
+
         Destroy(gameObject, lifeTime);
     }
 
@@ -54,8 +58,8 @@ public class HomingProjectile : MonoBehaviour
             Vector3 toFlat = new Vector3(toTarget.x, 0f, toTarget.z);
             if (toFlat.sqrMagnitude > 0.0001f)
             {
-                Quaternion want = Quaternion.LookRotation(toFlat.normalized, Vector3.up);
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, want, turnSpeedDeg * Time.fixedDeltaTime);
+                Quaternion wantedRotation = Quaternion.LookRotation(toFlat.normalized, Vector3.up);
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, wantedRotation, turnSpeedDeg * Time.fixedDeltaTime);
             }
         }
 
@@ -66,24 +70,31 @@ public class HomingProjectile : MonoBehaviour
     void OnTriggerEnter(Collider other)
     {
         if (other == null) return;
+
         if (owner != null && (other.gameObject == owner || other.transform.IsChildOf(owner.transform)))
         {
             if (Time.time - _spawnTime <= graceDuration) return;
             return;
         }
 
-        var hitRec = other.GetComponentInParent<IHitReceiver>();
-        if (hitRec != null)
+        var hitReceiver = other.GetComponentInParent<IHitReceiver>();
+        if (hitReceiver != null)
         {
-            var hd = new HitData { attacker = owner ?? gameObject, damage = damage, hitPoint = transform.position, hitDirection = transform.forward };
-            hitRec.ReceiveHit(hd);
+            var hitData = new HitData
+            {
+                attacker = owner ?? gameObject,
+                damage = damage,
+                hitPoint = transform.position,
+                hitDirection = transform.forward
+            };
+            hitReceiver.ReceiveHit(hitData);
         }
         else
         {
-            var ih = other.GetComponentInParent<IHealth>();
-            if (ih != null)
+            var health = other.GetComponentInParent<IHealth>();
+            if (health != null)
             {
-                try { ih.ApplyDamage(damage); } catch { }
+                try { health.ApplyDamage(damage); } catch { }
             }
         }
 

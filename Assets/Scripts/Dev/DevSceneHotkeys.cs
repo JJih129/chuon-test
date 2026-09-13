@@ -35,6 +35,9 @@ public sealed class DevSceneHotkeys : MonoBehaviour
 
     private void Update()
     {
+        if (!AnyKeyboardInputThisFrame())
+            return;
+
         if (IsSceneLoadKeyPressed(KeyCode.F1, Key.F1))
         {
             LoadScene(TitleSceneName);
@@ -59,6 +62,18 @@ public sealed class DevSceneHotkeys : MonoBehaviour
         }
     }
 
+    private static bool AnyKeyboardInputThisFrame()
+    {
+        if (Input.anyKeyDown)
+            return true;
+
+#if ENABLE_INPUT_SYSTEM
+        return Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame;
+#else
+        return false;
+#endif
+    }
+
     private static bool IsSceneLoadKeyPressed(KeyCode legacyKey, Key newInputKey)
     {
         bool pressed = Input.GetKeyDown(legacyKey);
@@ -78,7 +93,8 @@ public sealed class DevSceneHotkeys : MonoBehaviour
         var activeScene = SceneManager.GetActiveScene();
         if (activeScene.IsValid() && activeScene.name == sceneName) return;
 
-        Time.timeScale = 1f;
+        if (Time.timeScale != 1f)
+            Time.timeScale = 1f;
         SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
     }
 #endif

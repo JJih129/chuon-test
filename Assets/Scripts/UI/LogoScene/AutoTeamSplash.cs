@@ -5,6 +5,11 @@ using System.Collections;
 
 public class AutoTeamSplash : MonoBehaviour
 {
+    private WaitForSeconds cachedStartDelayWait;
+    private float cachedStartDelaySeconds = -1f;
+    private WaitForSeconds cachedDisplayDelayWait;
+    private float cachedDisplayDelaySeconds = -1f;
+
     [Header("UI 설정")]
     public CanvasGroup logoCanvasGroup; // 로고 이미지의 Canvas Group
     public float fadeDuration = 1.0f;     // 나타나고/사라지는 시간
@@ -20,13 +25,43 @@ public class AutoTeamSplash : MonoBehaviour
         StartCoroutine(PlaySplashSequence());
     }
 
+    private WaitForSeconds GetStartDelayWait()
+    {
+        float seconds = Mathf.Max(0f, startDelay);
+        if (seconds <= 0f) return null;
+
+        if (cachedStartDelayWait == null || !Mathf.Approximately(cachedStartDelaySeconds, seconds))
+        {
+            cachedStartDelaySeconds = seconds;
+            cachedStartDelayWait = new WaitForSeconds(seconds);
+        }
+
+        return cachedStartDelayWait;
+    }
+
+    private WaitForSeconds GetDisplayDelayWait()
+    {
+        float seconds = Mathf.Max(0f, displayDuration);
+        if (seconds <= 0f) return null;
+
+        if (cachedDisplayDelayWait == null || !Mathf.Approximately(cachedDisplayDelaySeconds, seconds))
+        {
+            cachedDisplayDelaySeconds = seconds;
+            cachedDisplayDelayWait = new WaitForSeconds(seconds);
+        }
+
+        return cachedDisplayDelayWait;
+    }
+
     IEnumerator PlaySplashSequence()
     {
         // 0. 초기화 (로고 투명하게)
         logoCanvasGroup.alpha = 0f;
 
         // 1. 유니티 로고 직후 잠시 검은 화면 대기 (연출상 자연스러움)
-        yield return new WaitForSeconds(startDelay);
+        var startWait = GetStartDelayWait();
+        if (startWait != null) yield return startWait;
+        else yield return null;
 
         // 2. Fade In (로고 서서히 등장)
         float timer = 0f;
@@ -39,7 +74,9 @@ public class AutoTeamSplash : MonoBehaviour
         logoCanvasGroup.alpha = 1f;
 
         // 3. 로고 유지 (보여주기)
-        yield return new WaitForSeconds(displayDuration);
+        var displayWait = GetDisplayDelayWait();
+        if (displayWait != null) yield return displayWait;
+        else yield return null;
 
         // 4. Fade Out (로고 서서히 퇴장)
         timer = 0f;

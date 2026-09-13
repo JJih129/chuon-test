@@ -3,23 +3,20 @@ using UnityEngine.UI;
 
 public class UI_UltimateGauge : MonoBehaviour
 {
-    // ========================= 변수 헤더(한글 설명) =========================
-    [Header("① 채움 이미지 | 게이지 바(필수)")]
-    [Tooltip("Image Type=Filled 인 채움 이미지")]
+    [Header("Fill")]
     public Image fill;
 
-    [Header("② 준비 이펙트 | 100% 도달 시 켜질 FX(선택)")]
-    [Tooltip("게이지가 가득 찰 때 활성화할 오브젝트")]
+    [Header("Ready FX")]
     public GameObject readyFx;
 
-    [Header("③ 보간 속도 | 채움량 부드럽게 이동 속도")]
-    [Tooltip("값이 높을수록 빠르게 따라간다")]
+    [Header("Lerp")]
     public float lerpSpeed = 6f;
 
-    // ========================= 내부 상태 =========================
-    static UI_UltimateGauge _inst;   // 정적 접근(컨트롤러에서 호출)
-    float _target;                   // 목표 채움 비율 0~1
-    float _current;                  // 현재 채움 비율 0~1
+    const float SnapEpsilon = 0.0001f;
+
+    static UI_UltimateGauge _inst;
+    float _target;
+    float _current;
     bool _ready;
 
     void Awake()
@@ -31,11 +28,19 @@ public class UI_UltimateGauge : MonoBehaviour
 
     void Update()
     {
+        if (Mathf.Abs(_current - _target) <= SnapEpsilon)
+        {
+            _current = _target;
+            if (fill && !Mathf.Approximately(fill.fillAmount, _current))
+                fill.fillAmount = _current;
+            return;
+        }
+
         _current = Mathf.Lerp(_current, _target, Time.deltaTime * lerpSpeed);
-        if (fill) fill.fillAmount = _current;
+        if (fill && !Mathf.Approximately(fill.fillAmount, _current))
+            fill.fillAmount = _current;
     }
 
-    // ============ 공개 정적 API(컨트롤러/시스템에서 호출) ============
     public static void UpdateValue(float ratio)
     {
         if (_inst == null) return;
@@ -48,16 +53,26 @@ public class UI_UltimateGauge : MonoBehaviour
         _inst.SetReadyInternal(ready);
     }
 
-    // ========================= 내부 구현 =========================
     void SetInternal(float ratio01)
     {
+        if (Mathf.Approximately(_target, ratio01))
+        {
+            if (ratio01 < 1f && _ready)
+                SetReadyInternal(false);
+            return;
+        }
+
         _target = ratio01;
-        if (_target < 1f && readyFx) readyFx.SetActive(false);
+        if (_target < 1f)
+            SetReadyInternal(false);
     }
 
     void SetReadyInternal(bool ready)
     {
+        if (_ready == ready) return;
+
         _ready = ready;
-        if (readyFx) readyFx.SetActive(_ready);
+        if (readyFx && readyFx.activeSelf != _ready)
+            readyFx.SetActive(_ready);
     }
 }

@@ -52,6 +52,7 @@ public class PlayerMoveController : MonoBehaviour
     private Vector3 _velXZ;
     private float _velY;
     private bool _externLocked; // 외부에서 이동을 막았는지 여부
+    private float _lastAnimSpeed = float.NaN;
 
     public bool IsExternallyLocked => _externLocked;
 
@@ -233,6 +234,8 @@ public class PlayerMoveController : MonoBehaviour
     void SetAnimSpeed(float spd01)
     {
         if (!animator || string.IsNullOrEmpty(p_Speed)) return;
+        if (!float.IsNaN(_lastAnimSpeed) && Mathf.Approximately(_lastAnimSpeed, spd01)) return;
+        _lastAnimSpeed = spd01;
         animator.SetFloat(p_Speed, spd01);
     }
 }

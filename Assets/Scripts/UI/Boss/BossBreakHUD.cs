@@ -5,43 +5,46 @@ using System.Collections;
 [DisallowMultipleComponent]
 public class BossBreakHUD : MonoBehaviour
 {
-    // ===== º¯¼ö Çì´õ(ÇÑ±Û ¼³¸í) =====
-    [Header("¢º ÂüÁ¶ (ÇÊ¼ö)")]
-    [Tooltip("ºê·¹ÀÌÅ© °ÔÀÌÁö¸¦ Ç¥½ÃÇÒ Image. Image Type = Filled·Î ¼³Á¤ÇÏ¼¼¿ä.")]
+    // ===== ë³€ìˆ˜ í—¤ë”(í•œê¸€ ì„¤ëª…) =====
+    [Header("â–¶ ì°¸ì¡° (í•„ìˆ˜)")]
+    [Tooltip("ë¸Œë ˆì´í¬ ê²Œì´ì§€ë¥¼ í‘œì‹œí•  Image. Image Type = Filledë¡œ ì„¤ì •í•˜ì„¸ìš”.")]
     public Image breakFillImage;
 
-    [Tooltip("HUD ·çÆ®. ºê·¹ÀÌÅ© ÁøÀÔ ½Ã È°¼ºÈ­/ºñÈ°¼ºÈ­ÇÒ ·çÆ® ¿ÀºêÁ§Æ®")]
+    [Tooltip("HUD ë£¨íŠ¸. ë¸Œë ˆì´í¬ ì§„ì… ì‹œ í™œì„±í™”/ë¹„í™œì„±í™”í•  ë£¨íŠ¸ ì˜¤ë¸Œì íŠ¸")]
     public GameObject hudRoot;
 
-    [Tooltip("¿¬µ¿ÇÒ º¸½ºÀÇ BossBreakController. ºñ¿öµÎ¸é ºÎ¸ğ¿¡¼­ ÀÚµ¿ Å½»ö")]
+    [Tooltip("ì—°ë™í•  ë³´ìŠ¤ì˜ BossBreakController. ë¹„ì›Œë‘ë©´ ë¶€ëª¨ì—ì„œ ìë™ íƒìƒ‰")]
     public BossBreakController breakController;
 
-    [Header("¢º µ¿ÀÛ/Æ©´× °ª")]
-    [Tooltip("fillAmount º¸°£ ¼Óµµ(Å¬¼ö·Ï ´õ ºü¸£°Ô µû¶ó°¨)")]
+    [Header("â–¶ ë™ì‘/íŠœë‹ ê°’")]
+    [Tooltip("fillAmount ë³´ê°„ ì†ë„(í´ìˆ˜ë¡ ë” ë¹ ë¥´ê²Œ ë”°ë¼ê°)")]
     public float followSpeed = 8f;
 
-    [Tooltip("ºê·¹ÀÌÅ© ÁøÀÔ ½Ã HUD¸¦ º¸ÀÌ°Ô ÇÒÁö ¿©ºÎ")]
+    [Tooltip("ë¸Œë ˆì´í¬ ì§„ì… ì‹œ HUDë¥¼ ë³´ì´ê²Œ í• ì§€ ì—¬ë¶€")]
     public bool showOnBreakEnter = true;
 
-    [Tooltip("ºê·¹ÀÌÅ© ÇØÁ¦ ½Ã ¼û±æÁö ¿©ºÎ")]
+    [Tooltip("ë¸Œë ˆì´í¬ í•´ì œ ì‹œ ìˆ¨ê¸¸ì§€ ì—¬ë¶€")]
     public bool hideOnBreakExit = true;
 
-    [Tooltip("HUD È°¼ºÈ­/ºñÈ°¼º½Ã ÆäÀÌµå(Ã¤³Î) »ç¿ë ¿©ºÎ")]
+    [Tooltip("HUD í™œì„±í™”/ë¹„í™œì„±ì‹œ í˜ì´ë“œ(ì±„ë„) ì‚¬ìš© ì—¬ë¶€")]
     public bool useFade = false;
 
-    [Tooltip("ÆäÀÌµå¿ë CanvasGroup (useFade=trueÀÏ ¶§ ÇÒ´ç)")]
+    [Tooltip("í˜ì´ë“œìš© CanvasGroup (useFade=trueì¼ ë•Œ í• ë‹¹)")]
     public CanvasGroup canvasGroup;
 
-    [Header("¢º ½Ã°¢ È¿°ú")]
-    [Tooltip("ºê·¹ÀÌÅ© µµ´Ş½Ã ±ôºıÀÓ Áö¼Ó½Ã°£")]
+    [Header("â–¶ ì‹œê° íš¨ê³¼")]
+    [Tooltip("ë¸Œë ˆì´í¬ ë„ë‹¬ì‹œ ê¹œë¹¡ì„ ì§€ì†ì‹œê°„")]
     public float hitFlashDuration = 0.35f;
 
-    [Tooltip("ºê·¹ÀÌÅ© µµ´Ş½Ã ±ôºıÀÓ È½¼ö")]
+    [Tooltip("ë¸Œë ˆì´í¬ ë„ë‹¬ì‹œ ê¹œë¹¡ì„ íšŸìˆ˜")]
     public int hitFlashCount = 2;
 
-    // ³»ºÎ
+    // ë‚´ë¶€
     float currentFill = 0f;
     Coroutine flashRoutine;
+    const float FillEpsilon = 0.0001f;
+    WaitForSeconds cachedFlashHalfWait;
+    float cachedFlashHalfDuration = -1f;
 
     void Awake()
     {
@@ -50,9 +53,9 @@ public class BossBreakHUD : MonoBehaviour
             breakController = GetComponentInParent<BossBreakController>();
 
         if (breakFillImage == null)
-            Debug.LogWarning("[BossBreakHUD] breakFillImage ¹ÌÇÒ´ç.");
+            Debug.LogWarning("[BossBreakHUD] breakFillImage ë¯¸í• ë‹¹.");
 
-        // ÀÌº¥Æ® ±¸µ¶
+        // ì´ë²¤íŠ¸ êµ¬ë…
         if (breakController != null)
         {
             breakController.OnBreakEnter.AddListener(OnBreakEnter);
@@ -74,8 +77,13 @@ public class BossBreakHUD : MonoBehaviour
         if (breakController == null || breakFillImage == null) return;
 
         float target = breakController.Get01();
-        currentFill = Mathf.Lerp(currentFill, target, Mathf.Clamp01(Time.deltaTime * followSpeed));
-        breakFillImage.fillAmount = currentFill;
+        float nextFill = Mathf.Lerp(currentFill, target, Mathf.Clamp01(Time.deltaTime * followSpeed));
+        if (Mathf.Abs(nextFill - currentFill) <= FillEpsilon && Mathf.Approximately(breakFillImage.fillAmount, currentFill))
+            return;
+
+        currentFill = nextFill;
+        if (!Mathf.Approximately(breakFillImage.fillAmount, currentFill))
+            breakFillImage.fillAmount = currentFill;
     }
 
     void OnBreakEnter()
@@ -124,12 +132,24 @@ public class BossBreakHUD : MonoBehaviour
         var orig = breakFillImage.color;
         for (int i = 0; i < hitFlashCount; i++)
         {
-            // ¹àÀº »ö ¼ø°£ Àû¿ë
+            // ë°ì€ ìƒ‰ ìˆœê°„ ì ìš©
             breakFillImage.color = Color.white;
-            yield return new WaitForSeconds(hitFlashDuration * 0.5f);
+            yield return GetFlashHalfWait();
             breakFillImage.color = orig;
-            yield return new WaitForSeconds(hitFlashDuration * 0.5f);
+            yield return GetFlashHalfWait();
         }
         flashRoutine = null;
+    }
+
+    WaitForSeconds GetFlashHalfWait()
+    {
+        float duration = Mathf.Max(0f, hitFlashDuration * 0.5f);
+        if (cachedFlashHalfWait == null || !Mathf.Approximately(cachedFlashHalfDuration, duration))
+        {
+            cachedFlashHalfDuration = duration;
+            cachedFlashHalfWait = new WaitForSeconds(duration);
+        }
+
+        return cachedFlashHalfWait;
     }
 }

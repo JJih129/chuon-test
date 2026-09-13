@@ -30,6 +30,8 @@ public class AttackHitbox : MonoBehaviour
     public bool canGuard = true;
     public bool isUnblockable = false;
     public bool causesGuardBreak = false;
+    [Min(0f)] public float parryableDuration = 0.06f;
+    [Min(0)] public int parryableActivationsPerSequence = 0;
 
     // ─────────────────────────────────────
     // ② 공격자 / 레이어 필터
@@ -67,6 +69,11 @@ public class AttackHitbox : MonoBehaviour
     Collider _col;
     readonly HashSet<IDamageReceiver> _alreadyHit = new HashSet<IDamageReceiver>();
     Coroutine _oneShotRoutine;
+    WaitForSeconds _cachedOneShotWait;
+    float _cachedOneShotWindow = -1f;
+    float _windowActivatedAt = float.NegativeInfinity;
+    int _activationCountInSequence;
+    bool _currentWindowParryable = true;
 
     /// <summary>현재 이 히트박스가 쓰는 Collider (외부에서 접근 필요할 때용)</summary>
     public Collider Collider => _col;
@@ -138,11 +145,16 @@ public class AttackHitbox : MonoBehaviour
 
     void OnEnable()
     {
+        _activationCountInSequence = 0;
+        _currentWindowParryable = true;
         _alreadyHit.Clear();
     }
 
     void OnDisable()
     {
+        _activationCountInSequence = 0;
+        _currentWindowParryable = true;
+        _windowActivatedAt = float.NegativeInfinity;
         _alreadyHit.Clear();
         if (_oneShotRoutine != null)
         {
@@ -162,6 +174,10 @@ public class AttackHitbox : MonoBehaviour
     {
         if (_col == null) return;
 
+        _activationCountInSequence++;
+        _currentWindowParryable = parryableActivationsPerSequence <= 0
+                               || _activationCountInSequence <= parryableActivationsPerSequence;
+        _windowActivatedAt = Time.time;
         _col.enabled = true;
         _alreadyHit.Clear();
 
@@ -169,7 +185,7 @@ public class AttackHitbox : MonoBehaviour
         {
             if (_oneShotRoutine != null)
                 StopCoroutine(_oneShotRoutine);
-            _oneShotRoutine = StartCoroutine(Co_ClearOneShotAfter(oneShotWindow));
+            _oneShotRoutine = StartCoroutine(Co_ClearOneShotAfter());
         }
 
         if (enableLogs)
@@ -183,6 +199,8 @@ public class AttackHitbox : MonoBehaviour
     {
         if (_col == null) return;
 
+        _currentWindowParryable = false;
+        _windowActivatedAt = float.NegativeInfinity;
         _col.enabled = false;
         _alreadyHit.Clear();
 
@@ -196,12 +214,23 @@ public class AttackHitbox : MonoBehaviour
             Debug.Log("[AttackHitbox] Window OFF", this);
     }
 
-    IEnumerator Co_ClearOneShotAfter(float t)
+    IEnumerator Co_ClearOneShotAfter()
     {
         // 게임 시간 기준(슬로우 모션과 함께 느려짐). 필요하면 WaitForSecondsRealtime 로 변경.
-        yield return new WaitForSeconds(t);
+        yield return GetOneShotWait();
         _alreadyHit.Clear();
         _oneShotRoutine = null;
+    }
+
+    WaitForSeconds GetOneShotWait()
+    {
+        if (_cachedOneShotWait == null || !Mathf.Approximately(_cachedOneShotWindow, oneShotWindow))
+        {
+            _cachedOneShotWindow = oneShotWindow;
+            _cachedOneShotWait = new WaitForSeconds(oneShotWindow);
+        }
+
+        return _cachedOneShotWait;
     }
 
     // ─────────────────────────────────────
@@ -262,6 +291,14 @@ public class AttackHitbox : MonoBehaviour
             attackerRoot = attackerOverride;
     }
 
+    public void ResetParrySequence(int parryableActivations)
+    {
+        parryableActivationsPerSequence = Mathf.Max(0, parryableActivations);
+        _activationCountInSequence = 0;
+        _currentWindowParryable = true;
+        _windowActivatedAt = float.NegativeInfinity;
+    }
+
     // ─────────────────────────────────────
     // ⑧ 실제 충돌 처리
     // ─────────────────────────────────────
@@ -282,11 +319,8 @@ public class AttackHitbox : MonoBehaviour
             return;
 
         // 4) OneShot 창에서 이미 맞은 대상이면 스킵
-        if (useOneShotWindow && _alreadyHit.Contains(receiver))
+        if (useOneShotWindow && !_alreadyHit.Add(receiver))
             return;
-
-        if (useOneShotWindow)
-            _alreadyHit.Add(receiver);
 
         // 5) 히트 정보 계산
         Vector3 attackerPos = attackerRoot ? attackerRoot.position : transform.position;
@@ -299,6 +333,9 @@ public class AttackHitbox : MonoBehaviour
             dir = attackerRoot ? attackerRoot.forward : transform.forward;
 
         // 6) 페이로드 구성
+        bool parryAllowedNow = canParry && _currentWindowParryable;
+        if (parryAllowedNow && parryableDuration > 0f && _windowActivatedAt > float.NegativeInfinity)
+            parryAllowedNow = (Time.time - _windowActivatedAt) <= parryableDuration;
         HitPayload payload = new HitPayload
         {
             damage          = baseDamage,
@@ -307,7 +344,7 @@ public class AttackHitbox : MonoBehaviour
             hitDirection    = dir,
             attacker        = attackerRoot,
             canPerfectDodge = canPerfectDodge,
-            canParry        = canParry,
+            canParry        = parryAllowedNow,
             canGuard        = canGuard,
             isUnblockable   = isUnblockable,
             causesGuardBreak = causesGuardBreak

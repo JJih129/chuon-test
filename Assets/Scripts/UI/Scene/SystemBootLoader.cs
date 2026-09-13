@@ -15,6 +15,8 @@ using System.Collections.Generic;
 /// </summary>
 public class SystemBootLoader : MonoBehaviour
 {
+    private static readonly WaitForSeconds MissingPromptDelay = new WaitForSeconds(1.0f);
+
     [Header("■ 기본 설정")]
     [Tooltip("부팅 후 이동할 다음 씬 이름")]
     public string nextSceneName = "LobbyScene";
@@ -152,7 +154,7 @@ public class SystemBootLoader : MonoBehaviour
             if (logText != null)
             {
                 // 큐에 들어있는 것만 다시 이어 붙여서 보여줌
-                logText.text = string.Join("\n", visibleLines.ToArray());
+                logText.text = string.Join("\n", visibleLines);
             }
 
             // 로그 진행도 (0~1)
@@ -215,7 +217,7 @@ public class SystemBootLoader : MonoBehaviour
         // 자동으로 넘어갈 수밖에 없음 → 반드시 할당해 둘 것.
         if (pressAnyKeyText == null)
         {
-            yield return new WaitForSeconds(1.0f);
+            yield return MissingPromptDelay;
             op.allowSceneActivation = true;
             yield break;
         }

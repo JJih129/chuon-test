@@ -34,6 +34,8 @@ public sealed class TimeScaleController : MonoBehaviour
     Coroutine _lerpCo;
     float _restoreAtUnscaled = 0f;
     bool _pendingAutoRestore = false;
+    float _lastAppliedScale = float.NaN;
+    float _lastAppliedFixedDelta = float.NaN;
 
     void Awake()
     {
@@ -108,6 +110,13 @@ public sealed class TimeScaleController : MonoBehaviour
     public void SetTimeScale(float toScale, float blendDuration = 0.1f)
     {
         if (_lerpCo != null) StopCoroutine(_lerpCo);
+        if (blendDuration <= 0f || Mathf.Approximately(CurrentScale, toScale))
+        {
+            ApplyScale(toScale);
+            _lerpCo = null;
+            return;
+        }
+
         _lerpCo = StartCoroutine(LerpTimeScale(toScale, blendDuration));
     }
 
@@ -117,6 +126,13 @@ public sealed class TimeScaleController : MonoBehaviour
     public void Restore(float blendDuration = 0.2f)
     {
         if (_lerpCo != null) StopCoroutine(_lerpCo);
+        if (blendDuration <= 0f || Mathf.Approximately(CurrentScale, 1f))
+        {
+            ApplyScale(1f);
+            _lerpCo = null;
+            return;
+        }
+
         _lerpCo = StartCoroutine(LerpTimeScale(1f, blendDuration));
     }
 
@@ -147,8 +163,21 @@ public sealed class TimeScaleController : MonoBehaviour
 
     void ApplyScale(float scale)
     {
-        CurrentScale = scale;
-        Time.timeScale = scale;
-        Time.fixedDeltaTime = baseFixedDeltaTime * Mathf.Max(scale, 0.0001f);
+        float clampedScale = Mathf.Max(scale, 0f);
+        float fixedDelta = baseFixedDeltaTime * Mathf.Max(clampedScale, 0.0001f);
+
+        CurrentScale = clampedScale;
+
+        if (!Mathf.Approximately(_lastAppliedScale, clampedScale))
+        {
+            _lastAppliedScale = clampedScale;
+            Time.timeScale = clampedScale;
+        }
+
+        if (!Mathf.Approximately(_lastAppliedFixedDelta, fixedDelta))
+        {
+            _lastAppliedFixedDelta = fixedDelta;
+            Time.fixedDeltaTime = fixedDelta;
+        }
     }
 }

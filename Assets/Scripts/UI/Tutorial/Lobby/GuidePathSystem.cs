@@ -1,61 +1,58 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
-using System.Collections.Generic;
 
 public class GuidePathSystem : MonoBehaviour
 {
-    [Header("■ 설정")]
-    public Transform player;       
-    [Tooltip("LineRenderer가 붙은 프리팹을 넣으세요")]
-    public GameObject linePrefab; // ★ 프리팹 연결 변수
-    
-    public float pathHeight = 0.5f; 
-    public float textureScrollSpeed = 2.0f; 
+    [Header("Path Settings")]
+    public Transform player;
+    [Tooltip("Prefab that contains a LineRenderer.")]
+    public GameObject linePrefab;
 
-    // 활성화된 라인들 관리
-    private List<LineRenderer> activeLines = new List<LineRenderer>();
-    private List<Transform> currentTargets = new List<Transform>();
+    public float pathHeight = 0.5f;
+    public float textureScrollSpeed = 2.0f;
+
+    private readonly List<LineRenderer> linePool = new List<LineRenderer>();
+    private readonly List<Transform> currentTargets = new List<Transform>();
     private NavMeshPath navMeshPath;
+    private int activeLineCount;
 
     void Awake()
     {
         navMeshPath = new NavMeshPath();
-        
+
         if (player == null)
         {
-            var p = GameObject.FindWithTag("Player");
-            if (p) player = p.transform;
+            var foundPlayer = GameObject.FindWithTag("Player");
+            if (foundPlayer != null)
+                player = foundPlayer.transform;
         }
     }
 
     void Update()
     {
-        if (player == null || currentTargets.Count == 0) return;
+        if (player == null || currentTargets.Count == 0 || activeLineCount == 0) return;
 
-        // 타겟 개수만큼 라인 그리기
-        for (int i = 0; i < currentTargets.Count; i++)
+        for (int i = 0; i < currentTargets.Count && i < activeLineCount; i++)
         {
-            // 라인이 모자라면 생성 안 함 (안전장치)
-            if (i >= activeLines.Count) break;
-
-            if (currentTargets[i] != null)
-            {
-                DrawPath(activeLines[i], currentTargets[i].position);
-            }
+            var target = currentTargets[i];
+            if (target != null)
+                DrawPath(linePool[i], target.position);
         }
 
-        // 텍스트 흐르는 애니메이션
         float offset = Time.time * -textureScrollSpeed;
-        foreach (var line in activeLines)
+        for (int i = 0; i < activeLineCount; i++)
         {
-            if (line != null && line.material != null) 
-                line.material.mainTextureOffset = new Vector2(offset, 0);
+            var line = linePool[i];
+            if (line != null && line.material != null)
+                line.material.mainTextureOffset = new Vector2(offset, 0f);
         }
     }
 
     void DrawPath(LineRenderer line, Vector3 targetPos)
     {
-        // 플레이어 -> 타겟 경로 계산
+        if (line == null) return;
+
         if (NavMesh.CalculatePath(player.position, targetPos, NavMesh.AllAreas, navMeshPath))
         {
             line.positionCount = navMeshPath.corners.Length;
@@ -69,42 +66,70 @@ public class GuidePathSystem : MonoBehaviour
         }
         else
         {
-            line.enabled = false; // 길 없으면 숨김
+            line.enabled = false;
+            line.positionCount = 0;
         }
     }
 
-    // ★ [핵심] 타겟을 여러 개 받아서 각각 라인을 생성함
-    public void ShowPath(params Transform[] newTargets)
+    public void ShowPath(IList<Transform> newTargets)
     {
-        // 기존 라인 싹 지우기
         HidePath();
 
         if (newTargets == null || linePrefab == null) return;
 
-        // 타겟 등록
-        currentTargets.AddRange(newTargets);
+        for (int i = 0; i < newTargets.Count; i++)
+        {
+            if (newTargets[i] != null)
+                currentTargets.Add(newTargets[i]);
+        }
 
-        // 타겟 개수만큼 라인 프리팹 생성
         for (int i = 0; i < currentTargets.Count; i++)
         {
-            GameObject lineObj = Instantiate(linePrefab, transform); // 자식으로 생성
-            LineRenderer lr = lineObj.GetComponent<LineRenderer>();
-            if (lr)
-            {
-                lr.enabled = true;
-                activeLines.Add(lr);
-            }
+            var line = GetOrCreateLine(i);
+            if (line == null) continue;
+
+            line.gameObject.SetActive(true);
+            line.enabled = true;
+            activeLineCount++;
         }
+    }
+
+    public void ShowPath(params Transform[] newTargets)
+    {
+        ShowPath((IList<Transform>)newTargets);
     }
 
     public void HidePath()
     {
-        // 생성했던 라인들 모두 삭제
-        foreach (var line in activeLines)
+        for (int i = 0; i < activeLineCount; i++)
         {
-            if (line != null) Destroy(line.gameObject);
+            var line = linePool[i];
+            if (line == null) continue;
+
+            line.enabled = false;
+            line.positionCount = 0;
+            line.gameObject.SetActive(false);
         }
-        activeLines.Clear();
+
+        activeLineCount = 0;
         currentTargets.Clear();
+    }
+
+    LineRenderer GetOrCreateLine(int index)
+    {
+        while (linePool.Count <= index)
+        {
+            GameObject lineObj = Instantiate(linePrefab, transform);
+            LineRenderer line = lineObj.GetComponent<LineRenderer>();
+            if (line != null)
+            {
+                line.enabled = false;
+                line.positionCount = 0;
+                line.gameObject.SetActive(false);
+            }
+            linePool.Add(line);
+        }
+
+        return linePool[index];
     }
 }

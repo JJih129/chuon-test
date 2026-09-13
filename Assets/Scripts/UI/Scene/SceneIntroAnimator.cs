@@ -37,6 +37,8 @@ public class SceneIntroAnimator : MonoBehaviour
 
     // 현재 재생 중인 코루틴 핸들 (중간에 정지/재시작 용도)
     private Coroutine sequenceRoutine;
+    private readonly System.Collections.Generic.Dictionary<float, WaitForSeconds> waitCache
+        = new System.Collections.Generic.Dictionary<float, WaitForSeconds>();
 
     private void Start()
     {
@@ -59,6 +61,9 @@ public class SceneIntroAnimator : MonoBehaviour
             Debug.LogWarning("[SceneIntroAnimator] Target Animator가 설정되어 있지 않습니다.");
             return;
         }
+
+        if (sequence == null || sequence.Length == 0)
+            return;
 
         // 이전에 돌고 있던 시퀀스가 있다면 정지
         if (sequenceRoutine != null)
@@ -103,7 +108,7 @@ public class SceneIntroAnimator : MonoBehaviour
             // 다음 단계까지 대기
             if (step.delayToNext > 0f)
             {
-                yield return new WaitForSeconds(step.delayToNext);
+                yield return GetDelayWait(step.delayToNext);
             }
             else
             {
@@ -114,6 +119,18 @@ public class SceneIntroAnimator : MonoBehaviour
 
         // 시퀀스가 끝났으므로 코루틴 핸들 정리
         sequenceRoutine = null;
+    }
+
+    WaitForSeconds GetDelayWait(float seconds)
+    {
+        seconds = Mathf.Max(0f, seconds);
+        if (!waitCache.TryGetValue(seconds, out var wait))
+        {
+            wait = new WaitForSeconds(seconds);
+            waitCache.Add(seconds, wait);
+        }
+
+        return wait;
     }
 
     /// <summary>

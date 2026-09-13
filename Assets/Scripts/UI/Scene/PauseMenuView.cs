@@ -13,15 +13,23 @@ public class PauseMenuView : MonoBehaviour
     public GameObject settingsPanel;
     public CanvasGroup settingsGroup;
 
+    CanvasGroup _menuCG;
+
     private void Awake()
     {
-        menuRoot.SetActive(false);
-        if (settingsPanel) settingsPanel.SetActive(false);
+        if (menuContainer != null)
+            _menuCG = menuContainer.GetComponent<CanvasGroup>();
+
+        if (menuRoot != null && menuRoot.activeSelf)
+            menuRoot.SetActive(false);
+        if (settingsPanel && settingsPanel.activeSelf)
+            settingsPanel.SetActive(false);
     }
 
     public void ShowMenu()
     {
-        menuRoot.SetActive(true);
+        if (menuRoot != null && !menuRoot.activeSelf)
+            menuRoot.SetActive(true);
         
         // 1. 배경: 서서히 어두워짐 (Fade In)
         backgroundGroup.alpha = 0;
@@ -31,11 +39,10 @@ public class PauseMenuView : MonoBehaviour
         menuContainer.localScale = Vector3.one * 0.8f; // 0.8배 크기에서 시작
         menuContainer.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetUpdate(true); // 띠용~ 하고 커짐
         
-        CanvasGroup menuCG = menuContainer.GetComponent<CanvasGroup>();
-        if (menuCG)
+        if (_menuCG)
         {
-            menuCG.alpha = 0;
-            menuCG.DOFade(1, 0.3f).SetUpdate(true);
+            _menuCG.alpha = 0;
+            _menuCG.DOFade(1, 0.3f).SetUpdate(true);
         }
     }
 
@@ -47,13 +54,13 @@ public class PauseMenuView : MonoBehaviour
         // 2. 메뉴: 작아지면서 사라짐
         menuContainer.DOScale(0.8f, 0.2f).SetEase(Ease.InQuad).SetUpdate(true);
 
-        CanvasGroup menuCG = menuContainer.GetComponent<CanvasGroup>();
-        if (menuCG) menuCG.DOFade(0, 0.2f).SetUpdate(true);
+        if (_menuCG) _menuCG.DOFade(0, 0.2f).SetUpdate(true);
 
         // 애니메이션 끝나면 비활성화
         DOVirtual.DelayedCall(0.25f, () => 
         {
-            menuRoot.SetActive(false);
+            if (menuRoot != null && menuRoot.activeSelf)
+                menuRoot.SetActive(false);
             onComplete?.Invoke();
         }).SetUpdate(true);
     }
@@ -64,17 +71,33 @@ public class PauseMenuView : MonoBehaviour
         // ... 기존 코드 유지 ...
         if (isOpen)
         {
-            settingsPanel.SetActive(true);
-            settingsGroup.alpha = 0;
-            settingsGroup.DOFade(1, 0.3f).SetUpdate(true);
-            menuContainer.gameObject.SetActive(false); 
+            if (settingsPanel != null && !settingsPanel.activeSelf)
+                settingsPanel.SetActive(true);
+            if (settingsGroup != null)
+            {
+                settingsGroup.alpha = 0;
+                settingsGroup.DOFade(1, 0.3f).SetUpdate(true);
+            }
+            if (menuContainer != null && menuContainer.gameObject.activeSelf)
+                menuContainer.gameObject.SetActive(false);
         }
         else
         {
+            if (settingsGroup == null)
+            {
+                if (settingsPanel != null && settingsPanel.activeSelf)
+                    settingsPanel.SetActive(false);
+                if (menuContainer != null && !menuContainer.gameObject.activeSelf)
+                    menuContainer.gameObject.SetActive(true);
+                return;
+            }
+
             settingsGroup.DOFade(0, 0.2f).SetUpdate(true).OnComplete(() =>
             {
-                settingsPanel.SetActive(false);
-                menuContainer.gameObject.SetActive(true);
+                if (settingsPanel != null && settingsPanel.activeSelf)
+                    settingsPanel.SetActive(false);
+                if (menuContainer != null && !menuContainer.gameObject.activeSelf)
+                    menuContainer.gameObject.SetActive(true);
                 
                 // 돌아올 때도 살짝 팝업 효과
                 menuContainer.localScale = Vector3.one * 0.9f;

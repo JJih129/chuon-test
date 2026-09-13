@@ -1,32 +1,38 @@
-using UnityEngine;
 using System.Collections;
 using DG.Tweening;
+using UnityEngine;
 
 public class TutorialDrone : MonoBehaviour
 {
-    [Header("발사 설정")]
-    public GameObject projectilePrefab; // 총알 프리팹 (필수 연결)
-    public Transform firePoint;         // 발사 위치 (총구)
-    public float attackInterval = 3.5f; // 공격 주기
-    
-    [Header("타겟")]
+    static readonly WaitForSeconds WarmupWait = new WaitForSeconds(1.0f);
+    static readonly WaitForSeconds WarningWait = new WaitForSeconds(1.0f);
+
+    [Header("Attack")]
+    public GameObject projectilePrefab;
+    public Transform firePoint;
+    public float attackInterval = 3.5f;
+
+    [Header("Target")]
     public Transform playerTarget;
 
-    [Header("연출")]
+    [Header("Visual")]
     public Renderer droneRenderer;
     public Color warningColor = Color.red;
-    private Color normalColor;
 
-    private Coroutine attackRoutine;
+    Color normalColor;
+    Material droneMaterial;
+    Coroutine attackRoutine;
+    WaitForSeconds cachedLoopWait;
+    float cachedLoopWaitSeconds = float.NaN;
 
     void OnEnable()
     {
-        if(droneRenderer) normalColor = droneRenderer.material.color;
-        
+        CacheMaterial();
+
         if (playerTarget == null)
         {
-            GameObject p = GameObject.FindGameObjectWithTag("Player");
-            if (p) playerTarget = p.transform;
+            GameObject player = GameObject.FindGameObjectWithTag("Player");
+            if (player) playerTarget = player.transform;
         }
 
         attackRoutine = StartCoroutine(AttackLoop());
@@ -34,51 +40,70 @@ public class TutorialDrone : MonoBehaviour
 
     void OnDisable()
     {
-        if (attackRoutine != null) StopCoroutine(attackRoutine);
+        if (attackRoutine != null)
+        {
+            StopCoroutine(attackRoutine);
+            attackRoutine = null;
+        }
     }
 
     void Update()
     {
-        if (playerTarget != null)
-        {
-            Vector3 dir = (playerTarget.position - transform.position).normalized;
-            dir.y = 0; 
-            if (dir != Vector3.zero)
-            {
-                Quaternion lookRot = Quaternion.LookRotation(dir);
-                transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 5f);
-            }
-        }
+        if (playerTarget == null) return;
+
+        Vector3 dir = playerTarget.position - transform.position;
+        dir.y = 0f;
+        if (dir.sqrMagnitude <= 0.000001f) return;
+
+        Quaternion lookRot = Quaternion.LookRotation(dir.normalized);
+        transform.rotation = Quaternion.Slerp(transform.rotation, lookRot, Time.deltaTime * 5f);
     }
 
     IEnumerator AttackLoop()
     {
-        yield return new WaitForSeconds(1.0f);
+        yield return WarmupWait;
 
         while (true)
         {
-            // 1. 대기
-            yield return new WaitForSeconds(attackInterval - 1.5f);
+            yield return GetLoopWait();
 
-            // 2. 경고 (깜빡임)
-            if(droneRenderer)
-            {
-                droneRenderer.material.DOColor(warningColor, 0.5f).SetLoops(2, LoopType.Yoyo);
-            }
-            yield return new WaitForSeconds(1.0f);
+            if (droneMaterial != null)
+                droneMaterial.DOColor(warningColor, 0.5f).SetLoops(2, LoopType.Yoyo);
 
-            // 3. 발사
+            yield return WarningWait;
+
             if (projectilePrefab != null && firePoint != null)
             {
                 GameObject bullet = Instantiate(projectilePrefab, firePoint.position, firePoint.rotation);
-                TutorialProjectile bp = bullet.GetComponent<TutorialProjectile>();
-                if (bp) bp.owner = this.transform;
+                TutorialProjectile projectile = bullet.GetComponent<TutorialProjectile>();
+                if (projectile) projectile.owner = transform;
             }
-            
-            // 반동 효과
+
             transform.DOPunchPosition(Vector3.back * 0.3f, 0.2f);
-            
-            if(droneRenderer) droneRenderer.material.color = normalColor;
+
+            if (droneMaterial != null)
+                droneMaterial.color = normalColor;
         }
+    }
+
+    WaitForSeconds GetLoopWait()
+    {
+        float waitSeconds = attackInterval - 1.5f;
+        if (cachedLoopWait == null || !Mathf.Approximately(cachedLoopWaitSeconds, waitSeconds))
+        {
+            cachedLoopWaitSeconds = waitSeconds;
+            cachedLoopWait = new WaitForSeconds(waitSeconds);
+        }
+
+        return cachedLoopWait;
+    }
+
+    void CacheMaterial()
+    {
+        if (!droneRenderer) return;
+        if (droneMaterial != null) return;
+
+        droneMaterial = droneRenderer.material;
+        normalColor = droneMaterial.color;
     }
 }

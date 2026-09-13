@@ -8,6 +8,11 @@ using System.Collections.Generic;
 public class LobbyManager : MonoBehaviour
 {
     public static LobbyManager Instance;
+    private readonly List<Transform> _pathBuffer = new List<Transform>(8);
+    private WaitForSeconds _cachedTypingDelay;
+    private float _cachedTypingDelaySeconds = -1f;
+    private Transform _cachedPlayerTransform;
+    private readonly Dictionary<float, WaitForSeconds> _waitCache = new Dictionary<float, WaitForSeconds>();
 
     [Header("■ UI 요소")]
     public CanvasGroup dialogueGroup;
@@ -69,6 +74,7 @@ public class LobbyManager : MonoBehaviour
         if (questPanelGroup) { questPanelGroup.alpha = 0; questPanelGroup.interactable = false; }
         if (alertOverlay) alertOverlay.color = new Color(1, 0, 0, 0); 
         if (elevatorPanel) elevatorPanel.SetActive(false); 
+        ResolvePlayerTransform();
 
         StartCoroutine(Sequence_Arrival());
     }
@@ -99,7 +105,7 @@ public class LobbyManager : MonoBehaviour
         if (dronePrefab && spawnPoints.Length > 0)
         {
             totalEnemyCount = spawnPoints.Length;
-            Transform playerTr = GameObject.FindWithTag("Player").transform;
+            Transform playerTr = ResolvePlayerTransform();
             for (int i = 0; i < spawnPoints.Length; i++)
             {
                 GameObject drone = Instantiate(dronePrefab, spawnPoints[i].position, spawnPoints[i].rotation);
@@ -113,7 +119,7 @@ public class LobbyManager : MonoBehaviour
 
         UpdateQuestUI("전투 개시", $"적을 섬멸하세요. ({currentDeadEnemy} / {totalEnemyCount})");
         yield return new WaitUntil(() => currentDeadEnemy >= totalEnemyCount);
-        yield return new WaitForSeconds(1.0f);
+        yield return GetWait(1.0f);
         StartCoroutine(Sequence_PostCombat());
     }
 
@@ -132,7 +138,7 @@ public class LobbyManager : MonoBehaviour
         UpdateQuestUI("전투 완료", "모든 적을 처치했습니다.");
         isDoorReached = false; 
 
-        yield return new WaitForSeconds(0.5f);
+        yield return GetWait(0.5f);
         yield return StartCoroutine(PlayDialogue("EGO", "좋아, 다 파괴한 것 같아. 지원 병력도 더 이상 오지 않고 있어.", 2.0f));
         // ... (중간 대사 생략 - 필요시 추가) ...
         yield return StartCoroutine(PlayDialogue("추온", "뭔가 유도 당하는 느낌이지만 어쩔 수 없지.", 1.5f));
@@ -171,10 +177,10 @@ public class LobbyManager : MonoBehaviour
     void UpdateNavigationPath()
     {
         if (guideSystem == null) return;
-        List<Transform> pathList = new List<Transform>();
-        pathList.AddRange(activeWaypoints);
-        if (triggerApproach) pathList.Add(triggerApproach);
-        guideSystem.ShowPath(pathList.ToArray());
+        _pathBuffer.Clear();
+        _pathBuffer.AddRange(activeWaypoints);
+        if (triggerApproach) _pathBuffer.Add(triggerApproach);
+        guideSystem.ShowPath(_pathBuffer);
     }
 
     public void OnReachElevator() 
@@ -247,18 +253,64 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
-        dialogueGroup.alpha = 1;
+        if (dialogueGroup) dialogueGroup.alpha = 1;
         if (speakerText) speakerText.text = speaker;
         if (contentText)
         {
-            contentText.text = "";
-            foreach (char c in content)
+            contentText.text = content;
+            contentText.maxVisibleCharacters = 0;
+            contentText.ForceMeshUpdate();
+
+            int visibleCount = contentText.textInfo.characterCount;
+            var typingDelay = GetTypingDelay();
+            for (int i = 1; i <= visibleCount; i++)
             {
-                contentText.text += c;
-                yield return new WaitForSeconds(textTypingSpeed); 
+                contentText.maxVisibleCharacters = i;
+                if (typingDelay != null) yield return typingDelay;
+                else yield return null;
             }
         }
-        yield return new WaitForSeconds(waitTime);
+        var wait = GetWait(waitTime);
+        if (wait != null) yield return wait;
+        else yield return null;
+    }
+
+    Transform ResolvePlayerTransform()
+    {
+        if (_cachedPlayerTransform != null) return _cachedPlayerTransform;
+
+        var player = GameObject.FindWithTag("Player");
+        if (player != null)
+            _cachedPlayerTransform = player.transform;
+
+        return _cachedPlayerTransform;
+    }
+
+    WaitForSeconds GetTypingDelay()
+    {
+        if (textTypingSpeed <= 0f) return null;
+
+        if (_cachedTypingDelay == null || !Mathf.Approximately(_cachedTypingDelaySeconds, textTypingSpeed))
+        {
+            _cachedTypingDelaySeconds = textTypingSpeed;
+            _cachedTypingDelay = new WaitForSeconds(textTypingSpeed);
+        }
+
+        return _cachedTypingDelay;
+    }
+
+    WaitForSeconds GetWait(float seconds)
+    {
+        float waitSeconds = Mathf.Max(0f, seconds);
+        if (waitSeconds <= 0f) return null;
+
+        if (!_waitCache.TryGetValue(waitSeconds, out var wait))
+        {
+            wait = new WaitForSeconds(waitSeconds);
+            _waitCache[waitSeconds] = wait;
+        }
+
+        return wait;
     }
 
     // 갈림길 트리거(BranchTrigger)가 호출하는 함수

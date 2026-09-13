@@ -60,6 +60,7 @@ public class PerfectDodgeController : MonoBehaviour
     float _initialFixedDelta;
     Coroutine _coSlow;
     Coroutine _coClose;
+    bool _slowActive;
     readonly Dictionary<Animator, (AnimatorUpdateMode mode, float speed)> _animatorBackup
         = new Dictionary<Animator, (AnimatorUpdateMode, float)>();
 
@@ -172,6 +173,7 @@ public class PerfectDodgeController : MonoBehaviour
 
         Time.timeScale = Mathf.Clamp(scale, 0.01f, 1f);
         if (adjustFixedDelta) Time.fixedDeltaTime = _initialFixedDelta * Time.timeScale;
+        _slowActive = true;
 
         // 이동 잠금(슬로우)
         if (lockMoveDuringSlow && moveLocker)
@@ -193,6 +195,9 @@ public class PerfectDodgeController : MonoBehaviour
     [ContextMenu("Force end slow (debug)")]
     public void ForceEndSlow()
     {
+        if (!_slowActive && _coSlow == null)
+            return;
+
         if (_coSlow != null) { StopCoroutine(_coSlow); _coSlow = null; }
 
         if (Time.timeScale != 1f) Time.timeScale = 1f;
@@ -204,6 +209,7 @@ public class PerfectDodgeController : MonoBehaviour
         // 슬로우용 잠금 해제
         if (lockMoveDuringSlow && moveLocker)
             moveLocker.Unlock("PD_SLOW");
+        _slowActive = false;
 
         if (enableLogs) Debug.Log("[PD] Slow END → timeScale=1", this);
     }

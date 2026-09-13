@@ -32,8 +32,7 @@ public sealed class AnimationEventReceiver : MonoBehaviour
     private void Awake()
     {
         TryAutoWire();
-        _attackingHash = Animator.StringToHash(attackingBoolParam);
-        _hasAttackingBool = HasBool(anim, attackingBoolParam);
+        CacheAnimatorParams();
         if (!_hasAttackingBool)
             Debug.LogWarning($"[AnimEventReceiver] Animator Bool '{attackingBoolParam}' 를 찾지 못했습니다. AE_AttackStart/End는 무시됩니다.", this);
     }
@@ -43,7 +42,7 @@ public sealed class AnimationEventReceiver : MonoBehaviour
     {
         // 에디터에서 참조 빠지면 자동 연결 시도
         TryAutoWire();
-        _attackingHash = Animator.StringToHash(attackingBoolParam);
+        CacheAnimatorParams();
     }
 #endif
 
@@ -52,6 +51,19 @@ public sealed class AnimationEventReceiver : MonoBehaviour
         if (anim == null)        anim = GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
         if (guard == null)       guard = GetComponentInParent<PlayerGuardController>(true);
         if (perfectDodge == null)perfectDodge = GetComponentInParent<PerfectDodgeController>(true);
+    }
+
+    private void CacheAnimatorParams()
+    {
+        if (string.IsNullOrEmpty(attackingBoolParam))
+        {
+            _attackingHash = 0;
+            _hasAttackingBool = false;
+            return;
+        }
+
+        _attackingHash = Animator.StringToHash(attackingBoolParam);
+        _hasAttackingBool = HasBool(anim, attackingBoolParam);
     }
 
     private static bool HasBool(Animator a, string name)

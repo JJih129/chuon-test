@@ -27,6 +27,7 @@ public class PlayerCombatController : MonoBehaviour
 
     [Header("▶ 안전장치")]
     [SerializeField] private float endAttackIfStuckSeconds = 2.0f;
+    [SerializeField] private bool debugFailsafeLogs = false;
 
     // ── 피격 관련 ───────────────────────────────────
     [Header("▶ 피격 설정")]
@@ -67,12 +68,20 @@ public class PlayerCombatController : MonoBehaviour
 
     // 참조
     private PlayerMoveController moveController;
+    private int speedParamHash;
+    private bool hasSpeedParam;
 
     // ───────────────── 라이프사이클 ─────────────────
     void Awake()
     {
         if (!animator) animator = GetComponent<Animator>();
         moveController = GetComponent<PlayerMoveController>();
+        CacheAnimatorHashes();
+    }
+
+    void OnValidate()
+    {
+        CacheAnimatorHashes();
     }
 
     void Start()
@@ -134,7 +143,8 @@ public class PlayerCombatController : MonoBehaviour
         // 4) 공격 비상 타임아웃 (Time.time 기준)
         if (inAttack && endAttackIfStuckSeconds > 0f && (Time.time - attackStartTime) > endAttackIfStuckSeconds)
         {
-            Debug.LogWarning("[Combat] Attack forced to end by timeout failsafe.");
+            if (debugFailsafeLogs)
+                Debug.LogWarning("[Combat] Attack forced to end by timeout failsafe.");
             EndAttack();
         }
     }
@@ -149,9 +159,6 @@ public class PlayerCombatController : MonoBehaviour
     // ───────────────── 콤보 로직 ─────────────────
     private void StepCombo()
     {
-        int layer = current ? current.animatorLayer : actionLayerIndex;
-        var st = animator.GetCurrentAnimatorStateInfo(layer);
-        float t = st.normalizedTime % 1f;
 
         // A) 대기 상태 -> 첫 타
         if (!inAttack)
@@ -169,6 +176,10 @@ public class PlayerCombatController : MonoBehaviour
         // B) 공격 중 (콤보 연결)
         if (current)
         {
+            int layer = current.animatorLayer;
+            var st = animator.GetCurrentAnimatorStateInfo(layer);
+            float t = st.normalizedTime % 1f;
+
             // 캔슬 구간 확인
             if (t >= current.cancelStart && t <= current.cancelEnd)
             {
@@ -319,7 +330,8 @@ public class PlayerCombatController : MonoBehaviour
         // 타임아웃 체크 (Time.time 기준)
         if (endHitIfStuckSeconds > 0f && (Time.time - hitStartTime) > endHitIfStuckSeconds)
         {
-            Debug.LogWarning("[Combat] Hit state forced to end by timeout failsafe.");
+            if (debugFailsafeLogs)
+                Debug.LogWarning("[Combat] Hit state forced to end by timeout failsafe.");
             EndHit();
             return;
         }
@@ -353,12 +365,13 @@ public class PlayerCombatController : MonoBehaviour
         // 간단한 블렌드 트리 제어 (PlayerMoveController와 별개로 애니메이션만 동기화)
         float h = Input.GetAxisRaw("Horizontal");
         float v = Input.GetAxisRaw("Vertical");
-        float mag01 = Mathf.Clamp01(new Vector2(h, v).magnitude);
+        float mag01 = Mathf.Clamp01(Mathf.Sqrt(h * h + v * v));
 
         if (inAttack && lockMovementWhileAttacking) mag01 = 0f;
         if (inHit) mag01 = 0f;
 
-        animator.SetFloat(speedParam, mag01, 0.1f, Time.deltaTime);
+        if (hasSpeedParam)
+            animator.SetFloat(speedParamHash, mag01, 0.1f, Time.deltaTime);
     }
 
     private void SetMoveLock(bool locked)
@@ -372,7 +385,13 @@ public class PlayerCombatController : MonoBehaviour
             moveController.SetExternalControl(locked);
         }
 
-        if (locked) animator.SetFloat(speedParam, 0f);
+        if (locked && hasSpeedParam) animator.SetFloat(speedParamHash, 0f);
+    }
+
+    private void CacheAnimatorHashes()
+    {
+        hasSpeedParam = !string.IsNullOrEmpty(speedParam);
+        speedParamHash = hasSpeedParam ? Animator.StringToHash(speedParam) : 0;
     }
 
     private void SafeSetLayerWeight(int layerIndex, float weight01)

@@ -12,6 +12,8 @@ using UnityEngine.Audio;
 [DisallowMultipleComponent]
 public class OptionsManagerAdvanced : MonoBehaviour
 {
+    static readonly KeyCode[] CachedKeyCodes = (KeyCode[])Enum.GetValues(typeof(KeyCode));
+
     [Header("▶ 비디오 설정")]
     public Dropdown resolutionDropdown;
     public Toggle fullscreenToggle;
@@ -269,7 +271,10 @@ public class OptionsManagerAdvanced : MonoBehaviour
     {
         if (_waitingForKey && _currentRebindButton != null)
         {
-            foreach (KeyCode kc in Enum.GetValues(typeof(KeyCode)))
+            if (!Input.anyKeyDown)
+                return;
+
+            foreach (KeyCode kc in CachedKeyCodes)
             {
                 if (Input.GetKeyDown(kc))
                 {

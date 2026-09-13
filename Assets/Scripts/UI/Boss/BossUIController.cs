@@ -48,6 +48,8 @@ public class BossUIController : MonoBehaviour
     float hideSqr;
     bool isVisible;
     Coroutine pollRoutine;
+    Coroutine pendingShowRoutine;
+    Coroutine pendingHideRoutine;
 
     void Awake()
     {
@@ -77,6 +79,8 @@ public class BossUIController : MonoBehaviour
     void OnDisable()
     {
         if (pollRoutine != null) StopCoroutine(pollRoutine);
+        CancelPendingShow();
+        CancelPendingHide();
         ForceHideImmediate();
     }
 
@@ -96,21 +100,30 @@ public class BossUIController : MonoBehaviour
         if (player == null) return;
         float sqr = (player.position - transform.position).sqrMagnitude;
 
-        if (!isVisible && sqr <= showSqr)
+        if (sqr <= showSqr)
         {
-            if (showDelay <= 0f) ShowHUD();
-            else StartCoroutine(DelayedShow(showDelay));
+            CancelPendingHide();
+            if (!isVisible && pendingShowRoutine == null)
+            {
+                if (showDelay <= 0f) ShowHUD();
+                else pendingShowRoutine = StartCoroutine(DelayedShow(showDelay));
+            }
         }
-        else if (isVisible && sqr > hideSqr)
+        else if (sqr > hideSqr)
         {
-            if (hideDelay <= 0f) HideHUD();
-            else StartCoroutine(DelayedHide(hideDelay));
+            CancelPendingShow();
+            if (isVisible && pendingHideRoutine == null)
+            {
+                if (hideDelay <= 0f) HideHUD();
+                else pendingHideRoutine = StartCoroutine(DelayedHide(hideDelay));
+            }
         }
     }
 
     IEnumerator DelayedShow(float delay)
     {
         yield return new WaitForSeconds(delay);
+        pendingShowRoutine = null;
         if ((player.position - transform.position).sqrMagnitude <= showSqr)
             ShowHUD();
     }
@@ -118,6 +131,7 @@ public class BossUIController : MonoBehaviour
     IEnumerator DelayedHide(float delay)
     {
         yield return new WaitForSeconds(delay);
+        pendingHideRoutine = null;
         if ((player.position - transform.position).sqrMagnitude > hideSqr)
             HideHUD();
     }
@@ -125,6 +139,7 @@ public class BossUIController : MonoBehaviour
     void ShowHUD()
     {
         if (isVisible) return;
+        CancelPendingHide();
         if (hpHud == null || topHudRoot == null)
         {
             Debug.LogWarning("[BossUIController] hpHud 또는 topHudRoot 미할당.");
@@ -148,6 +163,7 @@ public class BossUIController : MonoBehaviour
     void HideHUD()
     {
         if (!isVisible) return;
+        CancelPendingShow();
         if (hpHud != null) hpHud.Unbind();
         if (breakHud != null && breakHud.hudRoot != null) breakHud.hudRoot.SetActive(false);
         if (topHudRoot != null) topHudRoot.SetActive(false);
@@ -157,9 +173,25 @@ public class BossUIController : MonoBehaviour
     // 강제 숨김 즉시
     public void ForceHideImmediate()
     {
+        CancelPendingShow();
+        CancelPendingHide();
         if (hpHud != null) hpHud.Unbind();
         if (breakHud != null && breakHud.hudRoot != null) breakHud.hudRoot.SetActive(false);
         if (topHudRoot != null) topHudRoot.SetActive(false);
         isVisible = false;
+    }
+
+    void CancelPendingShow()
+    {
+        if (pendingShowRoutine == null) return;
+        StopCoroutine(pendingShowRoutine);
+        pendingShowRoutine = null;
+    }
+
+    void CancelPendingHide()
+    {
+        if (pendingHideRoutine == null) return;
+        StopCoroutine(pendingHideRoutine);
+        pendingHideRoutine = null;
     }
 }

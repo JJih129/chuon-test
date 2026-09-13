@@ -111,6 +111,7 @@ public class PlayerHealth : MonoBehaviour, IHealth
         }
 
         RaiseHpEvents();
+        RefreshUpdateState();
     }
 
     void Update()
@@ -130,6 +131,8 @@ public class PlayerHealth : MonoBehaviour, IHealth
                 if (debugLog) Debug.Log("[Health] Animator controller swapped -> re-scan params", this);
             }
         }
+
+        RefreshUpdateState();
     }
 
     // ── Damage: 일반(리액션 포함) ──────────────────────────────
@@ -191,6 +194,7 @@ public class PlayerHealth : MonoBehaviour, IHealth
     {
         isInvincible = seconds > 0f;
         _invTimer = seconds;
+        RefreshUpdateState();
     }
 
     // ── Reaction ───────────────────────────────────────────────
@@ -212,12 +216,12 @@ public class PlayerHealth : MonoBehaviour, IHealth
         // AnimatorParam 모드
         if (!animator) { if (debugLog) Debug.LogWarning("[Health] Animator NULL (AnimatorParam mode)", this); return; }
 
-        if (_hitExists) { SetParam(animator, _hitHash, hitParamName, _hitIsTrigger); return; }
-        if (_hurtExists){ SetParam(animator, _hurtHash, hurtParamName, _hurtIsTrigger); return; }
+        if (_hitExists) { SetParam(animator, _hitHash, _hitIsTrigger); return; }
+        if (_hurtExists){ SetParam(animator, _hurtHash, _hurtIsTrigger); return; }
 
         CacheAnimatorParams();
-        if (_hitExists) { SetParam(animator, _hitHash, hitParamName, _hitIsTrigger); return; }
-        if (_hurtExists){ SetParam(animator, _hurtHash, hurtParamName, _hurtIsTrigger); return; }
+        if (_hitExists) { SetParam(animator, _hitHash, _hitIsTrigger); return; }
+        if (_hurtExists){ SetParam(animator, _hurtHash, _hurtIsTrigger); return; }
 
         var ctrl = (animator && animator.runtimeAnimatorController) ? animator.runtimeAnimatorController.name : "NULL";
         Debug.LogWarning("[Health] No param '" + hitParamName + "' or '" + hurtParamName + "' in controller '" + ctrl + "'", this);
@@ -260,19 +264,27 @@ public class PlayerHealth : MonoBehaviour, IHealth
                 _hurtExists = true;
                 _hurtIsTrigger = (p.type == AnimatorControllerParameterType.Trigger);
             }
+
+            if (_hitExists && _hurtExists)
+                break;
         }
     }
 
-    void SetParam(Animator anim, int hash, string name, bool isTrigger)
+    void RefreshUpdateState()
     {
-        if (isTrigger) anim.SetTrigger(hash);
-        else { anim.SetBool(hash, true); StartCoroutine(ResetBoolNextFrame(anim, name)); }
+        enabled = _isInvincible || reactionMode == ReactionMode.AnimatorParam;
     }
 
-    IEnumerator ResetBoolNextFrame(Animator anim, string name)
+    void SetParam(Animator anim, int hash, bool isTrigger)
+    {
+        if (isTrigger) anim.SetTrigger(hash);
+        else { anim.SetBool(hash, true); StartCoroutine(ResetBoolNextFrame(anim, hash)); }
+    }
+
+    IEnumerator ResetBoolNextFrame(Animator anim, int hash)
     {
         yield return null;
-        if (anim) anim.SetBool(name, false);
+        if (anim) anim.SetBool(hash, false);
     }
 
     void RaiseHpEvents()

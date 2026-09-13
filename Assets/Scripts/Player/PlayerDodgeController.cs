@@ -69,6 +69,7 @@ public class PlayerDodgeController : MonoBehaviour
     float elapsed;
     Vector3 dodgeDir;
     float baseSpeed;
+    int dodgeTriggerHash;
 
     public bool IsDodging => isDodging;
 
@@ -91,13 +92,15 @@ public class PlayerDodgeController : MonoBehaviour
         if (!move) move = GetComponent<PlayerMoveController>();
         if (!playerLockOn) playerLockOn = GetComponent<PlayerLockOn>();
         if (!moveLocker) moveLocker = GetComponent<CombatMoveLocker>();
+        CacheAnimatorHashes();
 
         EnsureDodgeAudioSource();
     }
 
     void Update()
     {
-        cdTimer -= Time.unscaledDeltaTime;
+        if (cdTimer > 0f)
+            cdTimer = Mathf.Max(0f, cdTimer - Time.unscaledDeltaTime);
 
         if (isDodging)
         {
@@ -134,7 +137,7 @@ public class PlayerDodgeController : MonoBehaviour
         if (animator)
         {
             if (!string.IsNullOrEmpty(p_IsDodging)) animator.SetBool(p_IsDodging, true);
-            if (!string.IsNullOrEmpty(p_DodgeTrigger)) animator.SetTrigger(p_DodgeTrigger);
+            if (dodgeTriggerHash != 0) animator.SetTrigger(dodgeTriggerHash);
         }
 
         // 회피 시작 사운드 재생
@@ -206,7 +209,9 @@ public class PlayerDodgeController : MonoBehaviour
         float pitch = 1f;
         if (dodgePitchRandomRange.y >= dodgePitchRandomRange.x && dodgePitchRandomRange.y > 0f)
         {
-            pitch = Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
+            pitch = Mathf.Approximately(dodgePitchRandomRange.x, dodgePitchRandomRange.y)
+                ? dodgePitchRandomRange.x
+                : Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
         }
 
         dodgeAudioSource.pitch = pitch;
@@ -223,7 +228,9 @@ public class PlayerDodgeController : MonoBehaviour
         float pitch = 1f;
         if (dodgePitchRandomRange.y >= dodgePitchRandomRange.x && dodgePitchRandomRange.y > 0f)
         {
-            pitch = Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
+            pitch = Mathf.Approximately(dodgePitchRandomRange.x, dodgePitchRandomRange.y)
+                ? dodgePitchRandomRange.x
+                : Random.Range(dodgePitchRandomRange.x, dodgePitchRandomRange.y);
         }
 
         dodgeAudioSource.pitch = pitch;
@@ -235,11 +242,24 @@ public class PlayerDodgeController : MonoBehaviour
         if (clips == null || clips.Length == 0)
             return null;
 
+        if (clips.Length == 1)
+            return clips[0];
+
         int idx = Random.Range(0, clips.Length);
         return clips[idx];
     }
 
+    void CacheAnimatorHashes()
+    {
+        dodgeTriggerHash = string.IsNullOrEmpty(p_DodgeTrigger) ? 0 : Animator.StringToHash(p_DodgeTrigger);
+    }
+
 #if UNITY_EDITOR
+    void OnValidate()
+    {
+        CacheAnimatorHashes();
+    }
+
     void OnDrawGizmosSelected()
     {
         if (!Application.isPlaying && useDistanceBased)

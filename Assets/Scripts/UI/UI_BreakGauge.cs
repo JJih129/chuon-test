@@ -1,28 +1,40 @@
-// 파일명: UI_BreakGauge.cs
-// 역할: 보스 브레이크 게이지 UI(게이지 바/텍스트) 표시
 using UnityEngine;
 using UnityEngine.UI;
 
 public class UI_BreakGauge : MonoBehaviour
 {
-    [Header("표시 대상 보스(브레이크 컨트롤러)")]
+    [Header("Source Boss")]
     public BossBreakController boss;
 
-    [Header("게이지 이미지(0~1 Fill)")]
+    [Header("Fill Image")]
     public Image fill;
 
-    [Header("표시 토글(보스 근접 시만 표시 등)")]
+    [Header("Visibility")]
     public CanvasGroup group;
     public bool alwaysOn = true;
+
+    float _lastFill = -1f;
+    float _lastAlpha = -1f;
 
     void Update()
     {
         if (!boss || !fill) return;
-        fill.fillAmount = boss.Get01();
+
+        float nextFill = boss.Get01();
+        if (!Mathf.Approximately(_lastFill, nextFill))
+        {
+            fill.fillAmount = nextFill;
+            _lastFill = nextFill;
+        }
 
         if (group && !alwaysOn)
         {
-            group.alpha = (boss.gameObject.activeInHierarchy ? 1f : 0f);
+            float nextAlpha = boss.gameObject.activeInHierarchy ? 1f : 0f;
+            if (!Mathf.Approximately(_lastAlpha, nextAlpha))
+            {
+                group.alpha = nextAlpha;
+                _lastAlpha = nextAlpha;
+            }
         }
     }
 }

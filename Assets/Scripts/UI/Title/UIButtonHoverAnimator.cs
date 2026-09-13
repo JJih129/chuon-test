@@ -90,11 +90,20 @@ public class UIButtonHoverAnimator : MonoBehaviour, IPointerEnterHandler, IPoint
 
     IEnumerator AnimateMove(Vector3 target, float time)
     {
+        if (time <= 0f)
+        {
+            if (_rect != null) _rect.anchoredPosition = (Vector2)target;
+            else if (groupTransform != null) groupTransform.localPosition = target;
+            yield break;
+        }
+
         float t = 0f;
         if (_rect != null)
         {
             Vector2 start = _rect.anchoredPosition;
             Vector2 end = (Vector2)target;
+            if ((start - end).sqrMagnitude <= 0.000001f)
+                yield break;
             while (t < time)
             {
                 t += Time.unscaledDeltaTime;
@@ -109,6 +118,8 @@ public class UIButtonHoverAnimator : MonoBehaviour, IPointerEnterHandler, IPoint
         {
             Vector3 start = groupTransform.localPosition;
             Vector3 end = target;
+            if ((start - end).sqrMagnitude <= 0.000001f)
+                yield break;
             while (t < time)
             {
                 t += Time.unscaledDeltaTime;
@@ -124,6 +135,14 @@ public class UIButtonHoverAnimator : MonoBehaviour, IPointerEnterHandler, IPoint
     IEnumerator AnimateGlowAlpha(float from, float to, float time, System.Action onComplete = null)
     {
         if (_glowImage == null) { onComplete?.Invoke(); yield break; }
+        if (time <= 0f || Mathf.Approximately(from, to))
+        {
+            Color immediate = _glowImage.color;
+            immediate.a = to;
+            _glowImage.color = immediate;
+            onComplete?.Invoke();
+            yield break;
+        }
         float t = 0f;
         Color col = _glowImage.color;
         while (t < time)

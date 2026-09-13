@@ -1,4 +1,4 @@
-// 파일명: BossController.cs
+﻿// 파일명: BossController.cs
 // 보스 FSM + 이동 + 패턴 + 근접 백스텝 + 사망 시 루트 파괴
 // 트리거는 PlayAnimTrigger() 하나로 관리해서 한 번에 하나만 켜지도록 설계.
 // 공격 진입 전 플레이어 쪽으로 회전 보정(스냅/짧은 회전) 지원.
@@ -24,6 +24,7 @@ public enum BossState
     Move,        // 플레이어에게 이동
     Attack,      // 패턴 수행 중
     CombatIdle,  // 공격 후 잠깐 휴지
+    ParryStagger,// 패링당해 잠깐 경직
     Break,       // 브레이크(그로기)
     Dead         // 사망
 }
@@ -84,7 +85,7 @@ public class AttackPattern
     }
 }
 
-public class BossController : MonoBehaviour
+public class BossController : MonoBehaviour, IParryReact
 {
     [Header("참조 컴포넌트 (한글 설명)")]
     [Tooltip("보스 체력/사망 이벤트 담당 컴포넌트")]
@@ -123,6 +124,16 @@ public class BossController : MonoBehaviour
     [Tooltip("공격 후 CombatIdle 상태 유지 시간(초). 0이면 바로 다음 상태로 이동.")]
     public float combatIdleTime = 0.3f;
 
+    [Header("패링 경직 설정 (한글 설명)")]
+    [Tooltip("플레이어가 보스 공격을 패링하면 현재 패턴을 끊고 추가 경직을 줄지 여부")]
+    public bool interruptPatternOnParry = true;
+
+    [Tooltip("패링 성공 시 다음 패턴 전까지 보스가 쉬는 추가 시간(초)")]
+    public float parryStaggerDuration = 0.75f;
+
+    [Tooltip("패링 처리 후 다음 공격을 다시 고르기 전 반드시 쉬는 최소 시간(초)")]
+    public float postParryAttackGap = 0.6f;
+
     [Tooltip("공격 상태에서 애니메이션 종료를 기다리는 최대 시간 (초). 안전장치 역할")]
     public float maxAttackStateWaitTime = 2.0f;
 
@@ -143,8 +154,19 @@ public class BossController : MonoBehaviour
     private static readonly int AnimParam_MoveSpeed = Animator.StringToHash("MoveSpeed");
     private static readonly int AnimParam_IsBreak   = Animator.StringToHash("IsBreak");
     private static readonly int AnimParam_IsDead    = Animator.StringToHash("IsDead");
+    private static readonly int AnimTrigger_Parried = Animator.StringToHash("Parried");
+    private static readonly int AnimState_AttackA = Animator.StringToHash("Attack_A");
+    private static readonly int AnimState_AttackB = Animator.StringToHash("Attack_B");
+    private static readonly int AnimState_AttackC = Animator.StringToHash("Attack_C");
+    private static readonly int AnimState_AttackD = Animator.StringToHash("Attack_D");
+    private static readonly int AnimState_AttackE = Animator.StringToHash("Attack_E");
+    private static readonly int AnimState_AttackF = Animator.StringToHash("Attack_F");
 
     private float _moveBlend; // 0~1
+    private float _lastAppliedMoveBlend = float.NaN;
+    private float _stoppingDistanceSq;
+    private float _detectMoveThresholdSq;
+    private float _backstepTriggerDistanceSq;
 
     [Header("공격 패턴 목록 (한글 설명)")]
     [Tooltip("보스가 사용할 수 있는 모든 공격 패턴 리스트")]
@@ -152,6 +174,7 @@ public class BossController : MonoBehaviour
 
     private string _lastExecutedPattern = string.Empty;
     private AttackPattern _currentPattern;
+    private readonly List<AttackPattern> _patternCandidates = new List<AttackPattern>(8);
 
     [Header("공격 전 회전 보정 (한글 설명)")]
     [Tooltip("Attack/백스텝 시작 전에 플레이어 방향으로 회전 보정을 할지 여부")]
@@ -184,6 +207,10 @@ public class BossController : MonoBehaviour
 
     private float _backstepCooldownTimer;
 
+    [Header("Debug")]
+    [SerializeField] private bool debugLogs = false;
+    [SerializeField] private bool parryDebugLogs = true;
+
     [Header("사망시 오브젝트 정리 (한글 설명)")]
     [Tooltip("보스 사망 시 자동으로 오브젝트를 파괴할지 여부")]
     public bool autoDestroyOnDead = true;
@@ -198,11 +225,20 @@ public class BossController : MonoBehaviour
     public Transform[] extraObjectsToDestroyOnDead;
 
     private Coroutine _destroyRoutine;
+    private WaitForSeconds _cachedDestroyDelayWait;
+    private float _cachedDestroyDelayWaitSeconds = -1f;
+    private AttackHitbox[] _cachedAttackHitboxes;
+    private float _combatIdleDurationOverride = -1f;
+    private float _parryStaggerDurationOverride = -1f;
+    private float _attackLockedUntil = -1f;
+    private float _pendingPostParryGap = -1f;
 
     void Awake()
     {
-        if (attackHitbox != null)
-            attackHitbox.DeactivateWindow();
+        CacheDerivedValues();
+        CacheAttackHitboxes();
+        DeactivateAllAttackHitboxes();
+        PlayerGuardController.GlobalParrySuccess += HandleGlobalParrySuccess;
 
         if (bossHealth != null)
             bossHealth.OnDied += OnBossDied;
@@ -214,15 +250,30 @@ public class BossController : MonoBehaviour
         }
     }
 
+    void OnValidate()
+    {
+        CacheDerivedValues();
+        CacheAttackHitboxes();
+    }
+
     void Start()
     {
         SetState(BossState.IntroIdle);
     }
 
+    void OnDestroy()
+    {
+        PlayerGuardController.GlobalParrySuccess -= HandleGlobalParrySuccess;
+    }
+
     void Update()
     {
+        bool hasPatterns = allPatterns != null && allPatterns.Count > 0;
+        if (!hasPatterns && _backstepCooldownTimer <= 0f)
+            return;
+
         // 패턴 쿨타임 감소
-        if (allPatterns != null)
+        if (hasPatterns)
         {
             float dt = Time.deltaTime;
             foreach (var p in allPatterns)
@@ -252,7 +303,8 @@ public class BossController : MonoBehaviour
 
         var old = currentState;
         currentState = newState;
-        Debug.Log($"[BossFSM] {old} → {newState}");
+        if (debugLogs)
+            Debug.Log($"[BossFSM] {old} -> {newState}");
 
         switch (currentState)
         {
@@ -270,6 +322,9 @@ public class BossController : MonoBehaviour
                 break;
             case BossState.CombatIdle:
                 _stateRoutine = StartCoroutine(Co_CombatIdle());
+                break;
+            case BossState.ParryStagger:
+                _stateRoutine = StartCoroutine(Co_HandleParryStagger());
                 break;
             case BossState.Break:
                 _stateRoutine = StartCoroutine(Co_HandleBreak());
@@ -299,10 +354,10 @@ public class BossController : MonoBehaviour
         if (bossAnimator != null)
             bossAnimator.SetBool(AnimParam_IsDead, true);
 
-        if (attackHitbox != null)
-            attackHitbox.DeactivateWindow();
+        DeactivateAllAttackHitboxes();
 
-        Debug.Log("[BossFSM] Boss Dead");
+        if (debugLogs)
+            Debug.Log("[BossFSM] Boss Dead");
 
         if (autoDestroyOnDead && _destroyRoutine == null)
             _destroyRoutine = StartCoroutine(Co_DestroyHierarchyAfterDead());
@@ -333,9 +388,23 @@ public class BossController : MonoBehaviour
     IEnumerator Co_DestroyHierarchyAfterDead()
     {
         if (destroyDelayAfterDead > 0f)
-            yield return new WaitForSeconds(destroyDelayAfterDead);
+            yield return GetDestroyDelayWait();
 
         FinalizeDeathAndDestroy();
+    }
+
+    private WaitForSeconds GetDestroyDelayWait()
+    {
+        float seconds = Mathf.Max(0f, destroyDelayAfterDead);
+        if (seconds <= 0f) return null;
+
+        if (_cachedDestroyDelayWait == null || !Mathf.Approximately(_cachedDestroyDelayWaitSeconds, seconds))
+        {
+            _cachedDestroyDelayWaitSeconds = seconds;
+            _cachedDestroyDelayWait = new WaitForSeconds(seconds);
+        }
+
+        return _cachedDestroyDelayWait;
     }
 
     /// <summary>
@@ -377,19 +446,78 @@ public class BossController : MonoBehaviour
         }
 
         _currentPattern = null;
+        ApplyPendingPostParryGap();
         SetState(BossState.CombatIdle);
+    }
+
+    public void OnParried(GameObject parrier, float riposteDamage, float stunDuration)
+    {
+        if (parryDebugLogs)
+            Debug.Log($"[ParryDebug][Boss] OnParried enter frame={Time.frameCount} time={Time.time:0.000} state={currentState} pattern={_currentPattern?.patternName ?? "null"} lockUntil={_attackLockedUntil:0.000} parrier={(parrier ? parrier.name : "null")}", this);
+
+        if (_isDead || currentState == BossState.Dead || currentState == BossState.Break)
+        {
+            if (parryDebugLogs)
+                Debug.Log($"[ParryDebug][Boss] OnParried ignored by dead/break state={currentState}", this);
+            return;
+        }
+
+        if (!interruptPatternOnParry)
+        {
+            if (parryDebugLogs)
+                Debug.Log("[ParryDebug][Boss] OnParried ignored because interruptPatternOnParry is false", this);
+            return;
+        }
+
+        float staggerDuration = stunDuration > 0f ? stunDuration : parryStaggerDuration;
+        _parryStaggerDurationOverride = Mathf.Max(0.05f, staggerDuration);
+        _pendingPostParryGap = Mathf.Max(_pendingPostParryGap, Mathf.Max(0f, postParryAttackGap));
+        float lockDuration = Mathf.Max(_parryStaggerDurationOverride, postParryAttackGap);
+        _attackLockedUntil = Mathf.Max(_attackLockedUntil, Time.time + lockDuration);
+
+        if (_stateRoutine != null)
+        {
+            StopCoroutine(_stateRoutine);
+            _stateRoutine = null;
+        }
+
+        _currentPattern = null;
+        DeactivateAllAttackHitboxes();
+        UpdateMoveAnimation(0f);
+
+        ResetAnimationTriggers();
+        if (bossAnimator != null)
+            bossAnimator.SetTrigger(AnimTrigger_Parried);
+        SetState(BossState.ParryStagger);
+
+        if (debugLogs)
+            Debug.Log($"[BossFSM] Parried by {parrier?.name ?? "Unknown"} -> ParryStagger({_parryStaggerDurationOverride:0.00}s)");
+
+        if (parryDebugLogs)
+            Debug.Log($"[ParryDebug][Boss] OnParried applied stagger={_parryStaggerDurationOverride:0.000} gap={_pendingPostParryGap:0.000} lockUntil={_attackLockedUntil:0.000}", this);
     }
 
     public void ActivateHitbox()
     {
-        if (_currentPattern != null && attackHitbox != null)
-            attackHitbox.ActivateWindow();
+        if (_currentPattern == null)
+            return;
+
+        if (_cachedAttackHitboxes == null || _cachedAttackHitboxes.Length == 0)
+            CacheAttackHitboxes();
+
+        if (_cachedAttackHitboxes == null)
+            return;
+
+        for (int i = 0; i < _cachedAttackHitboxes.Length; i++)
+        {
+            if (_cachedAttackHitboxes[i] != null)
+                _cachedAttackHitboxes[i].ActivateWindow();
+        }
     }
 
     public void DeactivateHitbox()
     {
-        if (attackHitbox != null)
-            attackHitbox.DeactivateWindow();
+        DeactivateAllAttackHitboxes();
     }
 
     // ==================== 트리거 통합 유틸 ====================
@@ -403,21 +531,7 @@ public class BossController : MonoBehaviour
         if (bossAnimator == null || string.IsNullOrEmpty(triggerName))
             return;
 
-        // 1) 공격 패턴 트리거 전부 Reset
-        if (allPatterns != null)
-        {
-            foreach (var p in allPatterns)
-            {
-                if (p != null && !string.IsNullOrEmpty(p.animTriggerName))
-                    bossAnimator.ResetTrigger(p.animTriggerName);
-            }
-        }
-
-        // 2) 백스텝 트리거 Reset
-        if (!string.IsNullOrEmpty(backstepAnimTriggerName))
-            bossAnimator.ResetTrigger(backstepAnimTriggerName);
-
-        // 3) 이번에 쓸 트리거만 Set
+        ResetAnimationTriggers();
         bossAnimator.SetTrigger(triggerName);
     }
 
@@ -502,10 +616,13 @@ public class BossController : MonoBehaviour
             yield break;
         }
 
-        float distance = Vector3.Distance(transform.position, playerTarget.position);
+        if (TryEnterAttackLockIdle())
+            yield break;
+
+        float distanceSq = (playerTarget.position - transform.position).sqrMagnitude;
         UpdateMoveAnimation(0f);
 
-        if (distance > stoppingDistance + 1.0f)
+        if (distanceSq > _detectMoveThresholdSq)
             SetState(BossState.Move);
         else
             SetState(BossState.Attack);
@@ -513,7 +630,8 @@ public class BossController : MonoBehaviour
 
     IEnumerator Co_HandleMove()
     {
-        Debug.Log("[BossFSM] Move: 플레이어에게 접근 시작");
+        if (debugLogs)
+            Debug.Log("[BossFSM] Move: approaching player");
 
         while (currentState == BossState.Move && !_isDead)
         {
@@ -523,11 +641,14 @@ public class BossController : MonoBehaviour
                 yield break;
             }
 
+            if (TryEnterAttackLockIdle())
+                yield break;
+
             Vector3 toPlayer = playerTarget.position - transform.position;
             toPlayer.y = 0f;
-            float distance = toPlayer.magnitude;
+            float distanceSq = toPlayer.sqrMagnitude;
 
-            if (distance <= stoppingDistance)
+            if (distanceSq <= _stoppingDistanceSq)
             {
                 UpdateMoveAnimation(0f);
                 SetState(BossState.Attack);
@@ -555,7 +676,7 @@ public class BossController : MonoBehaviour
 
     IEnumerator Co_CombatIdle()
     {
-        float t = combatIdleTime;
+        float t = ConsumeCombatIdleDuration();
         while (t > 0f && !_isDead)
         {
             t -= Time.deltaTime;
@@ -567,9 +688,32 @@ public class BossController : MonoBehaviour
             SetState(BossState.Detect);
     }
 
+    IEnumerator Co_HandleParryStagger()
+    {
+        float t = ConsumeParryStaggerDuration();
+        while (t > 0f && !_isDead)
+        {
+            t -= Time.deltaTime;
+            UpdateMoveAnimation(0f);
+            yield return null;
+        }
+
+        if (_isDead)
+            yield break;
+
+        float gap = ConsumePendingPostParryGap();
+        if (gap > 0f)
+            _attackLockedUntil = Mathf.Max(_attackLockedUntil, Time.time + gap);
+
+        _combatIdleDurationOverride = Mathf.Max(_combatIdleDurationOverride, gap);
+        SetState(BossState.CombatIdle);
+    }
+
     IEnumerator Co_HandleBreak()
     {
-        Debug.Log("[BossFSM] Break: 브레이크 상태 진입");
+        if (debugLogs)
+            Debug.Log("[BossFSM] Break: entered break state");
+
         while (currentState == BossState.Break && !_isDead)
         {
             UpdateMoveAnimation(0f);
@@ -582,6 +726,9 @@ public class BossController : MonoBehaviour
     /// </summary>
     IEnumerator Co_PerformAttack()
     {
+        if (TryEnterAttackLockIdle())
+            yield break;
+
         if (playerTarget == null)
         {
             SetState(BossState.CombatIdle);
@@ -600,10 +747,10 @@ public class BossController : MonoBehaviour
         }
 
         // 1) 거리 다시 측정 후 백스텝 여부 결정
-        float distance = Vector3.Distance(transform.position, playerTarget.position);
+        float distanceSq = (playerTarget.position - transform.position).sqrMagnitude;
 
         if (useBackstepWhenTooClose &&
-            distance < backstepTriggerDistance &&
+            distanceSq < _backstepTriggerDistanceSq &&
             _backstepCooldownTimer <= 0f)
         {
             yield return StartCoroutine(Co_Backstep());
@@ -623,10 +770,12 @@ public class BossController : MonoBehaviour
             yield break;
         }
 
-        AttackPattern pattern = SelectPattern(distance);
+        AttackPattern pattern = SelectPattern(Mathf.Sqrt(distanceSq));
         if (pattern == null)
         {
-            Debug.LogWarning("[BossFSM] 사용할 수 있는 패턴이 없음 → CombatIdle");
+            if (debugLogs)
+                Debug.LogWarning("[BossFSM] No usable attack pattern -> CombatIdle");
+
             SetState(BossState.CombatIdle);
             yield break;
         }
@@ -638,19 +787,13 @@ public class BossController : MonoBehaviour
         if (patternVisuals != null)
             patternVisuals.SetParryable(pattern.CanParry);
 
-        if (attackHitbox != null)
-            attackHitbox.Configure(
-                pattern.damageAmount,
-                pattern.CanParry,
-                pattern.canGuard,
-                pattern.isUnblockable,
-                pattern.causesGuardBreak,
-                transform);
+        ConfigureAttackHitboxesForPattern(pattern);
 
         if (!string.IsNullOrEmpty(pattern.animTriggerName))
             PlayAnimTrigger(pattern.animTriggerName);
 
-        Debug.Log($"[BossFSM] Attack 패턴 실행: {pattern.patternName} ({pattern.animTriggerName})");
+        if (debugLogs)
+            Debug.Log($"[BossFSM] Attack pattern: {pattern.patternName} ({pattern.animTriggerName})");
 
         // 이름 기반 스테이트 대기가 아니라,
         // "Attack 상태 + 최대 대기 시간" 기준으로만 기다리는 방식 (안전장치).
@@ -666,6 +809,7 @@ public class BossController : MonoBehaviour
         if (currentState == BossState.Attack && !_isDead)
         {
             _currentPattern = null;
+            ApplyPendingPostParryGap();
             SetState(BossState.CombatIdle);
         }
     }
@@ -714,29 +858,29 @@ public class BossController : MonoBehaviour
         if (allPatterns == null || allPatterns.Count == 0)
             return null;
 
-        List<AttackPattern> candidates = new List<AttackPattern>();
+        _patternCandidates.Clear();
 
         foreach (var p in allPatterns)
         {
             if (p == null) continue;
             if (p.CanExecute(this, distanceToPlayer, _lastExecutedPattern))
-                candidates.Add(p);
+                _patternCandidates.Add(p);
         }
 
-        if (candidates.Count == 0)
+        if (_patternCandidates.Count == 0)
             return null;
 
         float totalWeight = 0f;
-        foreach (var p in candidates)
+        foreach (var p in _patternCandidates)
             totalWeight += Mathf.Max(0f, p.weight);
 
         if (totalWeight <= 0f)
-            return candidates[0];
+            return _patternCandidates[0];
 
         float r = UnityEngine.Random.value * totalWeight;
         float accum = 0f;
 
-        foreach (var p in candidates)
+        foreach (var p in _patternCandidates)
         {
             float w = Mathf.Max(0f, p.weight);
             accum += w;
@@ -744,7 +888,7 @@ public class BossController : MonoBehaviour
                 return p;
         }
 
-        return candidates[candidates.Count - 1];
+        return _patternCandidates[_patternCandidates.Count - 1];
     }
 
     // ==================== 이동 애니 (BlendTree) ====================
@@ -761,7 +905,73 @@ public class BossController : MonoBehaviour
             Time.deltaTime / Mathf.Max(0.0001f, moveAnimDamp)
         );
 
+        if (Mathf.Approximately(_lastAppliedMoveBlend, _moveBlend))
+            return;
+
+        _lastAppliedMoveBlend = _moveBlend;
         bossAnimator.SetFloat(AnimParam_MoveSpeed, _moveBlend);
+    }
+
+    void CacheDerivedValues()
+    {
+        float stopping = Mathf.Max(0f, stoppingDistance);
+        _stoppingDistanceSq = stopping * stopping;
+
+        float detectMoveThreshold = stopping + 1.0f;
+        _detectMoveThresholdSq = detectMoveThreshold * detectMoveThreshold;
+
+        float backstep = Mathf.Max(0f, backstepTriggerDistance);
+        _backstepTriggerDistanceSq = backstep * backstep;
+    }
+
+    void CacheAttackHitboxes()
+    {
+        _cachedAttackHitboxes = GetComponentsInChildren<AttackHitbox>(true);
+        if ((_cachedAttackHitboxes == null || _cachedAttackHitboxes.Length == 0) && attackHitbox != null)
+            _cachedAttackHitboxes = new[] { attackHitbox };
+    }
+
+    void DeactivateAllAttackHitboxes()
+    {
+        if (_cachedAttackHitboxes == null || _cachedAttackHitboxes.Length == 0)
+            CacheAttackHitboxes();
+
+        if (_cachedAttackHitboxes == null)
+            return;
+
+        for (int i = 0; i < _cachedAttackHitboxes.Length; i++)
+        {
+            if (_cachedAttackHitboxes[i] != null)
+                _cachedAttackHitboxes[i].DeactivateWindow();
+        }
+    }
+
+    void ConfigureAttackHitboxesForPattern(AttackPattern pattern)
+    {
+        if (pattern == null)
+            return;
+
+        if (_cachedAttackHitboxes == null || _cachedAttackHitboxes.Length == 0)
+            CacheAttackHitboxes();
+
+        if (_cachedAttackHitboxes == null)
+            return;
+
+        for (int i = 0; i < _cachedAttackHitboxes.Length; i++)
+        {
+            var hitbox = _cachedAttackHitboxes[i];
+            if (hitbox == null)
+                continue;
+
+            hitbox.Configure(
+                pattern.damageAmount,
+                pattern.CanParry,
+                pattern.canGuard,
+                pattern.isUnblockable,
+                pattern.causesGuardBreak,
+                transform);
+            hitbox.ResetParrySequence(pattern.CanParry ? 1 : 0);
+        }
     }
 
     // ==================== (선택) 루트 콜라이더 충돌 ====================
@@ -771,4 +981,113 @@ public class BossController : MonoBehaviour
         if (_currentPattern == null) return;
         // 필요하면 여기서 특수 처리 추가.
     }
+
+    float ConsumeCombatIdleDuration()
+    {
+        float duration = _combatIdleDurationOverride >= 0f ? _combatIdleDurationOverride : combatIdleTime;
+        _combatIdleDurationOverride = -1f;
+        return Mathf.Max(0f, duration);
+    }
+
+    float ConsumeParryStaggerDuration()
+    {
+        float duration = _parryStaggerDurationOverride >= 0f ? _parryStaggerDurationOverride : parryStaggerDuration;
+        _parryStaggerDurationOverride = -1f;
+        return Mathf.Max(0.05f, duration);
+    }
+
+    float ConsumePendingPostParryGap()
+    {
+        float gap = _pendingPostParryGap >= 0f ? _pendingPostParryGap : 0f;
+        _pendingPostParryGap = -1f;
+        return Mathf.Max(0f, gap);
+    }
+
+    void ApplyPendingPostParryGap()
+    {
+        float gap = ConsumePendingPostParryGap();
+        if (gap <= 0f)
+            return;
+
+        _attackLockedUntil = Mathf.Max(_attackLockedUntil, Time.time + gap);
+        _combatIdleDurationOverride = Mathf.Max(_combatIdleDurationOverride, gap);
+    }
+
+    bool TryEnterAttackLockIdle()
+    {
+        float remaining = _attackLockedUntil - Time.time;
+        if (remaining <= 0f)
+            return false;
+
+        if (parryDebugLogs)
+            Debug.Log($"[ParryDebug][Boss] Attack lock active -> CombatIdle remaining={remaining:0.000} frame={Time.frameCount} state={currentState}", this);
+
+        _combatIdleDurationOverride = Mathf.Max(_combatIdleDurationOverride, remaining);
+        SetState(BossState.CombatIdle);
+        return true;
+    }
+
+    void ResetAnimationTriggers()
+    {
+        if (bossAnimator == null)
+            return;
+
+        if (allPatterns != null)
+        {
+            foreach (var p in allPatterns)
+            {
+                if (p != null && !string.IsNullOrEmpty(p.animTriggerName))
+                    bossAnimator.ResetTrigger(p.animTriggerName);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(backstepAnimTriggerName))
+            bossAnimator.ResetTrigger(backstepAnimTriggerName);
+
+        bossAnimator.ResetTrigger(AnimTrigger_Parried);
+    }
+
+    void HandleGlobalParrySuccess(PlayerGuardController parryOwner)
+    {
+        if (parryDebugLogs)
+            Debug.Log($"[ParryDebug][Boss] HandleGlobalParrySuccess frame={Time.frameCount} time={Time.time:0.000} state={currentState} pattern={_currentPattern?.patternName ?? "null"} guard={(parryOwner ? parryOwner.name : "null")}", this);
+
+        if (parryOwner == null || _isDead || currentState == BossState.Dead || currentState == BossState.Break)
+            return;
+
+        if (playerTarget != null)
+        {
+            Transform parryTransform = parryOwner.transform;
+            if (parryTransform != playerTarget && parryTransform.root != playerTarget.root)
+                return;
+        }
+
+        if (!_currentPatternIsLikelyActive() && Time.time >= _attackLockedUntil)
+        {
+            if (parryDebugLogs)
+                Debug.Log("[ParryDebug][Boss] Global parry ignored because no active/likely attack state", this);
+            return;
+        }
+
+        OnParried(parryOwner.gameObject, 0f, 0f);
+    }
+
+    bool _currentPatternIsLikelyActive()
+    {
+        if (_currentPattern != null || currentState == BossState.Attack)
+            return true;
+
+        if (bossAnimator == null)
+            return false;
+
+        AnimatorStateInfo state = bossAnimator.GetCurrentAnimatorStateInfo(0);
+        int shortHash = state.shortNameHash;
+        return shortHash == AnimState_AttackA
+            || shortHash == AnimState_AttackB
+            || shortHash == AnimState_AttackC
+            || shortHash == AnimState_AttackD
+            || shortHash == AnimState_AttackE
+            || shortHash == AnimState_AttackF;
+    }
+
 }

@@ -47,15 +47,6 @@ public class FreeLookCamera : MonoBehaviour
         Cursor.visible = false;
     }
 
-    void Update()
-    {
-        // ★ [핵심] 일시정지 중이면 아무것도 하지 마라 (커서 건드리지 마라)
-        if (Time.timeScale == 0f) return;
-
-        // ... 기존 줌 로직 ...
-        // (간략화됨)
-    }
-
     void LateUpdate()
     {
         // ★ [핵심] 일시정지 중이면 카메라 회전 멈춤

@@ -3,10 +3,22 @@ using System.Collections;
 
 public class CameraShake : MonoBehaviour
 {
+    Coroutine _shakeRoutine;
+
     public void Shake(float amplitude, float duration)
     {
-        StopAllCoroutines();
-        StartCoroutine(ShakeCoroutine(amplitude, duration));
+        if (_shakeRoutine != null)
+        {
+            StopCoroutine(_shakeRoutine);
+            _shakeRoutine = null;
+        }
+
+        if (amplitude <= 0f || duration <= 0f)
+        {
+            return;
+        }
+
+        _shakeRoutine = StartCoroutine(ShakeCoroutine(amplitude, duration));
     }
 
     IEnumerator ShakeCoroutine(float amplitude, float duration)
@@ -22,5 +34,6 @@ public class CameraShake : MonoBehaviour
             yield return null;
         }
         transform.localPosition = originalPos;
+        _shakeRoutine = null;
     }
 }

@@ -18,10 +18,23 @@ public class LockOnFacingDriver : MonoBehaviour
     [SerializeField] private bool autoUnlockWhenFar = true;              // [조절값]
     [SerializeField] private float maxDistance = 30f;                    // [조절값]
 
+    float maxDistanceSq;
+
     void Reset()
     {
         if (!playerRoot) playerRoot = transform;
         if (!lockOn) lockOn = GetComponent<PlayerLockOn>();
+        CacheDerivedValues();
+    }
+
+    void Awake()
+    {
+        CacheDerivedValues();
+    }
+
+    void OnValidate()
+    {
+        CacheDerivedValues();
     }
 
     void Update()
@@ -35,16 +48,23 @@ public class LockOnFacingDriver : MonoBehaviour
             return;
         }
 
-        if (autoUnlockWhenFar && Vector3.Distance(playerRoot.position, t.position) > maxDistance)
+        Vector3 dir = t.position - playerRoot.position;
+
+        if (autoUnlockWhenFar && dir.sqrMagnitude > maxDistanceSq)
         {
             lockOn.Unlock();
             return;
         }
 
-        Vector3 dir = t.position - playerRoot.position;
         dir.y = 0f; if (dir.sqrMagnitude < 0.0001f) return;
 
         Quaternion target = Quaternion.LookRotation(dir.normalized, Vector3.up);
         playerRoot.rotation = Quaternion.RotateTowards(playerRoot.rotation, target, yawSpeedDeg * Time.deltaTime);
+    }
+
+    void CacheDerivedValues()
+    {
+        float distance = Mathf.Max(0f, maxDistance);
+        maxDistanceSq = distance * distance;
     }
 }

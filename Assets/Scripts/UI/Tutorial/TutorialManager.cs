@@ -13,6 +13,9 @@ public enum TutorialStep
 public class TutorialManager : MonoBehaviour
 {
     public static TutorialManager Instance;
+    private WaitForSeconds _cachedTypingDelay;
+    private float _cachedTypingDelaySeconds = -1f;
+    private readonly Dictionary<float, WaitForSeconds> _waitCache = new Dictionary<float, WaitForSeconds>();
 
     [Header("■ 대화창 UI")]
     public TextMeshProUGUI centerTitleText;    // 중앙 타이틀 텍스트
@@ -323,14 +326,49 @@ public class TutorialManager : MonoBehaviour
 
         if (contentText)
         {
-            contentText.text = "";
-            foreach (char c in content)
+            contentText.text = content;
+            contentText.maxVisibleCharacters = 0;
+            contentText.ForceMeshUpdate();
+
+            int visibleCount = contentText.textInfo.characterCount;
+            var typingDelay = GetTypingDelay();
+            for (int i = 1; i <= visibleCount; i++)
             {
-                contentText.text += c;
-                yield return new WaitForSeconds(textTypingSpeed);
+                contentText.maxVisibleCharacters = i;
+                if (typingDelay != null) yield return typingDelay;
+                else yield return null;
             }
         }
-        yield return new WaitForSeconds(waitTime);
+        var wait = GetWait(waitTime);
+        if (wait != null) yield return wait;
+        else yield return null;
+    }
+
+    WaitForSeconds GetTypingDelay()
+    {
+        if (textTypingSpeed <= 0f) return null;
+
+        if (_cachedTypingDelay == null || !Mathf.Approximately(_cachedTypingDelaySeconds, textTypingSpeed))
+        {
+            _cachedTypingDelaySeconds = textTypingSpeed;
+            _cachedTypingDelay = new WaitForSeconds(textTypingSpeed);
+        }
+
+        return _cachedTypingDelay;
+    }
+
+    WaitForSeconds GetWait(float seconds)
+    {
+        float waitSeconds = Mathf.Max(0f, seconds);
+        if (waitSeconds <= 0f) return null;
+
+        if (!_waitCache.TryGetValue(waitSeconds, out var wait))
+        {
+            wait = new WaitForSeconds(waitSeconds);
+            _waitCache[waitSeconds] = wait;
+        }
+
+        return wait;
     }
 
     void ShowQuestPanel()

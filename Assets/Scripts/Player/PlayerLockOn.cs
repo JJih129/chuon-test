@@ -3,34 +3,33 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class PlayerLockOn : MonoBehaviour
 {
-    [Header("탐색 범위/시야 (한글 설명)")]
-    [SerializeField, Min(0f)] private float lockOnRange = 18f;                // [조절값] 락온 탐색 최대 거리
-    [SerializeField, Range(10f, 180f)] private float lockOnFOV = 70f;         // [조절값] 카메라 중심 기준 허용 시야각
-    [SerializeField] private LayerMask obstacleMask = 0;                      // [조절값] 시야를 가리는 장애물 레이어 마스크(없으면 0)
-    [SerializeField] private LayerMask enemyMask = 1 << 9;                    // [조절값] 적 레이어 마스크 (프로젝트에 맞게 조정)
+    [Header("Target Search Range / FOV")]
+    [SerializeField, Min(0f)] private float lockOnRange = 18f;
+    [SerializeField, Range(10f, 180f)] private float lockOnFOV = 70f;
+    [SerializeField] private LayerMask obstacleMask = 0;
+    [SerializeField] private LayerMask enemyMask = 1 << 9;
 
-    [Header("타깃 피벗 생성/추적 (한글 설명)")]
-    [SerializeField] private string pivotName = "LockPivot";                  // [조절값] 타깃 루트 하위에 생성할 락온 기준점 이름
-    [SerializeField] private float defaultPivotY = 1.3f;                       // [조절값] Render가 없을 때 기본 높이
+    [Header("Pivot Creation / Tracking")]
+    [SerializeField] private string pivotName = "LockPivot";
+    [SerializeField] private float defaultPivotY = 1.3f;
 
-    [Header("입력(레거시) - Tab/MiddleMouse 토글 (한글 설명)")]
-    [SerializeField] private bool useLegacyInput = true;                      // [조절값] 구 Input 시스템(Tab/휠 클릭) 사용 여부
-    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;                 // [조절값] 락온 토글 키 1
-    [SerializeField] private KeyCode toggleKeyAlt = KeyCode.Mouse2;           // [조절값] 락온 토글 키 2 (휠 클릭)
+    [Header("Input (Legacy)")]
+    [SerializeField] private bool useLegacyInput = true;
+    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
+    [SerializeField] private KeyCode toggleKeyAlt = KeyCode.Mouse2;
 
-    [Header("카메라 연동 (한글 설명)")]
-    [SerializeField] private LockOnCameraManager cameraMgr;                    // [조절값] 락온 카메라 매니저 참조
+    [Header("Camera Link")]
+    [SerializeField] private LockOnCameraManager cameraMgr;
 
-    [Header("자동 해제 옵션 (한글 설명)")]
-    [Tooltip("락온 중 타깃 Transform이 파괴되거나 비활성화되면 자동으로 락온을 해제할지 여부")]
-    [SerializeField] private bool autoUnlockWhenTargetDisabled = true;        // [조절값]
+    [Header("Auto Unlock Option")]
+    [Tooltip("Automatically unlock when the current target gets disabled.")]
+    [SerializeField] private bool autoUnlockWhenTargetDisabled = true;
 
-    // ===== 외부에서 참조하는 공개 상태/헬퍼 =====
-    public Transform CurrentTarget { get; private set; }                       // 현재 타깃의 '피벗' Transform
-    public bool IsLocked => CurrentTarget != null;                             // 기존 호환용
-    public bool IsLockOn => IsLocked;                                          // 기존 호환용
-    public bool HasTarget => CurrentTarget != null;                            // PlayerDodgeController 호환용
-    public Transform Target => CurrentTarget;                                  // 타깃 피벗 직접 접근용
+    public Transform CurrentTarget { get; private set; }
+    public bool IsLocked => CurrentTarget != null;
+    public bool IsLockOn => IsLocked;
+    public bool HasTarget => CurrentTarget != null;
+    public Transform Target => CurrentTarget;
     public Vector3 TargetPosition => CurrentTarget ? CurrentTarget.position : transform.position;
 
     public Vector3 DirectionFrom(Vector3 origin)
@@ -38,19 +37,25 @@ public class PlayerLockOn : MonoBehaviour
             ? (TargetPosition - origin).normalized
             : transform.forward;
 
-    Transform _playerPivot;                                                    // 플레이어 쪽 락온 피벗
-    Transform _cam;                                                            // Camera.main 캐시
+    Transform _playerPivot;
+    Transform _cam;
+    readonly Collider[] _targetBuffer = new Collider[64];
+    bool _lockModeActive;
+    float _lockOnRangeSq;
+    float _lockOnMinDot;
 
-    private bool _lockModeActive;
     void Awake()
     {
-        // 플레이어 쪽 피벗 확보 후 카메라 매니저에 전달
+        CacheDerivedValues();
         _playerPivot = EnsurePivot(transform, pivotName, defaultPivotY);
         if (!cameraMgr) cameraMgr = FindAnyObjectByType<LockOnCameraManager>();
         cameraMgr?.SetPlayerPivot(_playerPivot);
-
-        // 카메라 캐시(메인 카메라는 런타임에 바뀔 수 있어 Start에서 재확보)
         _cam = Camera.main ? Camera.main.transform : null;
+    }
+
+    void OnValidate()
+    {
+        CacheDerivedValues();
     }
 
     void Start()
@@ -60,16 +65,12 @@ public class PlayerLockOn : MonoBehaviour
 
     void Update()
     {
-        // 0) 락온 중인데 타겟이 죽었거나 비활성화된 경우 자동으로 카메라 해제
-        //    - CurrentTarget == null : Destroy 된 경우
-        //    - activeInHierarchy == false : SetActive(false) 된 경우
         if (_lockModeActive && (!CurrentTarget || !CurrentTarget.gameObject.activeInHierarchy))
         {
             _lockModeActive = false;
-            cameraMgr?.EndLockOn();   // freeLookDriver.enabled = true, 카메라 우선순위 복구
+            cameraMgr?.EndLockOn();
         }
 
-        // 1) 입력으로 락온 토글(Tab, 휠 클릭 등)
         if (useLegacyInput && (Input.GetKeyDown(toggleKey) || Input.GetKeyDown(toggleKeyAlt)))
         {
             if (IsLocked)
@@ -84,21 +85,17 @@ public class PlayerLockOn : MonoBehaviour
         }
     }
 
-
-    // === 외부 제어용 API ===
     public void LockTo(Transform enemyRoot)
     {
-        // 대상 루트에서 피벗을 확보(없으면 생성)
         CurrentTarget = EnsurePivot(enemyRoot, pivotName, defaultPivotY);
-
-        _lockModeActive = CurrentTarget;           // 피벗이 있으면 락온 모드 ON
+        _lockModeActive = CurrentTarget;
         if (CurrentTarget)
             cameraMgr?.StartLockOn(CurrentTarget);
     }
 
     public void Unlock()
     {
-        _lockModeActive = false;                   // 락온 모드 OFF
+        _lockModeActive = false;
         CurrentTarget = null;
         cameraMgr?.EndLockOn();
     }
@@ -111,9 +108,6 @@ public class PlayerLockOn : MonoBehaviour
         return true;
     }
 
-    // === 내부 구현 ===
-
-    // 카메라 전방 원뿔(FOV) + 장애물 라인캐스트로 최적 타깃 탐색
     Transform FindBestTarget()
     {
         if (!_cam)
@@ -122,28 +116,38 @@ public class PlayerLockOn : MonoBehaviour
             _cam = Camera.main.transform;
         }
 
-        var cols = Physics.OverlapSphere(_cam.position, lockOnRange, enemyMask, QueryTriggerInteraction.Ignore);
         float bestScore = float.MaxValue;
         Transform bestRoot = null;
+        int hitCount = Physics.OverlapSphereNonAlloc(
+            _cam.position,
+            lockOnRange,
+            _targetBuffer,
+            enemyMask,
+            QueryTriggerInteraction.Ignore);
 
-        for (int i = 0; i < cols.Length; ++i)
+        for (int i = 0; i < hitCount; ++i)
         {
-            var root = cols[i].transform.root;
+            var hit = _targetBuffer[i];
+            if (hit == null) continue;
+
+            var root = hit.transform.root;
             var pivot = EnsurePivot(root, pivotName, defaultPivotY);
             if (!pivot) continue;
 
             Vector3 to = pivot.position - _cam.position;
-            float dist = to.magnitude;
-            if (dist > lockOnRange) continue;
+            float distSq = to.sqrMagnitude;
+            if (distSq > _lockOnRangeSq) continue;
 
-            float ang = Vector3.Angle(_cam.forward, to / (dist > 0.0001f ? dist : 1f));
-            if (ang > lockOnFOV * 0.5f) continue;
+            float dist = distSq > 0.0001f ? Mathf.Sqrt(distSq) : 0f;
+            float invDist = dist > 0.0001f ? 1f / dist : 0f;
+            float dot = Vector3.Dot(_cam.forward, to * invDist);
+            if (dot < _lockOnMinDot) continue;
 
             if (obstacleMask.value != 0 &&
                 Physics.Linecast(_cam.position, pivot.position, obstacleMask, QueryTriggerInteraction.Ignore))
                 continue;
 
-            // 중앙+근거리 우선 가중치
+            float ang = Mathf.Acos(Mathf.Clamp(dot, -1f, 1f)) * Mathf.Rad2Deg;
             float score = ang * 2f + dist;
             if (score < bestScore)
             {
@@ -152,25 +156,26 @@ public class PlayerLockOn : MonoBehaviour
             }
         }
 
+        for (int i = 0; i < hitCount; ++i)
+            _targetBuffer[i] = null;
+
         return bestRoot;
     }
 
-    // 타깃 루트에 락온 피벗이 없으면 생성해서 반환
     Transform EnsurePivot(Transform root, string name, float defaultY)
     {
         if (!root) return null;
 
-        var t = root.Find(name);
-        if (t) return t;
+        var existing = root.Find(name);
+        if (existing) return existing;
 
-        // 렌더러가 있으면 머리 근처로, 없으면 기본 높이로
         var rend = root.GetComponentInChildren<Renderer>();
         Vector3 worldPos;
         if (rend)
         {
             float cy = rend.bounds.center.y;
             float ty = rend.bounds.max.y;
-            float y = Mathf.Lerp(cy, ty, 0.6f) - 0.1f; // 살짝 아래로
+            float y = Mathf.Lerp(cy, ty, 0.6f) - 0.1f;
             worldPos = new Vector3(rend.bounds.center.x, y, rend.bounds.center.z);
         }
         else
@@ -183,7 +188,6 @@ public class PlayerLockOn : MonoBehaviour
         go.transform.position = worldPos;
         go.transform.rotation = Quaternion.identity;
 
-        // 타깃 모델의 스케일/본 이동에 따라 Y를 따라가도록 보조 컴포넌트
         var follower = go.AddComponent<LockPivotFollower>();
         follower.sourceRenderer = rend;
         follower.yOffset = rend ? go.transform.position.y - rend.bounds.center.y : defaultY;
@@ -191,10 +195,16 @@ public class PlayerLockOn : MonoBehaviour
         return go.transform;
     }
 
+    void CacheDerivedValues()
+    {
+        float range = Mathf.Max(0f, lockOnRange);
+        _lockOnRangeSq = range * range;
+        _lockOnMinDot = Mathf.Cos(Mathf.Clamp(lockOnFOV, 10f, 180f) * 0.5f * Mathf.Deg2Rad);
+    }
+
 #if UNITY_EDITOR
     void OnDrawGizmosSelected()
     {
-        // 탐색 구/시야각 가시화(에디터)
         var cam = Camera.main ? Camera.main.transform : null;
         Gizmos.color = new Color(0f, 1f, 0f, 0.2f);
         if (cam) Gizmos.DrawWireSphere(cam.position, lockOnRange);

@@ -6,6 +6,8 @@ public class AnimationLockManager : MonoBehaviour
     public Animator animator;
     Coroutine[] blendCoroutines = new Coroutine[8];
     bool isLocked = false;
+    WaitForSeconds cachedLockWait;
+    float cachedLockWaitSeconds = -1f;
 
     void Awake()
     {
@@ -15,7 +17,15 @@ public class AnimationLockManager : MonoBehaviour
     // 부드럽게 레이어 가중치 요청
     public void RequestLayerWeight(int layerIndex, float targetWeight, float blendTime)
     {
+        if (animator == null) return;
         if (blendCoroutines[layerIndex] != null) StopCoroutine(blendCoroutines[layerIndex]);
+        float currentWeight = animator.GetLayerWeight(layerIndex);
+        if (blendTime <= 0f || Mathf.Approximately(currentWeight, targetWeight))
+        {
+            blendCoroutines[layerIndex] = null;
+            animator.SetLayerWeight(layerIndex, targetWeight);
+            return;
+        }
         blendCoroutines[layerIndex] = StartCoroutine(BlendLayerWeight(layerIndex, targetWeight, blendTime));
     }
 
@@ -37,6 +47,7 @@ public class AnimationLockManager : MonoBehaviour
     // 즉시 강제 설정(긴급)
     public void ForceSetLayerWeight(int layerIndex, float weight)
     {
+        if (animator == null) return;
         if (blendCoroutines[layerIndex] != null)
         {
             StopCoroutine(blendCoroutines[layerIndex]);
@@ -55,9 +66,21 @@ public class AnimationLockManager : MonoBehaviour
     {
         isLocked = true;
         // 필요한 외부 API 호출 포인트: PlayerMovement.SetExternalControl(true) 등 가능
-        yield return new WaitForSeconds(seconds);
+        yield return GetLockWait(seconds);
         isLocked = false;
     }
 
     public bool IsLocked() => isLocked;
+
+    WaitForSeconds GetLockWait(float seconds)
+    {
+        seconds = Mathf.Max(0f, seconds);
+        if (cachedLockWait == null || !Mathf.Approximately(cachedLockWaitSeconds, seconds))
+        {
+            cachedLockWaitSeconds = seconds;
+            cachedLockWait = new WaitForSeconds(seconds);
+        }
+
+        return cachedLockWait;
+    }
 }

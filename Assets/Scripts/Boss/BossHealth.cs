@@ -76,6 +76,8 @@ public class BossHealth : MonoBehaviour, IHealth
 
         if (debugLog)
             Debug.Log($"[BossHealth] Init HP={CurrentHP}/{MaxHP} invincible={isInvincible} staggered={IsStaggered}", this);
+
+        enabled = _invincibleRemain > 0f;
     }
 
     void Update()
@@ -90,6 +92,8 @@ public class BossHealth : MonoBehaviour, IHealth
 
                 if (debugLog)
                     Debug.Log("[BossHealth] Invincible OFF (timer end)", this);
+
+                enabled = false;
             }
         }
     }
@@ -170,6 +174,7 @@ public class BossHealth : MonoBehaviour, IHealth
         {
             isInvincible = false;
             _invincibleRemain = 0f;
+            enabled = false;
 
             if (debugLog)
                 Debug.Log("[BossHealth] Invincible OFF (manual)", this);
@@ -179,6 +184,7 @@ public class BossHealth : MonoBehaviour, IHealth
 
         isInvincible = true;
         _invincibleRemain = duration;
+        enabled = true;
 
         if (debugLog)
             Debug.Log($"[BossHealth] Invincible ON ({duration:0.00}s)", this);

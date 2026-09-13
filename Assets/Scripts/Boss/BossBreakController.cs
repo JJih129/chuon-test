@@ -102,6 +102,9 @@ public class BossBreakController : MonoBehaviour
 
     private void Update()
     {
+        if (!_isInBreak && (_currentBreak <= 0f || recoveryPerSecond <= 0f))
+            return;
+
         if (_isInBreak)
         {
             // 브레이크 상태 유지 시간 감소
