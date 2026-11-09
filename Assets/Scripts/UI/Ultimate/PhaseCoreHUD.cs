@@ -241,6 +241,8 @@ public sealed class PhaseCoreHUD : MonoBehaviour
     {
         if (!_built)
             return;
+        if (!EnsureIntact())
+            return;
 
         float dt = Time.unscaledDeltaTime;
 
@@ -469,6 +471,24 @@ public sealed class PhaseCoreHUD : MonoBehaviour
     // ------------------------------------------------------------------
     // 구성
     // ------------------------------------------------------------------
+
+    // Play 중 씬 재로드 등으로 생성한 자식 이미지가 파괴됐으면(유니티 null) 다시 만든다 — RefreshVisuals NRE 방지.
+    bool EnsureIntact()
+    {
+        bool intact = _coreDisc != null && _dashOuter != null && _dashInner != null && _plasma != null && _hairline != null
+            && _glow != null && _crack != null && _phaseLabel != null && _stateLabel != null;
+        for (int i = 0; intact && i < StageCount; i++)
+            intact = _segmentFills[i] != null && _segmentTracks[i] != null;
+        if (intact)
+            return true;
+
+        for (int i = transform.childCount - 1; i >= 0; i--)
+            Destroy(transform.GetChild(i).gameObject);
+        _built = false;
+        _lastLabelKey = -1;
+        EnsureBuilt();
+        return _built;
+    }
 
     void EnsureBuilt()
     {

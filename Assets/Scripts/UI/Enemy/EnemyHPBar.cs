@@ -49,8 +49,11 @@ public class EnemyHPBar : MonoBehaviour
         _cam = GameplaySceneCache.ResolveMainCamera();
         _camTransform = _cam != null ? _cam.transform : null;
         _rt = transform as RectTransform;
-        _isUI = (_rt != null);
         _parentRT = _rt != null ? _rt.parent as RectTransform : null;
+        // 자체 월드 스페이스 Canvas 를 가진 바(잡몹 프리팹 자식)는 월드 모드: 화면 좌표를 월드 위치로 쓰면 바가 사라진다
+        Canvas ownCanvas = GetComponent<Canvas>();
+        bool worldCanvas = ownCanvas != null && ownCanvas.renderMode == RenderMode.WorldSpace && _parentRT == null;
+        _isUI = _rt != null && !worldCanvas;
 
         // Slider 자동 탐색
         if (slider == null)

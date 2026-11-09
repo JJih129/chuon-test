@@ -47,6 +47,11 @@ public static class CombatRewardUtility
         if (source == null)
             return null;
 
+        // 공격자 자신(또는 부모)의 IParryReact 우선 — 씬 루트 아래 묶인 잡몹이 다른 적에게 통지가 가지 않게.
+        IParryReact direct = source.GetComponentInParent<IParryReact>();
+        if (direct != null)
+            return direct;
+
         Transform root = source.root != null ? source.root : source;
         int rootId = root.GetInstanceID();
         if (ParryReactByRootId.TryGetValue(rootId, out MonoBehaviour cachedReaction) && cachedReaction != null)

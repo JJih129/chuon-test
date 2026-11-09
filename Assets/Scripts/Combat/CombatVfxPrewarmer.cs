@@ -139,8 +139,26 @@ public sealed class CombatVfxPrewarmer : MonoBehaviour
         if (wave != null)
             wave.Configure(null, 0f, 0.1f, 0.3f, 2f, 1f, 1f, false, false, false, false, false);
 
+        // 보스 피해 균열 (HP 50%/25% 첫 진입 히치): 텍스처 2장 생성 + 오버레이 재질을 워밍업 카메라 앞 쿼드로 1회 렌더
+        GameObject crackQuadA = null, crackQuadB = null;
+        Material crackPrewarmMaterial = null;
+        Material crackMaterial = BossDamageCracks.PrewarmShared(out Texture2D crackStage2);
+        if (crackMaterial != null)
+        {
+            crackQuadA = CreateWarmupQuad(basePosition + new Vector3(-0.8f, 0.4f, 2.5f), crackMaterial);
+            if (crackStage2 != null)
+            {
+                crackPrewarmMaterial = new Material(crackMaterial) { name = "_BossDamageCracks (prewarm stage2)", hideFlags = HideFlags.DontSave, mainTexture = crackStage2 };
+                crackQuadB = CreateWarmupQuad(basePosition + new Vector3(0.8f, 0.4f, 2.5f), crackPrewarmMaterial);
+            }
+        }
+
         for (int frame = 0; frame < warmupRenderFrames; frame++)
             yield return null;
+
+        if (crackQuadA != null) Destroy(crackQuadA);
+        if (crackQuadB != null) Destroy(crackQuadB);
+        if (crackPrewarmMaterial != null) Destroy(crackPrewarmMaterial);
 
         warmupCamera.targetTexture = null;
         RenderTexture.ReleaseTemporary(warmupTarget);
@@ -324,6 +342,18 @@ public sealed class CombatVfxPrewarmer : MonoBehaviour
                     add(entry.Method.DeclaringType);
             }
         }
+    }
+
+    static GameObject CreateWarmupQuad(Vector3 position, Material material)
+    {
+        GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        quad.name = "__CombatVfxWarmupQuad";
+        Collider collider = quad.GetComponent<Collider>();
+        if (collider != null)
+            Destroy(collider);
+        quad.transform.SetPositionAndRotation(position, Quaternion.identity);
+        quad.GetComponent<MeshRenderer>().sharedMaterial = material;
+        return quad;
     }
 
     static void MuteAudio(GameObject spawned)

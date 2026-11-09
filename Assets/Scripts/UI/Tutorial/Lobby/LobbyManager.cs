@@ -139,6 +139,8 @@ public class LobbyManager : MonoBehaviour
     [SerializeField] Transform combatStartGate;
     [Tooltip("Pre-instantiate the drone wave (+ projectile pool) and render it once off-screen during the arrival beat, so combat start has no Instantiate / first-render (shader, texture upload) hitch. Off = original behaviour.")]
     [SerializeField] bool prewarmDronesBeforeCombat = false;
+    [Tooltip("Optional: upper-floor mob encounter (teach android gates the drone wave, elevator guards gate the elevator door). Null = LobbyMobEncounter.Active or none (original flow).")]
+    [SerializeField] LobbyMobEncounter mobEncounter;
     readonly List<GameObject> _prewarmedDrones = new List<GameObject>();
 
     // Raised when the elevator descent finished in continueInSameScene mode (lower floor should take over).
@@ -179,6 +181,7 @@ public class LobbyManager : MonoBehaviour
     bool _elevatorLiftInitialLocalPositionValid;
 
     public bool IsDoorReached => _isDoorReached;
+    public Transform CombatStartGate => combatStartGate;
     public bool IsBoarded => _isBoarded;
     public LobbyFlowPhase CurrentPhase => _currentPhase;
 
@@ -392,10 +395,26 @@ public class LobbyManager : MonoBehaviour
             yield return new WaitUntil(() => _handedOffToLowerFloor || HasPlayerPassedCombatGate());
         }
 
+        // 가르치기: 아트리움 경비 안드로이드를 정리해야 드론 웨이브가 시작된다 (잡몹 교전이 없으면 즉시 통과)
+        LobbyMobEncounter mobs = ResolveMobEncounter();
+        if (mobs != null && !mobs.TeachCleared && !_handedOffToLowerFloor)
+        {
+            UpdateQuestUI("경비 병력", "로비 경비 안드로이드를 제압해.");
+            ShowQuestPanel();
+            yield return new WaitUntil(() => _handedOffToLowerFloor || mobs == null || mobs.TeachCleared);
+        }
+
         if (_handedOffToLowerFloor)
             yield break;
 
         StartCoroutine(SequenceCombat());
+    }
+
+    LobbyMobEncounter ResolveMobEncounter()
+    {
+        if (mobEncounter == null)
+            mobEncounter = LobbyMobEncounter.Active;
+        return mobEncounter != null && mobEncounter.isActiveAndEnabled ? mobEncounter : null;
     }
 
     bool HasPlayerPassedCombatGate()
@@ -1036,6 +1055,26 @@ public class LobbyManager : MonoBehaviour
         UpdateQuestUI("\uad50\uc804 \uc885\ub8cc", "\ubaa8\ub4e0 \uc801 \uc2e0\ud638 \uc81c\uac70.");
         _isDoorReached = false;
 
+        // 시험·비틀기: 드론 전멸 → 엘리베이터 홀 경비(안드로이드 + 집행관, 터렛 지원)를 정리해야 엘리베이터로 갈 수 있다
+        LobbyMobEncounter mobs = ResolveMobEncounter();
+        if (mobs != null && mobs.GuardsPendingOrActive && !mobs.GuardsCleared)
+        {
+            int lastDead = -1;
+            while (!_handedOffToLowerFloor && mobs != null && !mobs.GuardsCleared)
+            {
+                if (mobs.GuardsActivated && mobs.GuardDead != lastDead)
+                {
+                    lastDead = mobs.GuardDead;
+                    UpdateQuestUI("엘리베이터 경비", $"경비 병력 제거 ({lastDead} / {mobs.GuardTotal})");
+                    ShowQuestPanel();
+                }
+                yield return null;
+            }
+            if (_handedOffToLowerFloor)
+                yield break;
+            UpdateQuestUI("교전 종료", "엘리베이터 경비 해제.");
+        }
+
         yield return new WaitForSeconds(0.5f);
         yield return StartCoroutine(PlayKeyed("lobby.post.0", "EGO", "\uc88b\uc544, \uc815\ub9ac \ub05d. \uc77c\ubc18 \uc5d8\ub9ac\ubca0\uc774\ud130\ub294 \uc804\ubd80 \uc7a0\uaca8 \uc788\uc5b4.", 2.2f));
         yield return StartCoroutine(PlayKeyed("lobby.post.1", "ChuOn", "\ub2e4\ub978 \uae38\uc740?", 1.3f));
@@ -1076,6 +1115,7 @@ public class LobbyManager : MonoBehaviour
         yield return new WaitUntil(() => _isDoorReached || _handedOffToLowerFloor);
         if (_handedOffToLowerFloor)
             yield break;
+
         StartCoroutine(SequenceAtElevator());
     }
 

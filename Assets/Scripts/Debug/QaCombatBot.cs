@@ -28,6 +28,13 @@ public sealed class QaCombatBot : MonoBehaviour
     [Tooltip("Fight the nearest live DroneController (upper drone hall) before the boss.")]
     public bool fightDrones = true;
     public float droneEngageRange = 28f;
+    [Tooltip("Fight EnemyBrain mobs (android / enforcer / turret) on the player's floor before the boss.")]
+    public bool fightMobs = true;
+    public float mobEngageRange = 30f;
+    [Tooltip("Mobs are smaller than the boss: close in to this range before swinging.")]
+    public float mobAttackRange = 2.3f;
+    [Tooltip("Full-level run: with no enemy around, walk the Level_Facility upper-floor route (combat gate -> elevator approach -> board).")]
+    public bool followLobbyRoute = false;
 
     public static string OutputDir => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Temp", "qa"));
 
@@ -57,7 +64,22 @@ public sealed class QaCombatBot : MonoBehaviour
         $"t={Time.unscaledTime - _startTime:F1}s playerHP={(_playerHealth ? _playerHealth.CurrentHP : -1)} " +
         $"bossHP={(_bossHealth ? _bossHealth.CurrentHP : -1)}/{(_bossHealth ? _bossHealth.MaxHP : -1)} " +
         $"break={(_break ? _break.CurrentBreak : -1):F0} cues={_cues} parryPress={_parries} parried={PlayerGuardController.QaParrySuccessCount - _parryBaseline} dodgePress={_dodges} " +
-        $"attacks={_attacks} hitsTaken={HitsTaken} heals={Heals} healCancel={HealsCancelled} deaths={Deaths} respawns={Respawns} bossDeadAt={BossDeadAt:F0} minHP={(MinHp < 0 ? -1 : MinHp)} finishers={_finishers} ultimates={_ultimates} ts={Time.timeScale:F2} autoLock={LockAttempts - LockFailures}/{LockAttempts}";
+        $"attacks={_attacks} hitsTaken={HitsTaken} heals={Heals} healCancel={HealsCancelled} deaths={Deaths} respawns={Respawns} bossDeadAt={BossDeadAt:F0} minHP={(MinHp < 0 ? -1 : MinHp)} finishers={_finishers} ultimates={_ultimates} ts={Time.timeScale:F2} autoLock={LockAttempts - LockFailures}/{LockAttempts}" +
+        $" mobKills={MobKills} mobHitsTaken={MobHitsTaken} mobParryPress={MobParryPresses} mobDodgePress={MobDodgePresses} maxMeleeTokens={MaxMeleeTokens} lockOnDeadFrames={LockOnDeadMobFrames} mobFight={MobFightStart:F0}-{MobFightEnd:F0}s";
+
+    /// <summary>Per-mob QA line (hits both ways, parries, staggers, cue honesty).</summary>
+    public static string MobReport()
+    {
+        var sb = new StringBuilder();
+        foreach (EnemyBrain b in Resources.FindObjectsOfTypeAll<EnemyBrain>())
+        {
+            if (b == null || !b.gameObject.scene.IsValid())
+                continue;
+            string extra = b is ShieldEnforcerBrain se ? $" blocks={se.BlockCount} guardBreaks={se.GuardBreakCount}" : "";
+            sb.Append($"{b.name} ({b.GetType().Name}) dead={b.IsDead} state={b.State} hitsRecv={b.HitsReceived} landed={b.HitsLanded} strikesDelivered={b.StrikesDelivered} parried={b.ParriedCount} staggers={b.StaggerCount} cues={b.CueCount} maxCueErr={b.MaxCueHonestyError:F3}{extra}\n");
+        }
+        return sb.ToString();
+    }
 
     public string Log => _log.ToString();
     public int AttackCount => _attacks;
@@ -178,6 +200,212 @@ public sealed class QaCombatBot : MonoBehaviour
         foreach (DroneController d in _hookedDrones)
             if (d != null) d.AttackTelegraphed -= HandleDroneTelegraph;
         _hookedDrones.Clear();
+        foreach (EnemyBrain b in _hookedMobs)
+            if (b != null) { b.CueIssued -= HandleMobCue; b.Died -= HandleMobDied; }
+        _hookedMobs.Clear();
+    }
+
+    // ---- Mobs (EnemyBrain): nearest live one on this floor; strikes are answered from the brain's own hit clock ----
+    readonly HashSet<EnemyBrain> _hookedMobs = new HashSet<EnemyBrain>();
+    readonly HashSet<long> _answeredStrikes = new HashSet<long>();
+    EnemyBrain _mob;
+    float _nextMobScanAt;
+    Vector3 _lateralDir;
+    float _lateralFrom, _lateralUntil;
+    public int MobKills { get; private set; }
+    public int MobHitsTaken { get; private set; }
+    public int MaxMeleeTokens { get; private set; }
+    public int MobParryPresses { get; private set; }
+    public int MobDodgePresses { get; private set; }
+    public float MobFightStart { get; private set; } = -1f;
+    public float MobFightEnd { get; private set; } = -1f;
+
+    static bool IsMobTargetable(EnemyBrain b) => b != null && !b.IsDead && b.isActiveAndEnabled;
+
+    void UpdateMobTarget()
+    {
+        if (!fightMobs || _player == null)
+        {
+            _mob = null;
+            return;
+        }
+
+        if (_mob != null && !IsMobTargetable(_mob))
+            _mob = null;
+        if (Time.unscaledTime < _nextMobScanAt && _mob != null)
+            return;
+
+        _nextMobScanAt = Time.unscaledTime + 0.3f;
+        EnemyBrain best = null;
+        float bestScore = float.PositiveInfinity;
+        IReadOnlyList<EnemyBrain> all = EnemyBrain.Active;
+        for (int i = 0; i < all.Count; i++)
+        {
+            EnemyBrain b = all[i];
+            if (!IsMobTargetable(b))
+                continue;
+            if (_hookedMobs.Add(b)) { b.CueIssued += HandleMobCue; b.Died += HandleMobDied; }
+            Vector3 d = b.transform.position - _player.position;
+            if (Mathf.Abs(d.y) > 6f || d.magnitude > mobEngageRange)
+                continue;
+            // Melee mobs first (they gate the flow); a turret only when nothing else is left.
+            float score = d.magnitude + (b is SentryTurretBrain ? 25f : 0f);
+            if (score < bestScore) { bestScore = score; best = b; }
+        }
+
+        if (best != _mob && best != null)
+        {
+            Note($"target mob {best.name} ({best.GetType().Name}) dist={Vector3.Distance(best.transform.position, _player.position):F1}");
+            if (MobFightStart < 0f) MobFightStart = Time.unscaledTime - _startTime;
+        }
+        _mob = best;
+    }
+
+    void HandleMobDied(EnemyBrain b)
+    {
+        MobKills++;
+        MobFightEnd = Time.unscaledTime - _startTime;
+        Note($"MOB DEAD {b.name} hitsRecv={b.HitsReceived} landed={b.HitsLanded} strikes={b.StrikesDelivered} parried={b.ParriedCount} staggers={b.StaggerCount} cues={b.CueCount} maxCueErr={b.MaxCueHonestyError:F3}");
+        Capture("mobdead_" + b.GetType().Name);
+    }
+
+    // Cued attacks (turret lock, android thrust/3rd hit, enforcer bash): turret bursts only come through here.
+    void HandleMobCue(EnemyBrain b, EnemyCueType type, float lead)
+    {
+        if (b == null || _player == null || Mathf.Abs(b.transform.position.y - _player.position.y) > 6f)
+            return;
+        _cues++;
+        _lastThreatTime = Time.time;
+        Note($"mob cue {b.name} {type} in {lead:F2}s err={b.LastCueHonestyError:+0.000;-0.000}");
+        Capture("mobcue_" + b.GetType().Name + "_" + type);
+        if (b is SentryTurretBrain)
+        {
+            bool react = _rng.NextDouble() < defenseSkill;
+            if (!react) return;
+            // Step out of the locked line: dodge sideways relative to the turret.
+            Vector3 toMe = _player.position - b.transform.position; toMe.y = 0f;
+            Vector3 lateral = Vector3.Cross(Vector3.up, toMe.sqrMagnitude > 0.01f ? toMe.normalized : Vector3.forward);
+            if (_rng.NextDouble() < 0.5) lateral = -lateral;
+            float at = Time.time + Mathf.Max(0f, lead - dodgeLead);
+            _lateralDir = lateral; _lateralFrom = at - 0.12f; _lateralUntil = at + 0.35f;
+            Schedule(lead - dodgeLead, true);
+            MobDodgePresses++;
+        }
+    }
+
+    Transform _lastLockTarget;
+    float _lockOnDeadSince = -1f;
+    public int LockOnDeadMobFrames { get; private set; }
+    public int LockSwitches { get; private set; }
+
+    // Lock-on QA: log target changes and how long the lock stays on a dead mob.
+    void TrackLockTarget()
+    {
+        if (_lockOn == null)
+            return;
+        Transform current = _lockOn.IsLockedOn() ? _lockOn.CurrentTarget : null;
+        if (current != _lastLockTarget)
+        {
+            LockSwitches++;
+            Note($"lock -> {(current != null ? current.root.name : "none")}");
+            _lastLockTarget = current;
+        }
+        EnemyBrain lockedBrain = current != null ? current.GetComponentInParent<EnemyBrain>() : null;
+        if (lockedBrain != null && lockedBrain.IsDead)
+        {
+            LockOnDeadMobFrames++;
+            if (_lockOnDeadSince < 0f) _lockOnDeadSince = Time.unscaledTime;
+            else if (Time.unscaledTime - _lockOnDeadSince > 0.6f) { Note($"LOCK STUCK on dead {lockedBrain.name}"); _lockOnDeadSince = Time.unscaledTime + 100f; }
+        }
+        else
+            _lockOnDeadSince = -1f;
+    }
+
+    // A player stops pressing attack when a guard who holds an attack slot is closing in (otherwise the swing
+    // animation blocks the guard/parry input and the incoming hit lands).
+    bool MeleeMobAboutToSwing()
+    {
+        IReadOnlyList<EnemyBrain> all = EnemyBrain.Active;
+        for (int i = 0; i < all.Count; i++)
+        {
+            EnemyBrain b = all[i];
+            if (!IsMobTargetable(b) || b is SentryTurretBrain)
+                continue;
+            if (b.State != EnemyBrainState.Approach && b.State != EnemyBrainState.Attack)
+                continue;
+            if (!EnemyAttackTokenDirector.Holds(_player, b, EnemyTokenKind.Melee))
+                continue;
+            if (Vector3.Distance(b.transform.position, _player.position) < 3.6f)
+                return true;
+        }
+        return false;
+    }
+
+    // Every melee strike (cued or not) has a known hit time: a player reads the wind-up animation.
+    void AnswerMobStrikes()
+    {
+        IReadOnlyList<EnemyBrain> all = EnemyBrain.Active;
+        for (int i = 0; i < all.Count; i++)
+        {
+            EnemyBrain b = all[i];
+            if (!IsMobTargetable(b) || b is SentryTurretBrain)
+                continue;
+            float hitAt = b.PendingHitAt;
+            if (hitAt < 0f)
+                continue;
+            EnemyStrike s = b.CurrentStrike;
+            if (s == null)
+                continue;
+            long key = ((long)b.GetInstanceID() << 32) ^ (uint)b.AttackSequenceId;
+            if (_answeredStrikes.Contains(key))
+                continue;
+            float dist = Vector3.Distance(b.transform.position, _player.position);
+            if (dist > s.range + s.lungeDistance + 1.5f)
+                continue;
+            _answeredStrikes.Add(key);
+            if (_answeredStrikes.Count > 512) _answeredStrikes.Clear();
+            _lastThreatTime = Time.time;
+            // Turn to face the swing (parry/guard only work from the front): retarget + relock right away.
+            if (b != _mob && dist < 4.5f)
+            {
+                _mob = b;
+                _nextMobScanAt = Time.unscaledTime + 1.2f;
+                _lockMismatchSince = Time.unscaledTime - 1f;
+            }
+            bool dodge = s.cueType == EnemyCueType.DodgeOnly || s.cueType == EnemyCueType.Unblockable;
+            // Parry/guard only work from the front: a swing from the side or back is dodged instead.
+            Vector3 toAttacker = b.transform.position - _player.position; toAttacker.y = 0f;
+            if (!dodge && toAttacker.sqrMagnitude > 0.01f && Vector3.Angle(_player.forward, toAttacker) > 65f)
+                dodge = true;
+            bool react = _rng.NextDouble() < defenseSkill;
+            float remaining = hitAt - Time.time;
+            // Screenshot sheet: wind-up (now), mid wind-up and the hit frame, once per mob type + strike.
+            string sheet = b.GetType().Name.Replace("Brain", "") + "_" + s.name;
+            Capture("mobwindup_" + sheet);
+            if (_pendingCaptureKey == null && !_captured.Contains("mobhit_" + sheet))
+            {
+                _pendingCaptureKey = "mobhit_" + sheet;
+                _pendingCaptureAt = hitAt + 0.02f;
+            }
+            Note($"mob strike {b.name} {s.name} ({s.cueType}) in {remaining:F2}s react={react}");
+            if (!react)
+                continue;
+            if (dodge)
+            {
+                Vector3 toMe = _player.position - b.transform.position; toMe.y = 0f;
+                Vector3 lateral = Vector3.Cross(Vector3.up, toMe.sqrMagnitude > 0.01f ? toMe.normalized : Vector3.forward);
+                if (_rng.NextDouble() < 0.5) lateral = -lateral;
+                float at = Time.time + Mathf.Max(0f, remaining - dodgeLead);
+                _lateralDir = lateral; _lateralFrom = at - 0.12f; _lateralUntil = at + 0.35f;
+                Schedule(remaining - dodgeLead, true, true);
+                MobDodgePresses++;
+            }
+            else
+            {
+                Schedule(remaining - parryLead, false, true);
+                MobParryPresses++;
+            }
+        }
     }
 
     // Drones: pick the nearest live one in range (throttled scan) and hook its shot telegraph.
@@ -346,13 +574,19 @@ public sealed class QaCombatBot : MonoBehaviour
 
     // One press per swing: a newer cue for the same swing (pre-telegraph -> opener timing cue) supersedes
     // a pending reaction of the same kind instead of stacking a second press (which would eat parry recovery).
-    void Schedule(float delay, bool dodge)
+    void Schedule(float delay, bool dodge, bool keepEarliest = false)
     {
         float jitter = timingJitter > 0f ? (float)(_rng.NextDouble() * 2.0 - 1.0) * timingJitter : 0f;
         float at = Time.time + Mathf.Max(reactionTime, delay + jitter);
         for (int i = _scheduled.Count - 1; i >= 0; i--)
-            if (_scheduled[i].dodge == dodge && Mathf.Abs(_scheduled[i].time - at) < 0.35f)
-                _scheduled.RemoveAt(i);
+        {
+            if (_scheduled[i].dodge != dodge || Mathf.Abs(_scheduled[i].time - at) >= 0.35f)
+                continue;
+            // Mobs: two attackers swinging close together -> one press, timed for the earlier hit.
+            if (keepEarliest)
+                at = Mathf.Min(at, _scheduled[i].time);
+            _scheduled.RemoveAt(i);
+        }
         _scheduled.Add((at, dodge));
     }
     float _pendingCaptureAt;
@@ -400,6 +634,7 @@ public sealed class QaCombatBot : MonoBehaviour
     {
         if (_playerHealth != null)
         {
+            if (_lastHp >= 0 && _playerHealth.CurrentHP < _lastHp && _mob != null) MobHitsTaken++;
             if (_lastHp >= 0 && _playerHealth.CurrentHP < _lastHp) { HitsTaken++; Note($"HIT taken -{_lastHp - _playerHealth.CurrentHP} pat={(_drone != null ? "drone" : _boss != null ? _boss.CurrentPatternName : "?")} hp={_playerHealth.CurrentHP}{DefenseState()} abs={Time.unscaledTime:F2} res=({PlayerDefenseResolver.QaLastResolve})"); }
             _lastHp = _playerHealth.CurrentHP;
             if (MinHp < 0 || _lastHp < MinHp) MinHp = _lastHp;
@@ -421,7 +656,32 @@ public sealed class QaCombatBot : MonoBehaviour
         }
 
         UpdateDroneTarget();
-        Transform target = _drone != null ? _drone.transform : (_boss != null ? _boss.transform : null);
+        UpdateMobTarget();
+        if (_player != null)
+        {
+            int melee = EnemyAttackTokenDirector.ActiveCount(_player, EnemyTokenKind.Melee);
+            if (melee > MaxMeleeTokens) { MaxMeleeTokens = melee; Note($"melee tokens active={melee}"); }
+        }
+        Transform target = null;
+        if (_mob != null && (_drone == null || Vector3.Distance(_mob.transform.position, _player.position) <= Vector3.Distance(_drone.transform.position, _player.position) + 4f))
+            target = _mob.transform;
+        else if (_drone != null)
+            target = _drone.transform;
+        else if (_boss != null && !(followLobbyRoute && UpperFloorActive()))
+            target = _boss.transform;
+        bool mobTarget = _mob != null && target == _mob.transform;
+        bool nonBossTarget = _drone != null || mobTarget;
+
+        if (_playerHealth != null && !_playerHealth.IsDead)
+        {
+            AnswerMobStrikes();
+            if (target == null && followLobbyRoute && FollowLobbyRoute())
+            {
+                RunScheduledDefense();
+                return;
+            }
+        }
+
         if (target == null)
         {
             PlayerMoveController.QaMoveInputOverride = null;
@@ -441,7 +701,7 @@ public sealed class QaCombatBot : MonoBehaviour
             return;
         }
 
-        if (_drone == null && _bossHealth != null && _bossHealth.IsDead)
+        if (!nonBossTarget && _bossHealth != null && _bossHealth.IsDead)
         {
             if (BossDeadAt < 0f) { BossDeadAt = Time.unscaledTime - _startTime; Note("BOSS DEAD"); }
             Capture("boss_dead");
@@ -449,19 +709,8 @@ public sealed class QaCombatBot : MonoBehaviour
         }
 
         UpdateLockOn(target);
-
-        // Scheduled defensive reactions (scaled time, like the attack timing they answer).
-        for (int i = _scheduled.Count - 1; i >= 0; i--)
-        {
-            if (Time.time < _scheduled[i].time)
-                continue;
-
-            if (_scheduled[i].dodge) { _input.RecordDodgePress(); _dodges++; Note("dodge"); }
-            else { PlayerGuardController.QaPressGuard(); _releaseGuardAt = Time.unscaledTime + 0.12f; _parries++; Note((_combat != null && _combat.IsInHit ? "parry (from hit-stun)" : "parry") + DefenseState()); }
-            _scheduled.RemoveAt(i);
-        }
-
-        if (_releaseGuardAt > 0f && Time.unscaledTime >= _releaseGuardAt) { PlayerGuardController.QaReleaseGuard(); _releaseGuardAt = 0f; }
+        TrackLockTarget();
+        RunScheduledDefense();
 
         // Escape multi-hit strings with a recovery dodge, like a real player would.
         if (_combat != null && _combat.IsInHit && _combat.HitStateElapsed > 0.32f && Time.time >= _nextEscapeAt)
@@ -504,7 +753,7 @@ public sealed class QaCombatBot : MonoBehaviour
         if (_profileUltState == 1 && Time.frameCount < _profileUltStopFrame - 1190)
             return;
 
-        if (_ultimate != null && _ultimate.IsGaugeReady && _ultimate.TryActivate())
+        if (!nonBossTarget && _ultimate != null && _ultimate.IsGaugeReady && _ultimate.TryActivate())
         {
             if (_profileUltState == 1)
                 _profileUltStopFrame = Time.frameCount + 90;
@@ -518,7 +767,8 @@ public sealed class QaCombatBot : MonoBehaviour
         bool inHit = _combat != null && _combat.IsInHit;
 
         if (healAtHp > 0 && _consumables != null && _consumables.CurrentAmpoule > 0 && _playerHealth.CurrentHP <= healAtHp
-            && !defensePending && !inHit && Time.time >= _nextHealAt)
+            && !defensePending && !inHit && Time.time >= _nextHealAt
+            && !(mobTarget && (Time.time - _lastThreatTime < 1.0f || MeleeMobAboutToSwing())))
         {
             if (_consumables.TryUseAmpoule())
             {
@@ -528,11 +778,14 @@ public sealed class QaCombatBot : MonoBehaviour
             _nextHealAt = Time.time + 1.5f;
         }
 
-        UpdateApproach(target, dist, defensePending);
+        float range = mobTarget ? mobAttackRange : attackRange;
+        UpdateApproach(target, dist, defensePending, range);
         // Human-like: hold attacks while a boss string is running (unless it opened a punish window).
-        bool bossBusy = _drone == null && _boss != null && !inBreak && !_boss.IsPunishWindowActive && !string.IsNullOrEmpty(_boss.CurrentPatternName);
-        bool threatened = _drone == null && (bossBusy || Time.time - _lastThreatTime < holdAttackAfterThreat);
-        if (dist <= attackRange && !defensePending && !threatened && Time.time >= _nextAttackAt)
+        bool bossBusy = !nonBossTarget && _boss != null && !inBreak && !_boss.IsPunishWindowActive && !string.IsNullOrEmpty(_boss.CurrentPatternName);
+        bool mobOpen = mobTarget && (_mob.InRiposteWindow || _mob.State == EnemyBrainState.Recover);
+        bool mobBusy = mobTarget && (_mob.PendingHitAt > 0f || MeleeMobAboutToSwing());
+        bool threatened = _drone == null && !mobOpen && (bossBusy || mobBusy || Time.time - _lastThreatTime < holdAttackAfterThreat);
+        if (dist <= range && !defensePending && !threatened && Time.time >= _nextAttackAt)
         {
             _nextAttackAt = Time.time + attackInterval;
             if (inBreak && _break.IsFinisherAvailable)
@@ -541,7 +794,9 @@ public sealed class QaCombatBot : MonoBehaviour
                 Note("finisher attempt");
             }
 
-            bool heavy = _rng.NextDouble() < 0.2;
+            // Shield up in front -> a player swaps to heavy (guard break) or flanks; light hits only bounce.
+            double heavyChance = mobTarget && _mob is ShieldEnforcerBrain se && se.ShieldUp ? 0.7 : 0.2;
+            bool heavy = _rng.NextDouble() < heavyChance;
             if (heavy) _input.RecordAttackHeavyPress(); else _input.RecordAttackLightPress();
             _attacks++;
             if (_attacks == 6)
@@ -552,9 +807,91 @@ public sealed class QaCombatBot : MonoBehaviour
     Vector3 _lastProgressPos;
     float _progressCheckAt, _detourUntil, _detourSign = 1f;
 
-    void UpdateApproach(Transform target, float dist, bool defensePending)
+    void RunScheduledDefense()
     {
-        if (!approachBoss || defensePending || dist <= attackRange * 0.85f)
+        // Scheduled defensive reactions (scaled time, like the attack timing they answer).
+        for (int i = _scheduled.Count - 1; i >= 0; i--)
+        {
+            if (Time.time < _scheduled[i].time)
+                continue;
+
+            if (_scheduled[i].dodge) { _input.RecordDodgePress(); _dodges++; Note("dodge"); }
+            else { PlayerGuardController.QaPressGuard(); _releaseGuardAt = Time.unscaledTime + 0.12f; _parries++; Note((_combat != null && _combat.IsInHit ? "parry (from hit-stun)" : "parry") + DefenseState()); }
+            _scheduled.RemoveAt(i);
+        }
+
+        if (_releaseGuardAt > 0f && Time.unscaledTime >= _releaseGuardAt) { PlayerGuardController.QaReleaseGuard(); _releaseGuardAt = 0f; }
+    }
+
+    // ---- Level_Facility upper-floor route (full-run mode) ----
+    LobbyManager _lobby;
+    string _routeLeg;
+
+    bool UpperFloorActive()
+    {
+        if (_lobby == null)
+            _lobby = LobbyManager.Instance != null ? LobbyManager.Instance : FindObjectOfType<LobbyManager>();
+        return _lobby != null && _lobby.ContinuesInSameScene && !_lobby.HasHandedOffToLowerFloor;
+    }
+
+    /// <summary>No enemy around: walk the next leg of the upper floor. Returns false when there is nothing to walk.</summary>
+    bool FollowLobbyRoute()
+    {
+        if (!UpperFloorActive())
+            return false;
+
+        Vector3? goal = null;
+        string leg = null;
+        switch (_lobby.CurrentPhase)
+        {
+            case LobbyManager.LobbyFlowPhase.Arrival:
+            case LobbyManager.LobbyFlowPhase.Combat:
+                if (_lobby.CombatStartGate != null)
+                {
+                    goal = _lobby.CombatStartGate.position + _lobby.CombatStartGate.forward * 4f;
+                    leg = "combat gate";
+                }
+                break;
+            case LobbyManager.LobbyFlowPhase.Route:
+                if (_lobby.triggerApproach != null) { goal = _lobby.triggerApproach.position; leg = "elevator approach"; }
+                break;
+            case LobbyManager.LobbyFlowPhase.Board:
+                if (_lobby.triggerBoard != null) { goal = _lobby.triggerBoard.position; leg = "board"; }
+                break;
+        }
+
+        if (leg != _routeLeg) { _routeLeg = leg; Note($"route leg -> {leg ?? "wait"} (phase {_lobby.CurrentPhase})"); }
+        if (!goal.HasValue)
+        {
+            PlayerMoveController.QaMoveInputOverride = null;
+            return true;
+        }
+
+        Vector3 to = goal.Value - _player.position;
+        to.y = 0f;
+        if (to.magnitude < 0.6f)
+        {
+            PlayerMoveController.QaMoveInputOverride = null;
+            return true;
+        }
+        if (_routeGoal == null) { _routeGoal = new GameObject("__QaRouteGoal").transform; _routeGoal.SetParent(transform, false); }
+        _routeGoal.position = goal.Value;
+        UpdateApproach(_routeGoal, to.magnitude, false, 0f);
+        return true;
+    }
+    Transform _routeGoal;
+
+    void UpdateApproach(Transform target, float dist, bool defensePending, float range)
+    {
+        if (Time.time >= _lateralFrom && Time.time < _lateralUntil && Camera.main != null)
+        {
+            Vector3 f = Camera.main.transform.forward; f.y = 0f; f.Normalize();
+            Vector3 r = Camera.main.transform.right; r.y = 0f; r.Normalize();
+            PlayerMoveController.QaMoveInputOverride = new Vector2(Vector3.Dot(_lateralDir, r), Vector3.Dot(_lateralDir, f));
+            return;
+        }
+
+        if (!approachBoss || defensePending || dist <= range * 0.85f)
         {
             PlayerMoveController.QaMoveInputOverride = null;
             return;

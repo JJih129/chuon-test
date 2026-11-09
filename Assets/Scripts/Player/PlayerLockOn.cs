@@ -963,7 +963,10 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         if (enemyHealth != null && enemyHealth.IsDead)
             return true;
         DroneController drone = root.GetComponentInChildren<DroneController>();
-        return drone != null && drone.IsDead;
+        if (drone != null && drone.IsDead)
+            return true;
+        EnemyBrain brain = root.GetComponentInChildren<EnemyBrain>();
+        return brain != null && brain.IsDead;
     }
 
     Vector3 SoulsOrigin => _playerPivot != null ? _playerPivot.position : transform.position + Vector3.up * defaultPivotY;

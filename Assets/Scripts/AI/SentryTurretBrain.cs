@@ -62,6 +62,17 @@ public sealed class SentryTurretBrain : EnemyBrain
     Quaternion _pitchBase = Quaternion.identity;
 
     public bool IsLocked => _locked;
+    public bool IsPoweredDown => _poweredDown;
+    bool _poweredDown;
+
+    /// <summary>외부 정지(경비 해제 등): 폭발 없이 헤드가 처진 잔해로 남는다. 사망과 같은 처리 → 락온·토큰·HP 바 해제.</summary>
+    public void PowerDown()
+    {
+        if (IsDead)
+            return;
+        _poweredDown = true;
+        Die();
+    }
 
     protected override void Awake()
     {
@@ -79,6 +90,7 @@ public sealed class SentryTurretBrain : EnemyBrain
     protected override void OnEnable()
     {
         base.OnEnable();
+        _poweredDown = false;
         _locked = false;
         _trackTime = 0f;
         _yaw = 0f;
@@ -203,10 +215,14 @@ public sealed class SentryTurretBrain : EnemyBrain
         if (laser != null)
             laser.startColor = laser.endColor = blink ? laserLockColor : laserTrackColor;
 
-        while (_roundsFired < roundsPerBurst && now >= _firstRoundAt + _roundsFired * roundInterval)
+        // 첫 발 = 공지 시각에 가장 가까운 프레임 (반 프레임 반올림, |오차| ≤ dt/2)
+        while (_roundsFired < roundsPerBurst && now + dt * 0.5f >= _firstRoundAt + _roundsFired * roundInterval)
         {
             if (_roundsFired == 0)
+            {
                 LastCueHonestyError = (now - _firstRoundAt);
+                MaxCueHonestyError = Mathf.Max(MaxCueHonestyError, Mathf.Abs(LastCueHonestyError));
+            }
             FireRound();
             _roundsFired++;
             if (State != EnemyBrainState.Attack)
@@ -254,6 +270,8 @@ public sealed class SentryTurretBrain : EnemyBrain
         SetLaser(false, laserTrackColor);
         _pitch = pitchMax;
         ApplyAim();
+        if (_poweredDown)
+            return;
         if (deathVfx != null)
             TransientVfxPool.Spawn(deathVfx, Muzzle.position, Quaternion.identity, null, 2f);
         if (deathSfx != null)

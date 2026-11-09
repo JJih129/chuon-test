@@ -28,6 +28,14 @@ public sealed class LevelFacilityObservationBeat : MonoBehaviour
 
     bool _played;
 
+    /// <summary>관측 연출(카메라 점유) 진행 중. 상층 잡몹이 이 동안 플레이어를 인지하지 않게 하는 데 쓴다.</summary>
+    public static bool IsPlaying { get; private set; }
+
+    void OnDisable()
+    {
+        IsPlaying = false;
+    }
+
     void Reset()
     {
         Collider trigger = GetComponent<Collider>();
@@ -52,6 +60,7 @@ public sealed class LevelFacilityObservationBeat : MonoBehaviour
             return;
 
         _played = true;
+        IsPlaying = true;
         StartCoroutine(CoPlayBeat());
     }
 
@@ -109,7 +118,9 @@ public sealed class LevelFacilityObservationBeat : MonoBehaviour
         }
 
         beatCamera.Priority = -100;
-        yield return new WaitForSeconds(2f);
+        yield return new WaitForSeconds(0.8f); // 게임플레이 카메라로 블렌드 복귀
+        IsPlaying = false;
+        yield return new WaitForSeconds(1.2f);
         Destroy(cameraObject);
     }
 

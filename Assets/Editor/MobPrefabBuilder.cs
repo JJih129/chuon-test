@@ -549,6 +549,8 @@ public static class MobPrefabBuilder
         if (animator == null)
             animator = body.AddComponent<Animator>();
         animator.applyRootMotion = false;
+        if (body.GetComponent<MobAnimationEventSink>() == null)
+            body.AddComponent<MobAnimationEventSink>(); // GhostSamurai 이동 클립 발소리 이벤트 수신 (no receiver 경고 방지)
         animator.cullingMode = AnimatorCullingMode.CullUpdateTransforms;
         if (animator.avatar == null || !animator.isHuman)
         {

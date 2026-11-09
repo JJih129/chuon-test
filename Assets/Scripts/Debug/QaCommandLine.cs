@@ -12,6 +12,9 @@ using UnityEngine.SceneManagement;
 /// -qaBot S        attach QaCombatBot with defense skill S after -qaBotDelay seconds (default 5)
 /// -qaDuration D   after D seconds log QaFrameSampler.Report() + bot summary ("[QA] ..." lines in Player.log)
 /// -qaQuit         quit after the report
+/// -qaFullRun      Level_Facility from the top (no skip): the bot walks the upper floor (teach android -> drones ->
+///                 elevator guards + turret -> elevator) and then fights the boss. Logs "[QA-RUN] ..." phase times, a per-mob
+///                 report when the lower floor is reached, and the usual frame/bot report after -qaDuration.
 /// -qaDialogue     show the story dialogue lines (ExhibitionPrototypePresentationPolicy keeps them off by default)
 /// -qaOcclusionShot  before the bot: put a wall (an existing URP/Lit scene material) between camera and player and
 ///                 capture qa_occl_off.png (fader disabled) / qa_occl_on.png (fader enabled) next to the player log
@@ -32,6 +35,7 @@ public sealed class QaCommandLine : MonoBehaviour
     float _duration = 60f;
     bool _quit;
     bool _occlusionShot;
+    bool _fullRun;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -78,6 +82,7 @@ public sealed class QaCommandLine : MonoBehaviour
                 case "-qaDuration": float.TryParse(next, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _duration); break;
                 case "-qaQuit": _quit = true; break;
                 case "-qaOcclusionShot": _occlusionShot = true; break;
+                case "-qaFullRun": _fullRun = true; break;
                 case "-qaDifficulty": // easy|normal|hard (저장하지 않음)
                     if (next != null && System.Enum.TryParse(next, true, out BossDifficultyTier tier))
                         GameDifficulty.Set(tier, save: false);
@@ -308,6 +313,30 @@ public sealed class QaCommandLine : MonoBehaviour
         Destroy(wall);
     }
 
+    // -qaFullRun: upper-floor phase timeline + per-mob report at the elevator handoff.
+    IEnumerator WatchFullRun(QaCombatBot bot)
+    {
+        float start = Time.realtimeSinceStartup;
+        bool lower = false;
+        System.Action<LobbyManager> onLower = _ => lower = true;
+        LobbyManager.LowerFloorReached += onLower;
+        LobbyManager lobby = FindObjectOfType<LobbyManager>();
+        string phase = null;
+        while (!lower && bot != null)
+        {
+            string now = lobby != null ? lobby.CurrentPhase.ToString() : "?";
+            if (now != phase)
+            {
+                phase = now;
+                Debug.Log($"[QA-RUN] t={Time.realtimeSinceStartup - start:F1}s lobby phase {phase}");
+            }
+            yield return new WaitForSecondsRealtime(0.25f);
+        }
+        LobbyManager.LowerFloorReached -= onLower;
+        QaFrameSampler.Mark("facility_boss");
+        Debug.Log($"[QA-RUN] t={Time.realtimeSinceStartup - start:F1}s lower floor reached={lower}\n[QA-RUN] bot: {(bot != null ? bot.Summary : "gone")}\n[QA-RUN] mobs:\n{QaCombatBot.MobReport()}");
+    }
+
     IEnumerator Run()
     {
         Debug.Log($"[QA] command line: scene={_scene} skipToBoss={_skipToBoss} bot={_botSkill} duration={_duration}");
@@ -315,7 +344,7 @@ public sealed class QaCommandLine : MonoBehaviour
 
         if (!string.IsNullOrEmpty(_scene))
         {
-            if (_skipToBoss)
+            if (_skipToBoss && !_fullRun)
             {
                 LobbyManager.RequestSkipToLowerFloorOnNextLoad();
                 MainSceneArrivalController.RequestSkipArrivalOnNextLoad();
@@ -343,6 +372,11 @@ public sealed class QaCommandLine : MonoBehaviour
         {
             bot = QaCombatBot.Attach(_botSkill);
             bot.captureScreenshots = false;
+            if (_fullRun)
+            {
+                bot.followLobbyRoute = true;
+                StartCoroutine(WatchFullRun(bot));
+            }
         }
         CameraMetricsSampler.Begin(_scene + (SoulsCameraRig.Active != null ? " (souls rig)" : " (legacy cam)"));
 

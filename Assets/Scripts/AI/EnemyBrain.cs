@@ -214,6 +214,21 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
     /// <summary>QA: 마지막 큐의 (실제 큐→판정 시간 − 공지 시간). 정직하면 |값| ≤ 1프레임.</summary>
     public float LastCueHonestyError { get; protected set; }
     public int CueCount { get; protected set; }
+    /// <summary>QA: 진행 중인 일격의 판정 시각(Time.time). 판정 전이 아니면 -1.</summary>
+    public float PendingHitAt => _state == EnemyBrainState.Attack && _strike != null && !_hitDone ? _hitAt : -1f;
+    /// <summary>QA: 일격마다 증가 (같은 일격 중복 반응 방지용 키).</summary>
+    public int AttackSequenceId => _attackSequenceId;
+    /// <summary>QA: 큐 공지 오차 최대값(|오차|, 이 적의 수명 동안).</summary>
+    public float MaxCueHonestyError { get; protected set; }
+    /// <summary>QA: 받은 히트 수 / 실제 피해가 들어간 히트 수.</summary>
+    public int HitsReceived { get; private set; }
+    public int HitsLanded { get; private set; }
+    /// <summary>QA: 플레이어에게 전달한 일격 수 (판정 안에 있었던 것).</summary>
+    public int StrikesDelivered { get; private set; }
+    public int StaggerCount { get; private set; }
+    public int ParriedCount { get; private set; }
+    /// <summary>true 면 시야/청각으로 플레이어를 알아채지 않는다 (피격·동료 경보는 그대로). 연출 중 대기 등.</summary>
+    public bool PerceptionSuppressed { get; set; }
 
     protected void RaiseCueIssued(EnemyCueType type, float lead) => CueIssued?.Invoke(this, type, lead);
     protected float Now => Time.time;
@@ -296,7 +311,8 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
     protected virtual void Start()
     {
         ResolveTarget();
-        if (hpPresenter != null)
+        // 활성화와 같은 프레임에 경계 상태가 된 적(엘리베이터 경비 등)은 HP 바를 유지
+        if (hpPresenter != null && !_alerted)
             hpPresenter.Detach();
         EnsureAgentOnNavMesh();
     }
@@ -424,6 +440,9 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
                 BecomeAlerted(true);
             return;
         }
+
+        if (PerceptionSuppressed && !_alerted)
+            return;
 
         bool noticed = perception.Evaluate();
         if (!_alerted)
@@ -812,11 +831,15 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
             }
         }
 
-        if (!_hitDone && now >= _hitAt)
+        // 판정 프레임 = 판정 시각에 가장 가까운 프레임 (반 프레임 반올림) → 큐 공지 오차 |err| ≤ dt/2
+        if (!_hitDone && now + dt * 0.5f >= _hitAt)
         {
             _hitDone = true;
             if (_cueIssued && _cueLead > 0f)
+            {
                 LastCueHonestyError = (now - _cueTime) - _cueLead;
+                MaxCueHonestyError = Mathf.Max(MaxCueHonestyError, Mathf.Abs(LastCueHonestyError));
+            }
             if (swingSfx != null)
                 OneShotAudio.PlayAt(swingSfx, transform.position + Vector3.up * 1.2f, 0.7f, UnityEngine.Random.Range(0.95f, 1.08f), 0.8f);
             DeliverStrike(s);
@@ -889,6 +912,7 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
             attackSequenceId = _attackSequenceId
         };
         EnemyCuePalette.ApplyDefenseRules(ref payload, s.cueType);
+        StrikesDelivered++;
         DeliverPayload(payload, s);
     }
 
@@ -937,8 +961,9 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
     {
         if (_dead)
             return;
+        ParriedCount++;
         AbortSequence();
-        bool full = s != null && (s.cueType == EnemyCueType.Parryable || s.cueType == EnemyCueType.Heavy);
+        bool full =s != null && (s.cueType == EnemyCueType.Parryable || s.cueType == EnemyCueType.Heavy);
         if (full)
         {
             _poise = 0f;
@@ -958,6 +983,7 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
             AbortSequence();
         ReleaseTokens();
         _riposteWindow = riposteWindow;
+        StaggerCount++;
         _staggerUntil = Time.time + duration;
         StopMoving();
         PlayAction(animHash != 0 ? animHash : _staggerHash, 1f);
@@ -982,6 +1008,9 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
             damageMul *= riposteDamageMultiplier;
 
         bool landed = ModifyIncomingHit(ref payload, ref damageMul, ref poiseMul);
+        HitsReceived++;
+        if (landed)
+            HitsLanded++;
         if (!_alerted)
         {
             if (perception != null && target != null)

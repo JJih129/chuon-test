@@ -2402,6 +2402,11 @@ MonoBehaviour:
     clipImpactTime: 0.36666667
     hyperArmor: 0
   bashChance: 0.55
+  bashCoilLeanDeg: 13
+  bashCoilPullBack: 0.24
+  bashCoilCrouch: 0.1
+  bashSnapTime: 0.14
+  bashCoilGlowBoost: 2.4
 --- !u!1 &6547532128052292885
 GameObject:
   m_ObjectHideFlags: 0
@@ -3028,6 +3033,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2403335757241817858}
   - component: {fileID: 7365640878483661442}
+  - component: {fileID: 4595406850283546724}
   m_Layer: 12
   m_Name: Visual
   m_TagString: Untagged
@@ -3073,6 +3079,20 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &4595406850283546724
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9051018061004560136}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d7486dc7885997c4897c45a07b7e147a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  footstep: {fileID: 0}
+  footstepVolume: 0.25
 --- !u!1 &9149505205758875626
 GameObject:
   m_ObjectHideFlags: 0

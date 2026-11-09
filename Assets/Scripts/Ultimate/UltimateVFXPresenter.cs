@@ -316,12 +316,19 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         Color emission = _data.Vfx.slashStormAoeEmission;
         Gradient particleGradient = CreateSlashStormGradient(primary, accent, highlight);
         Gradient trailGradient = CreateTrailGradient(trail, accent, highlight);
+        // 바닥 연기는 그래파이트 (불꽃 팔레트를 그대로 받으면 B&W 꺼짐 상태에서 채도 높은 붉은 안개가 된다).
+        // 붉은기는 시작 직후 살짝만 — 아트 방향: 그래파이트/화이트/츠카사 레드 포인트.
+        Gradient smokeGradient = CreateSlashStormGradient(SlashSmokeGraphite, Color.Lerp(SlashSmokeGraphite, accent, 0.18f), SlashSmokeLight);
 
         _speedParticles.Clear();
         root.GetComponentsInChildren(true, _speedParticles);
         for (int i = 0; i < _speedParticles.Count; i++)
         {
-            ApplyParticlePalette(_speedParticles[i], primary, particleGradient, trailGradient);
+            ParticleSystem particle = _speedParticles[i];
+            if (IsSmokeLike(particle.name))
+                ApplyParticlePalette(particle, Color.white, smokeGradient, smokeGradient);
+            else
+                ApplyParticlePalette(particle, primary, particleGradient, trailGradient);
         }
 
         _tintTrails.Clear();
@@ -346,13 +353,14 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
             if (shared == null)
                 continue;
 
+            Color baseTint = IsSmokeLike(targetRenderer.name) ? SlashSmokeGraphite : primary;
             targetRenderer.GetPropertyBlock(_tintBlock);
             if (shared.HasProperty(BaseColorId))
-                _tintBlock.SetColor(BaseColorId, primary);
+                _tintBlock.SetColor(BaseColorId, baseTint);
             if (shared.HasProperty(ColorId))
-                _tintBlock.SetColor(ColorId, primary);
+                _tintBlock.SetColor(ColorId, baseTint);
             if (shared.HasProperty(TintColorId))
-                _tintBlock.SetColor(TintColorId, primary);
+                _tintBlock.SetColor(TintColorId, baseTint);
             if (shared.HasProperty(EmissionColorId))
                 _tintBlock.SetColor(EmissionColorId, emission);
             if (shared.HasProperty(MainColorId))
@@ -508,6 +516,9 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
             targetRenderer.SetPropertyBlock(_tintBlock);
         }
     }
+
+    static readonly Color SlashSmokeGraphite = new Color(0.16f, 0.16f, 0.17f, 0.75f);
+    static readonly Color SlashSmokeLight = new Color(0.62f, 0.6f, 0.61f, 0.85f);
 
     static bool IsSmokeLike(string objectName)
     {

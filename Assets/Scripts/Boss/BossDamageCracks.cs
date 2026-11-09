@@ -105,6 +105,29 @@ public sealed class BossDamageCracks : MonoBehaviour
         _overlay.color = c;
     }
 
+    /// <summary>
+    /// 균열 텍스처(512² RGBA 밉맵 ×2) + 오버레이 재질을 미리 만든다. 반복 12 측정: HP 50%/25% 첫 단계 진입 프레임이
+    /// 텍스처 생성·업로드 + 1 MB 픽셀 배열 GC + Sprites/Default 첫 사용으로 49–102 ms 히치였다 → 하층 도착 암전 중 소진.
+    /// 반환된 재질을 워밍업 카메라 앞 쿼드에 그리면 셰이더/텍스처 업로드까지 끝난다.
+    /// </summary>
+    public static Material PrewarmShared(out Texture2D stage2)
+    {
+        Texture2D stage1 = Stage1Texture;
+        stage2 = Stage2Texture;
+        if (Active != null)
+        {
+            Active.EnsureOverlay();
+            if (Active._overlay != null)
+            {
+                if (Active._stage == 0)
+                    Active._overlay.mainTexture = stage1;
+                return Active._overlay;
+            }
+        }
+        Shader shader = Shader.Find("Sprites/Default");
+        return shader != null ? new Material(shader) { name = "_BossDamageCracks (prewarm)", hideFlags = HideFlags.DontSave, mainTexture = stage1 } : null;
+    }
+
     void EnsureOverlay()
     {
         if (_overlay != null)
