@@ -142,6 +142,10 @@ public sealed class UltimateSwordCoreChargeFx : MonoBehaviour
 
     public void StopImmediate()
     {
+        // 종료/씬 해제 중 PlayableDirector.stopped 콜백이 파괴된 컴포넌트로 들어올 수 있다
+        if (this == null)
+            return;
+
         _isPlaying = false;
         _elapsed = 0f;
         _followTarget = null;

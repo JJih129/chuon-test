@@ -116,7 +116,8 @@ public class UltimateTargetSimple : MonoBehaviour, IUltimateTarget
         if (hitVFXPrefab)
         {
             Vector3 pos = vfxSpawnPoint ? vfxSpawnPoint.position : transform.position;
-            Instantiate(hitVFXPrefab, pos, Quaternion.identity);
+            // 일회성 피격 이펙트는 풀을 통해 재사용
+            TransientVfxPool.Spawn(hitVFXPrefab, pos, Quaternion.identity);
         }
 
         if (hitSFX && audioSource)

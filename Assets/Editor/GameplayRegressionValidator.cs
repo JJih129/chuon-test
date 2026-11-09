@@ -493,10 +493,8 @@ public static class GameplayRegressionValidator
     {
         if (ultimate.gaugeMax <= 0f)
             report.Error(sceneLabel, "PlayerUltimateController.gaugeMax must be greater than 0.");
-        if (ultimate.gaugePerParry <= 0f)
-            report.Error(sceneLabel, "PlayerUltimateController.gaugePerParry must be greater than 0.");
-        if (ultimate.gaugePerPerfectDodge <= 0f)
-            report.Error(sceneLabel, "PlayerUltimateController.gaugePerPerfectDodge must be greater than 0.");
+        if (ultimate.gaugePerH <= 0f)
+            report.Error(sceneLabel, "PlayerUltimateController.gaugePerH must be greater than 0.");
         if (ultimate.finisherFixedDamage <= 0)
             report.Error(sceneLabel, "PlayerUltimateController.finisherFixedDamage must be greater than 0.");
         if (ultimate.multihitFixedDamage <= 0)

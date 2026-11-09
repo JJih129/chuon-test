@@ -252,6 +252,23 @@ public class MainScenePostClearGuideController : MonoBehaviour
         if (fallbackTargetNames == null || fallbackTargetNames.Length == 0)
             return null;
 
+        // 전체 씬 스캔 결과 캐시 (파괴 시 재탐색, 실패 시 쿨다운)
+        if (_cachedFallbackTarget != null)
+            return _cachedFallbackTarget;
+        if (Time.unscaledTime < _nextFallbackLookupAt)
+            return null;
+
+        _cachedFallbackTarget = FindFallbackTargetInScene();
+        if (_cachedFallbackTarget == null)
+            _nextFallbackLookupAt = Time.unscaledTime + 1f;
+        return _cachedFallbackTarget;
+    }
+
+    Transform _cachedFallbackTarget;
+    float _nextFallbackLookupAt;
+
+    Transform FindFallbackTargetInScene()
+    {
         Transform[] transforms = FindObjectsOfType<Transform>(true);
         if (transforms == null || transforms.Length == 0)
             return null;

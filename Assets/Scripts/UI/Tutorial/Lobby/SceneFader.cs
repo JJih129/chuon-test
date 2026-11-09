@@ -60,6 +60,7 @@ public class SceneFader : MonoBehaviour
         {
             fadeCanvasGroup.alpha = 1; // 일단 검게 시작
             fadeCanvasGroup.blocksRaycasts = true; // 터치 방지
+            LoadingTipOverlay.Hide(fadeCanvasGroup); // 전환 팁은 페이더와 함께(조금 먼저) 사라짐
 
             fadeCanvasGroup.DOFade(0, fadeDuration)
                 .SetUpdate(true)
@@ -75,6 +76,10 @@ public class SceneFader : MonoBehaviour
     {
         if (fadeCanvasGroup)
         {
+            // 검은 화면 동안 로딩 팁 (로고/타이틀/부트/크레딧 제외), 페이더 알파를 따라 나타남
+            if (LoadingTipOverlay.ShouldShowForScene(sceneName))
+                LoadingTipOverlay.ShowRandom(fadeCanvasGroup);
+
             fadeCanvasGroup.blocksRaycasts = true;
             fadeCanvasGroup.DOFade(1, fadeDuration)
                 .SetUpdate(true)

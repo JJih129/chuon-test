@@ -35,6 +35,9 @@ public sealed class BossGroundTelegraph : MonoBehaviour
 
     void LateUpdate()
     {
+        if (_circleActive)
+            UpdateCircle();
+
         if (!_active)
             return;
 
@@ -50,6 +53,7 @@ public sealed class BossGroundTelegraph : MonoBehaviour
 
     void OnDisable()
     {
+        HideCircle();
         HideCue();
     }
 
@@ -57,6 +61,200 @@ public sealed class BossGroundTelegraph : MonoBehaviour
     {
         if (_runtimeMaterial != null)
             Destroy(_runtimeMaterial);
+        if (_circleMaterial != null)
+            Destroy(_circleMaterial);
+    }
+
+    // ==================== 원형 텔레그래프 (충격파 / 도약 그림자) ====================
+    // 테두리 링 + 안쪽에서 바깥으로 차오르는 채움(= 남은 시간). 채움이 테두리에 닿는 순간이 피격 시점 (정직한 큐).
+    // shadowStyle: 도약 내려찍기용. 어두운 그림자 원판이 follow 위치(플레이어)를 따라가다 LockCircle() 후 고정.
+    [Header("Circle Telegraph")]
+    [SerializeField, Range(0.5f, 0.99f)] private float circleRimInner = 0.93f;
+    [SerializeField] private Color shadowFillColor = new Color(0.02f, 0.02f, 0.03f, 0.62f);
+
+    Transform _circleRoot;
+    MeshRenderer _circleRimRenderer;
+    MeshRenderer _circleFillRenderer;
+    MeshRenderer _circleShadowRenderer;
+    Material _circleMaterial;
+    MaterialPropertyBlock _circleBlock;
+    bool _circleActive;
+    float _circleStartTime;
+    float _circleEndTime;
+    float _circleRadius;
+    float _circleGroundY;
+    Color _circleColor;
+    Vector3 _circleCenter;
+    System.Func<Vector3> _circleFollow;
+    bool _circleShadow;
+    bool _circleLocked;
+    const float CircleFollowSharpness = 9f;
+    static Mesh s_discMesh;
+    static Mesh s_ringMesh;
+
+    public bool IsCircleActive => _circleActive;
+    public Vector3 CircleCenter => _circleCenter;
+    public float CircleRadius => _circleRadius;
+
+    public void ShowCircle(Vector3 center, float radius, AttackTelegraphType telegraphType, float duration, System.Func<Vector3> follow = null, bool shadowStyle = false)
+    {
+        EnsureCircleVisual();
+        _circleActive = true;
+        _circleStartTime = Time.time;
+        _circleEndTime = Time.time + Mathf.Max(0.06f, duration);
+        _circleRadius = Mathf.Max(0.3f, radius);
+        _circleGroundY = center.y + yOffset + 0.01f;
+        _circleCenter = new Vector3(center.x, _circleGroundY, center.z);
+        _circleFollow = follow;
+        _circleShadow = shadowStyle;
+        _circleLocked = follow == null;
+        Color c = ResolveColor(telegraphType);
+        _circleColor = new Color(c.r, c.g, c.b, 1f);
+        _circleRoot.gameObject.SetActive(true);
+        _circleShadowRenderer.gameObject.SetActive(shadowStyle);
+        enabled = true;
+        UpdateCircle();
+    }
+
+    /// <summary>추적을 멈추고 현재 위치에 고정 (도약 낙하 지점 확정).</summary>
+    public Vector3 LockCircle()
+    {
+        _circleLocked = true;
+        _circleFollow = null;
+        return _circleCenter;
+    }
+
+    public void HideCircle()
+    {
+        _circleActive = false;
+        _circleFollow = null;
+        if (_circleRoot != null)
+            _circleRoot.gameObject.SetActive(false);
+        if (!_active)
+            enabled = false;
+    }
+
+    void UpdateCircle()
+    {
+        if (_circleRoot == null)
+            return;
+
+        if (Time.time >= _circleEndTime + 0.12f)
+        {
+            HideCircle();
+            return;
+        }
+
+        if (!_circleLocked && _circleFollow != null)
+        {
+            Vector3 target = _circleFollow();
+            target.y = _circleGroundY;
+            float k = 1f - Mathf.Exp(-CircleFollowSharpness * Time.deltaTime);
+            _circleCenter = Vector3.Lerp(_circleCenter, target, k);
+        }
+
+        float duration = Mathf.Max(0.01f, _circleEndTime - _circleStartTime);
+        float progress = Mathf.Clamp01((Time.time - _circleStartTime) / duration);
+        _circleRoot.SetPositionAndRotation(_circleCenter, Quaternion.identity);
+
+        _circleRimRenderer.transform.localScale = new Vector3(_circleRadius, 1f, _circleRadius);
+        float fillScale = Mathf.Max(0.02f, _circleRadius * progress);
+        _circleFillRenderer.transform.localScale = new Vector3(fillScale, 1f, fillScale);
+
+        // 마지막 0.4초: 테두리가 빠르게 깜빡이며 밝아진다 (임박)
+        float remaining = _circleEndTime - Time.time;
+        float urgent = remaining < 0.4f ? 0.5f + 0.5f * Mathf.Abs(Mathf.Sin(Time.time * 26f)) : 0f;
+        SetCircleColor(_circleRimRenderer, _circleColor, Mathf.Lerp(0.55f, 0.95f, Mathf.Max(progress * 0.6f, urgent)));
+        SetCircleColor(_circleFillRenderer, _circleColor, Mathf.Lerp(0.14f, 0.30f, progress));
+        if (_circleShadow)
+        {
+            float shadowScale = _circleRadius * Mathf.Lerp(0.55f, 0.8f, progress);
+            _circleShadowRenderer.transform.localScale = new Vector3(shadowScale, 1f, shadowScale);
+            SetCircleColor(_circleShadowRenderer, shadowFillColor, Mathf.Lerp(shadowFillColor.a * 0.5f, shadowFillColor.a, progress));
+        }
+    }
+
+    void SetCircleColor(MeshRenderer target, Color color, float alpha)
+    {
+        color.a = Mathf.Clamp01(alpha);
+        _circleBlock.Clear();
+        _circleBlock.SetColor("_BaseColor", color);
+        _circleBlock.SetColor("_Color", color);
+        target.SetPropertyBlock(_circleBlock);
+    }
+
+    void EnsureCircleVisual()
+    {
+        if (_circleRoot != null)
+            return;
+
+        if (s_discMesh == null) s_discMesh = BuildAnnulus(0f, 1f, 64, "_TelegraphDisc");
+        if (s_ringMesh == null) s_ringMesh = BuildAnnulus(circleRimInner, 1f, 96, "_TelegraphRing");
+
+        var root = new GameObject("GroundTelegraphCircle");
+        root.hideFlags = HideFlags.HideAndDontSave;
+        _circleRoot = root.transform;
+        _circleRoot.SetParent(transform, false);
+
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader != null)
+        {
+            _circleMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            _circleMaterial.renderQueue = (int)RenderQueue.Transparent + 1;
+        }
+
+        _circleShadowRenderer = NewCirclePart("Shadow", s_discMesh, 0.000f);
+        _circleFillRenderer = NewCirclePart("Fill", s_discMesh, 0.004f);
+        _circleRimRenderer = NewCirclePart("Rim", s_ringMesh, 0.008f);
+        _circleBlock = new MaterialPropertyBlock();
+        root.SetActive(false);
+    }
+
+    MeshRenderer NewCirclePart(string partName, Mesh mesh, float lift)
+    {
+        var go = new GameObject(partName, typeof(MeshFilter), typeof(MeshRenderer));
+        go.hideFlags = HideFlags.HideAndDontSave;
+        go.transform.SetParent(_circleRoot, false);
+        go.transform.localPosition = new Vector3(0f, lift, 0f);
+        go.GetComponent<MeshFilter>().sharedMesh = mesh;
+        var r = go.GetComponent<MeshRenderer>();
+        r.sharedMaterial = _circleMaterial;
+        r.shadowCastingMode = ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        r.lightProbeUsage = LightProbeUsage.Off;
+        r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        return r;
+    }
+
+    static Mesh BuildAnnulus(float inner, float outer, int segments, string meshName)
+    {
+        var mesh = new Mesh { name = meshName, hideFlags = HideFlags.HideAndDontSave };
+        var verts = new Vector3[(segments + 1) * 2];
+        var uvs = new Vector2[verts.Length];
+        var tris = new int[segments * 6];
+        for (int i = 0; i <= segments; i++)
+        {
+            float a = i / (float)segments * Mathf.PI * 2f;
+            Vector3 d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            verts[i * 2] = d * inner;
+            verts[i * 2 + 1] = d * outer;
+            uvs[i * 2] = new Vector2(i / (float)segments, 0f);
+            uvs[i * 2 + 1] = new Vector2(i / (float)segments, 1f);
+        }
+        for (int i = 0; i < segments; i++)
+        {
+            int v = i * 2;
+            int t = i * 6;
+            tris[t] = v; tris[t + 1] = v + 3; tris[t + 2] = v + 1;
+            tris[t + 3] = v; tris[t + 4] = v + 2; tris[t + 5] = v + 3;
+        }
+        mesh.vertices = verts;
+        mesh.uv = uvs;
+        mesh.triangles = tris;
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
     }
 
     public void ShowCue(Collider trackedCollider, AttackTelegraphType telegraphType, float duration, Transform ownerRoot = null)
@@ -89,7 +287,7 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         if (_visualTransform != null)
             _visualTransform.gameObject.SetActive(false);
 
-        enabled = false;
+        enabled = _circleActive;
     }
 
     void EnsureVisual()

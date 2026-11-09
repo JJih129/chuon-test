@@ -13,6 +13,7 @@ public class PauseMenuView : MonoBehaviour
     const string UnifiedSettingsPrefabResourcePath = "UI/Title/PauseOptionsRoot_Title";
     const string SettingsContentHostName = "_SettingsContentHost";
     const string RuntimeDimOverlayName = "_RuntimePauseDim";
+    const string RuntimeComboHintName = "_RuntimeComboGuideHint";
 
     [Header("UI 연결")]
     public GameObject menuRoot;
@@ -39,6 +40,9 @@ public class PauseMenuView : MonoBehaviour
     CanvasGroup dimOverlayGroup;
     Canvas menuCanvas;
     bool menuButtonsBound;
+    // PauseView는 씬에서 비활성으로 시작하므로 첫 ShowMenu의 SetActive(true)에서 Awake가 실행됨.
+    // 이때 Awake가 menuRoot(자기 자신)를 다시 꺼서 첫 일시정지에 메뉴 없이 시간만 멈추던 문제 방지.
+    bool _showRequested;
 
     void Awake()
     {
@@ -48,7 +52,7 @@ public class PauseMenuView : MonoBehaviour
 
         if (useUnifiedSettingsOverlay)
         {
-            if (menuRoot != null)
+            if (menuRoot != null && !_showRequested)
                 menuRoot.SetActive(false);
 
             if (settingsPanel != null)
@@ -59,7 +63,7 @@ public class PauseMenuView : MonoBehaviour
         EnsureSettingsPanelReferences();
         EnsureSettingsContent();
 
-        if (menuRoot != null)
+        if (menuRoot != null && !_showRequested)
             menuRoot.SetActive(false);
 
         if (settingsPanel != null)
@@ -84,7 +88,9 @@ public class PauseMenuView : MonoBehaviour
             EnsureSettingsContent();
         }
 
+        _showRequested = true;
         menuRoot.SetActive(true);
+        _showRequested = false;
         menuContainer.gameObject.SetActive(true);
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
@@ -99,6 +105,7 @@ public class PauseMenuView : MonoBehaviour
 
         menuContainer.localScale = Vector3.one * 0.8f;
         menuContainer.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetUpdate(true);
+        EnsureComboGuideHint();
 
         var menuCanvasGroup = menuContainer.GetComponent<CanvasGroup>();
         if (menuCanvasGroup != null)
@@ -409,6 +416,45 @@ public class PauseMenuView : MonoBehaviour
                 menuContainer.DOScale(1f, 0.2f).SetEase(Ease.OutBack).SetUpdate(true);
             });
         }
+    }
+
+    /// <summary>설정창을 열고 '콤보' 탭을 바로 보여준다.</summary>
+    public void OpenSettingsComboTab()
+    {
+        ToggleSettings(true);
+        if (unifiedSettingsOverlay != null)
+            unifiedSettingsOverlay.ShowComboTab();
+    }
+
+    // 일시정지 메뉴 하단 안내: 콤보 표 위치 (튜토리얼 대사 "콤보는 설정창에서도 확인 가능")
+    void EnsureComboGuideHint()
+    {
+        RectTransform parent = menuRoot != null ? menuRoot.transform as RectTransform : null;
+        if (parent == null || parent.Find(RuntimeComboHintName) != null)
+            return;
+
+        GameObject hintObject = new GameObject(RuntimeComboHintName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        hintObject.layer = parent.gameObject.layer;
+        RectTransform rect = hintObject.GetComponent<RectTransform>();
+        rect.SetParent(parent, false);
+        rect.SetAsLastSibling();
+        rect.anchorMin = new Vector2(0.5f, 0f);
+        rect.anchorMax = new Vector2(0.5f, 0f);
+        rect.pivot = new Vector2(0.5f, 0f);
+        rect.anchoredPosition = new Vector2(0f, 36f);
+        rect.sizeDelta = new Vector2(760f, 30f);
+
+        Text text = hintObject.GetComponent<Text>();
+        text.font = RuntimeBuiltInFontUtility.GetDefaultFont();
+        text.fontSize = 18;
+        text.fontStyle = FontStyle.Bold;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Overflow;
+        text.supportRichText = true;
+        text.raycastTarget = false;
+        text.color = new Color(0.93f, 0.94f, 0.95f, 0.82f);
+        text.text = "<color=#E0303A>[C]</color>  콤보 표  ·  설정 > 콤보 / COMBO";
     }
 
     bool EnsureUnifiedSettingsOverlay()

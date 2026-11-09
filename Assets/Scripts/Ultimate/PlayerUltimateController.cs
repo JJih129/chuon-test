@@ -29,10 +29,7 @@ public class PlayerUltimateController : MonoBehaviour
     public float gaugeMax = 100f;
     [Tooltip("Gauge gained from normal attack hits.")]
     public float gaugePerH = 3f;
-    [Tooltip("Gauge gained from successful parries.")]
-    public float gaugePerParry = 6f;
-    [Tooltip("Gauge gained from successful perfect dodges.")]
-    public float gaugePerPerfectDodge = 16f;
+    // Parry / perfect-dodge gauge gain is owned by PlayerGuardController and PerfectDodgeController.
 
     [Header("Ultimate Activation")]
     [Tooltip("Optional Input System action for ultimate activation.")]
@@ -175,6 +172,43 @@ public class PlayerUltimateController : MonoBehaviour
     public Action<UltimateActivationBlockReason, string> OnActivationRejected;
     public Action<UltimateSequencePhase, string> OnUltimatePhaseChanged;
 
+    [Header("Once Per Fight (기획: 전투당 1회)")]
+    [Tooltip("켜면 궁극기를 한 번 쓴 뒤 코어가 소진(잠김)되어 ResetForNewFight 전까지 게이지가 차지 않는다. Level_Facility 보스전에서 FacilityCombatRules 가 켠다.")]
+    [SerializeField] bool oncePerFight = false;
+
+    public bool OncePerFight
+    {
+        get => oncePerFight;
+        set
+        {
+            oncePerFight = value;
+            if (!value && IsSpentThisFight)
+            {
+                IsSpentThisFight = false;
+                SyncGaugeUi();
+            }
+        }
+    }
+
+    /// <summary>oncePerFight 일 때 이번 전투에서 이미 궁극기를 사용했는지 (HUD 페이즈 코어가 '소진' 표시).</summary>
+    public bool IsSpentThisFight { get; private set; }
+
+    /// <summary>새 전투/리스폰: 소진 해제 + 게이지를 startGauge 로 맞춘다.</summary>
+    public void ResetForNewFight(float startGauge)
+    {
+        if (_isCinematic)
+            return;
+        IsSpentThisFight = false;
+        Gauge = Mathf.Clamp(startGauge, 0f, gaugeMax);
+        SyncGaugeUi();
+    }
+
+    void MarkSpentIfOncePerFight()
+    {
+        if (oncePerFight)
+            IsSpentThisFight = true;
+    }
+
     public float Gauge { get; private set; }
     public bool IsCinematic => _isCinematic;
     public bool IsGaugeReady => gaugeMax > 0f && Gauge >= gaugeMax - 0.0001f;
@@ -185,8 +219,6 @@ public class PlayerUltimateController : MonoBehaviour
     public UltimateSequencePhase CurrentUltimatePhase { get; private set; } = UltimateSequencePhase.None;
 
     bool _isCinematic;
-    float _cachedTimeScale = 1f;
-    float _cachedFixedDeltaTime = 0.02f;
     DirectorUpdateMode _cachedDirectorTimeUpdateMode = DirectorUpdateMode.GameTime;
     IInputBlocker _input;
     ILockOnController _lockOn;
@@ -268,7 +300,7 @@ public class PlayerUltimateController : MonoBehaviour
         if (scriptedAnimator == null && _playerReferences != null)
             scriptedAnimator = _playerReferences.MainAnimator;
         if (slashBurstSpawner == null)
-            slashBurstSpawner = GetComponent<UltimateSlashBurstSpawner>() ?? GetComponentInChildren<UltimateSlashBurstSpawner>(true);
+            slashBurstSpawner = GetComponent<UltimateSlashBurstSpawner>().OrNull() ?? GetComponentInChildren<UltimateSlashBurstSpawner>(true);
 
         SyncGaugeUi();
     }
@@ -278,12 +310,78 @@ public class PlayerUltimateController : MonoBehaviour
         ResolveSceneObjectCaches();
         if (activateAction?.action != null)
             activateAction.action.Enable();
+        LobbyManager.LowerFloorReached += HandleLowerFloorReachedForPrewarm;
+    }
+
+    [Header("Presentation Clone Prewarm")]
+    // QA(iter6): Level_Facility 궁극기는 프레젠테이션 사본 경로(스테이지 캡처)를 쓰지 않는다 → 기본 off (쓰지 않는 사본 2개 상주 방지).
+    // 사본 경로를 쓰는 스테이지 연출이면 켠다. 사본 자체는 항상 풀로 재사용된다 (UltimatePresentationClone).
+    [Tooltip("씬 시작/하층 도착(암전) 중에 궁극기용 플레이어/보스 프레젠테이션 사본을 미리 만들어 둔다 (스테이지 연출이 사본을 쓰는 경우만).")]
+    [SerializeField] bool prewarmPresentationClones = false;
+
+    bool _presentationPrewarmRunning;
+
+    void Start()
+    {
+        if (prewarmPresentationClones && !_presentationPrewarmRunning)
+            StartCoroutine(Co_PrewarmPresentationClones());
+    }
+
+    // 로딩 직후 몇 프레임 뒤: 비활성 사본 생성 → 1프레임 동안 원본과 같은 자세로 렌더(GPU 리소스/Awake 소진) → 풀로 복귀.
+    System.Collections.IEnumerator Co_PrewarmPresentationClones()
+    {
+        _presentationPrewarmRunning = true;
+        try
+        {
+            yield return null;
+            yield return null;
+            yield return Co_PrewarmPresentationClonesBody();
+        }
+        finally
+        {
+            _presentationPrewarmRunning = false;
+        }
+    }
+
+    System.Collections.IEnumerator Co_PrewarmPresentationClonesBody()
+    {
+
+        Transform playerRoot = ResolvePlayerRoot();
+        Transform playerSource = playerRoot != null ? ResolvePlayerPresentationSource(playerRoot) : null;
+        BossController boss = FindObjectOfType<BossController>();
+        Transform bossSource = boss != null ? ResolveVictimPresentationSource(boss.transform) : null;
+
+        if (playerSource != null)
+            UltimatePresentationClone.Prewarm(playerSource);
+        yield return null;
+        if (bossSource != null)
+            UltimatePresentationClone.Prewarm(bossSource);
+        yield return null;
+
+        if (_isCinematic)
+            yield break;
+
+        GameObject warmHolder = new GameObject("__UltimateCloneWarm");
+        bool warmedPlayer = UltimatePresentationClone.BeginWarmRender(playerSource, warmHolder.transform);
+        bool warmedBoss = UltimatePresentationClone.BeginWarmRender(bossSource, warmHolder.transform);
+        yield return null; // 한 프레임 렌더
+        if (warmedPlayer) UltimatePresentationClone.EndWarmRender(playerSource);
+        if (warmedBoss) UltimatePresentationClone.EndWarmRender(bossSource);
+        Destroy(warmHolder);
     }
 
     void OnDisable()
     {
         if (activateAction?.action != null)
             activateAction.action.Disable();
+        LobbyManager.LowerFloorReached -= HandleLowerFloorReachedForPrewarm;
+    }
+
+    // Level_Facility: 보스는 하층 핸드오프(엘리베이터 암전) 때 활성화 → 그 암전 중에 보스 사본도 미리 만든다.
+    void HandleLowerFloorReachedForPrewarm(LobbyManager lobby)
+    {
+        if (prewarmPresentationClones && isActiveAndEnabled && !_presentationPrewarmRunning)
+            StartCoroutine(Co_PrewarmPresentationClones());
     }
 
     void Update()
@@ -307,6 +405,7 @@ public class PlayerUltimateController : MonoBehaviour
     public void AddGauge(float amount)
     {
         if (_isCinematic) return;
+        if (IsSpentThisFight && amount > 0f) return; // 전투당 1회: 소진된 코어는 다시 차지 않는다
 
         Gauge = Mathf.Clamp(Gauge + amount, 0f, gaugeMax);
         SyncGaugeUi();
@@ -317,6 +416,7 @@ public class PlayerUltimateController : MonoBehaviour
         if (_isCinematic)
             return;
 
+        IsSpentThisFight = false;
         Gauge = gaugeMax;
         SyncGaugeUi();
     }
@@ -506,6 +606,7 @@ public class PlayerUltimateController : MonoBehaviour
         _externalSessionFreezeTime = freezeTimeOverride;
         _externalSessionRestoreCamera = restoreCameraOverride;
         Gauge = 0f;
+        MarkSpentIfOncePerFight();
         SyncGaugeUi();
 
         CacheExternalBreakPresentationState();
@@ -534,10 +635,7 @@ public class PlayerUltimateController : MonoBehaviour
 
         if (_externalSessionFreezeTime)
         {
-            _cachedTimeScale = Time.timeScale;
-            _cachedFixedDeltaTime = Time.fixedDeltaTime;
-            Time.timeScale = 0f;
-            Time.fixedDeltaTime = 0f;
+            GameTimeScale.Request(this, 0f);
             DidFreezeWorldTimeThisCinematic = true;
         }
 
@@ -554,8 +652,7 @@ public class PlayerUltimateController : MonoBehaviour
 
         if (_externalSessionFreezeTime)
         {
-            Time.timeScale = _cachedTimeScale;
-            Time.fixedDeltaTime = _cachedFixedDeltaTime;
+            GameTimeScale.Release(this);
         }
 
         if (_externalPreservedBreakController != null)
@@ -784,6 +881,7 @@ public class PlayerUltimateController : MonoBehaviour
         float preservedBreakTimer = 0f;
         bool preservedBreakWasActive = false;
         Gauge = 0f;
+        MarkSpentIfOncePerFight();
         SyncGaugeUi();
 
         if (TryResolveUltimateTarget(out _, out Transform preservedBreakTargetTransform))
@@ -829,10 +927,7 @@ public class PlayerUltimateController : MonoBehaviour
 
         if (freezeWorldTimeDuringCinematic)
         {
-            _cachedTimeScale = Time.timeScale;
-            _cachedFixedDeltaTime = Time.fixedDeltaTime;
-            Time.timeScale = 0f;
-            Time.fixedDeltaTime = 0f;
+            GameTimeScale.Request(this, 0f);
             DidFreezeWorldTimeThisCinematic = true;
         }
 
@@ -875,8 +970,7 @@ public class PlayerUltimateController : MonoBehaviour
                 director.timeUpdateMode = _cachedDirectorTimeUpdateMode;
             if (freezeWorldTimeDuringCinematic)
             {
-                Time.timeScale = _cachedTimeScale;
-                Time.fixedDeltaTime = _cachedFixedDeltaTime;
+                GameTimeScale.Release(this);
             }
             if (preservedBreakController != null)
                 preservedBreakController.RestoreStateAfterPresentation(preservedBreakValue, preservedBreakWasActive, preservedBreakTimer);
@@ -1613,8 +1707,8 @@ public class PlayerUltimateController : MonoBehaviour
         if (targetTransform == null)
             return null;
 
-        BossController bossController = targetTransform.GetComponentInParent<BossController>()
-            ?? targetTransform.GetComponent<BossController>()
+        BossController bossController = targetTransform.GetComponentInParent<BossController>().OrNull()
+            ?? targetTransform.GetComponent<BossController>().OrNull()
             ?? targetTransform.root.GetComponent<BossController>();
         if (bossController != null)
         {
@@ -1638,7 +1732,7 @@ public class PlayerUltimateController : MonoBehaviour
         if (targetAnimator != null)
             return targetAnimator.transform.root;
 
-        Renderer renderer = targetTransform.GetComponentInChildren<Renderer>(true) ?? targetTransform.GetComponentInParent<Renderer>();
+        Renderer renderer = targetTransform.GetComponentInChildren<Renderer>(true).OrNull() ?? targetTransform.GetComponentInParent<Renderer>();
         return renderer != null ? renderer.transform.root : targetTransform.root;
     }
 
@@ -2456,7 +2550,7 @@ public class PlayerUltimateController : MonoBehaviour
     void ResolveSceneObjectCaches()
     {
         if (_freeLookCamera == null || !_freeLookCamera)
-            _freeLookCamera = FindAnyObjectByType<FreeLookCamera>();
+            _freeLookCamera = FreeLookCamera.FindAuthoritative(); // 씬에 사본이 있어도 실제 FreeLook vcam 의 드라이버
 
         if (_cinemachineFreeLook == null || !_cinemachineFreeLook)
             _cinemachineFreeLook = CinemachineCompat.FindLegacyFreeLookCamera();

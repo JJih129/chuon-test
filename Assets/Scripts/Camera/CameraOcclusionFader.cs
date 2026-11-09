@@ -37,6 +37,8 @@ public class CameraOcclusionFader : MonoBehaviour
     readonly List<Renderer> _cleanupBuffer = new List<Renderer>(16);
     readonly Dictionary<int, Renderer> _colliderRendererCache = new Dictionary<int, Renderer>(64);
     readonly Dictionary<int, bool> _characterRootCache = new Dictionary<int, bool>(32);
+    readonly Dictionary<Renderer, OccluderState> _stateCache = new Dictionary<Renderer, OccluderState>(16);
+    const int StateCachePruneThreshold = 32;
 
     Transform _playerRoot;
     float _nextReferenceResolveAt;
@@ -49,10 +51,48 @@ public class CameraOcclusionFader : MonoBehaviour
     {
         public Renderer Renderer;
         public MaterialFadeState[] Materials;
+        // 원본 sharedMaterials / 투명화용 복제본 (렌더러별 1회 생성 후 재사용)
+        public Material[] OriginalSharedMaterials;
+        public Material[] FadeSharedMaterials;
+        public Material[] OwnedClones;
         public ShadowCastingMode OriginalShadowCastingMode;
         public float CurrentAlpha = 1f;
         public float TargetAlpha = 1f;
         public bool UsesShadowFallback;
+        public bool FadeMaterialsApplied;
+
+        public void Activate()
+        {
+            CurrentAlpha = 1f;
+            TargetAlpha = 1f;
+            UsesShadowFallback = false;
+
+            if (Renderer == null)
+                return;
+
+            OriginalShadowCastingMode = Renderer.shadowCastingMode;
+            if (Materials != null && FadeSharedMaterials != null && !FadeMaterialsApplied)
+            {
+                Renderer.sharedMaterials = FadeSharedMaterials;
+                FadeMaterialsApplied = true;
+            }
+        }
+
+        public void DestroyClones()
+        {
+            if (OwnedClones == null)
+                return;
+
+            for (int i = 0; i < OwnedClones.Length; i++)
+            {
+                if (OwnedClones[i] != null)
+                    UnityEngine.Object.Destroy(OwnedClones[i]);
+            }
+
+            OwnedClones = null;
+            FadeSharedMaterials = null;
+            Materials = null;
+        }
 
         public bool Update(float deltaTime, float fadeOutSpeed, float fadeInSpeed, bool useShadowsOnlyFallback)
         {
@@ -83,11 +123,10 @@ public class CameraOcclusionFader : MonoBehaviour
 
         public void Restore()
         {
-            if (Materials != null)
-            {
-                for (int i = 0; i < Materials.Length; i++)
-                    Materials[i].Restore();
-            }
+            // 원본 sharedMaterials 로 되돌림 (복제본은 캐시에 유지, 키워드 재전환 없음)
+            if (FadeMaterialsApplied && Renderer != null && OriginalSharedMaterials != null)
+                Renderer.sharedMaterials = OriginalSharedMaterials;
+            FadeMaterialsApplied = false;
 
             if (Renderer != null)
                 Renderer.shadowCastingMode = OriginalShadowCastingMode;
@@ -270,6 +309,8 @@ public class CameraOcclusionFader : MonoBehaviour
 
     void OnDisable()
     {
+        if (_playerHidden)
+            SetPlayerHidden(false);
         RestoreAllOccluders();
         _hasOcclusionSample = false;
     }
@@ -317,7 +358,7 @@ public class CameraOcclusionFader : MonoBehaviour
     void AutoResolveReferences()
     {
         if (targetCamera == null)
-            targetCamera = GetComponent<Camera>() ?? GameplaySceneCache.ResolveMainCamera();
+            targetCamera = GetComponent<Camera>().OrNull() ?? GameplaySceneCache.ResolveMainCamera();
 
         if (playerReferences == null)
             playerReferences = GameplaySceneCache.ResolvePlayerReferences();
@@ -410,6 +451,64 @@ public class CameraOcclusionFader : MonoBehaviour
         }
     }
 
+    // ---- 카메라 근접 플레이어 숨김 (SoulsCameraRig: 카메라가 플레이어 가슴 0.8 m 안으로 붙을 때)
+    // 플레이어 툰 셰이더는 _BaseColor 투명 전환 시 단색(시안)으로 깨지므로 머티리얼 페이드 대신 '그림자만' 렌더로 숨긴다.
+    // 히스테리시스: alpha < 0.5 이면 숨김, > 0.7 이면 복원.
+    float _playerProximityAlpha = 1f;
+    bool _playerHidden;
+    Renderer[] _playerRenderers;
+    ShadowCastingMode[] _playerShadowModes;
+
+    /// <summary>1 = 보통, 작을수록 카메라가 플레이어에 붙은 상태. 0.5 미만이면 플레이어를 그림자만 남기고 숨긴다.</summary>
+    public void SetPlayerProximityFade(float alpha)
+    {
+        _playerProximityAlpha = Mathf.Clamp01(alpha);
+        bool hide = _playerHidden ? _playerProximityAlpha < 0.7f : _playerProximityAlpha < 0.5f;
+        if (hide != _playerHidden)
+            SetPlayerHidden(hide);
+    }
+
+    void SetPlayerHidden(bool hide)
+    {
+        if (hide && _playerRoot == null)
+            TryAutoResolveReferences(true);
+        if (hide && _playerRoot == null)
+            return;
+
+        if (hide && (_playerRenderers == null || _playerRenderers.Length == 0 || _playerRenderers[0] == null))
+        {
+            List<Renderer> list = new List<Renderer>(8);
+            foreach (Renderer r in _playerRoot.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer || r is LineRenderer)
+                    continue;
+                list.Add(r);
+            }
+            _playerRenderers = list.ToArray();
+            _playerShadowModes = new ShadowCastingMode[_playerRenderers.Length];
+        }
+
+        if (_playerRenderers == null)
+            return;
+
+        for (int i = 0; i < _playerRenderers.Length; i++)
+        {
+            Renderer r = _playerRenderers[i];
+            if (r == null)
+                continue;
+            if (hide)
+            {
+                _playerShadowModes[i] = r.shadowCastingMode;
+                r.shadowCastingMode = ShadowCastingMode.ShadowsOnly;
+            }
+            else
+            {
+                r.shadowCastingMode = _playerShadowModes[i];
+            }
+        }
+        _playerHidden = hide;
+    }
+
     void UpdateActiveStates(float deltaTime)
     {
         _cleanupBuffer.Clear();
@@ -481,27 +580,86 @@ public class CameraOcclusionFader : MonoBehaviour
         if (renderer == null)
             return null;
 
-        Material[] materials = renderer.materials;
-        List<MaterialFadeState> fadeStates = new List<MaterialFadeState>(materials.Length);
-        for (int i = 0; i < materials.Length; i++)
+        // 이전에 만든 복제본이 있으면 재사용
+        if (_stateCache.TryGetValue(renderer, out OccluderState cachedState) && cachedState != null)
         {
-            Material material = materials[i];
-            if (material == null)
+            cachedState.Activate();
+            return cachedState;
+        }
+
+        PruneStateCache();
+
+        // renderer.materials 대신 직접 복제해 소유권을 추적 (복원 시 원본 sharedMaterials 로 교체)
+        Material[] originals = renderer.sharedMaterials;
+        Material[] fadeMaterials = new Material[originals.Length];
+        List<MaterialFadeState> fadeStates = new List<MaterialFadeState>(originals.Length);
+        List<Material> ownedClones = new List<Material>(originals.Length);
+        for (int i = 0; i < originals.Length; i++)
+        {
+            Material original = originals[i];
+            fadeMaterials[i] = original;
+            if (original == null)
                 continue;
 
-            string colorProperty = ResolveColorProperty(material);
+            string colorProperty = ResolveColorProperty(original);
             if (string.IsNullOrEmpty(colorProperty))
                 continue;
 
-            fadeStates.Add(new MaterialFadeState(material, colorProperty));
+            Material clone = new Material(original);
+            fadeMaterials[i] = clone;
+            ownedClones.Add(clone);
+            fadeStates.Add(new MaterialFadeState(clone, colorProperty));
         }
 
-        return new OccluderState
+        OccluderState state = new OccluderState
         {
             Renderer = renderer,
             Materials = fadeStates.Count > 0 ? fadeStates.ToArray() : null,
+            OriginalSharedMaterials = originals,
+            FadeSharedMaterials = fadeStates.Count > 0 ? fadeMaterials : null,
+            OwnedClones = ownedClones.Count > 0 ? ownedClones.ToArray() : null,
             OriginalShadowCastingMode = renderer.shadowCastingMode
         };
+
+        _stateCache[renderer] = state;
+        state.Activate();
+        return state;
+    }
+
+    void PruneStateCache()
+    {
+        if (_stateCache.Count < StateCachePruneThreshold)
+            return;
+
+        _cleanupBuffer.Clear();
+        foreach (KeyValuePair<Renderer, OccluderState> pair in _stateCache)
+        {
+            if (pair.Key == null)
+                _cleanupBuffer.Add(pair.Key);
+        }
+
+        for (int i = 0; i < _cleanupBuffer.Count; i++)
+        {
+            if (_stateCache.TryGetValue(_cleanupBuffer[i], out OccluderState state))
+                state?.DestroyClones();
+            _stateCache.Remove(_cleanupBuffer[i]);
+        }
+
+        _cleanupBuffer.Clear();
+    }
+
+    void DestroyCachedClones()
+    {
+        foreach (KeyValuePair<Renderer, OccluderState> pair in _stateCache)
+            pair.Value?.DestroyClones();
+
+        _stateCache.Clear();
+    }
+
+    void OnDestroy()
+    {
+        RestoreAllOccluders();
+        DestroyCachedClones();
     }
 
     string ResolveColorProperty(Material material)

@@ -58,7 +58,7 @@ public class PlayerVisualRig : MonoBehaviour
         }
 
         if (!mainAnimator)
-            mainAnimator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>(true);
+            mainAnimator = GetComponent<Animator>().OrNull() ?? GetComponentInChildren<Animator>(true);
 
         if (createMissingHitbox)
             EnsureDefaultSwordHitbox();

@@ -59,6 +59,9 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 
     void Start()
     {
+        // 튜토리얼 = 가상현실 훈련: 진입 시 디지털 부팅 오버레이
+        if (_flowController != null)
+            VrTransitionOverlay.Play("TSUKASA COMBAT SIMULATION", "VR TRAINING  //  가상현실 부팅", 0.7f);
         _flowController?.StartFlow();
     }
 
@@ -66,6 +69,16 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
     {
         if (_flowController != null)
             _flowController.StepStarted -= HandleTutorialStepStarted;
+        if (_vrExit != null)
+            _vrExit.BeforeSceneLoad -= HandleVrExit;
+    }
+
+    SceneLoadInteractable _vrExit;
+
+    void HandleVrExit(SceneLoadInteractable interactable, object invoker)
+    {
+        // 훈련 종료: 시뮬레이션 디레졸브 (DontDestroyOnLoad 라 다음 씬 첫 화면에서 걷힌다)
+        VrTransitionOverlay.Play("SIMULATION TERMINATED", "VR LINK RELEASED  //  현실 복귀", 0.45f);
     }
 
     void BuildRuntimePrototype()
@@ -142,7 +155,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialWorldMarker movementMarker = CreateWorldMarker(
             "TutorialMovementMarker",
             questGoal != null ? questGoal.transform : null,
-            new Color(0.18f, 0.85f, 1f, 0.9f),
+            new Color(1.00f, 0.62f, 0.16f, 0.9f),
             new Vector3(1.15f, 0.025f, 1.15f),
             new Vector3(0f, 0.65f, 0f),
             new Vector3(0.10f, 0.35f, 0.10f),
@@ -160,7 +173,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialWorldMarker attackDummyMarker = CreateWorldMarker(
             "TutorialAttackDummyMarker",
             attackDummyObject != null ? attackDummyObject.transform : null,
-            new Color(0.24f, 0.88f, 1f, 0.92f),
+            new Color(1.00f, 0.26f, 0.20f, 0.92f),
             new Vector3(0.95f, 0.025f, 0.95f),
             new Vector3(0f, 0.72f, 0f),
             new Vector3(0.09f, 0.34f, 0.09f),
@@ -212,6 +225,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             attackDummyObject != null ? attackDummyObject.transform : null,
             movementGoalZone,
             exitZone);
+
+        _vrExit = sceneMoveObject != null ? sceneMoveObject.GetComponent<SceneLoadInteractable>() : null;
+        if (_vrExit != null)
+            _vrExit.BeforeSceneLoad += HandleVrExit;
 
         TutorialExitInteractableBridge exitInteractableBridge = gameObject.AddComponent<TutorialExitInteractableBridge>();
         exitInteractableBridge.ConfigureRuntime(
@@ -1111,10 +1128,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialLookAtConditionChecker lookChecker = gameObject.AddComponent<TutorialLookAtConditionChecker>();
         lookChecker.ConfigureRuntime(_playerBridge.GameplayCamera, attackDummy != null ? attackDummy.transform : null);
         lookChecker.ConfigureRuntimeReminders(
-            new[]
+            TableLines("tut.camera.remind", new[]
             {
                 Guide(EGOGuideMessageType.FailureAssist, "\ud654\uba74 \ubcf4\uc870 \ud45c\uc2dc\ub97c \ub530\ub77c \ud45c\uc801\uc744 \uc2dc\uc57c\uc5d0 \ub2f4\uc544.", 2.0f)
-            },
+            }, EGOGuideMessageType.FailureAssist),
             3f,
             true,
             6f);
@@ -1122,10 +1139,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialLockOnConditionChecker lockOnChecker = gameObject.AddComponent<TutorialLockOnConditionChecker>();
         lockOnChecker.ConfigureRuntime(_playerBridge, attackDummy != null ? attackDummy.transform : null);
         lockOnChecker.ConfigureRuntimeReminders(
-            new[]
+            TableLines("tut.lockon.remind", new[]
             {
                 Guide(EGOGuideMessageType.FailureAssist, "\ud45c\uc801\uc744 \ubc14\ub77c\ubcf4\uace0 \ub77d\uc628\uc744 \uc720\uc9c0\ud574.", 2.0f)
-            },
+            }, EGOGuideMessageType.FailureAssist),
             3f,
             true,
             6f);
@@ -1133,10 +1150,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialAttackConditionChecker attackChecker = gameObject.AddComponent<TutorialAttackConditionChecker>();
         attackChecker.ConfigureRuntime(new[] { attackDummy }, 10, 10);
         attackChecker.ConfigureRuntimeReminders(
-            new[]
+            TableLines("tut.basic_attack.remind", new[]
             {
                 Guide(EGOGuideMessageType.FailureAssist, "\uc88c\ud074\ub9ad\uacfc \uc6b0\ud074\ub9ad\uc744 \uac01\uac01 10\ud68c\uc529 \uc801\uc911\uc2dc\ucf1c.", 2.1f)
-            },
+            }, EGOGuideMessageType.FailureAssist),
             4f,
             false,
             6f);
@@ -1144,10 +1161,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialGuardConditionChecker guardChecker = gameObject.AddComponent<TutorialGuardConditionChecker>();
         guardChecker.ConfigureRuntime(_playerBridge, 1);
         guardChecker.ConfigureRuntimeReminders(
-            new[]
+            TableLines("tut.guard.remind", new[]
             {
                 Guide(EGOGuideMessageType.FailureAssist, "\ubd89\uc740 \uc120\uacfc \ub9c8\ucee4\uac00 \ubcf4\uc774\uba74 \uba3c\uc800 \ubc29\uc5b4\ud574.", 2.2f)
-            },
+            }, EGOGuideMessageType.FailureAssist),
             4f,
             true,
             6f);
@@ -1155,10 +1172,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialParryConditionChecker parryChecker = gameObject.AddComponent<TutorialParryConditionChecker>();
         parryChecker.ConfigureRuntime(_playerBridge, 1);
         parryChecker.ConfigureRuntimeReminders(
-            new[]
+            TableLines("tut.parry.remind", new[]
             {
                 Guide(EGOGuideMessageType.FailureAssist, "\uc11c\ub450\ub974\uc9c0 \ub9c8. \uacbd\uace0\uac00 \uacb9\uce58\ub294 \uc21c\uac04\uc5d0 \ub9c9\uc544.", 2.2f)
-            },
+            }, EGOGuideMessageType.FailureAssist),
             4f,
             true,
             6f);
@@ -1166,10 +1183,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialDodgeConditionChecker dodgeChecker = gameObject.AddComponent<TutorialDodgeConditionChecker>();
         dodgeChecker.ConfigureRuntime(new[] { guardDummy }, 1, false);
         dodgeChecker.ConfigureRuntimeReminders(
-            new[]
+            TableLines("tut.dodge.remind", new[]
             {
                 Guide(EGOGuideMessageType.FailureAssist, "\ubc1b\uc544\ub0b4\uc9c0 \ub9d0\uace0 \ub9c8\ucee4 \ubc14\uae65\uc73c\ub85c \ube44\ucf1c.", 2.1f)
-            },
+            }, EGOGuideMessageType.FailureAssist),
             4f,
             true,
             6f);
@@ -1177,10 +1194,10 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         TutorialPerfectDodgeConditionChecker perfectChecker = gameObject.AddComponent<TutorialPerfectDodgeConditionChecker>();
         perfectChecker.ConfigureRuntime(_playerBridge, 1);
         perfectChecker.ConfigureRuntimeReminders(
-            new[]
+            TableLines("tut.perfect_dodge.remind", new[]
             {
                 Guide(EGOGuideMessageType.FailureAssist, "\ud55c \ubc15\uc790 \ub2a6\uac8c. \ud22c\uc0ac\uccb4 \uc9c1\uc804\uc5d0 \ud68c\ud53c\ud574.", 2.1f)
-            },
+            }, EGOGuideMessageType.FailureAssist),
             4f,
             true,
             6f);
@@ -1347,6 +1364,37 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
                 null));
         }
 
+        // 대사 테이블(Resources/Dialogue/DialogueTable_KO): "tut.<stepId>.intro.N" / ".success.N" 가 있으면 교체.
+        for (int i = 0; i < steps.Count; i++)
+        {
+            TutorialStepDefinition step = steps[i];
+            if (step == null || string.IsNullOrEmpty(step.stepId))
+                continue;
+
+            step.introLines = TableLines("tut." + step.stepId + ".intro", step.introLines, EGOGuideMessageType.Briefing);
+            step.successLines = TableLines("tut." + step.stepId + ".success", step.successLines, EGOGuideMessageType.Success);
+        }
+
+        // 대사 스크립트: 튜토리얼 = 가상현실 훈련. 첫 단계 앞에 VR 부팅 대사를 붙인다.
+        if (steps.Count > 0 && steps[0] != null)
+        {
+            List<TutorialGuideLine> opening = new List<TutorialGuideLine>(TableLines("tut.open", new[]
+            {
+                Guide(EGOGuideMessageType.Briefing, "가상현실 부팅 완료.", 1.9f),
+                Guide(EGOGuideMessageType.Briefing, "내일 싸우러 가기 전 마지막 훈련이야, 추온.", 2.5f),
+                new TutorialGuideLine
+                {
+                    messageType = EGOGuideMessageType.Briefing,
+                    speaker = "추온",
+                    text = "장비는 체크됐어. 바로 시작하자.",
+                    duration = 2.1f
+                }
+            }, EGOGuideMessageType.Briefing));
+            if (steps[0].introLines != null)
+                opening.AddRange(steps[0].introLines);
+            steps[0].introLines = opening.ToArray();
+        }
+
         return steps.ToArray();
     }
 
@@ -1385,6 +1433,29 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             activateOnComplete = FilterNulls(activateOnComplete),
             deactivateOnComplete = FilterNulls(deactivateOnComplete)
         };
+    }
+
+    // 대사 테이블 우선: "prefix.0", "prefix.1", ... 가 있으면 그 줄들로, 없으면 기존 문구(fallback).
+    static TutorialGuideLine[] TableLines(string prefix, TutorialGuideLine[] fallback, EGOGuideMessageType messageType)
+    {
+        List<DialogueTable.Entry> entries = DialogueTable.GetSequence(prefix);
+        if (entries.Count == 0)
+            return fallback;
+
+        TutorialGuideLine[] lines = new TutorialGuideLine[entries.Count];
+        for (int i = 0; i < entries.Count; i++)
+        {
+            DialogueTable.Entry entry = entries[i];
+            lines[i] = new TutorialGuideLine
+            {
+                messageType = fallback != null && i < fallback.Length ? fallback[i].messageType : messageType,
+                speaker = string.IsNullOrEmpty(entry.speaker) ? "EGO" : entry.speaker,
+                text = entry.text,
+                duration = entry.duration > 0f ? entry.duration : DialogueTable.SuggestedDuration(entry.text)
+            };
+        }
+
+        return lines;
     }
 
     TutorialGuideLine Guide(EGOGuideMessageType messageType, string text, float duration)

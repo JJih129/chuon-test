@@ -12,6 +12,9 @@ public static class UltimateTempVfxBuilder
     [InitializeOnLoadMethod]
     static void AutoBuildOnLoad()
     {
+        if (!EditorAutoFixupGate.Enabled)
+            return;
+
         EditorApplication.delayCall += TryAutoBuild;
     }
 

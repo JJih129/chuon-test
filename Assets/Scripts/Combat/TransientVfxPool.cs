@@ -121,6 +121,65 @@ public sealed class TransientVfxPool : MonoBehaviour
                 return pooled;
         }
 
+        return CreateInstance(prefab, parent);
+    }
+
+    /// <summary>
+    /// 첫 사용 시 Instantiate/GetComponentsInChildren 스파이크를 피하기 위해 미리 생성.
+    /// </summary>
+    public static void Prewarm(GameObject prefab, int count)
+    {
+        if (prefab == null || count <= 0)
+            return;
+
+        Instance.PrewarmInternal(prefab, count);
+    }
+
+    /// <summary>
+    /// 풀에서 생성된 인스턴스의 캐시된 파티클 배열 반환 (Spawn 시 이미 재시작됨).
+    /// </summary>
+    public static bool TryGetCachedParticleSystems(GameObject spawned, out ParticleSystem[] particleSystems)
+    {
+        particleSystems = null;
+        if (spawned == null)
+            return false;
+
+        PooledInstance marker = spawned.GetComponent<PooledInstance>();
+        if (marker == null || marker.ParticleSystems == null)
+            return false;
+
+        particleSystems = marker.ParticleSystems;
+        return true;
+    }
+
+    void PrewarmInternal(GameObject prefab, int count)
+    {
+        if (!_pool.TryGetValue(prefab, out Queue<PooledInstance> queue))
+        {
+            queue = new Queue<PooledInstance>();
+            _pool[prefab] = queue;
+        }
+
+        Transform poolRoot = GetOrCreatePoolRoot(prefab);
+        GameObject poolRootObject = poolRoot.gameObject;
+        bool rootWasActive = poolRootObject.activeSelf;
+
+        // 비활성 부모 아래에서 생성해 Awake/playOnAwake 가 실행되지 않도록 함
+        poolRootObject.SetActive(false);
+        while (queue.Count < count)
+        {
+            PooledInstance created = CreateInstance(prefab, poolRoot);
+            if (created == null)
+                break;
+
+            created.gameObject.SetActive(false);
+            queue.Enqueue(created);
+        }
+        poolRootObject.SetActive(rootWasActive);
+    }
+
+    PooledInstance CreateInstance(GameObject prefab, Transform parent)
+    {
         UnityEngine.Object rawInstance = parent != null
             ? UnityEngine.Object.Instantiate((UnityEngine.Object)prefab, parent, false)
             : UnityEngine.Object.Instantiate((UnityEngine.Object)prefab);
@@ -226,11 +285,16 @@ public sealed class TransientVfxPool : MonoBehaviour
         if (pooled == null)
             return;
 
+        // 배열에 모든 자식 시스템이 포함되므로 withChildren=false (중복 순회 방지)
+        // Stop+Clear 후 Play 로 항상 처음부터 재시작
         for (int i = 0; i < pooled.ParticleSystems.Length; i++)
         {
             ParticleSystem particle = pooled.ParticleSystems[i];
-            particle.Clear(true);
-            particle.Play(true);
+            if (particle == null)
+                continue;
+
+            particle.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
+            particle.Play(false);
         }
 
         for (int i = 0; i < pooled.TrailRenderers.Length; i++)

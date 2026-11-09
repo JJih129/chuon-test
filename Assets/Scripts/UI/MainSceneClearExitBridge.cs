@@ -195,6 +195,23 @@ public class MainSceneClearExitBridge : MonoBehaviour
         if (fallbackExitNames == null || fallbackExitNames.Length == 0)
             return null;
 
+        // 전체 씬 스캔 결과 캐시 (파괴 시 재탐색, 실패 시 쿨다운)
+        if (_cachedFallbackExitRoot != null)
+            return _cachedFallbackExitRoot;
+        if (Time.unscaledTime < _nextFallbackExitLookupAt)
+            return null;
+
+        _cachedFallbackExitRoot = FindFallbackExitRootInScene();
+        if (_cachedFallbackExitRoot == null)
+            _nextFallbackExitLookupAt = Time.unscaledTime + 1f;
+        return _cachedFallbackExitRoot;
+    }
+
+    Transform _cachedFallbackExitRoot;
+    float _nextFallbackExitLookupAt;
+
+    Transform FindFallbackExitRootInScene()
+    {
         Transform[] transforms = FindObjectsOfType<Transform>(true);
         if (transforms == null || transforms.Length == 0)
             return null;

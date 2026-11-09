@@ -25,6 +25,9 @@ public class UI_UltimateGauge : MonoBehaviour
     void Awake()
     {
         _inst = this;
+        // 직렬화된 fillAmount(1)가 남아 0%인데 링이 가득 차 보이던 문제 방지
+        if (fill != null)
+            fill.fillAmount = 0f;
         SetInternal(0f);
         SetReadyInternal(false);
         enabled = false;

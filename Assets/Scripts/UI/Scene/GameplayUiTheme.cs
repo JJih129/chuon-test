@@ -33,6 +33,22 @@ public sealed class GameplayUiTheme : ScriptableObject
     public Color buttonTextColor = new Color(0.98f, 0.98f, 0.99f, 1f);
     public Color buttonMutedTextColor = new Color(0.86f, 0.87f, 0.90f, 0.95f);
 
+    [Header("Gameplay HUD (Arasaka corporate)")]
+    [Tooltip("플레이어/퀘스트/보스 HUD 프레임 색 (오프화이트, 알파 ~0.6). *_white 스프라이트에 곱해짐")]
+    public Color hudFrameColor = new Color(0.86f, 0.87f, 0.89f, 0.62f);
+    [Tooltip("HUD 강조 레드 (#D8202A)")]
+    public Color hudAccentColor = new Color(0.847f, 0.125f, 0.165f, 1f);
+    public Color hudHpFillColor = new Color(0.86f, 0.87f, 0.89f, 0.92f);
+    [Tooltip("HP 감소 시 뒤에 남는 데미지 청크 색")]
+    public Color hudHpDamageChunkColor = new Color(0.847f, 0.125f, 0.165f, 0.92f);
+    [Tooltip("이 비율 이하에서 HP 채움이 레드로 전환")]
+    [Range(0f, 1f)] public float hudHpLowThreshold = 0.3f;
+    public Color hudAmpouleColor = new Color(0.90f, 0.91f, 0.93f, 0.92f);
+    public Color hudUltimateChargingColor = new Color(0.97f, 0.97f, 0.98f, 1f);
+    public Color hudTextColor = new Color(0.97f, 0.97f, 0.98f, 1f);
+    public Color hudPanelColor = new Color(0.035f, 0.04f, 0.045f, 0.86f);
+    public Color hudQuestNodeDoneColor = new Color(0.86f, 0.87f, 0.89f, 0.55f);
+
     [Header("Typography")]
     public int deathTitleFontSize = 110;
     public int deathSubtitleFontSize = 22;

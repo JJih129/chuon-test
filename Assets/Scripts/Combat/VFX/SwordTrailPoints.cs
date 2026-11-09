@@ -34,7 +34,8 @@ public sealed class SwordTrailPoints : MonoBehaviour
 #if UNITY_EDITOR
     void OnValidate()
     {
-        if (trailBase == null || trailTip == null)
+        // 런타임 AddComponent(PlayerAttackVfxPresenter 의 자동 연결) 직후에는 아직 비어 있으므로 플레이 중엔 경고하지 않음
+        if (!Application.isPlaying && (trailBase == null || trailTip == null))
             Debug.LogWarning("[SwordTrailPoints] TrailBase and TrailTip must be assigned.", this);
     }
 

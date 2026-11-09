@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -14,11 +15,20 @@ public sealed class SceneUiResponsiveRuntime : MonoBehaviour
 
     static SceneUiResponsiveRuntime s_instance;
 
-    readonly Dictionary<int, RectSnapshot> _snapshots = new Dictionary<int, RectSnapshot>(128);
+    // 원본 오프셋 스냅샷 (RectTransform 기준). 이미 보정된 값을 다시 스냅샷하지 않도록 최초 1회만 기록.
+    readonly Dictionary<RectTransform, RectSnapshot> _snapshots = new Dictionary<RectTransform, RectSnapshot>(128);
+    readonly List<RectTransform> _deadKeys = new List<RectTransform>(16);
 
     Vector2Int _lastScreenSize;
     Rect _lastSafeArea;
-    float _nextRefreshAt;
+    int _deferredRefreshFrame = -1;
+
+    /// <summary>런타임에 생성된 Canvas 등, 다음 프레임에 1회 재적용을 요청.</summary>
+    public static void RequestRefresh()
+    {
+        if (s_instance != null)
+            s_instance._deferredRefreshFrame = Time.frameCount + 1;
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Bootstrap()
@@ -41,7 +51,7 @@ public sealed class SceneUiResponsiveRuntime : MonoBehaviour
 
         s_instance = this;
         SceneManager.sceneLoaded += OnSceneLoaded;
-        RefreshAll(force: true);
+        RefreshAll();
     }
 
     void OnDestroy()
@@ -52,29 +62,46 @@ public sealed class SceneUiResponsiveRuntime : MonoBehaviour
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 
+    // 주기 폴링 없음: 화면 크기/세이프 영역 변경, 씬 로드(+Start 생성분 대비 지연 1회), 명시 요청 시에만 갱신.
     void Update()
     {
-        var screenSize = new Vector2Int(Screen.width, Screen.height);
-        var safeArea = Screen.safeArea;
-        bool changed = screenSize != _lastScreenSize || safeArea != _lastSafeArea;
-        bool periodic = Time.unscaledTime >= _nextRefreshAt;
-        if (!changed && !periodic)
+        bool changed = Screen.width != _lastScreenSize.x
+            || Screen.height != _lastScreenSize.y
+            || Screen.safeArea != _lastSafeArea;
+        bool deferred = _deferredRefreshFrame >= 0 && Time.frameCount >= _deferredRefreshFrame;
+        if (!changed && !deferred)
             return;
 
-        RefreshAll(changed);
+        _deferredRefreshFrame = -1;
+        RefreshAll();
     }
 
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        _snapshots.Clear();
-        RefreshAll(force: true);
+        PruneDeadSnapshots();
+        RefreshAll();
+        // Start()에서 생성되는 Canvas 대비 지연 1회 갱신
+        _deferredRefreshFrame = Time.frameCount + 2;
     }
 
-    void RefreshAll(bool force)
+    void PruneDeadSnapshots()
+    {
+        _deadKeys.Clear();
+        foreach (var key in _snapshots.Keys)
+        {
+            if (key == null)
+                _deadKeys.Add(key);
+        }
+
+        for (int i = 0; i < _deadKeys.Count; i++)
+            _snapshots.Remove(_deadKeys[i]);
+        _deadKeys.Clear();
+    }
+
+    void RefreshAll()
     {
         _lastScreenSize = new Vector2Int(Screen.width, Screen.height);
         _lastSafeArea = Screen.safeArea;
-        _nextRefreshAt = Time.unscaledTime + 1f;
 
         var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         for (int i = 0; i < canvases.Length; i++)
@@ -84,7 +111,7 @@ public sealed class SceneUiResponsiveRuntime : MonoBehaviour
                 continue;
 
             NormalizeCanvasScaler(canvas);
-            ApplySafeAreaToCanvasChildren(canvas, force);
+            ApplySafeAreaToCanvasChildren(canvas);
         }
     }
 
@@ -103,7 +130,7 @@ public sealed class SceneUiResponsiveRuntime : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
     }
 
-    void ApplySafeAreaToCanvasChildren(Canvas canvas, bool force)
+    void ApplySafeAreaToCanvasChildren(Canvas canvas)
     {
         if (canvas == null || canvas.transform is not RectTransform canvasRect)
             return;
@@ -123,17 +150,16 @@ public sealed class SceneUiResponsiveRuntime : MonoBehaviour
             if (ShouldSkipSafeArea(child))
                 continue;
 
-            int key = child.GetInstanceID();
-            if (force || !_snapshots.ContainsKey(key))
+            if (!_snapshots.TryGetValue(child, out var snapshot))
             {
-                _snapshots[key] = new RectSnapshot
+                snapshot = new RectSnapshot
                 {
                     offsetMin = child.offsetMin,
                     offsetMax = child.offsetMax
                 };
+                _snapshots[child] = snapshot;
             }
 
-            var snapshot = _snapshots[key];
             Vector2 offsetMin = snapshot.offsetMin;
             Vector2 offsetMax = snapshot.offsetMax;
 
@@ -157,14 +183,19 @@ public sealed class SceneUiResponsiveRuntime : MonoBehaviour
         if (string.IsNullOrEmpty(name))
             return false;
 
-        string lower = name.ToLowerInvariant();
-        return lower.Contains("background")
-            || lower.Contains("_bg")
-            || lower.EndsWith("bg")
-            || lower.Contains("backdrop")
-            || lower.Contains("fade")
-            || lower.Contains("overlay")
-            || lower.Contains("blocker")
-            || lower.Contains("dim");
+        return Has(name, "background")
+            || Has(name, "_bg")
+            || name.EndsWith("bg", StringComparison.OrdinalIgnoreCase)
+            || Has(name, "backdrop")
+            || Has(name, "fade")
+            || Has(name, "overlay")
+            || Has(name, "blocker")
+            || Has(name, "dim")
+            || Has(name, "letterbox");
+    }
+
+    static bool Has(string source, string value)
+    {
+        return source.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 }

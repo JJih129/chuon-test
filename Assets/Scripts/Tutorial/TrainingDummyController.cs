@@ -152,8 +152,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     float _attackResumeRealtime;
     TutorialHintUIBridge _hintBridge;
     Coroutine _localParrySlowMotion;
-    float _localSlowPreviousScale = 1f;
-    float _localSlowPreviousFixedDeltaTime = 0.02f;
+    readonly object _localSlowTimeKey = new object();
     bool _localSlowMotionActive;
     float _attackLungeMovedDistance;
     bool _forcedParryPromptActive;
@@ -162,8 +161,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
     bool _hasLockedWorldPose;
     Vector3 _lockedWorldPosition;
     Quaternion _lockedWorldRotation;
-    float _forcedParryPreviousTimeScale = 1f;
-    float _forcedParryPreviousFixedDeltaTime = 0.02f;
+    readonly object _forcedParryTimeKey = new object();
     float _forcedParryPreviousAnimatorSpeed = 1f;
     readonly Dictionary<TutorialProjectile, AttackSnapshot> _projectileSnapshots = new Dictionary<TutorialProjectile, AttackSnapshot>();
 
@@ -718,10 +716,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     void TriggerForcedParryFreeze()
     {
-        _forcedParryPreviousTimeScale = Time.timeScale;
-        _forcedParryPreviousFixedDeltaTime = Time.fixedDeltaTime;
-        Time.timeScale = Mathf.Clamp(forcedParryTimeScale, 0f, 1f);
-        Time.fixedDeltaTime = 0.02f * Mathf.Max(Time.timeScale, 0.0001f);
+        GameTimeScale.Request(_forcedParryTimeKey, Mathf.Clamp(forcedParryTimeScale, 0f, 1f));
 
         if (visualAnimator != null)
         {
@@ -762,8 +757,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         if (!_forcedParryPromptActive && !_forcedPerfectDodgePromptActive)
             return;
 
-        Time.timeScale = _forcedParryPreviousTimeScale;
-        Time.fixedDeltaTime = _forcedParryPreviousFixedDeltaTime;
+        GameTimeScale.Release(_forcedParryTimeKey);
 
         if (visualAnimator != null)
             visualAnimator.speed = _forcedParryPreviousAnimatorSpeed;
@@ -845,11 +839,8 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     IEnumerator CoLocalParrySlowMotion()
     {
-        _localSlowPreviousScale = Time.timeScale;
-        _localSlowPreviousFixedDeltaTime = Time.fixedDeltaTime;
         _localSlowMotionActive = true;
-        Time.timeScale = Mathf.Clamp(parryAssistTimeScale, 0.05f, 1f);
-        Time.fixedDeltaTime = 0.02f * Time.timeScale;
+        GameTimeScale.Request(_localSlowTimeKey, Mathf.Clamp(parryAssistTimeScale, 0.05f, 1f));
 
         yield return new WaitForSecondsRealtime(parryAssistDuration);
 
@@ -862,11 +853,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
         if (!_localSlowMotionActive)
             return;
 
-        if (Mathf.Abs(Time.timeScale - parryAssistTimeScale) <= 0.05f)
-        {
-            Time.timeScale = _localSlowPreviousScale;
-            Time.fixedDeltaTime = _localSlowPreviousFixedDeltaTime;
-        }
+        GameTimeScale.Release(_localSlowTimeKey);
 
         _localSlowMotionActive = false;
     }

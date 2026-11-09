@@ -1,8 +1,8 @@
-// [Çì´õ] »óÈ£ÀÛ¿ë ´ë»ó ÀÎÅÍÆäÀÌ½º
+// [í—¤ë”] ìƒí˜¸ì‘ìš© ëŒ€ìƒ ì¸í„°í˜ì´ìŠ¤
 public interface IInteractable
 {
-    string GetPromptText();   // [Çì´õ] È­¸é¿¡ ¶ç¿ï ¹®±¸ ¹İÈ¯
-    void OnHoverStart();      // [Çì´õ] Ä¿¼­/·¹ÀÌ°¡ ´ê±â ½ÃÀÛ
-    void OnHoverEnd();        // [Çì´õ] Ä¿¼­/·¹ÀÌ°¡ ¹ş¾î³²
-    bool TryInteract(object invoker = null); // [Çì´õ] F ÀÔ·Â µî ½ÇÁ¦ »óÈ£ÀÛ¿ë
+    string GetPromptText();   // [í—¤ë”] í™”ë©´ì— ë„ìš¸ ë¬¸êµ¬ ë°˜í™˜
+    void OnHoverStart();      // [í—¤ë”] ì»¤ì„œ/ë ˆì´ê°€ ë‹¿ê¸° ì‹œì‘
+    void OnHoverEnd();        // [í—¤ë”] ì»¤ì„œ/ë ˆì´ê°€ ë²—ì–´ë‚¨
+    bool TryInteract(object invoker = null); // [í—¤ë”] F ì…ë ¥ ë“± ì‹¤ì œ ìƒí˜¸ì‘ìš©
 }

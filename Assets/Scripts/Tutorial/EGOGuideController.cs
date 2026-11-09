@@ -79,7 +79,7 @@ public class EGOGuideController : MonoBehaviour
             _lastPlayedKey = line.DeduplicationKey;
 
             if (voiceSource != null && line.clip != null)
-                voiceSource.PlayOneShot(line.clip);
+                voiceSource.PlayOneShot(line.clip, AudioOptionsRuntime.ScaleVoice(1f)); // 보이스 볼륨 옵션
 
             hintUIBridge?.ShowGuideText(line.text, line.speaker);
             yield return new WaitForSeconds(Mathf.Max(0.2f, line.duration > 0f ? line.duration : defaultLineDuration));

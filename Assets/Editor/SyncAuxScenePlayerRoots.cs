@@ -19,6 +19,9 @@ public static class SyncAuxScenePlayerRoots
 
     static SyncAuxScenePlayerRoots()
     {
+        if (!EditorAutoFixupGate.Enabled)
+            return;
+
         EditorApplication.delayCall += RunOnceAfterReload;
     }
 

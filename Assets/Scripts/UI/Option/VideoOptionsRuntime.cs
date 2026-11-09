@@ -19,6 +19,26 @@ public class VideoOptionsRuntime : MonoBehaviour
     MotionBlur _motionBlur;
     bool _initialized;
 
+    // Base cinematic look (always on). Keep values subtle; per-scene volumes can override with higher priority.
+    // Threshold slightly above 1 so the bright (near-white) floor does not bloom; only true HDR highlights do.
+    const float BaseBloomThreshold = 1.1f;
+    const float BaseBloomIntensity = 0.65f;
+    const float BaseBloomScatter = 0.68f;
+    const float BaseVignetteIntensity = 0.2f;
+
+    // Base grade: counter the flat / washed-out look. Neutral tonemapping is kept on purpose
+    // (ACES darkens and hue-shifts the anime character shading).
+    const float BaseContrast = 12f;      // ColorAdjustments.contrast (-100..100)
+    const float BaseSaturation = 8f;     // ColorAdjustments.saturation (-100..100)
+    const float BaseExposureOffset = -0.2f; // added to the brightness option's postExposure mapping (EV)
+    const float BrightnessMinExposure = -1.6f;
+    const float BrightnessMaxExposure = 0f;
+    // Subtle shadows/midtones/highlights: slightly richer, cooler shadows and tamed highlights.
+    // Vector4 = (r, g, b, w); w is the luminance offset, rgb is the tint (1 = neutral).
+    static readonly Vector4 BaseShadows = new Vector4(0.98f, 0.99f, 1.02f, -0.04f);
+    static readonly Vector4 BaseMidtones = new Vector4(1f, 1f, 1f, 0f);
+    static readonly Vector4 BaseHighlights = new Vector4(1f, 1f, 1f, -0.06f);
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Bootstrap()
     {
@@ -106,6 +126,8 @@ public class VideoOptionsRuntime : MonoBehaviour
         _colorAdjustments = _profile.Add<ColorAdjustments>(true);
         _colorAdjustments.active = true;
         _colorAdjustments.postExposure.overrideState = true;
+        _colorAdjustments.contrast.Override(BaseContrast);
+        _colorAdjustments.saturation.Override(BaseSaturation);
 
         _motionBlur = _profile.Add<MotionBlur>(true);
         _motionBlur.active = true;
@@ -113,9 +135,32 @@ public class VideoOptionsRuntime : MonoBehaviour
         _motionBlur.quality.overrideState = true;
         _motionBlur.quality.value = MotionBlurQuality.Low;
 
+        AddBaseLook(_profile);
+
         _initialized = true;
         ApplyPrefs();
         ApplyToAllCameras();
+    }
+
+    static void AddBaseLook(VolumeProfile profile)
+    {
+        var bloom = profile.Add<Bloom>(true);
+        bloom.threshold.value = BaseBloomThreshold;
+        bloom.intensity.value = BaseBloomIntensity;
+        bloom.scatter.value = BaseBloomScatter;
+        bloom.highQualityFiltering.value = false;
+
+        var tonemapping = profile.Add<Tonemapping>(true);
+        tonemapping.mode.value = TonemappingMode.Neutral;
+
+        var vignette = profile.Add<Vignette>(true);
+        vignette.intensity.value = BaseVignetteIntensity;
+        vignette.smoothness.value = 0.45f;
+
+        var smh = profile.Add<ShadowsMidtonesHighlights>(true);
+        smh.shadows.Override(BaseShadows);
+        smh.midtones.Override(BaseMidtones);
+        smh.highlights.Override(BaseHighlights);
     }
 
     void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -136,7 +181,7 @@ public class VideoOptionsRuntime : MonoBehaviour
             return;
 
         value = Mathf.Clamp01(value);
-        _colorAdjustments.postExposure.value = Mathf.Lerp(-1.6f, 0f, value);
+        _colorAdjustments.postExposure.value = Mathf.Lerp(BrightnessMinExposure, BrightnessMaxExposure, value) + BaseExposureOffset;
         ApplyVolumeState();
         ApplyToAllCameras();
     }
@@ -176,11 +221,8 @@ public class VideoOptionsRuntime : MonoBehaviour
 
     bool ShouldEnablePostProcessing()
     {
-        bool brightnessActive = _colorAdjustments != null
-            && Mathf.Abs(_colorAdjustments.postExposure.value) > 0.001f;
-        bool motionBlurActive = _motionBlur != null
-            && _motionBlur.intensity.value > 0.001f;
-
-        return brightnessActive || motionBlurActive;
+        // The base look (bloom / tonemapping / vignette) is always active.
+        return true;
     }
+
 }

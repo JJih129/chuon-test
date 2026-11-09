@@ -9,10 +9,9 @@ public static class CombatFeelRuntimeUtility
     static Coroutine _activeHitStopCoroutine;
     static int _activeHitStopSessionId;
     static bool _isHitStopActive;
-    static float _restoreTimeScale = 1f;
-    static float _restoreFixedDeltaTime = DefaultFixedDeltaTime;
     static float _currentAppliedTimeScale = 1f;
     static float _currentAppliedFixedDeltaTime = DefaultFixedDeltaTime;
+    static readonly object HitStopTimeKey = new object();
 
     public static bool IsHitStopActive => _isHitStopActive;
 
@@ -90,17 +89,8 @@ public static class CombatFeelRuntimeUtility
             ? DefaultFixedDeltaTime * appliedScale
             : Time.fixedDeltaTime;
 
-        if (!_isHitStopActive)
-        {
-            _restoreTimeScale = Time.timeScale;
-            _restoreFixedDeltaTime = Time.fixedDeltaTime > 0f
-                ? Time.fixedDeltaTime
-                : DefaultFixedDeltaTime;
-        }
-        else
-        {
+        if (_isHitStopActive)
             StopActiveHitStopCoroutine();
-        }
 
         _isHitStopActive = true;
         _currentAppliedTimeScale = appliedScale;
@@ -117,11 +107,8 @@ public static class CombatFeelRuntimeUtility
         float duration,
         bool scaleFixedDeltaTime)
     {
-        float appliedFixedDeltaTime = DefaultFixedDeltaTime * appliedScale;
-
-        Time.timeScale = appliedScale;
-        if (scaleFixedDeltaTime)
-            Time.fixedDeltaTime = appliedFixedDeltaTime;
+        // GameTimeScale owns Time.timeScale/fixedDeltaTime; overlapping effects resolve to the minimum.
+        GameTimeScale.Request(HitStopTimeKey, appliedScale);
 
         yield return new WaitForSecondsRealtime(duration);
 
@@ -158,11 +145,7 @@ public static class CombatFeelRuntimeUtility
 
     static void RestoreActiveHitStopState()
     {
-        if (Mathf.Abs(Time.timeScale - _currentAppliedTimeScale) < 0.0001f)
-            Time.timeScale = _restoreTimeScale;
-
-        if (Mathf.Abs(Time.fixedDeltaTime - _currentAppliedFixedDeltaTime) < 0.0001f)
-            Time.fixedDeltaTime = _restoreFixedDeltaTime;
+        GameTimeScale.Release(HitStopTimeKey);
 
         _isHitStopActive = false;
         _activeHitStopCoroutine = null;

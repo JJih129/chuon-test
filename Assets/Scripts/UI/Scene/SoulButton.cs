@@ -36,6 +36,15 @@ public class SoulButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandl
         if (iconImage) iconImage.DOFade(0, 0.2f).SetUpdate(true);
     }
 
+    // 씬 전환으로 파괴될 때 진행 중인 트윈(아이콘 페이드 등)이 파괴된 Image 를 건드리지 않도록 정리
+    private void OnDestroy()
+    {
+        // 대상이 먼저 파괴됐을 수 있으므로 Unity null 비교 대신 참조로 Kill
+        if (!ReferenceEquals(iconImage, null)) DOTween.Kill(iconImage);
+        if (!ReferenceEquals(buttonText, null)) DOTween.Kill(buttonText);
+        DOTween.Kill(transform);
+    }
+
     public void OnPointerClick(PointerEventData eventData)
     {
         transform.DOPunchScale(new Vector3(0.1f, 0.1f, 0.1f), 0.1f).SetUpdate(true);

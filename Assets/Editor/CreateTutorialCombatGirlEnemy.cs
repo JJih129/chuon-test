@@ -20,6 +20,9 @@ public static class CreateTutorialCombatGirlEnemy
     [InitializeOnLoadMethod]
     static void AutoCreateOnce()
     {
+        if (!EditorAutoFixupGate.Enabled)
+            return;
+
         if (SessionState.GetBool(AutoCreateSessionKey, false))
             return;
 

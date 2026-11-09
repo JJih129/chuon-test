@@ -65,6 +65,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     public DroneCombatRole CombatRole => combatRole;
     public bool IsDead => _isDead;
+    public float AttackTelegraphLeadTime => _attackTelegraphLeadTime;
 
     [Header("Death Cleanup")]
     [SerializeField, Min(0.05f)] float deathDespawnDelay = 0.45f;
@@ -819,8 +820,13 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
         if (_rigidbody != null)
         {
-            _rigidbody.velocity = Vector3.zero;
-            _rigidbody.angularVelocity = Vector3.zero;
+            // Kinematic bodies (lightweightSimulationMode) don't support velocity writes (Unity warns
+            // "Setting linear velocity of a kinematic body is not supported"); only zero dynamic ones.
+            if (!_rigidbody.isKinematic)
+            {
+                _rigidbody.velocity = Vector3.zero;
+                _rigidbody.angularVelocity = Vector3.zero;
+            }
             _rigidbody.isKinematic = true;
         }
 

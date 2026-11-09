@@ -20,6 +20,11 @@ public class CameraShake : MonoBehaviour
         if (scaledAmplitude <= 0f || duration <= 0f)
             return;
 
+        // 소울라이크 카메라 리그가 있는 씬: 메인 카메라 흔들림은 리그가 위치 노이즈(누적 상한)로 처리한다.
+        // (Brain 이 매 프레임 메인 카메라 Transform 을 덮어쓰므로 여기서 localPosition 을 흔들면 순서에 따라 묻힌다)
+        if (_isMainCamera && SoulsCameraRig.TryRouteShake(scaledAmplitude, duration))
+            return;
+
         EnsureInitialized();
         enabled = true;
 
@@ -34,9 +39,12 @@ public class CameraShake : MonoBehaviour
         }
     }
 
+    bool _isMainCamera;
+
     void Awake()
     {
         EnsureInitialized();
+        _isMainCamera = GetComponent<Unity.Cinemachine.CinemachineBrain>() != null;
         enabled = false;
     }
 

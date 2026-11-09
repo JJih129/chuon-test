@@ -105,7 +105,10 @@ public class SystemBootLoader : MonoBehaviour
 
     void ConfigureResponsiveUi()
     {
+        // BootLoader는 Canvas 밖(루트)에 있으므로 UI 요소 쪽에서 캔버스를 찾는다.
         var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null && logText != null)
+            canvas = logText.canvas != null ? logText.canvas.rootCanvas : null;
         if (canvas == null)
             return;
 
@@ -130,8 +133,8 @@ public class SystemBootLoader : MonoBehaviour
             return;
 
         var rect = logText.rectTransform;
-        rect.anchorMin = new Vector2(0.06f, 0.58f);
-        rect.anchorMax = new Vector2(0.58f, 0.94f);
+        rect.anchorMin = new Vector2(0.06f, 0.30f);
+        rect.anchorMax = new Vector2(0.66f, 0.88f);
         rect.pivot = new Vector2(0f, 1f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
@@ -146,11 +149,24 @@ public class SystemBootLoader : MonoBehaviour
         if (rect == null)
             return;
 
-        rect.anchorMin = new Vector2(0.08f, 0.10f);
-        rect.anchorMax = new Vector2(0.92f, 0.18f);
+        rect.anchorMin = new Vector2(0.06f, 0.175f);
+        rect.anchorMax = new Vector2(0.94f, 0.187f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
+
+        // 슬라이더 자식(Background / Fill Area)을 바 영역 전체로 맞춘다 (얇은 기업형 진행 바).
+        for (int i = 0; i < rect.childCount; i++)
+        {
+            var child = rect.GetChild(i) as RectTransform;
+            if (child == null)
+                continue;
+
+            child.anchorMin = Vector2.zero;
+            child.anchorMax = Vector2.one;
+            child.offsetMin = Vector2.zero;
+            child.offsetMax = Vector2.zero;
+        }
     }
 
     void ConfigureProgressTextRect()
@@ -159,12 +175,12 @@ public class SystemBootLoader : MonoBehaviour
             return;
 
         var rect = progressText.rectTransform;
-        rect.anchorMin = new Vector2(0.08f, 0.20f);
-        rect.anchorMax = new Vector2(0.92f, 0.28f);
+        rect.anchorMin = new Vector2(0.50f, 0.198f);
+        rect.anchorMax = new Vector2(0.94f, 0.250f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
-        progressText.alignment = TextAlignmentOptions.Center;
+        progressText.alignment = TextAlignmentOptions.BottomRight;
     }
 
     void ConfigureReadyStatusRect()
@@ -173,17 +189,21 @@ public class SystemBootLoader : MonoBehaviour
             return;
 
         var rect = readyStatusText.rectTransform;
-        rect.anchorMin = new Vector2(0.08f, 0.30f);
-        rect.anchorMax = new Vector2(0.92f, 0.36f);
+        rect.anchorMin = new Vector2(0.06f, 0.198f);
+        rect.anchorMax = new Vector2(0.50f, 0.250f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
-        readyStatusText.alignment = TextAlignmentOptions.Center;
+        readyStatusText.alignment = TextAlignmentOptions.BottomLeft;
     }
 
     void Start()
     {
         StartCoroutine(BootSequence());
+        // 로딩 화면 동안 레거시 Text 한글 글리프를 미리 캐시 (다음 씬 첫 프레임 Font.CacheFontForText 스파이크 제거)
+        StartCoroutine(LegacyFontGlyphWarmup.WarmRoutine());
+        // 부팅 로딩 화면 우하단 전술 메모 (다음 씬 로드 시 페이더와 함께 사라짐)
+        LoadingTipOverlay.ShowRandom();
     }
 
     IEnumerator BootSequence()
@@ -244,16 +264,48 @@ public class SystemBootLoader : MonoBehaviour
         float progress = totalLogs > 0 ? Mathf.Clamp01((float)revealedCount / totalLogs) : 1f;
 
         if (logText != null)
-            logText.text = string.Join("\n", visibleLines.ToArray());
+        {
+            var sb = new StringBuilder();
+            foreach (string line in visibleLines)
+            {
+                if (sb.Length > 0)
+                    sb.Append('\n');
+                sb.Append(FormatLogLine(line));
+            }
+            logText.text = sb.ToString();
+        }
 
         if (progressBar != null)
             progressBar.value = progress;
 
+        // 퍼센트는 progressText 한 곳에서만 표시하고, readyStatusText는 단계 라벨로 사용 (중복 표기 제거)
         if (progressText != null)
-            progressText.text = $"SYSTEM BOOT... {(progress * 100f):0}%";
+            progressText.text = $"{(progress * 100f):0}<size=60%>%</size>";
 
         if (readyStatusText != null)
-            readyStatusText.text = $"SYSTEM READY... {(progress * 100f):0}%";
+            readyStatusText.text = progress >= 1f
+                ? "<color=#FFFFFF>E.G.O LINK</color>  //  ESTABLISHED"
+                : "<color=#FFFFFF>E.G.O LINK</color>  //  SYNCHRONIZING";
+    }
+
+    // 로그 라인 강조: 경고는 레드, 접근/완료 라인은 화이트, 일반 라인은 기본 그레이
+    static string FormatLogLine(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+            return line;
+
+        string safe = line.Replace("<", "‹");
+        if (line.StartsWith("ALERT") || line.Contains("[WARNING]") || line.Contains("[ELEVATED]") || line.Contains("[RISK+]"))
+            return "<color=#FF3B30>" + safe + "</color>";
+        if (line.StartsWith(">>>") || line.StartsWith("SYSTEM"))
+            return "<color=#FFFFFF><b>" + safe + "</b></color>";
+        if (line.StartsWith(">"))
+            return "<color=#E6E6E6>" + safe + "</color>";
+
+        int tagStart = safe.LastIndexOf('[');
+        if (tagStart > 0 && safe.EndsWith("]"))
+            return safe.Substring(0, tagStart) + "<color=#FFFFFF>" + safe.Substring(tagStart) + "</color>";
+        return safe;
     }
 
     private bool IsAnyKeyPressedThisFrame()
@@ -292,7 +344,7 @@ public class SystemBootLoader : MonoBehaviour
         awaitingPlayerInput = true;
         if (pressAnyKeyText != progressText)
             pressAnyKeyText.gameObject.SetActive(true);
-        pressAnyKeyText.text = "PRESS ANY KEY . . .";
+        pressAnyKeyText.text = "PRESS ANY KEY";
 
         Tween blinkTween = pressAnyKeyText
             .DOFade(0.3f, 0.5f)

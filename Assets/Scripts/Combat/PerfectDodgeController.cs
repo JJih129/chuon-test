@@ -24,7 +24,8 @@ public class PerfectDodgeController : MonoBehaviour
     [Range(0.01f, 1f)] public float initialFreezeTimeScale = 0.04f;
     [Min(0f)] public float initialFreezeDuration = 0.03f;
     [Range(0.01f, 1f)] public float slowTimeScale = 0.28f;
-    [Min(0.01f)] public float slowDuration = 2f;
+    [Tooltip("Realtime seconds to ease the slow-mo back to 1. Keep short: the reward is the follow-up counter window, not long slow-mo.")]
+    [Min(0.01f)] public float slowDuration = 0.45f;
     [SerializeField] private PlayerHealth playerHealth;
     [Min(0f)] public float perfectDodgeInvincibleRealtime = 0.50f;
     [Tooltip("Adjust fixedDeltaTime while the slow effect is active.")]
@@ -36,8 +37,8 @@ public class PerfectDodgeController : MonoBehaviour
     public bool forceAnimatorsToScaled = true;
     [Tooltip("Collect child animators automatically when the explicit list is empty.")]
     public bool includeChildAnimators = true;
-    [Tooltip("Drive animator speed to match the active time scale.")]
-    public bool overrideAnimatorSpeed = true;
+    [Tooltip("Also multiply animator.speed by the time scale. Normal-update animators are already slowed by Time.timeScale, so enabling this slows them twice.")]
+    public bool overrideAnimatorSpeed = false;
     public List<Animator> animatorsToAffect = new List<Animator>();
 
     [Header("Movement Lock")]
@@ -59,6 +60,14 @@ public class PerfectDodgeController : MonoBehaviour
     public PlayerUltimateController ultimate;
     public float ultimateGainOnPerfect = 7f;
     public bool autoUltimateGain = true;
+
+    [Header("Feedback Audio")]
+    [Tooltip("Dedicated perfect-dodge SFX played on success (in addition to ParryFeedbackController's dodgeClip). Null = silent.")]
+    public AudioClip perfectDodgeClip;
+    [Tooltip("Volume for perfectDodgeClip (scaled by the SFX option).")]
+    [Range(0f, 1f)] public float perfectDodgeVolume = 0.9f;
+    [Tooltip("Optional AudioSource for perfectDodgeClip. Null = shared OneShotAudio pool (2D).")]
+    public AudioSource perfectDodgeAudioSource;
 
     [Header("Attack Follow Up")]
     public bool enableAttackFollowUpAssist = true;
@@ -177,6 +186,17 @@ public class PerfectDodgeController : MonoBehaviour
 
     public void PerfectDodge_EndSlow() => ForceEndSlow();
 
+    void PlayPerfectDodgeSfx()
+    {
+        if (perfectDodgeClip == null)
+            return;
+
+        if (perfectDodgeAudioSource != null)
+            perfectDodgeAudioSource.PlayOneShot(perfectDodgeClip, AudioOptionsRuntime.ScaleSfx(perfectDodgeVolume));
+        else
+            OneShotAudio.Play2D(perfectDodgeClip, perfectDodgeVolume);
+    }
+
     void StartCloseTimer(float seconds)
     {
         if (_coClose != null)
@@ -212,6 +232,7 @@ public class PerfectDodgeController : MonoBehaviour
 
         if (autoFeedback && feedback)
             feedback.PlayPerfectDodgeFeedback(hitPoint, attacker);
+        PlayPerfectDodgeSfx();
         if (autoAfterImage && afterImageEffect)
         {
             afterImageEffect.Play();
@@ -351,10 +372,11 @@ public class PerfectDodgeController : MonoBehaviour
     void ApplyTimeScale(float scale)
     {
         scale = Mathf.Clamp(scale, 0.0001f, 1f);
-        Time.timeScale = scale;
-
-        if (adjustFixedDelta)
-            Time.fixedDeltaTime = ResolveBaseFixedDeltaTime(_initialFixedDelta) * scale;
+        // GameTimeScale owns Time.timeScale and fixedDeltaTime (overlaps resolve to the minimum).
+        if (scale >= 0.9999f)
+            GameTimeScale.Release(this);
+        else
+            GameTimeScale.Request(this, scale);
 
         if (forceAnimatorsToScaled && overrideAnimatorSpeed)
             ApplyAnimatorSpeed(scale);

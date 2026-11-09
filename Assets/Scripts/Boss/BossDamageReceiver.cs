@@ -20,7 +20,7 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
     [Tooltip("Consume the parry counter window on the first valid hit.")]
     public bool consumeParryCounterBonus = true;
     [Tooltip("Grant extra break when the counter hit lands.")]
-    public bool grantBreakBonusOnParryCounter = false;
+    public bool grantBreakBonusOnParryCounter = true;
 
     [Header("Punish Window")]
     [Tooltip("보스 공격 후 열린 빈틈 시간 동안 추가 피해 배수를 적용.")]

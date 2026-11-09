@@ -11,6 +11,9 @@ public class TutorialDummy : MonoBehaviour, IDamageReceiver
     [Tooltip("피격 이펙트 (선택)")]
     public GameObject hitEffectPrefab;
 
+    [Tooltip("피격 디버그 로그 출력")]
+    [SerializeField] private bool debugLogs = false;
+
     // 공격 쿨타임 (너무 빠르게 다단히트 되는 것 방지용)
     private float lastHitTime;
     private float hitCooldown = 0.1f;
@@ -53,10 +56,12 @@ public class TutorialDummy : MonoBehaviour, IDamageReceiver
         // 3. 피격 이펙트 생성
         if (hitEffectPrefab != null)
         {
-            Instantiate(hitEffectPrefab, payload.hitPoint, Quaternion.LookRotation(payload.hitDirection));
+            // 일회성 피격 이펙트는 풀을 통해 재사용
+            TransientVfxPool.Spawn(hitEffectPrefab, payload.hitPoint, Quaternion.LookRotation(payload.hitDirection));
         }
 
-        Debug.Log($"[Dummy] Hit by {payload.attacker?.name}, Damage: {payload.damage}");
+        if (debugLogs)
+            Debug.Log($"[Dummy] Hit by {payload.attacker?.name}, Damage: {payload.damage}");
 
         // 4. 튜토리얼 매니저에게 "나 맞았어!" 보고
         if (TutorialManager.Instance != null)

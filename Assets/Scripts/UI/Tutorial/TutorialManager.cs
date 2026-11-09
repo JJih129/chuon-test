@@ -120,25 +120,25 @@ public class TutorialManager : MonoBehaviour
     {
         if (centerTitleText != null)
         {
-            centerTitleText.text = "가상현실 부트 완료";
+            centerTitleText.text = "가상현실 부팅 완료";
             centerTitleText.DOFade(1f, 0.5f);
         }
 
-        yield return StartCoroutine(PlayDialogue("EGO", "가상현실 부트 완료.", introDelay));
+        yield return StartCoroutine(PlayKeyed("tut.open.0", "EGO", "가상현실 부팅 완료.", introDelay));
 
         if (centerTitleText != null)
             centerTitleText.DOFade(0f, 0.5f);
 
-        yield return StartCoroutine(PlayDialogue("EGO", "실전에 들어가기 전 마지막 훈련을 진행하자.", introDelay));
-        yield return StartCoroutine(PlayDialogue("추온", "장비는 체크됐어. 바로 시작하자.", introDelay));
+        yield return StartCoroutine(PlayKeyed("tut.open.1", "EGO", "실전에 들어가기 전 마지막 훈련을 진행하자.", introDelay));
+        yield return StartCoroutine(PlayKeyed("tut.open.2", "추온", "장비는 체크됐어. 바로 시작하자.", introDelay));
 
         StartCoroutine(Sequence_Movement());
     }
 
     IEnumerator Sequence_Movement()
     {
-        yield return StartCoroutine(PlayDialogue("EGO", "먼저 WASD로 지정 위치까지 이동해.", moveDelay));
-        yield return StartCoroutine(PlayDialogue("EGO", "시야는 마우스로 조작하고, Shift로 회피할 수 있어.", moveDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.move.0", "EGO", "먼저 WASD로 지정 위치까지 이동해.", moveDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.move.1", "EGO", "시야는 마우스로 조작하고, Shift로 회피할 수 있어.", moveDelay));
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
@@ -193,8 +193,8 @@ public class TutorialManager : MonoBehaviour
     IEnumerator Sequence_Attack()
     {
         currentStep = TutorialStep.None;
-        yield return StartCoroutine(PlayDialogue("EGO", "이제 기본 공격을 확인하자.", attackDelay));
-        yield return StartCoroutine(PlayDialogue("EGO", "마우스 좌클릭으로 약공격, 우클릭으로 강공격을 사용할 수 있어.", attackDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.attack.0", "EGO", "이제 기본 공격을 확인하자.", attackDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.attack.1", "EGO", "마우스 좌클릭으로 약공격, 우클릭으로 강공격을 사용할 수 있어.", attackDelay));
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
@@ -243,14 +243,14 @@ public class TutorialManager : MonoBehaviour
     IEnumerator Sequence_MidTalk()
     {
         currentStep = TutorialStep.None;
-        yield return StartCoroutine(PlayDialogue("추온", "컨디션은 괜찮아. 다음 훈련으로 가자.", attackDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.mid.0", "추온", "컨디션은 괜찮아. 다음 훈련으로 가자.", attackDelay));
         StartCoroutine(Sequence_Defense());
     }
 
     IEnumerator Sequence_Defense()
     {
-        yield return StartCoroutine(PlayDialogue("EGO", "이번에는 방어와 패링을 연습해.", defenseDelay));
-        yield return StartCoroutine(PlayDialogue("EGO", "E키로 방어하고, 공격 타이밍에 맞추면 패링이 발동돼.", defenseDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.defense.0", "EGO", "이번에는 방어와 패링을 연습해.", defenseDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.defense.1", "EGO", "E키로 방어하고, 공격 타이밍에 맞추면 패링이 발동돼.", defenseDelay));
 
         if (droneEnemy != null)
         {
@@ -324,8 +324,8 @@ public class TutorialManager : MonoBehaviour
     IEnumerator Sequence_Heal()
     {
         currentStep = TutorialStep.None;
-        yield return StartCoroutine(PlayDialogue("추온", "실패하면 바로 회복하는 감각도 중요하지.", healDelay));
-        yield return StartCoroutine(PlayDialogue("EGO", "Q키로 앰플을 사용해 체력을 회복할 수 있어.", healDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.heal.0", "추온", "실패하면 바로 회복하는 감각도 중요하지.", healDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.heal.1", "EGO", "Q키로 앰플을 사용해 체력을 회복할 수 있어.", healDelay));
 
         currentStep = TutorialStep.Heal;
         ShowCenterKeyCue("Q", "HEAL", 999f);
@@ -349,7 +349,7 @@ public class TutorialManager : MonoBehaviour
     IEnumerator Sequence_Complete()
     {
         currentStep = TutorialStep.Complete;
-        yield return StartCoroutine(PlayDialogue("EGO", "좋아. 기본 훈련은 끝났어.", completeDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.complete.0", "EGO", "좋아. 기본 훈련은 끝났어.", completeDelay));
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
@@ -357,6 +357,16 @@ public class TutorialManager : MonoBehaviour
         SetMouseReferenceCueVisible(true);
         UpdateQuestUI("튜토리얼 완료", "좌클릭/우클릭 키를 눌러 공격해\nE 키 방어, Shift 키 회피, Q 키 회복");
         PunchEffect();
+    }
+
+    // 대사 테이블(DialogueTable) 키 우선, 없으면 기존 문구로 재생
+    IEnumerator PlayKeyed(string key, string speaker, string fallback, float waitTime)
+    {
+        string resolvedSpeaker = speaker;
+        string resolvedText = fallback;
+        float resolvedWait = waitTime;
+        DialogueTable.Resolve(key, ref resolvedSpeaker, ref resolvedText, ref resolvedWait);
+        return PlayDialogue(resolvedSpeaker, resolvedText, resolvedWait);
     }
 
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)

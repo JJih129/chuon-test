@@ -77,7 +77,7 @@ public class BossVisualRig : MonoBehaviour
             visualRoot = transform;
 
         if (!sourceAnimator)
-            sourceAnimator = GetComponent<Animator>() ?? GetComponentInChildren<Animator>(true);
+            sourceAnimator = GetComponent<Animator>().OrNull() ?? GetComponentInChildren<Animator>(true);
 
         if (!avatar && sourceAnimator != null)
             avatar = sourceAnimator.avatar;

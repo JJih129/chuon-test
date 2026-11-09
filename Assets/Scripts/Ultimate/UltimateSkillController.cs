@@ -43,7 +43,6 @@ public sealed class UltimateSkillController : MonoBehaviour
     IInputBlocker _inputBlocker;
     IInvulnerabilityToggle _invulnerabilityToggle;
     bool _isStandaloneCutscenePlaying;
-    float _cachedPrevTimeScale = 1f;
     UltimateSequenceData _runtimeFallbackData;
     UltimateSequenceData _runtimeFallbackSource;
 
@@ -173,8 +172,7 @@ public sealed class UltimateSkillController : MonoBehaviour
 
         if (freezeTimeScaleDuringCutscene)
         {
-            _cachedPrevTimeScale = Time.timeScale;
-            Time.timeScale = 0f;
+            GameTimeScale.Request(this, 0f);
         }
 
         director.time = 0d;
@@ -195,7 +193,7 @@ public sealed class UltimateSkillController : MonoBehaviour
             director.Stop();
 
         if (freezeTimeScaleDuringCutscene)
-            Time.timeScale = _cachedPrevTimeScale;
+            GameTimeScale.Release(this);
 
         if (setInvulnerableDuringCutscene && _invulnerabilityToggle != null)
             _invulnerabilityToggle.SetInvulnerable(false);
@@ -214,15 +212,15 @@ public sealed class UltimateSkillController : MonoBehaviour
         if (director == null)
             director = GetComponent<PlayableDirector>();
         if (sequencePlayer == null)
-            sequencePlayer = GetComponent<UltimateSequencePlayer>() ?? (allowCreate ? gameObject.AddComponent<UltimateSequencePlayer>() : null);
+            sequencePlayer = GetComponent<UltimateSequencePlayer>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateSequencePlayer>() : null);
         if (targetBinder == null)
-            targetBinder = GetComponent<UltimateTargetBinder>() ?? (allowCreate ? gameObject.AddComponent<UltimateTargetBinder>() : null);
+            targetBinder = GetComponent<UltimateTargetBinder>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateTargetBinder>() : null);
         if (cameraDirector == null)
-            cameraDirector = GetComponent<UltimateCameraDirector>() ?? (allowCreate ? gameObject.AddComponent<UltimateCameraDirector>() : null);
+            cameraDirector = GetComponent<UltimateCameraDirector>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateCameraDirector>() : null);
         if (hitProcessor == null)
-            hitProcessor = GetComponent<UltimateHitProcessor>() ?? (allowCreate ? gameObject.AddComponent<UltimateHitProcessor>() : null);
+            hitProcessor = GetComponent<UltimateHitProcessor>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateHitProcessor>() : null);
         if (vfxPresenter == null)
-            vfxPresenter = GetComponent<UltimateVFXPresenter>() ?? (allowCreate ? gameObject.AddComponent<UltimateVFXPresenter>() : null);
+            vfxPresenter = GetComponent<UltimateVFXPresenter>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateVFXPresenter>() : null);
     }
 
     void SyncPrimaryControllerBindings()

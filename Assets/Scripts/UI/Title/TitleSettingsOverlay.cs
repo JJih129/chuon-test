@@ -12,13 +12,16 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         Controls,
         Audio,
         Video,
-        Accessibility
+        Accessibility,
+        Game,
+        Combo
     }
 
     enum SliderDisplayMode
     {
         Percent,
-        Multiplier
+        Multiplier,
+        Degrees
     }
 
     sealed class KeybindRow
@@ -80,6 +83,10 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
     static readonly Color TabActiveColor = new Color(0.25f, 0.18f, 0.07f, 0.98f);
     static readonly Color SliderTrackColor = new Color(0.09f, 0.11f, 0.15f, 1f);
     static readonly Color SliderFillColor = new Color(0.22f, 0.88f, 0.97f, 0.96f);
+    // 츠카사 HUD 톤 (콤보 칩 / 난이도 강조)
+    static readonly Color TsukasaRedColor = new Color(0.878f, 0.188f, 0.227f, 1f);
+    static readonly Color TsukasaWhiteColor = new Color(0.93f, 0.94f, 0.95f, 0.98f);
+    static readonly Color ChipDarkTextColor = new Color(0.06f, 0.07f, 0.09f, 1f);
 
     readonly Dictionary<SettingsTab, Button> _tabButtons = new Dictionary<SettingsTab, Button>(4);
     readonly Dictionary<SettingsTab, RectTransform> _tabViews = new Dictionary<SettingsTab, RectTransform>(4);
@@ -98,11 +105,35 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
     GameObject _settingsInstance;
     OptionsManagerAdvanced _optionsManager;
     Coroutine _fadeRoutine;
-    SettingsTab _activeTab = SettingsTab.Controls;
+    SettingsTab _activeTab = SettingsTab.Game;
     bool _structureBuilt;
     bool _isVisible;
 
     public bool IsVisible => _isVisible;
+
+    /// <summary>설정창을 열고 '콤보' 탭으로 이동 (일시정지 메뉴 C 키 / 외부 호출용).</summary>
+    public void ShowComboTab()
+    {
+        ShowWithTab(SettingsTab.Combo);
+    }
+
+    /// <summary>설정창을 열고 '게임'(난이도) 탭으로 이동.</summary>
+    public void ShowGameTab()
+    {
+        ShowWithTab(SettingsTab.Game);
+    }
+
+    void ShowWithTab(SettingsTab tab)
+    {
+        if (!_structureBuilt)
+            return;
+
+        _activeTab = tab;
+        if (!_isVisible)
+            Show();
+        else
+            ApplyTab(tab);
+    }
 
     public bool Initialize(Transform parent, GameObject settingsPrefab)
     {
@@ -139,6 +170,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         CancelPendingRebind();
         _isVisible = false;
         FadeTo(0f, false);
+        OptionsManagerAdvanced.FlushPrefs(); // 닫을 때 설정을 디스크에 기록
     }
 
     void Update()
@@ -187,7 +219,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         BuildTabs();
         BuildBackButton();
         BuildViews();
-        ApplyTab(SettingsTab.Controls);
+        ApplyTab(_activeTab);
     }
 
     void BuildShell()
@@ -286,10 +318,15 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
 
     void BuildTabs()
     {
+        CreateTabButton("게임", SettingsTab.Game);
         CreateTabButton("조작", SettingsTab.Controls);
         CreateTabButton("사운드", SettingsTab.Audio);
         CreateTabButton("화면", SettingsTab.Video);
         CreateTabButton("접근성", SettingsTab.Accessibility);
+        Button comboTab = CreateTabButton("콤보 / COMBO", SettingsTab.Combo);
+        LayoutElement comboLayout = comboTab.GetComponent<LayoutElement>();
+        if (comboLayout != null)
+            comboLayout.preferredWidth = 156f;
     }
 
     void BuildBackButton()
@@ -305,6 +342,8 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         BuildAudioView();
         BuildVideoView();
         BuildAccessibilityView();
+        BuildGameView();
+        BuildComboView();
     }
 
     void BuildControlsView()
@@ -322,9 +361,18 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         CreateSectionHeader(content, "기능 단축키", "전투와 디버그 관련 빠른 전환 키입니다.");
         CreateStaticBindingRow(content, "락온", "TAB / MOUSE3", "가까운 적 타겟 고정 및 해제", rowIndex++);
         CreateStaticBindingRow(content, "상호작용", "F", "오브젝트 상호작용", rowIndex++);
-        CreateStaticBindingRow(content, "궁극기", "R", "게이지 충전 후 발동", rowIndex++);
+        CreateStaticBindingRow(content, "궁극기", "R", "페이즈 코어 5단 충전 후 발동 (보스전마다 1회)", rowIndex++);
+        CreateStaticBindingRow(content, "회복 앰플", "Q", "HP 35% 회복. 사용 동작 중 피격되면 취소되고 앰플은 소모", rowIndex++);
+        CreateStaticBindingRow(content, "콤보 표", "설정 > 콤보", "콤보 루트 A–E 입력표 (일시정지 중 C 키)", rowIndex++);
         CreateStaticBindingRow(content, "성능 HUD", "F11", "좌상단 프레임 / ms 표시 토글", rowIndex++);
         CreateStaticBindingRow(content, "전투 디버그 HUD", "F12", "우상단 전투 상태 디버그 토글", rowIndex++);
+
+        CreateSectionHeader(content, "카메라", "시점 감도와 방향을 조정합니다. 변경 즉시 적용됩니다.");
+        CreateSliderRow(content, "마우스 감도", _optionsManager.lookSensitivityMouseSlider, rowIndex++, SliderDisplayMode.Multiplier);
+        CreateSliderRow(content, "패드 감도", _optionsManager.lookSensitivityPadSlider, rowIndex++, SliderDisplayMode.Multiplier);
+        CreateToggleRow(content, "상하 반전", _optionsManager.invertYToggle, rowIndex++);
+        CreateToggleRow(content, "카메라 자동 정렬", _optionsManager.autoRecenterToggle, rowIndex++);
+        CreateStaticBindingRow(content, "카메라 리셋", "TAB (타깃 없음)", "락온 대상이 없을 때 탭하면 등 뒤로", rowIndex++);
     }
 
     void BuildAudioView()
@@ -354,6 +402,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         CreateSectionHeader(content, "프레임 / 가독성", "반응성과 전투 가독성에 직접 영향을 주는 항목입니다.");
         CreateTargetFrameRateRow(content, rowIndex++);
         CreateSliderRow(content, "밝기", _optionsManager.brightnessSlider, rowIndex++, SliderDisplayMode.Percent);
+        CreateSliderRow(content, "시야각 (FOV)", _optionsManager.cameraFovSlider, rowIndex++, SliderDisplayMode.Degrees);
 
         CreateSectionHeader(content, "렌더링", "그래픽 품질과 잔상 표현을 조정합니다.");
         CreateCycleRow(content, "그래픽 품질", _optionsManager.qualityDropdown, rowIndex++);
@@ -371,7 +420,165 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
 
         CreateSectionHeader(content, "카메라 편의", "강한 연출과 화면 흔들림을 제어합니다.");
         CreateSliderRow(content, "카메라 흔들림 강도", _optionsManager.cameraShakeSlider, rowIndex++, SliderDisplayMode.Percent);
+        CreateSliderRow(content, "화면 번쩍임 강도", _optionsManager.flashIntensitySlider, rowIndex++, SliderDisplayMode.Percent);
         CreateStaticBindingRow(content, "권장 프리셋", "흔들림 40% 이하", "보스전 가독성 중심 권장값", rowIndex++);
+    }
+
+    // ---- 게임 탭: 난이도 선택 (GameDifficulty, 즉시 반영) ----
+    static string[] s_difficultyValueLabels;
+
+    void BuildGameView()
+    {
+        RectTransform content = CreateTabView(SettingsTab.Game, "게임 / GAME", "난이도와 전투 기본 규칙을 확인합니다.\n난이도는 즉시 반영되며 보스전 중에도 바꿀 수 있습니다.");
+
+        int rowIndex = 0;
+        CreateSectionHeader(content, "난이도 / DIFFICULTY", "Type-D 보스전의 공격 속도·피해·패링 판정에 반영됩니다. 기본값은 보통입니다.");
+        CreateDifficultyRow(content, rowIndex++);
+
+        CreateSectionHeader(content, "전투 규칙 / FIELD RULES", "츠카사 경비 체계와 싸우기 위한 기본 규칙입니다.");
+        CreateStaticBindingRow(content, "발광 색", "금 / 빨강 / 자홍", "금색 = 패링 가능 · 빨강 = 회피 · 자홍 = 가드·패링 불가", rowIndex++);
+        CreateStaticBindingRow(content, "페이즈 코어", "5단 충전", "코어가 5단까지 차면 R 로 궁극기. 보스전마다 1회만 사용", rowIndex++);
+        CreateStaticBindingRow(content, "브레이크", "게이지 최대", "적이 5초간 그로기 상태가 되고 피니셔를 넣을 수 있다", rowIndex++);
+        CreateStaticBindingRow(content, "연속 회피", "3회째부터", "연속 회피는 3번째부터 무적 시간이 짧아진다", rowIndex++);
+    }
+
+    void CreateDifficultyRow(RectTransform parent, int rowIndex)
+    {
+        RectTransform holder = CreateRow(parent, "난이도", rowIndex);
+
+        Button previousButton = CreateButton("PrevButton", holder, "<", 16);
+        SetRect(previousButton.GetComponent<RectTransform>(), new Vector2(0.00f, 0f), new Vector2(0.13f, 1f));
+        previousButton.onClick.AddListener(() => StepDifficulty(-1));
+
+        Image valueBox = CreatePanel("ValueBox", holder, ControlColor);
+        SetRect(valueBox.rectTransform, new Vector2(0.17f, 0f), new Vector2(0.83f, 1f));
+        AddLine("DifficultyAccent", valueBox.rectTransform, new Vector2(0.02f, 0.06f), new Vector2(0.98f, 0.10f), TsukasaRedColor);
+        Text valueText = CreateText("ValueText", valueBox.rectTransform, GetDifficultyValueLabel(), 16, FontStyle.Bold, TextAnchor.MiddleCenter, TextColor, new Vector2(0.03f, 0f), new Vector2(0.97f, 1f));
+
+        Button nextButton = CreateButton("NextButton", holder, ">", 16);
+        SetRect(nextButton.GetComponent<RectTransform>(), new Vector2(0.87f, 0f), new Vector2(1f, 1f));
+        nextButton.onClick.AddListener(() => StepDifficulty(1));
+
+        _customCycleRows.Add(new CustomCycleRow
+        {
+            ValueText = valueText,
+            GetValueText = GetDifficultyValueLabel
+        });
+
+        // 설명 줄 (선택값 바로 아래)
+        RectTransform descRow = CreateRect("Row_DifficultyDescription", parent);
+        FitHeight(descRow, 54f);
+        descRow.gameObject.AddComponent<Image>().color = rowIndex % 2 == 0 ? RowEvenColor : RowOddColor;
+        AddLine("DescAccent", descRow, new Vector2(0.01f, 0.12f), new Vector2(0.013f, 0.88f), TsukasaRedColor);
+        CreateText("Tag", descRow, "MODE NOTE", 11, FontStyle.Bold, TextAnchor.MiddleLeft, MutedTextColor, new Vector2(0.03f, 0.10f), new Vector2(0.30f, 0.90f));
+        Text descText = CreateText("DescText", descRow, GetDifficultyDescription(), 14, FontStyle.Normal, TextAnchor.MiddleLeft, TextColor, new Vector2(0.33f, 0.08f), new Vector2(0.97f, 0.92f));
+
+        _customCycleRows.Add(new CustomCycleRow
+        {
+            ValueText = descText,
+            GetValueText = GetDifficultyDescription
+        });
+    }
+
+    void StepDifficulty(int direction)
+    {
+        GameDifficulty.Step(direction);
+        SyncCycleRows();
+    }
+
+    static string GetDifficultyValueLabel()
+    {
+        BossDifficultyTier[] tiers = GameDifficulty.Selectable;
+        if (s_difficultyValueLabels == null)
+        {
+            s_difficultyValueLabels = new string[tiers.Length];
+            for (int i = 0; i < tiers.Length; i++)
+                s_difficultyValueLabels[i] = GameDifficulty.Label(tiers[i]) + "   //   " + tiers[i].ToString().ToUpperInvariant();
+        }
+
+        int index = Array.IndexOf(tiers, GameDifficulty.Current);
+        if (index < 0 || index >= s_difficultyValueLabels.Length)
+            return GameDifficulty.CurrentLabel;
+
+        return s_difficultyValueLabels[index];
+    }
+
+    static string GetDifficultyDescription()
+    {
+        return GameDifficulty.Description(GameDifficulty.Current);
+    }
+
+    // ---- 콤보 탭: ComboRouteCatalog (튜토리얼 공격 배치표와 같은 데이터) ----
+    void BuildComboView()
+    {
+        RectTransform content = CreateTabView(SettingsTab.Combo, "콤보 / COMBO", "튜토리얼 공격 배치표와 같은 콤보 루트 5종입니다.\n입력 간격을 짧게 유지하면 다음 타로 이어집니다.");
+
+        int rowIndex = 0;
+        CreateSectionHeader(content, "입력 / INPUT", "약공과 강공 두 버튼의 순서로 루트가 갈립니다.");
+        CreateStaticBindingRow(content, ComboRouteCatalog.LightLabel, ComboRouteCatalog.LightKey + "  ·  좌클릭", "빠른 연결 · 대부분의 루트 시작", rowIndex++);
+        CreateStaticBindingRow(content, ComboRouteCatalog.HeavyLabel, ComboRouteCatalog.HeavyKey + "  ·  우클릭", "무거운 일격 · 연계가 깊을수록 피해 증가", rowIndex++);
+
+        CreateSectionHeader(content, "콤보 루트 A–E / ROUTES", "히트 이후에는 회피로 언제든 연계를 끊을 수 있습니다.");
+        ComboRoute[] routes = ComboRouteCatalog.Routes;
+        for (int i = 0; i < routes.Length; i++)
+            CreateComboRouteRow(content, routes[i], rowIndex++);
+    }
+
+    void CreateComboRouteRow(RectTransform parent, ComboRoute route, int rowIndex)
+    {
+        if (route == null)
+            return;
+
+        RectTransform row = CreateRect("Row_Combo_" + route.Id, parent);
+        FitHeight(row, 96f);
+        row.gameObject.AddComponent<Image>().color = rowIndex % 2 == 0 ? RowEvenColor : RowOddColor;
+        AddLine("RowAccent", row, new Vector2(0.01f, 0.08f), new Vector2(0.013f, 0.92f), TsukasaRedColor);
+
+        CreateText("RouteId", row, route.Id, 34, FontStyle.Bold, TextAnchor.MiddleCenter, TsukasaRedColor, new Vector2(0.02f, 0.10f), new Vector2(0.08f, 0.90f));
+        CreateText("RouteName", row, route.Name, 17, FontStyle.Bold, TextAnchor.LowerLeft, TextColor, new Vector2(0.09f, 0.50f), new Vector2(0.25f, 0.86f));
+        CreateText("RouteMeta", row, "ROUTE " + route.Id + "  ·  " + route.Length + " HIT", 11, FontStyle.Bold, TextAnchor.UpperLeft, MutedTextColor, new Vector2(0.09f, 0.14f), new Vector2(0.25f, 0.46f));
+
+        RectTransform chips = CreateRect("Chips", row);
+        SetRect(chips, new Vector2(0.26f, 0.12f), new Vector2(0.66f, 0.88f));
+
+        const float chipWidth = 50f;
+        const float arrowWidth = 20f;
+        float x = 0f;
+        for (int i = 0; i < route.Inputs.Length; i++)
+        {
+            if (i > 0)
+            {
+                Text arrow = CreateText("Arrow" + i, chips, ">", 16, FontStyle.Bold, TextAnchor.MiddleCenter, TsukasaRedColor, new Vector2(0f, 0f), new Vector2(0f, 1f));
+                PlaceLeft(arrow.rectTransform, x, arrowWidth);
+                x += arrowWidth;
+            }
+
+            CreateComboChip(chips, route.Inputs[i], i, x, chipWidth);
+            x += chipWidth;
+        }
+
+        CreateText("RouteNote", row, route.Note, 13, FontStyle.Normal, TextAnchor.MiddleLeft, MutedTextColor, new Vector2(0.67f, 0.10f), new Vector2(0.98f, 0.90f));
+    }
+
+    static void CreateComboChip(RectTransform parent, ComboInputKind input, int index, float x, float width)
+    {
+        bool heavy = input == ComboInputKind.Heavy;
+        Image chip = CreatePanel("Chip" + index, parent, heavy ? TsukasaRedColor : TsukasaWhiteColor);
+        chip.raycastTarget = false;
+        PlaceLeft(chip.rectTransform, x, width);
+
+        Color textColor = heavy ? TsukasaWhiteColor : ChipDarkTextColor;
+        CreateText("Input", chip.rectTransform, ComboRouteCatalog.ShortLabelOf(input), 18, FontStyle.Bold, TextAnchor.MiddleCenter, textColor, new Vector2(0f, 0.38f), new Vector2(1f, 1f));
+        CreateText("Key", chip.rectTransform, ComboRouteCatalog.KeyOf(input), 11, FontStyle.Bold, TextAnchor.MiddleCenter, textColor, new Vector2(0f, 0.02f), new Vector2(1f, 0.40f));
+    }
+
+    static void PlaceLeft(RectTransform rect, float x, float width)
+    {
+        rect.pivot = new Vector2(0f, 0.5f);
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.offsetMin = new Vector2(x, 0f);
+        rect.offsetMax = new Vector2(x + width, 0f);
     }
 
     RectTransform CreateTabView(SettingsTab tab, string title, string description)
@@ -908,6 +1115,9 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
     {
         if (mode == SliderDisplayMode.Multiplier)
             return value.ToString("0.0x");
+
+        if (mode == SliderDisplayMode.Degrees)
+            return Mathf.RoundToInt(value) + "°";
 
         return Mathf.RoundToInt(Mathf.Clamp01(value) * 100f) + "%";
     }

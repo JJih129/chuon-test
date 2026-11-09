@@ -1,0 +1,287 @@
+﻿// Assets/Scripts/Combat/ParryFeedbackController.cs
+using System.Collections;
+using UnityEngine;
+using Unity.Cinemachine;
+using UnityEngine.InputSystem;
+#pragma warning disable CS0618
+
+/// Handles parry, block, and perfect-dodge feedback.
+/// Uses hit stop, camera impulse, VFX, and SFX.
+[DisallowMultipleComponent]
+public class ParryFeedbackController : MonoBehaviour
+{
+    [Header("Hit Stop")]
+    [SerializeField] bool useHitStop = true;
+    [SerializeField] bool useParryHitStop = true;
+    [SerializeField] bool useBlockHitStop = false;
+
+    [Tooltip("Time scale used for parry hit stop.")]
+    public float parryTimeScale = 0.05f;
+
+    [Tooltip("Realtime duration for parry hit stop.")]
+    public float parryStopDuration = 0.08f;
+    [SerializeField, Min(0f)] float parryHitStopMinIntervalRealtime = 0.03f;
+
+    [Tooltip("Time scale used for block hit stop.")]
+    public float blockTimeScale = 0.25f;
+
+    [Tooltip("Realtime duration for block hit stop.")]
+    public float blockStopDuration = 0.05f;
+
+    [Tooltip("Time scale used for perfect-dodge hit stop.")]
+    public float dodgeTimeScale = 0.12f;
+
+    [Tooltip("Realtime duration for perfect-dodge hit stop.")]
+    public float dodgeStopDuration = 0.12f;
+    [SerializeField] bool usePerfectDodgeHitStop = false;
+
+    [Tooltip("Scale fixedDeltaTime during hit stop.")]
+    [SerializeField] bool scaleFixedDeltaTime = true;
+
+    [Header("Camera Shake")]
+    [SerializeField] CinemachineImpulseSource impulseSource;
+
+    [Tooltip("Parry impulse direction and strength.")]
+    public Vector3 parryVelocity = new(0f, -1f, 0f);
+    [Range(0f, 3f)] public float parryForce = 1.5f;
+    [SerializeField, Range(0f, 1f)] float parryImpulseMultiplier = 0.42f;
+    [SerializeField, Range(0f, 1f)] float parryShakeMultiplier = 0.45f;
+
+    [Tooltip("Block impulse direction and strength.")]
+    public Vector3 blockVelocity = new(0f, -0.6f, 0f);
+    [Range(0f, 3f)] public float blockForce = 0.8f;
+
+    [Tooltip("Perfect-dodge impulse direction and strength.")]
+    public Vector3 dodgeVelocity = new(0f, -0.8f, 0f);
+    [Range(0f, 3f)] public float dodgeForce = 1.2f;
+
+    // Fallback camera shake when no impulse source is assigned
+    [SerializeField] float fallbackShakeAmplitude = 0.2f;
+    [SerializeField] float fallbackShakeDuration = 0.12f;
+    [SerializeField] Transform fallbackCamera;
+
+    [Header("VFX")]
+    [SerializeField] GameObject parryVfxPrefab;
+    [SerializeField] GameObject blockVfxPrefab;
+    [SerializeField] GameObject dodgeVfxPrefab;
+    [SerializeField] float vfxYOffset = 0.1f;
+    [SerializeField] bool parentVfxToPlayer = false;
+
+    [Header("SFX")]
+    [SerializeField] AudioSource audioSource;
+    [SerializeField] AudioClip parryClip;
+    [SerializeField] AudioClip blockClip;
+    [SerializeField] AudioClip dodgeClip;
+    [Range(0f, 1f)] [SerializeField] float sfxVolume = 0.9f;
+
+    [Header("Rumble")]
+    [SerializeField] bool useParryRumble = true;
+    [SerializeField, Range(0f, 1f)] float parryLowFrequencyRumble = 0.16f;
+    [SerializeField, Range(0f, 1f)] float parryHighFrequencyRumble = 0.34f;
+    [SerializeField, Min(0f)] float parryRumbleDuration = 0.055f;
+
+    [Header("Policy")]
+    [SerializeField] bool useCombatFeelPolicy = true;
+
+    [Header("Debug")]
+    [SerializeField] bool debugLog = false;
+
+    Coroutine _hitStopCo;
+    Coroutine _rumbleCo;
+    float _lastHitStopRealtime = float.NegativeInfinity;
+
+    void Awake()
+    {
+        if (!fallbackCamera && Camera.main) fallbackCamera = Camera.main.transform;
+    }
+
+    void OnDisable()
+    {
+        CombatFeelRuntimeUtility.ForceRestoreActiveHitStop(this, ref _hitStopCo);
+        StopParryRumble();
+    }
+
+    // ===== External API =====
+    public void PlayParryFeedback(Vector3 hitPoint, Transform attacker)
+    {
+        CombatFeelPreset preset = ResolveDefensePreset(DefenseFeelKind.Parry);
+        if (debugLog) Debug.Log("[ParryFX] Parry", this);
+        SoulsCameraRig.NotifyParry(); // FOV 펀치 (리그가 있는 씬만)
+        if (useHitStop && useParryHitStop)
+            StartHitStop(preset.TimeScale, preset.StopDuration, parryHitStopMinIntervalRealtime);
+
+        ShakeCamera(
+            parryVelocity,
+            preset.CameraImpulseForce * parryImpulseMultiplier,
+            preset.CameraShakeAmplitude * parryShakeMultiplier,
+            preset.CameraShakeDuration * parryShakeMultiplier);
+        PlayParryRumble();
+        SpawnVfx(parryVfxPrefab, hitPoint);
+        PlaySfx(parryClip, preset);
+    }
+
+    public void PlayBlockFeedback(Vector3 hitPoint, Transform attacker)
+    {
+        CombatFeelPreset preset = ResolveDefensePreset(DefenseFeelKind.Block);
+        if (debugLog) Debug.Log("[ParryFX] Block", this);
+        if (useHitStop && useBlockHitStop) StartHitStop(preset.TimeScale, preset.StopDuration);
+        ShakeCamera(blockVelocity, preset.CameraImpulseForce, preset.CameraShakeAmplitude, preset.CameraShakeDuration);
+        SpawnVfx(blockVfxPrefab, hitPoint);
+        PlaySfx(blockClip, preset);
+    }
+
+    public void PlayPerfectDodgeFeedback(Vector3 hitPoint, Transform attacker)
+    {
+        CombatFeelPreset preset = ResolveDefensePreset(DefenseFeelKind.PerfectDodge);
+        if (debugLog) Debug.Log("[ParryFX] Perfect Dodge", this);
+        SoulsCameraRig.NotifyPerfectDodge(); // FOV +4° (리그가 있는 씬만)
+        if (useHitStop && usePerfectDodgeHitStop) StartHitStop(preset.TimeScale, preset.StopDuration);
+        ShakeCamera(dodgeVelocity, preset.CameraImpulseForce, preset.CameraShakeAmplitude, preset.CameraShakeDuration);
+        SpawnVfx(dodgeVfxPrefab, hitPoint);
+        PlaySfx(dodgeClip, preset);
+    }
+
+    // Alias used by PlayerDamageReceiver
+    public void PlayGuardBlockFeedback(Vector3 hitPoint, Transform attacker)
+        => PlayBlockFeedback(hitPoint, attacker);
+
+    // Overloads for inspector binding
+    public void PlayParryFeedback()        => PlayParryFeedback(transform.position, transform);
+    public void PlayBlockFeedback()        => PlayBlockFeedback(transform.position, transform);
+    public void PlayPerfectDodgeFeedback() => PlayPerfectDodgeFeedback(transform.position, transform);
+    public void PlayGuardBlockFeedback()   => PlayGuardBlockFeedback(transform.position, transform);
+
+    void StartHitStop(float scale, float duration, float minIntervalRealtime = 0f)
+    {
+        CombatFeelRuntimeUtility.StartHitStop(
+            this,
+            ref _hitStopCo,
+            scale,
+            duration,
+            scaleFixedDeltaTime,
+            minIntervalRealtime,
+            ref _lastHitStopRealtime);
+    }
+
+    CombatFeelPreset ResolveDefensePreset(DefenseFeelKind kind)
+    {
+        if (useCombatFeelPolicy)
+            return CombatFeelPolicy.GetDefensePreset(kind);
+
+        switch (kind)
+        {
+            case DefenseFeelKind.Parry:
+                return new CombatFeelPreset(parryTimeScale, parryStopDuration, parryForce, fallbackShakeAmplitude, fallbackShakeDuration, 1f, 1f, 1f);
+
+            case DefenseFeelKind.PerfectDodge:
+                return new CombatFeelPreset(dodgeTimeScale, dodgeStopDuration, dodgeForce, fallbackShakeAmplitude, fallbackShakeDuration, 1f, 1f, 1f);
+
+            case DefenseFeelKind.Block:
+            default:
+                return new CombatFeelPreset(blockTimeScale, blockStopDuration, blockForce, fallbackShakeAmplitude, fallbackShakeDuration, 1f, 1f, 1f);
+        }
+    }
+
+    void ShakeCamera(Vector3 dir, float force, float shakeAmplitude, float shakeDuration)
+    {
+        // 소울라이크 리그 씬: 임펄스(최대 ~0.6 m 변위 측정됨) 대신 리그의 위치 노이즈(누적 상한)로 처리
+        if (SoulsCameraRig.Active != null)
+        {
+            SoulsCameraRig.TryRouteShake(shakeAmplitude * CameraShake.GlobalStrength, shakeDuration);
+            return;
+        }
+
+        if (impulseSource != null)
+        {
+            // 접근성: 카메라 흔들림 강도 옵션 (임펄스도 포함)
+            float scaledForce = Mathf.Max(0f, force) * CameraShake.GlobalStrength;
+            if (scaledForce > 0f)
+                impulseSource.GenerateImpulse(dir * scaledForce);
+            return;
+        }
+        if (!fallbackCamera || CameraShake.GlobalStrength <= 0f) return;
+        StartCoroutine(CoSimpleShake(fallbackCamera, shakeAmplitude * CameraShake.GlobalStrength, shakeDuration));
+    }
+
+    IEnumerator CoSimpleShake(Transform cam, float amp, float dur)
+    {
+        Vector3 origin = cam.localPosition;
+        float t = 0f;
+        while (t < dur)
+        {
+            t += Time.unscaledDeltaTime;
+            cam.localPosition = origin + (Vector3)Random.insideUnitCircle * amp;
+            yield return null;
+        }
+        cam.localPosition = origin;
+    }
+
+    void SpawnVfx(GameObject prefab, Vector3 hitPoint)
+    {
+        if (!prefab) return;
+        Vector3 pos = hitPoint;
+        pos.y += vfxYOffset;
+        var go = TransientVfxPool.Spawn(prefab, pos, Quaternion.identity);
+        if (go != null && parentVfxToPlayer) go.transform.SetParent(transform);
+    }
+
+    void PlaySfx(AudioClip clip, CombatFeelPreset preset)
+    {
+        if (!clip) return;
+
+        float minPitch = Mathf.Min(preset.AudioPitchMin, preset.AudioPitchMax);
+        float maxPitch = Mathf.Max(preset.AudioPitchMin, preset.AudioPitchMax);
+        float pitch = Mathf.Approximately(minPitch, maxPitch)
+            ? minPitch
+            : Random.Range(minPitch, maxPitch);
+        float scaledVolume = Mathf.Clamp01(sfxVolume * preset.AudioVolumeMultiplier);
+
+        if (!audioSource)
+        {
+            // AudioSource 미할당 시 공용 원샷 풀로 재생 (클립만 지정해도 소리가 나도록)
+            OneShotAudio.Play2D(clip, scaledVolume, pitch);
+            return;
+        }
+
+        audioSource.pitch = pitch;
+        audioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(scaledVolume));
+    }
+
+    void PlayParryRumble()
+    {
+        if (!useParryRumble || parryRumbleDuration <= 0f)
+            return;
+
+        Gamepad gamepad = Gamepad.current;
+        if (gamepad == null)
+            return;
+
+        StopParryRumble();
+        _rumbleCo = StartCoroutine(CoParryRumble(
+            gamepad,
+            Mathf.Clamp01(parryLowFrequencyRumble),
+            Mathf.Clamp01(parryHighFrequencyRumble),
+            parryRumbleDuration));
+    }
+
+    IEnumerator CoParryRumble(Gamepad gamepad, float lowFrequency, float highFrequency, float duration)
+    {
+        gamepad.SetMotorSpeeds(lowFrequency, highFrequency);
+        yield return new WaitForSecondsRealtime(duration);
+        gamepad.SetMotorSpeeds(0f, 0f);
+        _rumbleCo = null;
+    }
+
+    void StopParryRumble()
+    {
+        if (_rumbleCo != null)
+        {
+            StopCoroutine(_rumbleCo);
+            _rumbleCo = null;
+        }
+
+        Gamepad gamepad = Gamepad.current;
+        if (gamepad != null)
+            gamepad.SetMotorSpeeds(0f, 0f);
+    }
+}

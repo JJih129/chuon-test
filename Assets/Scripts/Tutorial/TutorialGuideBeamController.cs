@@ -65,8 +65,9 @@ public class TutorialGuideBeamController : MonoBehaviour
     [SerializeField, Min(0f)] private float exitColorWhiten = 0.18f;
 
     [Header("Colors")]
-    [SerializeField] private Color movementColor = new Color(0.18f, 0.85f, 1f, 0.9f);
-    [SerializeField] private Color attackColor = new Color(0.24f, 0.88f, 1f, 0.92f);
+    // 아라사카 팔레트: 이동 경로 = 앰버(상호작용·통로), 공격 대상 = 레드. 시안은 UI 홀로그램 전용.
+    [SerializeField] private Color movementColor = new Color(1.00f, 0.62f, 0.16f, 0.9f);
+    [SerializeField] private Color attackColor = new Color(1.00f, 0.26f, 0.20f, 0.92f);
     [SerializeField] private Color guardColor = new Color(1.00f, 0.45f, 0.18f, 0.92f);
     [SerializeField] private Color exitColor = new Color(1.00f, 0.68f, 0.18f, 0.92f);
 

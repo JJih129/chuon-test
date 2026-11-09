@@ -17,14 +17,15 @@ public class CreditsSceneArrivalController : MonoBehaviour
     [SerializeField] private string subtitleText = "\uc2e4\uc804 \uac80\uc99d \uc885\ub8cc";
     [SerializeField] private string bodyText = "EGO \ub9c1\ud06c \uc548\uc815\ud654 \uc644\ub8cc";
     [SerializeField] private string hintText = "\uc544\ubb34 \ud0a4\ub098 \ub20c\ub7ec \ud0c0\uc774\ud2c0\ub85c";
-    [SerializeField] private Vector2 panelSize = new Vector2(520f, 180f);
-    [SerializeField] private Vector2 panelAnchoredPosition = new Vector2(0f, -12f);
-    [SerializeField] private Color panelColor = new Color(0.02f, 0.05f, 0.08f, 0.84f);
-    [SerializeField] private Color accentColor = new Color(0.35f, 0.92f, 1f, 0.98f);
-    [SerializeField] private Color titleColor = new Color(0.90f, 0.98f, 1f, 0.98f);
-    [SerializeField] private Color bodyColor = new Color(0.78f, 0.89f, 0.95f, 0.96f);
-    [SerializeField] private Color backdropColor = new Color(0f, 0.02f, 0.04f, 0.72f);
-    [SerializeField] private Color sweepColor = new Color(0.42f, 0.95f, 1f, 0.16f);
+    [SerializeField] private string creditsResourcePath = "UI/Title/TitleCredits_Default";
+    [SerializeField] private Vector2 panelSize = new Vector2(640f, 760f);
+    [SerializeField] private Vector2 panelAnchoredPosition = new Vector2(-470f, 0f);
+    [SerializeField] private Color panelColor = new Color(0.015f, 0.015f, 0.018f, 0.86f);
+    [SerializeField] private Color accentColor = new Color(0.92f, 0.12f, 0.09f, 0.98f);
+    [SerializeField] private Color titleColor = new Color(0.96f, 0.96f, 0.97f, 0.98f);
+    [SerializeField] private Color bodyColor = new Color(0.78f, 0.78f, 0.80f, 0.96f);
+    [SerializeField] private Color backdropColor = new Color(0f, 0f, 0f, 0.35f);
+    [SerializeField] private Color sweepColor = new Color(1f, 1f, 1f, 0.10f);
 
     [Header("Timing")]
     [SerializeField, Min(0f)] private float startDelay = 0.35f;
@@ -55,9 +56,25 @@ public class CreditsSceneArrivalController : MonoBehaviour
     Text _bodyLabel;
     Text _hintLabel;
     Text _previewLabel;
+    Text _creditsLabel;
+    TitleCreditsData _creditsData;
     Coroutine _autoReturnRoutine;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    // AfterSceneLoad only fires for the first scene of a session, so a LoadScene("CreditsScene")
+    // from MainScene never reached Bootstrap. Hook sceneLoaded so every entry path configures the scene.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    static void RegisterSceneHook()
+    {
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+    }
+
+    static void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (mode == LoadSceneMode.Single)
+            Bootstrap();
+    }
+
     static void Bootstrap()
     {
         Scene activeScene = SceneManager.GetActiveScene();
@@ -65,6 +82,8 @@ public class CreditsSceneArrivalController : MonoBehaviour
             return;
 
         CreditsSceneArrivalController controller = FindObjectOfType<CreditsSceneArrivalController>(true);
+        if (controller != null && controller._sequenceStarted)
+            return;
         if (controller == null)
         {
             GameObject runtimeRoot = new GameObject("CreditsSceneArrivalRuntime");
@@ -77,8 +96,9 @@ public class CreditsSceneArrivalController : MonoBehaviour
     public void ConfigureRuntime(bool fromMainClear)
     {
         _fromMainClear = fromMainClear;
-        _isDirectPreview = !_fromMainClear && ShouldUseDirectPreview();
-        if ((!_fromMainClear && !_isDirectPreview) || _sequenceStarted)
+        // Direct entry (dev hotkey / editor) now shows the credits roll instead of an empty scene.
+        _isDirectPreview = !_fromMainClear;
+        if (_sequenceStarted)
             return;
 
         RuntimeMenuSceneStateUtility.PrepareForMenuScene();
@@ -283,21 +303,37 @@ public class CreditsSceneArrivalController : MonoBehaviour
         sweepRect.localEulerAngles = new Vector3(0f, 0f, -10f);
         _sweepImage.gameObject.SetActive(false);
 
-        _titleLabel = CreateText("Title", _root, titleText, 30, FontStyle.Bold, titleColor);
-        ConfigureTextRect(_titleLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 42f), panelSize.x - 40f, 38f);
+        float top = panelSize.y * 0.5f;
+        float innerWidth = panelSize.x - 96f;
 
-        _subtitleLabel = CreateText("Subtitle", _root, subtitleText, 13, FontStyle.Normal, accentColor);
-        ConfigureTextRect(_subtitleLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 9f), panelSize.x - 44f, 22f);
+        _titleLabel = CreateText("Title", _root, titleText, 40, FontStyle.Bold, titleColor);
+        ConfigureTextRect(_titleLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, top - 80f), innerWidth, 50f);
+        _titleLabel.alignment = TextAnchor.MiddleLeft;
+
+        _subtitleLabel = CreateText("Subtitle", _root, subtitleText, 15, FontStyle.Bold, accentColor);
+        ConfigureTextRect(_subtitleLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, top - 122f), innerWidth, 22f);
+        _subtitleLabel.alignment = TextAnchor.MiddleLeft;
 
         _bodyLabel = CreateText("Body", _root, bodyText, 18, FontStyle.Normal, bodyColor);
-        ConfigureTextRect(_bodyLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -24f), panelSize.x - 44f, 28f);
+        ConfigureTextRect(_bodyLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, top - 154f), innerWidth, 28f);
+        _bodyLabel.alignment = TextAnchor.MiddleLeft;
+
+        Image divider = CreateImage("Divider", _root, new Color(1f, 1f, 1f, 0.14f));
+        ConfigureTextRect(divider.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, top - 186f), innerWidth, 1f);
+
+        _creditsLabel = CreateText("Credits", _root, BuildCreditsText(), 18, FontStyle.Normal, titleColor);
+        ConfigureTextRect(_creditsLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, top - 206f - 230f), innerWidth, 460f);
+        _creditsLabel.alignment = TextAnchor.UpperLeft;
+        _creditsLabel.supportRichText = true;
+        _creditsLabel.lineSpacing = 1.15f;
 
         _hintLabel = CreateText("Hint", _root, hintText, 14, FontStyle.Normal, bodyColor);
-        ConfigureTextRect(_hintLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -60f), panelSize.x - 44f, 22f);
+        ConfigureTextRect(_hintLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, -top + 44f), innerWidth, 22f);
+        _hintLabel.alignment = TextAnchor.MiddleLeft;
         _hintLabel.canvasRenderer.SetAlpha(0f);
 
         _previewLabel = CreateText("Preview", _root, previewBadgeText, 11, FontStyle.Bold, accentColor);
-        ConfigureTextRect(_previewLabel.rectTransform, new Vector2(1f, 1f), new Vector2(-16f, -16f), 160f, 18f);
+        ConfigureTextRect(_previewLabel.rectTransform, new Vector2(1f, 1f), new Vector2(-104f, -28f), 160f, 18f);
         _previewLabel.alignment = TextAnchor.UpperRight;
         _previewLabel.gameObject.SetActive(false);
     }
@@ -318,15 +354,17 @@ public class CreditsSceneArrivalController : MonoBehaviour
     void ApplyRuntimeLabelState()
     {
         if (_previewLabel != null)
-            _previewLabel.gameObject.SetActive(_isDirectPreview);
+            _previewLabel.gameObject.SetActive(_isDirectPreview && ShouldUseDirectPreview());
+
+        TitleCreditsData data = LoadCreditsData();
+        if (_titleLabel != null)
+            _titleLabel.text = _isDirectPreview && data != null && !string.IsNullOrEmpty(data.title) ? data.title : titleText;
 
         if (_subtitleLabel != null)
-            _subtitleLabel.text = _isDirectPreview ? "DIRECT SCENE PREVIEW" : subtitleText;
+            _subtitleLabel.text = _isDirectPreview ? "DEVELOPMENT CREDITS" : subtitleText;
 
         if (_bodyLabel != null)
-            _bodyLabel.text = _isDirectPreview
-                ? "CreditsScene direct preview is active."
-                : bodyText;
+            _bodyLabel.text = _isDirectPreview ? GetSubtitleTail(data) : bodyText;
 
         if (_hintLabel != null)
             _hintLabel.text = hintText;
@@ -335,6 +373,40 @@ public class CreditsSceneArrivalController : MonoBehaviour
     bool ShouldUseDirectPreview()
     {
         return Application.isEditor && enableEditorDirectPreview;
+    }
+
+    TitleCreditsData LoadCreditsData()
+    {
+        if (_creditsData == null && !string.IsNullOrEmpty(creditsResourcePath))
+            _creditsData = Resources.Load<TitleCreditsData>(creditsResourcePath);
+        return _creditsData;
+    }
+
+    static string GetSubtitleTail(TitleCreditsData data)
+    {
+        if (data == null || string.IsNullOrEmpty(data.subtitle))
+            return string.Empty;
+        string[] lines = data.subtitle.Split('\n');
+        return lines[lines.Length - 1].Trim();
+    }
+
+    string BuildCreditsText()
+    {
+        TitleCreditsData data = LoadCreditsData();
+        if (data == null || data.sections == null)
+            return string.Empty;
+
+        var sb = new System.Text.StringBuilder();
+        foreach (TitleCreditsData.Section section in data.sections)
+        {
+            if (section == null)
+                continue;
+            if (sb.Length > 0)
+                sb.Append("\n\n");
+            sb.Append("<size=13><color=#E5261C>").Append(section.heading.ToUpperInvariant()).Append("</color></size>\n");
+            sb.Append("<b>").Append(section.members != null ? string.Join("   ", section.members) : string.Empty).Append("</b>");
+        }
+        return sb.ToString();
     }
 
     IEnumerator CoPlayAccentSweep()

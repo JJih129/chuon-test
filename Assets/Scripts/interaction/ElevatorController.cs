@@ -2,16 +2,16 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 
-// [Çì´õ] ¿¤¸®º£ÀÌÅÍ ÇÃ·§Æû ÀÌµ¿ ÄÁÆ®·Ñ·¯
-// - platform: ½Â°­±â ÇÃ·§Æû Transform(ÇÊ¼ö)
-// - stops: Á¤Â÷ ÁöÁ¡ ¸®½ºÆ®(¿ùµå ÁÂÇ¥ Transform)
-// - moveSpeed: ÀÌµ¿ ¼Óµµ(m/s)
-// - accelTime: °¡¼Ó ½Ã°£(ÃÊ)
-// - doorObjects: ¹® ¿ÀºêÁ§Æ® ¸ñ·Ï(¼±ÅÃ)
-// - doorOpenAngle: ¹® ¿­¸² °¢µµ(Yaw ±âÁØ ¿¹½Ã)
-// - doorAnimTime: ¹® ¿©´İÀÌ ½Ã°£(ÃÊ)
-// - holdTimeAtStop: Á¤Â÷ ÈÄ ¹® ¿­°í ´İ±â±îÁö ´ë±â ½Ã°£(ÃÊ)
-// - allowPlayerRide: ÇÃ·¹ÀÌ¾î¸¦ ÀÚ½ÄÀ¸·Î ºÙ¿© Å¾½Â Ã³¸® ¿©ºÎ
+// [í—¤ë”] ì—˜ë¦¬ë² ì´í„° í”Œë«í¼ ì´ë™ ì»¨íŠ¸ë¡¤ëŸ¬
+// - platform: ìŠ¹ê°•ê¸° í”Œë«í¼ Transform(í•„ìˆ˜)
+// - stops: ì •ì°¨ ì§€ì  ë¦¬ìŠ¤íŠ¸(ì›”ë“œ ì¢Œí‘œ Transform)
+// - moveSpeed: ì´ë™ ì†ë„(m/s)
+// - accelTime: ê°€ì† ì‹œê°„(ì´ˆ)
+// - doorObjects: ë¬¸ ì˜¤ë¸Œì íŠ¸ ëª©ë¡(ì„ íƒ)
+// - doorOpenAngle: ë¬¸ ì—´ë¦¼ ê°ë„(Yaw ê¸°ì¤€ ì˜ˆì‹œ)
+// - doorAnimTime: ë¬¸ ì—¬ë‹«ì´ ì‹œê°„(ì´ˆ)
+// - holdTimeAtStop: ì •ì°¨ í›„ ë¬¸ ì—´ê³  ë‹«ê¸°ê¹Œì§€ ëŒ€ê¸° ì‹œê°„(ì´ˆ)
+// - allowPlayerRide: í”Œë ˆì´ì–´ë¥¼ ìì‹ìœ¼ë¡œ ë¶™ì—¬ íƒ‘ìŠ¹ ì²˜ë¦¬ ì—¬ë¶€
 public class ElevatorController : MonoBehaviour
 {
     public Transform platform;
@@ -37,7 +37,7 @@ public class ElevatorController : MonoBehaviour
         if (!platform) platform = transform;
     }
 
-    // [Çì´õ] ¿ÜºÎ È£Ãâ: Æ¯Á¤ ÃşÀ¸·Î ÀÌµ¿
+    // [í—¤ë”] ì™¸ë¶€ í˜¸ì¶œ: íŠ¹ì • ì¸µìœ¼ë¡œ ì´ë™
     public void CallTo(int stopIndex, Transform player = null)
     {
         if (_busy) return;
@@ -55,17 +55,17 @@ public class ElevatorController : MonoBehaviour
             rider.SetParent(platform, true);
         }
 
-        // ¹® ´İ±â
+        // ë¬¸ ë‹«ê¸°
         yield return StartCoroutine(CoDoor(false));
 
-        // ÀÌµ¿
+        // ì´ë™
         Vector3 start = platform.position;
         Vector3 end = stops[targetIndex].position;
 
         float dist = Vector3.Distance(start, end);
         float t = 0f;
         float accel = Mathf.Max(0.001f, accelTime);
-        float cruiseDist = Mathf.Max(0f, dist - moveSpeed * accel); // °£´Ü °¡°¨¼Ó
+        float cruiseDist = Mathf.Max(0f, dist - moveSpeed * accel); // ê°„ë‹¨ ê°€ê°ì†
         float traveled = 0f;
 
         while (traveled < dist - 0.01f)
@@ -73,7 +73,7 @@ public class ElevatorController : MonoBehaviour
             float dt = Time.deltaTime;
             float curSpeed = moveSpeed;
 
-            // °¡¼Ó/°¨¼Ó ±Ù»ç
+            // ê°€ì†/ê°ì† ê·¼ì‚¬
             float remain = dist - traveled;
             if (traveled < moveSpeed * accel) curSpeed *= Mathf.InverseLerp(0f, moveSpeed * accel, traveled);
             if (remain < moveSpeed * accel) curSpeed *= Mathf.InverseLerp(0f, moveSpeed * accel, remain);
@@ -89,7 +89,7 @@ public class ElevatorController : MonoBehaviour
         platform.position = end;
         _currentIndex = targetIndex;
 
-        // ¹® ¿­±â + Á¤Â÷ ´ë±â
+        // ë¬¸ ì—´ê¸° + ì •ì°¨ ëŒ€ê¸°
         yield return StartCoroutine(CoDoor(true));
         yield return new WaitForSeconds(holdTimeAtStop);
 

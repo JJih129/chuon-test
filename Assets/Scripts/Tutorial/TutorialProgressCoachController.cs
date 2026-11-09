@@ -126,7 +126,12 @@ public class TutorialProgressCoachController : MonoBehaviour
         Vector3 startPosition = player.position;
         bool progressQueued = false;
 
-        yield return new WaitForSecondsRealtime(1.2f);
+        // 첫 단계 앞에 붙는 VR 부팅 대사(대사 스크립트)를 재촉 큐가 끊지 않도록, 브리핑 길이만큼 기다린 뒤 코칭한다.
+        float briefing = 0f;
+        if (step != null && step.introLines != null)
+            for (int i = 0; i < step.introLines.Length; i++)
+                briefing += Mathf.Max(0.2f, step.introLines[i].duration);
+        yield return new WaitForSecondsRealtime(Mathf.Max(1.2f, briefing + 0.4f));
         while (IsCurrentStep(step))
         {
             float movedDistance = FlatDistance(startPosition, player.position);

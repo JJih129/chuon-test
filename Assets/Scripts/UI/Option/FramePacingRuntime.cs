@@ -5,6 +5,7 @@ public class FramePacingRuntime : MonoBehaviour
 {
     const string VSyncKey = "opt_vsync";
     const string TargetFrameRateKey = "opt_target_fps";
+    const string QualityIndexKey = "opt_quality_index";
     const int DefaultTargetFrameRate = 120;
     const float DefaultMaximumDeltaTime = 0.05f;
     const float DefaultShadowDistance = 16f;
@@ -68,6 +69,14 @@ public class FramePacingRuntime : MonoBehaviour
     {
         bool useVSync = PlayerPrefs.GetInt(VSyncKey, 0) == 1;
         int targetFrameRate = Mathf.Clamp(PlayerPrefs.GetInt(TargetFrameRateKey, DefaultTargetFrameRate), 30, 240);
+
+        // 저장된 그래픽 품질을 시작 시 다시 적용 (이전에는 드롭다운을 바꿀 때만 적용 → 재시작하면 기본 품질로 돌아갔다)
+        if (PlayerPrefs.HasKey(QualityIndexKey))
+        {
+            int quality = Mathf.Clamp(PlayerPrefs.GetInt(QualityIndexKey), 0, QualitySettings.names.Length - 1);
+            if (quality != QualitySettings.GetQualityLevel())
+                QualitySettings.SetQualityLevel(quality, true);
+        }
 
         QualitySettings.vSyncCount = useVSync ? 1 : 0;
         Application.targetFrameRate = useVSync ? -1 : targetFrameRate;

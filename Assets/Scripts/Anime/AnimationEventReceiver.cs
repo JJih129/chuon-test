@@ -51,7 +51,7 @@ public sealed class AnimationEventReceiver : MonoBehaviour
     private void TryAutoWire()
     {
         if (playerReferences == null) playerReferences = GetComponentInParent<PlayerReferences>(true);
-        if (anim == null)        anim = playerReferences != null ? playerReferences.MainAnimator ?? GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>() : GetComponentInChildren<Animator>(true) ?? GetComponent<Animator>();
+        if (anim == null)        anim = playerReferences != null ? playerReferences.MainAnimator ?? GetComponentInChildren<Animator>(true).OrNull() ?? GetComponent<Animator>() : GetComponentInChildren<Animator>(true).OrNull() ?? GetComponent<Animator>();
         if (guard == null)       guard = GetComponentInParent<PlayerGuardController>(true);
         if (perfectDodge == null)perfectDodge = GetComponentInParent<PerfectDodgeController>(true);
     }

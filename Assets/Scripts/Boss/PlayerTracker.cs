@@ -1,7 +1,7 @@
 using UnityEngine;
 using System;
 
-// BossController¿Í Pattern.CanExecute¿¡¼­ PlayerTrackerÀÇ µ¥ÀÌÅÍ¸¦ ÂüÁ¶ÇÏ±â À§ÇÑ ÀÎÅÍÆäÀÌ½º
+// BossControllerì™€ Pattern.CanExecuteì—ì„œ PlayerTrackerì˜ ë°ì´í„°ë¥¼ ì°¸ì¡°í•˜ê¸° ìœ„í•œ ì¸í„°í˜ì´ìŠ¤
 public interface IPlayerTracker
 {
     bool IsDodgingRecently();
@@ -10,43 +10,43 @@ public interface IPlayerTracker
     void SignalPlayerAction(PlayerAction action);
 }
 
-// ÇÃ·¹ÀÌ¾î Çàµ¿ Á¤ÀÇ
+// í”Œë ˆì´ì–´ í–‰ë™ ì •ì˜
 public enum PlayerAction { Attack, Dodge, Idle }
 
-// ÆÄÀÏ¸í: PlayerTracker.cs
+// íŒŒì¼ëª…: PlayerTracker.cs
 public class PlayerTracker : MonoBehaviour, IPlayerTracker
 {
-    [Header("ÃßÀû ½Ã°£ ¼³Á¤")]
-    public float recentTimeThreshold = 3f; // ÃÖ±Ù Çàµ¿À» ÆÇ´ÜÇÏ´Â ±âÁØ ½Ã°£ (3ÃÊ)
-    public int dodgeCountThreshold = 2; // ¿¬¼Ó È¸ÇÇ ÆÇ´Ü È½¼ö (2È¸)
-    public float retreatDurationThreshold = 2f; // ÈÄÅğ Áö¼Ó ½Ã°£ (2ÃÊ)
+    [Header("ì¶”ì  ì‹œê°„ ì„¤ì •")]
+    public float recentTimeThreshold = 3f; // ìµœê·¼ í–‰ë™ì„ íŒë‹¨í•˜ëŠ” ê¸°ì¤€ ì‹œê°„ (3ì´ˆ)
+    public int dodgeCountThreshold = 2; // ì—°ì† íšŒí”¼ íŒë‹¨ íšŸìˆ˜ (2íšŒ)
+    public float retreatDurationThreshold = 2f; // í›„í‡´ ì§€ì† ì‹œê°„ (2ì´ˆ)
 
     private float _lastAttackTime = -10f;
     private float _lastDodgeTime = -10f;
     private int _recentDodgeCount = 0;
     private float _retreatStartTime = -10f;
 
-    // --- IPlayerTracker ±¸Çö ---
+    // --- IPlayerTracker êµ¬í˜„ ---
 
-    // »ç¼± º£±â Á¶°Ç: ÇÃ·¹ÀÌ¾î°¡ ÃÖ±Ù 3ÃÊ ³» È¸ÇÇ¸¦ 2È¸ ÀÌ»ó ¿¬¼Ó »ç¿ëÇß´ÂÁö
+    // ì‚¬ì„  ë² ê¸° ì¡°ê±´: í”Œë ˆì´ì–´ê°€ ìµœê·¼ 3ì´ˆ ë‚´ íšŒí”¼ë¥¼ 2íšŒ ì´ìƒ ì—°ì† ì‚¬ìš©í–ˆëŠ”ì§€
     public bool IsDodgingRecently()
     {
         return (Time.time - _lastDodgeTime <= recentTimeThreshold) && (_recentDodgeCount >= dodgeCountThreshold);
     }
 
-    // ¿¬¼Ó º£±â Á¶°Ç: ÇÃ·¹ÀÌ¾î°¡ ÀÏÁ¤ ½Ã°£ °ø°İÀ» ¸ØÃè´ÂÁö
+    // ì—°ì† ë² ê¸° ì¡°ê±´: í”Œë ˆì´ì–´ê°€ ì¼ì • ì‹œê°„ ê³µê²©ì„ ë©ˆì·„ëŠ”ì§€
     public bool IsAttackStoppedRecently(float duration)
     {
         return (Time.time - _lastAttackTime >= duration);
     }
 
-    // ´ë½¬ Âî¸£±â Á¶°Ç: ÇÃ·¹ÀÌ¾î°¡ ¹İº¹ÀûÀ¸·Î ÈÄÅğÇÒ ¶§ (2m ÀÌ»ó °Å¸®¿¡¼­ 2ÃÊ ÀÌ»ó)
+    // ëŒ€ì‰¬ ì°Œë¥´ê¸° ì¡°ê±´: í”Œë ˆì´ì–´ê°€ ë°˜ë³µì ìœ¼ë¡œ í›„í‡´í•  ë•Œ (2m ì´ìƒ ê±°ë¦¬ì—ì„œ 2ì´ˆ ì´ìƒ)
     public bool IsRetreating()
     {
         return (Time.time - _retreatStartTime >= retreatDurationThreshold);
     }
 
-    // (Âü°í: µµ¾à ³»·ÁÂï±âÀÇ 'È¸º¹ Ä¸½¶ »ç¿ë' Á¶°ÇÀº ¿ÜºÎ ÀÌº¥Æ® ½Ã½ºÅÛ ¿¬µ¿ ÇÊ¿ä)
+    // (ì°¸ê³ : ë„ì•½ ë‚´ë ¤ì°ê¸°ì˜ 'íšŒë³µ ìº¡ìŠ ì‚¬ìš©' ì¡°ê±´ì€ ì™¸ë¶€ ì´ë²¤íŠ¸ ì‹œìŠ¤í…œ ì—°ë™ í•„ìš”)
 
     public void SignalPlayerAction(PlayerAction action)
     {
@@ -59,7 +59,7 @@ public class PlayerTracker : MonoBehaviour, IPlayerTracker
                 _retreatStartTime = -10f;
                 break;
             case PlayerAction.Dodge:
-                if (currentTime - _lastDodgeTime <= 1.0f) // ÂªÀº ½Ã°£ ³» ¿¬¼Ó È¸ÇÇ Ã¼Å©
+                if (currentTime - _lastDodgeTime <= 1.0f) // ì§§ì€ ì‹œê°„ ë‚´ ì—°ì† íšŒí”¼ ì²´í¬
                 {
                     _recentDodgeCount++;
                 }
@@ -71,7 +71,7 @@ public class PlayerTracker : MonoBehaviour, IPlayerTracker
                 _retreatStartTime = -10f;
                 break;
             case PlayerAction.Idle:
-                // ÇÃ·¹ÀÌ¾î°¡ ÈÄÅğ(µÚ·Î ÀÌµ¿)ÇÏ±â ½ÃÀÛÇßÀ» ¶§ ÀÌ ½ÅÈ£¸¦ ¹Şµµ·Ï ·ÎÁ÷À» ±¸¼ºÇØ¾ß ÇÕ´Ï´Ù.
+                // í”Œë ˆì´ì–´ê°€ í›„í‡´(ë’¤ë¡œ ì´ë™)í•˜ê¸° ì‹œì‘í–ˆì„ ë•Œ ì´ ì‹ í˜¸ë¥¼ ë°›ë„ë¡ ë¡œì§ì„ êµ¬ì„±í•´ì•¼ í•©ë‹ˆë‹¤.
                 if (_retreatStartTime < 0) _retreatStartTime = currentTime;
                 break;
         }

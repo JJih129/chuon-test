@@ -33,7 +33,7 @@ public sealed class DrakkarSwordTrailDriver : MonoBehaviour
         EnsureUpdater();
 
         if (_trail == null)
-            _trail = GetComponent<DrakkarTrail>() ?? gameObject.AddComponent<DrakkarTrail>();
+            _trail = GetComponent<DrakkarTrail>().OrNull() ?? gameObject.AddComponent<DrakkarTrail>();
 
         _trail.TrailMaterial = trailMaterial;
         _trail.Layer = layer;

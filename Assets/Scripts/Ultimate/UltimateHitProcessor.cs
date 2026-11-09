@@ -4,6 +4,11 @@ using UnityEngine;
 public sealed class UltimateHitProcessor : MonoBehaviour
 {
     [SerializeField] private bool debugLog;
+    [Tooltip("0보다 크면 궁극기 총 피해(처형 보너스 제외)를 대상 최대 HP 의 이 비율로 맞춘다 (기획: 최대 HP 30%). Level_Facility 는 FacilityCombatRules 가 0.3 으로 설정.")]
+    [SerializeField, Range(0f, 1f)] private float baseDamagePercentOfMaxHP = 0f;
+    bool _executionBonusApplied;
+
+    public float BaseDamagePercentOfMaxHP { get => baseDamagePercentOfMaxHP; set => baseDamagePercentOfMaxHP = Mathf.Clamp01(value); }
 
     UltimateTargetBinder.BoundTarget _target;
     IUltimateTarget _targetUltimateTarget;
@@ -32,6 +37,7 @@ public sealed class UltimateHitProcessor : MonoBehaviour
         _finalExplosionApplied = false;
         _bufferFlushed = false;
         _accumulatedDamage = 0;
+        _executionBonusApplied = false;
         if (data != null)
         {
             _dashSlashDamage = data.Damage.dashSlashDamage;
@@ -98,7 +104,8 @@ public sealed class UltimateHitProcessor : MonoBehaviour
 
         _finalExplosionApplied = true;
         int damage = _finalExplosionDamage;
-        if (ShouldApplyExecutionBonus())
+        _executionBonusApplied = ShouldApplyExecutionBonus();
+        if (_executionBonusApplied)
             damage += _executionBonusDamage;
         BufferDamage(damage);
 
@@ -112,6 +119,13 @@ public sealed class UltimateHitProcessor : MonoBehaviour
             return false;
 
         _bufferFlushed = true;
+        if (baseDamagePercentOfMaxHP > 0f && _targetHealth != null && _targetHealth.MaxHP > 0)
+        {
+            int scaled = Mathf.RoundToInt(_targetHealth.MaxHP * baseDamagePercentOfMaxHP);
+            if (_executionBonusApplied)
+                scaled += _executionBonusDamage;
+            _accumulatedDamage = Mathf.Max(1, scaled);
+        }
         _targetUltimateTarget.ApplyUltimateDamage(_accumulatedDamage);
 
         if (debugLog)

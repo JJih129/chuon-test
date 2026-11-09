@@ -5,6 +5,11 @@ public class GameSceneBinder : MonoBehaviour
 {
     const string MainSceneName = "MainScene";
 
+    // 씬 이름 대신 직렬화 플래그로 보스 레벨 바인딩 여부 결정 (MainScene은 이름으로도 계속 동작)
+    [SerializeField] bool bindAsMainLevel = false;
+
+    bool ShouldBindAsMainLevel => bindAsMainLevel || SceneManager.GetActiveScene().name == MainSceneName;
+
     System.Collections.IEnumerator Start()
     {
         yield return null;
@@ -18,7 +23,7 @@ public class GameSceneBinder : MonoBehaviour
         var ultimate = FindObjectOfType<PlayerUltimateController>(true);
         if (hud && ph) hud.Bind(ph, pc, pg, boss, ultimate);
 
-        if (SceneManager.GetActiveScene().name != MainSceneName)
+        if (!ShouldBindAsMainLevel)
             yield break;
 
         var arrivalController = GetComponent<MainSceneArrivalController>();
@@ -62,6 +67,12 @@ public class GameSceneBinder : MonoBehaviour
                 bossObjectiveController.enabled = false;
             RemoveRuntimeBossObjectivePanel();
         }
+
+        // 씬 배치 퀘스트 패널(QuastBG) 채우기: 런타임 프로토타입 패널이 꺼져 있어 아무도 바인딩하지 않던 문제
+        var questPanelPresenter = GetComponent<MainSceneQuestPanelPresenter>();
+        if (questPanelPresenter == null)
+            questPanelPresenter = gameObject.AddComponent<MainSceneQuestPanelPresenter>();
+        questPanelPresenter.ConfigureRuntime(hud, boss, bossBreak, ultimate);
 
         var consumables = FindObjectOfType<PlayerConsumables>(true);
         var combatAssistController = GetComponent<MainSceneCombatAssistController>();

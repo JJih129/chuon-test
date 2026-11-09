@@ -41,6 +41,10 @@ public class MainSceneClearPresentationController : MonoBehaviour
     [SerializeField] private Color overlayAccentColor = new Color(0.74f, 1f, 0.84f, 0.98f);
     [SerializeField] private Color overlayBodyColor = new Color(0.90f, 0.97f, 1f, 0.96f);
 
+    [Header("Ending (Tsukasa)")]
+    [SerializeField] private bool playTsukasaEnding = true;
+    [SerializeField, Min(0f)] private float tsukasaEndingDelay = 1.3f;
+
     [Header("Credits")]
     [SerializeField] private bool showCreditsAfterClear = true;
     [SerializeField] private string creditsDataResourcePath = DefaultCreditsDataResourcePath;
@@ -156,6 +160,19 @@ public class MainSceneClearPresentationController : MonoBehaviour
 
     IEnumerator CoPlayClearSequence()
     {
+        // 엔딩: Type-D 가 쓰러진 직후 츠카사 홀로그램 (건너뛰기 가능, 출구 진행은 막지 않는다)
+        if (playTsukasaEnding)
+        {
+            if (tsukasaEndingDelay > 0f)
+                yield return new WaitForSecondsRealtime(tsukasaEndingDelay);
+
+            bool endingDone = false;
+            TsukasaEndingPresenter.Play(() => endingDone = true);
+            float guardUntil = Time.realtimeSinceStartup + 20f;
+            while (!endingDone && Time.realtimeSinceStartup < guardUntil)
+                yield return null;
+        }
+
         PlayOverlay();
 
         if (playerHud != null)
@@ -167,7 +184,10 @@ public class MainSceneClearPresentationController : MonoBehaviour
         if (playerHud != null)
             playerHud.ShowRuntimeTelegraphMessage(syncMessage, syncTelegraphType, syncHold, false, clearCuePriority);
 
-        if (showCreditsAfterClear)
+        // 출구(크레딧 씬) 가 준비돼 있으면 씬 안 크레딧 오버레이(timeScale 0)는 띄우지 않는다: 출구로 걸어가 CreditsScene 으로 이어진다.
+        MainSceneClearExitBridge exitBridge = GetComponent<MainSceneClearExitBridge>();
+        bool hasSceneExit = exitBridge != null && exitBridge.ActiveExitInteractable != null;
+        if (showCreditsAfterClear && !hasSceneExit)
         {
             float delay = Mathf.Max(0f, overlayHoldDuration + overlayFadeOutDuration + creditsDelayAfterOverlay);
             if (delay > 0f)
@@ -268,7 +288,7 @@ public class MainSceneClearPresentationController : MonoBehaviour
         if (_creditsOverlay == null)
             return;
 
-        Time.timeScale = 0f;
+        GameTimeScale.Request(this, 0f);
         _creditsOverlay.ConfigureQuitButton(true, quitButtonLabel, QuitGame);
         _creditsOverlay.Show(_creditsData);
     }

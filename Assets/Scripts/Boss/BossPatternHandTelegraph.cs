@@ -4,6 +4,8 @@ using UnityEngine;
 public sealed class BossPatternHandTelegraph : MonoBehaviour
 {
     const string PivotName = "PatternPivot";
+    const float PivotLookupCooldown = 2f;
+    float _nextPivotLookupAt;
     const string MaterialPath = "Assets/Eric VFX Studio/Resource/Materials/DungeonRingGuid.mat";
     const string TexturePath = "Assets/Eric VFX Studio/Resource/Textures/DungeonRingGuid.png";
     const string MaterialResourcePath = "Boss/DungeonRingGuid";
@@ -27,6 +29,7 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
     Camera _mainCamera;
     float _hideAt;
     float _rotation;
+    float _scaleMultiplier = 1f;
 
     void Awake()
     {
@@ -72,13 +75,22 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
             _quadTransform.rotation = _mainCamera.transform.rotation * Quaternion.Euler(0f, 0f, _rotation);
 
         float pulse = 1f + Mathf.Sin(Time.time * pulseSpeed) * pulseAmount;
-        _quadTransform.localScale = Vector3.one * (baseScale * Mathf.Max(0.05f, pulse));
+        _quadTransform.localScale = Vector3.one * (baseScale * _scaleMultiplier * Mathf.Max(0.05f, pulse));
     }
 
     public void Play(float duration)
     {
+        Play(duration, fallbackColor, 1f);
+    }
+
+    // 다단 후속타용(BossController.StringHitCues): 텔레그래프 색 언어의 색과 작은 크기로 짧게 표시.
+    // Play(duration) 은 항상 기본 색/크기로 되돌리므로 오프너 표시는 그대로다.
+    public void Play(float duration, Color tint, float scaleMultiplier)
+    {
         if (duration <= 0.01f)
             return;
+
+        _scaleMultiplier = Mathf.Max(0.05f, scaleMultiplier);
 
         if (patternPivot == null)
             ResolvePivot();
@@ -86,9 +98,26 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
         if (_quad == null || patternPivot == null)
             return;
 
+        ApplyTint(tint);
         _hideAt = Time.time + duration;
         _quad.SetActive(true);
         LateUpdate();
+    }
+
+    void ApplyTint(Color tint)
+    {
+        if (_runtimeMaterial == null)
+            return;
+
+        float max = tint.maxColorComponent;
+        Color ldr = max > 1f ? tint / max : tint; // HDR 팔레트 색을 LDR 로
+        ldr.a = 1f;
+        if (_runtimeMaterial.HasProperty("_Color"))
+            _runtimeMaterial.SetColor("_Color", ldr);
+        if (_runtimeMaterial.HasProperty("_BaseColor"))
+            _runtimeMaterial.SetColor("_BaseColor", ldr);
+        if (_runtimeMaterial.HasProperty("_EmissionColor"))
+            _runtimeMaterial.SetColor("_EmissionColor", ldr * 2.8f);
     }
 
     public void Hide()
@@ -102,6 +131,11 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
     {
         if (patternPivot != null)
             return;
+
+        // 피벗 탐색 실패 시 매 Play 마다 전체 씬 스캔하지 않도록 쿨다운
+        if (Time.unscaledTime < _nextPivotLookupAt)
+            return;
+        _nextPivotLookupAt = Time.unscaledTime + PivotLookupCooldown;
 
         Transform[] children = transform.root != null
             ? transform.root.GetComponentsInChildren<Transform>(true)

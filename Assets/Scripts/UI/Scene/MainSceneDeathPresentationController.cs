@@ -8,16 +8,18 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public sealed class MainSceneDeathPresentationController : MonoBehaviour
 {
-    const float DefaultFixedDeltaTime = 0.02f;
     const int CanvasSortOrder = 7000;
     static readonly WaitForEndOfFrame EndOfFrame = new WaitForEndOfFrame();
 
     [Header("Flow")]
     [SerializeField] string titleSceneName = "TitleScene";
-    [SerializeField] float titleRevealDelay = 0.45f;
-    [SerializeField] float freezeDelay = 0.95f;
-    [SerializeField] float buttonsRevealDelay = 1.35f;
-    [SerializeField] float overlayFadeDuration = 0.60f;
+    [SerializeField] float titleRevealDelay = 0.2f;
+    [SerializeField] float freezeDelay = 0.4f;
+    [Tooltip("Realtime seconds after death until the retry/title buttons appear.")]
+    [SerializeField] float buttonsRevealDelay = 0.6f;
+    [SerializeField] float overlayFadeDuration = 0.40f;
+    [Tooltip("On retry, skip the MainScene arrival intro and start directly in the playable state.")]
+    [SerializeField] bool skipArrivalIntroOnRetry = true;
     [SerializeField] float titleScalePunch = 1.035f;
 
     [Header("Theme")]
@@ -368,8 +370,7 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
         if (_pauseManager != null)
             _pauseManager.enabled = false;
 
-        Time.timeScale = 0f;
-        Time.fixedDeltaTime = DefaultFixedDeltaTime;
+        GameTimeScale.Request(this, 0f);
         AudioListener.pause = false;
         RuntimeUiInputUtility.EnsureEventSystem();
         RuntimeUiInputUtility.ForceMenuCursor();
@@ -429,6 +430,25 @@ public sealed class MainSceneDeathPresentationController : MonoBehaviour
         RuntimeMenuSceneStateUtility.PrepareForGameplayScene();
         SceneFader sceneFader = RuntimeSceneFaderUtility.EnsureSceneFader();
         string activeSceneName = SceneManager.GetActiveScene().name;
+
+        // 재시도 시 도착 인트로 생략
+        if (skipArrivalIntroOnRetry)
+        {
+            // Level_Facility 체크포인트: 상층에서 사망 → 처음부터, 보스 도착 이후 사망 → 보스 앞에서 재시작
+            LobbyManager lobby = LobbyManager.Instance;
+            if (lobby != null && lobby.ContinuesInSameScene)
+            {
+                if (lobby.HasHandedOffToLowerFloor)
+                {
+                    MainSceneArrivalController.RequestSkipArrivalOnNextLoad();
+                    LobbyManager.RequestSkipToLowerFloorOnNextLoad();
+                }
+            }
+            else
+            {
+                MainSceneArrivalController.RequestSkipArrivalOnNextLoad();
+            }
+        }
 
         if (sceneFader != null)
             sceneFader.FadeOutAndLoadScene(activeSceneName);

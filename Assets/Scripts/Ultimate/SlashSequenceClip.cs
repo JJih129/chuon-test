@@ -8,11 +8,11 @@ public class SlashSequenceClip : PlayableAsset
     public ExposedReference<UltimateSlashBurstSpawner> spawner;
 
     [Min(1)] public int total = 15;
-    [Min(0f)] public float interval = 0.05f;  // °¢ Å¸ »çÀÌ °£°Ý(ÃÊ)
+    [Min(0f)] public float interval = 0.05f;  // ê° íƒ€ ì‚¬ì´ ê°„ê²©(ì´ˆ)
     public int patternSeed = 13579;
     public float slashLife = 0.7f;
 
-    // Å¸ÀÓ¶óÀÎ¿¡ ¿Ã·ÈÀ» ¶§ Å¬¸³ ±æÀÌ¸¦ ÀÚµ¿À¸·Î º¸Á¤ÇÏ¸é ÆíÇÔ
+    // íƒ€ìž„ë¼ì¸ì— ì˜¬ë ¸ì„ ë•Œ í´ë¦½ ê¸¸ì´ë¥¼ ìžë™ìœ¼ë¡œ ë³´ì •í•˜ë©´ íŽ¸í•¨
     public override double duration => Mathf.Max(0.0001f, total * interval);
 
     public override Playable CreatePlayable(PlayableGraph graph, GameObject owner)

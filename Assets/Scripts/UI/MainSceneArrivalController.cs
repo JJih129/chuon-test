@@ -79,7 +79,7 @@ public class MainSceneArrivalController : MonoBehaviour
         new IntroStep("EGO", "정정할게. 이제 시끄러워졌네.", 1.6f, AttackTelegraphType.Danger, IntroEvent.Alarm, true),
         new IntroStep("EGO", "전방 고에너지 반응. 인간형... 아니, 실험체야.", 2.2f, AttackTelegraphType.Danger, IntroEvent.BossIdentify, true),
         new IntroStep("추온", "나랑 같은 부류라는 건가.", 1.7f, AttackTelegraphType.Auto),
-        new IntroStep("EGO", "Type-D. 네 이전 실험 데이터를 기반으로 만든 방어 개체일 가능성이 높아.", 2.4f, AttackTelegraphType.Danger),
+        new IntroStep("EGO", "Type-D. 너와 같은 실험체 시리즈야. 이 격납고를 지키는 놈이지.", 2.4f, AttackTelegraphType.Danger),
         new IntroStep("추온", "그럼 베면 되겠네.", 1.5f, AttackTelegraphType.Parry),
         new IntroStep("EGO", "추온, 먼저 읽고 들어가. 힘으로 밀면 네가 먼저 부서져.", 2.2f, AttackTelegraphType.Guard),
         new IntroStep("추온", "걱정 마. 끝까지 벨 거야.", 1.7f, AttackTelegraphType.Parry, IntroEvent.CombatStart)
@@ -133,6 +133,10 @@ public class MainSceneArrivalController : MonoBehaviour
 
     [Header("Elevator Arrival")]
     [SerializeField] bool playElevatorArrivalOnSceneStart = true;
+    [Tooltip("Level_Facility: 상층(로비) 하강이 끝날 때까지 보스를 격리 상태로 붙잡아 두고 BeginArrivalFromLobby()를 기다린다.")]
+    [SerializeField] bool awaitLobbyHandoff = false;
+    [Tooltip("대기 중 보스 비주얼을 숨길지 여부 (끄면 관측 브리지에서 갇힌 보스가 보인다).")]
+    [SerializeField] bool hideBossWhileAwaitingLobbyHandoff = false;
     [SerializeField] Transform elevatorArrivalAnchor;
     [SerializeField] ElevatorDoorController elevatorDoorController;
     [SerializeField] GameObject closedElevatorDoorVisual;
@@ -155,6 +159,9 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField] Vector3 elevatorIntroCameraLookOffset = new Vector3(0f, 1.25f, 1.2f);
     [SerializeField] float elevatorArrivalCameraPitch = 8f;
     [SerializeField] float elevatorArrivalCameraYawOffset = 180f;
+    [Tooltip("Level_Facility: 조작이 돌아오는 순간 카메라를 플레이어 등 뒤(아레나·보스 방향)로 돌린다. 끄면 기존처럼 정면(yaw offset) 연출을 유지(MainScene).")]
+    [SerializeField] bool snapCameraBehindPlayerOnControlHandoff = false;
+    bool _controlHandedOff;
     [SerializeField, Min(0.5f)] float elevatorArrivalCameraDistance = 4.2f;
     [SerializeField] float elevatorArrivalCameraHeight = 1.25f;
     [SerializeField, Min(0f)] float elevatorDoorClosedHold = 0.9f;
@@ -274,6 +281,65 @@ public class MainSceneArrivalController : MonoBehaviour
     static readonly int BossMoveYHash = Animator.StringToHash("MoveY");
 
     public bool IsLobbyTransitionActive => _fromLobbyTransition;
+    public bool IsAwaitingLobbyHandoff => _awaitingLobbyHandoff;
+
+    bool _awaitingLobbyHandoff;
+    bool _lobbyHandoffStarted;
+    bool _lobbyHandoffSubscribed;
+
+    // 같은 씬 안에서 상층 엘리베이터 하강이 끝났을 때 호출: 하층 도착 연출을 시작한다.
+    public void BeginArrivalFromLobby()
+    {
+        if (_lobbyHandoffStarted || _retrySkipApplied)
+            return;
+
+        _lobbyHandoffStarted = true;
+        _awaitingLobbyHandoff = false;
+        _fromLobbyTransition = true;
+
+        if (_arrivalRoutine != null)
+        {
+            StopCoroutine(_arrivalRoutine);
+            _arrivalRoutine = null;
+        }
+
+        RefreshSubscriptions();
+        PrimeElevatorIntroOpeningFrame();
+        if (useBossIntroTimeline && hideBossVisualUntilReveal)
+            HideBossIntroVisuals();
+
+        _arrivalRoutine = StartCoroutine(CoPlayArrivalSequence());
+    }
+
+    void HoldBossForLobbyHandoff()
+    {
+        _awaitingLobbyHandoff = true;
+        ResolveCombatReferences();
+        SetBossIntroPaused(true);
+        if (hideBossWhileAwaitingLobbyHandoff)
+            HideBossIntroVisuals();
+
+        if (!_lobbyHandoffSubscribed)
+        {
+            LobbyManager.ElevatorDescentFinished += HandleLobbyElevatorDescentFinished;
+            _lobbyHandoffSubscribed = true;
+        }
+    }
+
+    void ReleaseLobbyHandoffSubscription()
+    {
+        if (!_lobbyHandoffSubscribed)
+            return;
+
+        LobbyManager.ElevatorDescentFinished -= HandleLobbyElevatorDescentFinished;
+        _lobbyHandoffSubscribed = false;
+    }
+
+    void HandleLobbyElevatorDescentFinished(LobbyManager lobby)
+    {
+        ReleaseLobbyHandoffSubscription();
+        BeginArrivalFromLobby();
+    }
 
     public void ConfigureElevatorIntroCamera(Vector3 localOffset, Vector3 lookOffset)
     {
@@ -286,10 +352,196 @@ public class MainSceneArrivalController : MonoBehaviour
         bossIntroDirector = director;
     }
 
+    // 사망 후 재시작 시 도착 인트로를 건너뛰기 위한 플래그 (씬 리로드 직전에 설정, 다음 로드에서 소비)
+    static bool s_skipArrivalOnNextLoad;
+    bool _retrySkipApplied;
+
+    public static void RequestSkipArrivalOnNextLoad() => s_skipArrivalOnNextLoad = true;
+
+    static bool ConsumeSkipArrival()
+    {
+        bool value = s_skipArrivalOnNextLoad;
+        s_skipArrivalOnNextLoad = false;
+        return value;
+    }
+
     void Awake()
     {
-        if (playElevatorArrivalOnSceneStart && useBossIntroTimeline && hideBossVisualUntilReveal)
+        LastLoadWasRetry = s_skipArrivalOnNextLoad;
+        ApplyDialogueTableToIntroSteps();
+        if (!s_skipArrivalOnNextLoad && playElevatorArrivalOnSceneStart && useBossIntroTimeline && hideBossVisualUntilReveal)
             HideBossIntroVisuals();
+    }
+
+    // ------------------------------------------------------------------ 대사 테이블 / 인트로 오버레이
+
+    /// <summary>직전 씬 로드가 사망 후 재시작(인트로 생략)이었는가. CombatBarkDirector 의 재도전 대사용.</summary>
+    public static bool LastLoadWasRetry { get; private set; }
+
+    /// <summary>엘리베이터 도착/보스 인트로 연출 중 (조작 잠금 또는 인트로 코루틴 진행).</summary>
+    public bool IsIntroSequenceActive => _arrivalInputLocked || (!_awaitingLobbyHandoff && (_bossPausedForIntro || (_arrivalRoutine != null && !_controlHandedOff)));
+    public bool IsIntroOverlayPlaying => _introOverlayRoutine != null;
+
+    const string IntroStepKeyPrefix = "boss.intro.";
+    const string IntroTypeDKey = "boss.intro.typed";
+    int _lastTimelineLineIndex = -1;
+    bool _timelineLineInProgress;
+    Coroutine _introOverlayRoutine;
+    bool _introOverlayInterrupted;
+    BossHealth _overlayBossHealth;
+
+    // 씬에 직렬화된 인트로 대사(보스 인트로 IntroStep)를 런타임에 테이블 키로 덮어쓴다 (씬 값 수정 불필요).
+    void ApplyDialogueTableToIntroSteps()
+    {
+        if (bossIntroSteps == null)
+            return;
+
+        for (int i = 0; i < bossIntroSteps.Length; i++)
+        {
+            IntroStep step = bossIntroSteps[i];
+            if (step == null)
+                continue;
+
+            string speaker = step.speaker;
+            string text = step.text;
+            float hold = step.hold;
+            if (DialogueTable.Resolve(IntroStepKeyPrefix + i, ref speaker, ref text, ref hold))
+            {
+                step.speaker = speaker;
+                step.text = text;
+                step.hold = hold;
+            }
+        }
+    }
+
+    // 타임라인이 보스 등장 걷기 종료로 일찍 끝나면 남은 인트로 대사(+Type-D 한 마디)를
+    // 조작을 막지 않는 자막으로 이어서 재생한다. 교전이 시작되면 bark 한 줄로 정리하고 멈춘다.
+    void StartIntroOverlayRemainder(int startIndex)
+    {
+        StopIntroOverlay();
+        if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled || !useBossIntroDialogueSubtitle)
+            return;
+
+        bool hasSteps = bossIntroSteps != null && startIndex >= 0 && startIndex < bossIntroSteps.Length;
+        if (!hasSteps && !DialogueTable.Has(IntroTypeDKey))
+            return;
+
+        _introOverlayRoutine = StartCoroutine(CoIntroOverlayRemainder(Mathf.Max(0, startIndex)));
+    }
+
+    void StopIntroOverlay()
+    {
+        if (_introOverlayRoutine != null)
+        {
+            StopCoroutine(_introOverlayRoutine);
+            _introOverlayRoutine = null;
+        }
+
+        ReleaseIntroOverlayCombatWatch();
+    }
+
+    IEnumerator CoIntroOverlayRemainder(int startIndex)
+    {
+        _introOverlayInterrupted = false;
+        WatchIntroOverlayCombat();
+        Canvas canvas = ResolveDialogueCanvas();
+        IntroDialoguePresenter presenter = ResolveIntroDialoguePresenter(canvas);
+        if (presenter == null)
+        {
+            _introOverlayRoutine = null;
+            ReleaseIntroOverlayCombatWatch();
+            yield break;
+        }
+
+        // 남은 IntroStep (이벤트는 타임라인이 이미 처리했으므로 대사만) + Type-D 태그
+        var lines = new List<KeyValuePair<string, string>>();
+        if (bossIntroSteps != null)
+        {
+            for (int i = startIndex; i < bossIntroSteps.Length; i++)
+            {
+                IntroStep step = bossIntroSteps[i];
+                if (step != null && !string.IsNullOrWhiteSpace(step.text))
+                    lines.Add(new KeyValuePair<string, string>(step.speaker, step.text));
+            }
+        }
+
+        if (DialogueTable.TryGet(IntroTypeDKey, out DialogueTable.Entry typeDLine))
+            lines.Add(new KeyValuePair<string, string>(string.IsNullOrEmpty(typeDLine.speaker) ? "Type-D" : typeDLine.speaker, typeDLine.text));
+
+        for (int i = 0; i < lines.Count; i++)
+        {
+            if (_introOverlayInterrupted)
+                break;
+
+            float hold = Mathf.Max(1.1f, DialogueTable.SuggestedDuration(lines[i].Value) * 0.85f);
+            presenter.ShowOverlayLine(canvas, lines[i].Key, lines[i].Value, hold);
+            float wait = hold + 0.55f;
+            float elapsed = 0f;
+            while (elapsed < wait && !_introOverlayInterrupted)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+        }
+
+        bool interrupted = _introOverlayInterrupted;
+        ReleaseIntroOverlayCombatWatch();
+        _introOverlayRoutine = null;
+        if (interrupted)
+            CombatBarkDirector.TryBark("boss.intro_cut", true);
+    }
+
+    void WatchIntroOverlayCombat()
+    {
+        ReleaseIntroOverlayCombatWatch();
+        ResolveCombatReferences();
+        if (playerHealth != null)
+            playerHealth.OnDamaged += HandleIntroOverlayCombatHit;
+
+        _overlayBossHealth = bossController != null ? bossController.GetComponentInChildren<BossHealth>(true) : null;
+        if (_overlayBossHealth == null && bossController != null)
+            _overlayBossHealth = bossController.GetComponentInParent<BossHealth>();
+        if (_overlayBossHealth != null)
+            _overlayBossHealth.OnHealthChanged += HandleIntroOverlayBossHealthChanged;
+    }
+
+    void ReleaseIntroOverlayCombatWatch()
+    {
+        if (playerHealth != null)
+            playerHealth.OnDamaged -= HandleIntroOverlayCombatHit;
+        if (_overlayBossHealth != null)
+        {
+            _overlayBossHealth.OnHealthChanged -= HandleIntroOverlayBossHealthChanged;
+            _overlayBossHealth = null;
+        }
+    }
+
+    void HandleIntroOverlayCombatHit(int damage) => _introOverlayInterrupted = true;
+    void HandleIntroOverlayBossHealthChanged(int current, int max) => _introOverlayInterrupted = true;
+
+    // 인트로 없이 엘리베이터 하차 완료 상태로 바로 진입
+    void ApplyRetrySkipArrivalState()
+    {
+        ResolveCombatReferences();
+        CacheElevatorArrivalReferences();
+        PlacePlayerAtElevatorArrival();
+
+        Transform playerRoot = ResolvePlayerFacingRoot();
+        if (playerRoot != null && walkPlayerOutAfterDoorOpen && elevatorWalkOutDistance > 0f)
+        {
+            Vector3 forward = ResolveElevatorWalkOutDirection(playerRoot);
+            SetPlayerWorldPose(playerRoot, playerRoot.position + forward * elevatorWalkOutDistance, Quaternion.LookRotation(forward, Vector3.up));
+        }
+
+        SetElevatorDoorOpenState(true, immediate: true);
+        RestoreBossHologramVisuals();
+        RestoreBossIntroVisualsVisibility();
+        SetBossIntroPaused(false);
+        SetArrivalInputLocked(false);
+        HandOffControlCamera();
+        if (playerRoot != null)
+            SnapCameraBehindPlayer(playerRoot, true);
+        _startFacingApplied = true;
     }
 
     public void ConfigureRuntime(
@@ -322,7 +574,7 @@ public class MainSceneArrivalController : MonoBehaviour
     void BeginRuntimeArrivalFlow()
     {
         bool enteredFromLobby = TutorialSceneTransitionState.ConsumeLobbyToMain();
-        _fromLobbyTransition = enteredFromLobby || playElevatorArrivalOnSceneStart;
+        _fromLobbyTransition = enteredFromLobby || playElevatorArrivalOnSceneStart || awaitLobbyHandoff;
 
         _firstDefenseCoachShown = false;
         _firstPunishCoachShown = false;
@@ -336,6 +588,25 @@ public class MainSceneArrivalController : MonoBehaviour
             StopCoroutine(_arrivalRoutine);
 
         RefreshSubscriptions();
+        if (_retrySkipApplied)
+            return;
+
+        if (ConsumeSkipArrival())
+        {
+            LastLoadWasRetry = true;
+            _retrySkipApplied = true;
+            ApplyRetrySkipArrivalState();
+            return;
+        }
+
+        // 같은 씬 레벨: 하강 연계 전까지 보스 격리 유지 (이미 시작됐으면 재시작하지 않음)
+        if (awaitLobbyHandoff)
+        {
+            if (!_lobbyHandoffStarted)
+                HoldBossForLobbyHandoff();
+            return;
+        }
+
         if (playElevatorArrivalOnSceneStart || enteredFromLobby)
             PrimeElevatorIntroOpeningFrame();
 
@@ -350,6 +621,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void OnDisable()
     {
+        StopIntroOverlay();
         ReleaseSubscriptions();
         StopBossRevealCloseUp();
         StopTimelineBossRevealCameraTracking();
@@ -376,6 +648,8 @@ public class MainSceneArrivalController : MonoBehaviour
 
     void OnDestroy()
     {
+        StopIntroOverlay();
+        ReleaseLobbyHandoffSubscription();
         ReleaseSubscriptions();
         StopBossRevealCloseUp();
         StopTimelineBossRevealCameraTracking();
@@ -432,11 +706,12 @@ public class MainSceneArrivalController : MonoBehaviour
             RestoreBossIntroVisualsVisibility();
             SetBossIntroPaused(false);
             SetArrivalInputLocked(false);
+            HandOffControlCamera();
             _arrivalRoutine = null;
             yield break;
         }
 
-        if (playElevatorArrivalOnSceneStart)
+        if (playElevatorArrivalOnSceneStart || _lobbyHandoffStarted)
             yield return StartCoroutine(CoPlayElevatorArrivalIntro());
 
         if (useBossIntroTimeline && bossIntroSteps != null && bossIntroSteps.Length > 0)
@@ -449,6 +724,10 @@ public class MainSceneArrivalController : MonoBehaviour
             RestoreBossIntroVisualsVisibility();
             SetBossIntroPaused(false);
             SetArrivalInputLocked(false);
+            HandOffControlCamera();
+            // Type-D 한 마디는 조작을 돌려준 뒤 오버레이로 (테이블에 있을 때만)
+            if (DialogueTable.Has(IntroTypeDKey))
+                StartIntroOverlayRemainder(bossIntroSteps.Length);
             _arrivalRoutine = null;
             yield break;
         }
@@ -473,6 +752,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
         SetBossIntroPaused(false);
         SetArrivalInputLocked(false);
+        HandOffControlCamera();
         RestoreBossHologramVisuals();
         RestoreBossIntroVisualsVisibility();
         _arrivalRoutine = null;
@@ -601,16 +881,23 @@ public class MainSceneArrivalController : MonoBehaviour
             return;
 
         _timelineIntroEnded = true;
+        // 현재 줄이 재생 도중 끊겼으면 그 줄부터, 아니면 다음 줄부터 오버레이로 이어간다.
+        int remainderStart = _timelineLineInProgress ? _lastTimelineLineIndex : _lastTimelineLineIndex + 1;
         if (_timelineDialogueRoutine != null)
         {
             StopCoroutine(_timelineDialogueRoutine);
             _timelineDialogueRoutine = null;
         }
+        _timelineLineInProgress = false;
 
         HideIntroDialogue();
         RestoreBossHologramVisuals();
         RestoreBossIntroVisualsVisibility();
         RestoreGameplayAfterTimelineIntro();
+
+        // 버그 수정: endTimelineWhenBossRevealWalkEnds 로 타임라인이 일찍 끝나면 이후 IntroStep 이 재생되지 않던 문제.
+        if (_lastTimelineLineIndex >= 0 || DialogueTable.Has(IntroTypeDKey))
+            StartIntroOverlayRemainder(Mathf.Max(0, remainderStart));
     }
 
     void RestoreGameplayAfterTimelineIntro()
@@ -620,6 +907,7 @@ public class MainSceneArrivalController : MonoBehaviour
         EndElevatorIntroCinematicCamera();
         SetBossIntroPaused(false);
         SetArrivalInputLocked(false);
+        HandOffControlCamera();
         EndElevatorIntroCinematicCamera();
 
         if (returnPlayerCameraImmediatelyAfterTimelineIntro || snapCameraBehindPlayerOnTimelineIntroEnd)
@@ -639,16 +927,25 @@ public class MainSceneArrivalController : MonoBehaviour
 
         IntroStep step = bossIntroSteps[index];
         PlayIntroEvent(step.introEvent);
+        if (_timelineIntroEnded)
+            return; // 타임라인 종료 후 늦게 도착한 신호: 대사는 오버레이가 처리
+
+        _lastTimelineLineIndex = Mathf.Max(_lastTimelineLineIndex, index);
+        _timelineLineInProgress = true;
         _timelineDialogueRoutine = StartCoroutine(CoPlayTimelineIntroLine(step));
     }
 
     IEnumerator CoPlayTimelineIntroLine(IntroStep step)
     {
         if (step == null)
+        {
+            _timelineLineInProgress = false;
             yield break;
+        }
 
         if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
         {
+            _timelineLineInProgress = false;
             _timelineDialogueRoutine = null;
             yield break;
         }
@@ -658,6 +955,7 @@ public class MainSceneArrivalController : MonoBehaviour
         else if (playerHud != null)
             ShowArrivalGuideMessage(FormatIntroLine(step), step.telegraphType, step.hold, step.dangerFeedback, 20);
 
+        _timelineLineInProgress = false;
         _timelineDialogueRoutine = null;
     }
 
@@ -776,7 +1074,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
         AudioSource source = ResolveIntroAudioSource();
         if (source != null)
-            source.PlayOneShot(clip);
+            source.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(1f)); // 효과음 볼륨 옵션
     }
 
     void PlayAlarmSirenCue()
@@ -1588,7 +1886,7 @@ public class MainSceneArrivalController : MonoBehaviour
         if (mainCamera == null || bossRoot == null)
             yield break;
 
-        FreeLookCamera freeLookCamera = FindObjectOfType<FreeLookCamera>(true);
+        FreeLookCamera freeLookCamera = FreeLookCamera.FindAuthoritative();
         bool restoreFreeLook = freeLookCamera != null && freeLookCamera.enabled;
         if (restoreFreeLook)
             freeLookCamera.enabled = false;
@@ -1882,7 +2180,7 @@ public class MainSceneArrivalController : MonoBehaviour
             return;
         }
 
-        Quaternion yawRotation = Quaternion.Euler(0f, playerRoot.eulerAngles.y + elevatorArrivalCameraYawOffset, 0f);
+        Quaternion yawRotation = Quaternion.Euler(0f, playerRoot.eulerAngles.y + ResolveArrivalCameraYawOffset(), 0f);
         Vector3 focusPoint = playerRoot.position + Vector3.up;
         position = playerRoot.position + yawRotation * new Vector3(0f, 0f, -elevatorArrivalCameraDistance) + Vector3.up * elevatorArrivalCameraHeight;
         rotation = Quaternion.LookRotation(focusPoint - position, Vector3.up);
@@ -2553,7 +2851,7 @@ public class MainSceneArrivalController : MonoBehaviour
         if (mainCamera == null)
             return;
 
-        _elevatorIntroFreeLookCamera = FindObjectOfType<FreeLookCamera>(true);
+        _elevatorIntroFreeLookCamera = FreeLookCamera.FindAuthoritative();
         _restoreElevatorIntroFreeLookCamera = _elevatorIntroFreeLookCamera != null && _elevatorIntroFreeLookCamera.enabled;
         if (_elevatorIntroFreeLookCamera != null)
             _elevatorIntroFreeLookCamera.enabled = false;
@@ -2724,18 +3022,64 @@ public class MainSceneArrivalController : MonoBehaviour
         SnapCameraBehindPlayer(ResolvePlayerFacingRoot(), false);
     }
 
+    float ResolveArrivalCameraYawOffset()
+    {
+        return _controlHandedOff && snapCameraBehindPlayerOnControlHandoff ? 0f : elevatorArrivalCameraYawOffset;
+    }
+
+    // 도착 연출이 끝나고 조작이 돌아올 때: 카메라를 플레이어 등 뒤로 돌려 아레나와 보스를 정면에 둔다.
+    void HandOffControlCamera()
+    {
+        if (!snapCameraBehindPlayerOnControlHandoff)
+            return;
+
+        _controlHandedOff = true;
+        Transform playerRoot = ResolvePlayerFacingRoot();
+        SnapCameraBehindPlayer(playerRoot, true);
+        if (playerRoot != null && isActiveAndEnabled)
+            StartCoroutine(CoForceGameplayCameraBehindPlayer(playerRoot));
+    }
+
+    // 실제 게임플레이 카메라는 CinemachineFreeLook(LazyFollow)이라 축 값으로는 방향이 바뀌지 않는다.
+    // 위치를 직접 지정해 플레이어 등 뒤(아레나 방향)에서 시작하게 한다.
+    IEnumerator CoForceGameplayCameraBehindPlayer(Transform playerRoot)
+    {
+        for (int i = 0; i < 2; i++)
+        {
+            if (i == 0)
+                yield return null;
+            else
+                yield return new WaitForEndOfFrame();
+
+            CinemachineVirtualCameraBase freeLook = CinemachineCompat.FindLegacyFreeLookCamera();
+            if (freeLook == null || playerRoot == null)
+                yield break;
+
+            Vector3 forward = playerRoot.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f)
+                yield break;
+
+            forward.Normalize();
+            Vector3 position = playerRoot.position - forward * elevatorArrivalCameraDistance + Vector3.up * (elevatorArrivalCameraHeight + 0.75f);
+            Vector3 focus = playerRoot.position + Vector3.up * 1.3f;
+            freeLook.ForceCameraPosition(position, Quaternion.LookRotation(focus - position, Vector3.up));
+        }
+    }
+
     void SnapCameraBehindPlayer(Transform playerRoot, bool scheduleSecondSnap)
     {
         if (!snapCameraBehindPlayerOnElevatorArrival || playerRoot == null)
             return;
 
-        FreeLookCamera freeLookCamera = FindObjectOfType<FreeLookCamera>(true);
+        FreeLookCamera freeLookCamera = FreeLookCamera.FindAuthoritative();
         if (freeLookCamera != null)
         {
             freeLookCamera.player = playerRoot;
             freeLookCamera.distance = elevatorArrivalCameraDistance;
             freeLookCamera.height = elevatorArrivalCameraHeight;
-            freeLookCamera.SnapBehindPlayer(elevatorArrivalCameraPitch, elevatorArrivalCameraYawOffset);
+            // LazyFollow FreeLook 은 축 값만으로는 돌지 않으므로 위치까지 강제한다 (MainScene/Level_Facility 공통)
+            freeLookCamera.SnapBehindPlayer(elevatorArrivalCameraPitch, ResolveArrivalCameraYawOffset(), forceLegacyCameraPosition: true);
             if (scheduleSecondSnap)
                 StartCoroutine(CoSnapCameraBehindPlayerDelayed());
             return;
@@ -2745,7 +3089,7 @@ public class MainSceneArrivalController : MonoBehaviour
         if (mainCamera == null)
             return;
 
-        Quaternion yawRotation = Quaternion.Euler(0f, playerRoot.eulerAngles.y + elevatorArrivalCameraYawOffset, 0f);
+        Quaternion yawRotation = Quaternion.Euler(0f, playerRoot.eulerAngles.y + ResolveArrivalCameraYawOffset(), 0f);
         Vector3 focusPoint = playerRoot.position + Vector3.up;
         Vector3 cameraPosition = playerRoot.position + yawRotation * new Vector3(0f, 0f, -elevatorArrivalCameraDistance) + Vector3.up * elevatorArrivalCameraHeight;
         mainCamera.transform.SetPositionAndRotation(
@@ -2763,7 +3107,9 @@ public class MainSceneArrivalController : MonoBehaviour
             Transform bossRoot = ResolveBossRoot();
             if (bossRoot != null && playerRoot != null)
             {
-                Vector3 toBoss = bossRoot.position - playerRoot.position;
+                // 플레이어의 현재 위치가 아니라 도착 지점 기준 (Level_Facility에서는 플레이어가 상층에서 출발)
+                Vector3 arrivalPosition = ResolveElevatorArrivalBasePosition(playerRoot.position) + elevatorArrivalWorldOffset;
+                Vector3 toBoss = bossRoot.position - arrivalPosition;
                 toBoss.y = 0f;
                 if (toBoss.sqrMagnitude > 0.0001f)
                     return Quaternion.LookRotation(toBoss.normalized, Vector3.up);
@@ -2976,7 +3322,7 @@ public class MainSceneArrivalController : MonoBehaviour
         if (locked)
         {
             List<MonoBehaviour> behaviours = new List<MonoBehaviour>(8);
-            AddArrivalCameraInputBehaviour(FindObjectOfType<FreeLookCamera>(true), behaviours);
+            AddArrivalCameraInputBehaviour(FreeLookCamera.FindAuthoritative(), behaviours);
             AddArrivalCameraInputBehaviour(FindObjectOfType<MouseWheelZoom>(true), behaviours);
             AddArrivalCameraInputBehaviour(FindObjectOfType<MouseWheelZoom_FreeLookOnly>(true), behaviours);
 

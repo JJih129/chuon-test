@@ -117,10 +117,10 @@ public class UltimateStageRuntime : MonoBehaviour
             : EnsureChild(null, CameraNodeName);
 
         if (sequenceCamera == null)
-            sequenceCamera = cameraNode.GetComponent<CinemachineCamera>() ?? cameraNode.gameObject.AddComponent<CinemachineCamera>();
+            sequenceCamera = cameraNode.GetComponent<CinemachineCamera>().OrNull() ?? cameraNode.gameObject.AddComponent<CinemachineCamera>();
 
         sequenceCamera.enabled = false;
-        cameraShake = cameraNode.GetComponent<CameraShake>() ?? cameraNode.gameObject.AddComponent<CameraShake>();
+        cameraShake = cameraNode.GetComponent<CameraShake>().OrNull() ?? cameraNode.gameObject.AddComponent<CameraShake>();
         presentationCamera = ResolveOrCreatePresentationCamera(cameraNode.gameObject);
         if (presentationCamera != null)
         {

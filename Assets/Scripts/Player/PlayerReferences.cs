@@ -149,7 +149,7 @@ public class PlayerReferences : MonoBehaviour
         instance.transform.localScale = Vector3.one;
         instance.name = visualPrefab.name;
 
-        var rig = instance.GetComponent<PlayerVisualRig>() ?? instance.GetComponentInChildren<PlayerVisualRig>(true);
+        var rig = instance.GetComponent<PlayerVisualRig>().OrNull() ?? instance.GetComponentInChildren<PlayerVisualRig>(true);
         if (rig == null)
             rig = instance.AddComponent<PlayerVisualRig>();
 
@@ -223,7 +223,7 @@ public class PlayerReferences : MonoBehaviour
             visualRoot = visualRig.VisualRoot;
 
         if (!mainAnimator)
-            mainAnimator = GetComponent<Animator>() ?? (visualRig ? visualRig.MainAnimator : null) ?? GetComponentInChildren<Animator>(true);
+            mainAnimator = GetComponent<Animator>().OrNull() ?? (visualRig ? visualRig.MainAnimator : null) ?? GetComponentInChildren<Animator>(true);
 
         var rootAttackHitbox = allowRuntimeCreate ? EnsureDefaultForwardHitbox() : null;
         if (rootAttackHitbox != null)
@@ -409,7 +409,7 @@ public class PlayerReferences : MonoBehaviour
         instanceTransform.localScale = Vector3.one;
         instance.name = visualPrefab.name;
 
-        var rig = instance.GetComponent<PlayerVisualRig>() ?? instance.GetComponentInChildren<PlayerVisualRig>(true);
+        var rig = instance.GetComponent<PlayerVisualRig>().OrNull() ?? instance.GetComponentInChildren<PlayerVisualRig>(true);
         if (rig == null)
             rig = instance.AddComponent<PlayerVisualRig>();
 

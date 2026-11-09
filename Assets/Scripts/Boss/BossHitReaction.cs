@@ -17,6 +17,14 @@ public class BossHitReaction : MonoBehaviour
     float _lastAudioRealtime = float.NegativeInfinity;
     float _lastHitFeelRealtime = float.NegativeInfinity;
     float _lastAnimationRealtime = float.NegativeInfinity;
+    float _lastHitStopRealtime = float.NegativeInfinity;
+    Coroutine _hitStopCo;
+
+    [Header("Hit Stop")]
+    [Tooltip("플레이어가 보스를 때릴 때 짧은 히트스톱을 준다 (값은 CombatFeelPolicy.GetBossHitPreset).")]
+    [SerializeField] bool useHitStopOnBossHit = true;
+    [Tooltip("연타 시 히트스톱이 과하게 겹치지 않도록 하는 최소 간격(실시간 초).")]
+    [SerializeField] float minHitStopIntervalRealtime = 0.09f;
 
     [Header("참조 (한글 설명)")]
     [Tooltip("같은 오브젝트 또는 부모에 있는 BossHealth를 지정. 비워두면 자동 검색.")]
@@ -84,7 +92,7 @@ public class BossHitReaction : MonoBehaviour
             if (bossReferences != null && bossReferences.MainAnimator != null)
                 bossAnimator = bossReferences.MainAnimator;
             if (!bossAnimator && bossHealth)
-                bossAnimator = bossHealth.GetComponent<Animator>() ?? bossHealth.GetComponentInChildren<Animator>();
+                bossAnimator = bossHealth.GetComponent<Animator>().OrNull() ?? bossHealth.GetComponentInChildren<Animator>();
         }
 
         if (!vfxPivot && bossReferences != null && bossReferences.VfxPivot != null)
@@ -244,6 +252,36 @@ public class BossHitReaction : MonoBehaviour
             _lastHitFeelRealtime = now;
             hitCameraShake.Shake(preset.CameraShakeAmplitude, preset.CameraShakeDuration);
         }
+
+        if (useHitStopOnBossHit && CanApplyBossHitStop())
+        {
+            CombatFeelRuntimeUtility.StartHitStop(
+                this,
+                ref _hitStopCo,
+                preset,
+                true,
+                minHitStopIntervalRealtime,
+                ref _lastHitStopRealtime);
+        }
+    }
+
+    // 궁극기 연출(자체 히트스톱/프리즈), 다른 히트스톱, 일시정지·슬로모 중에는 보스 피격 히트스톱을 덮어쓰지 않는다.
+    bool CanApplyBossHitStop()
+    {
+        if (CombatFeelRuntimeUtility.IsHitStopActive || GameTimeScale.Effective < 0.999f)
+            return false;
+
+        if (_ultimateController == null)
+            _ultimateController = GameplaySceneCache.ResolvePlayerUltimateController();
+
+        return _ultimateController == null || !_ultimateController.IsCinematic;
+    }
+
+    PlayerUltimateController _ultimateController;
+
+    void OnDisable()
+    {
+        CombatFeelRuntimeUtility.ForceRestoreActiveHitStop(this, ref _hitStopCo);
     }
 
     void PlayHitSound(HitType hitType)

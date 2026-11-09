@@ -1,28 +1,28 @@
 using UnityEngine;
 
-// ===== º¯¼ö Çì´õ(ÇÑ±Û ¼³¸í) =====
-// ÇÃ·¹ÀÌ¾î(Å¸°Ù) ¾ÕÂÊ¿¡ "Ä«¸Ş¶ó°¡ ¹Ù¶óº¼ ÇÇ¹ş"À» ÀÚµ¿À¸·Î À§Ä¡½ÃÄÑÁÖ´Â º¸Á¶ ½ºÅ©¸³Æ®ÀÔ´Ï´Ù.
-// - forwardDistance: Å¸°Ù Á¤¸é ¾ÕÀ¸·Î ¾ó¸¶³ª µÑÁö(¹ÌÅÍ)
-// - heightOffset: Å¸°Ù ±âÁØ ¾ó¸¶³ª ³ô°Ô µÑÁö(¹ÌÅÍ)
-// - lateralOffset: ÁÂ/¿ì·Î ¾ó¸¶³ª Ä¡¿ïÁö(¹ÌÅÍ, +´Â ¿À¸¥ÂÊ, -´Â ¿ŞÂÊ)
-// - followLerp: µû¶óºÙ´Â ¼Óµµ(0=Áï½Ã ÅÚ·¹Æ÷Æ®, 1=¸Å¿ì ´À¸²; º¸Åë 0.1~0.3)
-// - alignYawToTarget: ÇÇ¹şÀÇ Yaw(¼öÆò È¸Àü)¸¦ Å¸°Ù Á¤¸éÀ¸·Î ¸ÂÃâÁö ¿©ºÎ
-// - yawLerp: Yaw È¸Àü º¸°£ ¼Óµµ(0=Áï½Ã, 1=¸Å¿ì ´À¸²)
+// ===== ë³€ìˆ˜ í—¤ë”(í•œê¸€ ì„¤ëª…) =====
+// í”Œë ˆì´ì–´(íƒ€ê²Ÿ) ì•ìª½ì— "ì¹´ë©”ë¼ê°€ ë°”ë¼ë³¼ í”¼ë²—"ì„ ìë™ìœ¼ë¡œ ìœ„ì¹˜ì‹œì¼œì£¼ëŠ” ë³´ì¡° ìŠ¤í¬ë¦½íŠ¸ì…ë‹ˆë‹¤.
+// - forwardDistance: íƒ€ê²Ÿ ì •ë©´ ì•ìœ¼ë¡œ ì–¼ë§ˆë‚˜ ë‘˜ì§€(ë¯¸í„°)
+// - heightOffset: íƒ€ê²Ÿ ê¸°ì¤€ ì–¼ë§ˆë‚˜ ë†’ê²Œ ë‘˜ì§€(ë¯¸í„°)
+// - lateralOffset: ì¢Œ/ìš°ë¡œ ì–¼ë§ˆë‚˜ ì¹˜ìš¸ì§€(ë¯¸í„°, +ëŠ” ì˜¤ë¥¸ìª½, -ëŠ” ì™¼ìª½)
+// - followLerp: ë”°ë¼ë¶™ëŠ” ì†ë„(0=ì¦‰ì‹œ í…”ë ˆí¬íŠ¸, 1=ë§¤ìš° ëŠë¦¼; ë³´í†µ 0.1~0.3)
+// - alignYawToTarget: í”¼ë²—ì˜ Yaw(ìˆ˜í‰ íšŒì „)ë¥¼ íƒ€ê²Ÿ ì •ë©´ìœ¼ë¡œ ë§ì¶œì§€ ì—¬ë¶€
+// - yawLerp: Yaw íšŒì „ ë³´ê°„ ì†ë„(0=ì¦‰ì‹œ, 1=ë§¤ìš° ëŠë¦¼)
 [ExecuteAlways]
 public class DynamicCamLookPivot : MonoBehaviour
 {
-    [Header("¨ç Å¸°Ù(º¸Åë Player)")]
+    [Header("â‘  íƒ€ê²Ÿ(ë³´í†µ Player)")]
     public Transform target;
 
-    [Header("¨è ¿ÀÇÁ¼Â(¹ÌÅÍ) | Àü¹æ/³ôÀÌ/ÁÂ¿ì")]
+    [Header("â‘¡ ì˜¤í”„ì…‹(ë¯¸í„°) | ì „ë°©/ë†’ì´/ì¢Œìš°")]
     public float forwardDistance = 2.0f;
     public float heightOffset = 1.5f;
     public float lateralOffset = 0.0f;
 
-    [Header("¨é µû¶óºÙ´Â ¼Óµµ(0~1) | 0=Áï½Ã, 0.1~0.3 ±ÇÀå")]
+    [Header("â‘¢ ë”°ë¼ë¶™ëŠ” ì†ë„(0~1) | 0=ì¦‰ì‹œ, 0.1~0.3 ê¶Œì¥")]
     [Range(0f, 1f)] public float followLerp = 0.15f;
 
-    [Header("¨ê È¸Àü ¿É¼Ç | Å¸°Ù Á¤¸éÀ¸·Î Yaw Á¤·Ä")]
+    [Header("â‘£ íšŒì „ ì˜µì…˜ | íƒ€ê²Ÿ ì •ë©´ìœ¼ë¡œ Yaw ì •ë ¬")]
     public bool alignYawToTarget = true;
     [Range(0f, 1f)] public float yawLerp = 0.15f;
 
@@ -30,19 +30,19 @@ public class DynamicCamLookPivot : MonoBehaviour
     {
         if (!target) return;
 
-        // ¸ñÇ¥ À§Ä¡ °è»ê
+        // ëª©í‘œ ìœ„ì¹˜ ê³„ì‚°
         Vector3 desired = target.position
                         + target.forward * forwardDistance
                         + target.right * lateralOffset
                         + Vector3.up * heightOffset;
 
-        // À§Ä¡ º¸°£
+        // ìœ„ì¹˜ ë³´ê°„
         if (followLerp <= 0f || !Application.isPlaying)
             transform.position = desired;
         else
             transform.position = Vector3.Lerp(transform.position, desired, 1f - Mathf.Pow(1f - followLerp, Time.deltaTime * 60f));
 
-        // È¸Àü º¸°£(Á¤¸éÀ» ¹Ù¶óº¸°Ô)
+        // íšŒì „ ë³´ê°„(ì •ë©´ì„ ë°”ë¼ë³´ê²Œ)
         if (alignYawToTarget)
         {
             Quaternion desiredRot = Quaternion.LookRotation(target.forward, Vector3.up);

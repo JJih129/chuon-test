@@ -644,3 +644,296 @@ public sealed class BossPatternSelector
         Debug.Log($"[BossPatternSelector] exclude={pattern.patternId} reason={reason}", _logContext);
     }
 }
+
+/// <summary>
+/// 최근 실행 패턴 이름/텔레그래프 기록 (패턴 다양성 가중치 + 디버그 출력용).
+/// 용량 설정(recentPatternMemory)은 BossController 직렬화 값을 호출 시 넘겨받는다.
+/// </summary>
+public sealed class BossRecentPatternMemory
+{
+    readonly string[] _recentPatternNames = new string[4];
+    readonly AttackTelegraphType[] _recentTelegraphTypes = new AttackTelegraphType[4];
+    int _recentPatternWriteIndex;
+    int _recentPatternRecordedCount;
+
+    int ResolveCapacity(int memorySetting)
+    {
+        return Mathf.Clamp(memorySetting, 1, _recentPatternNames.Length);
+    }
+
+    public void Record(AttackPattern pattern, int memorySetting)
+    {
+        if (pattern == null)
+            return;
+
+        int capacity = ResolveCapacity(memorySetting);
+        _recentPatternNames[_recentPatternWriteIndex] = pattern.patternName ?? string.Empty;
+        _recentTelegraphTypes[_recentPatternWriteIndex] = pattern.ResolveTelegraphType();
+        _recentPatternWriteIndex = (_recentPatternWriteIndex + 1) % capacity;
+        _recentPatternRecordedCount = Mathf.Min(capacity, _recentPatternRecordedCount + 1);
+    }
+
+    public bool IsImmediateRepeat(string patternName, int memorySetting)
+    {
+        if (string.IsNullOrEmpty(patternName) || _recentPatternRecordedCount <= 0)
+            return false;
+
+        int capacity = ResolveCapacity(memorySetting);
+        int lastIndex = (_recentPatternWriteIndex - 1 + capacity) % capacity;
+        return string.Equals(_recentPatternNames[lastIndex], patternName, StringComparison.Ordinal);
+    }
+
+    public bool WasUsedRecently(string patternName, int lookback, int memorySetting)
+    {
+        if (string.IsNullOrEmpty(patternName) || _recentPatternRecordedCount <= 0)
+            return false;
+
+        int capacity = ResolveCapacity(memorySetting);
+        int count = Mathf.Min(_recentPatternRecordedCount, Mathf.Clamp(lookback, 1, capacity));
+        for (int i = 0; i < count; i++)
+        {
+            int index = (_recentPatternWriteIndex - 1 - i + capacity) % capacity;
+            if (string.Equals(_recentPatternNames[index], patternName, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    public int CountRecentTelegraphMatches(AttackTelegraphType telegraphType, int lookback, int memorySetting)
+    {
+        if (_recentPatternRecordedCount <= 0)
+            return 0;
+
+        int capacity = ResolveCapacity(memorySetting);
+        int count = Mathf.Min(_recentPatternRecordedCount, Mathf.Clamp(lookback, 1, capacity));
+        int matches = 0;
+        for (int i = 0; i < count; i++)
+        {
+            int index = (_recentPatternWriteIndex - 1 - i + capacity) % capacity;
+            if (_recentTelegraphTypes[index] == telegraphType)
+                matches++;
+        }
+
+        return matches;
+    }
+
+    public void AppendDebug(System.Text.StringBuilder builder, int memorySetting)
+    {
+        builder.Append(" recent[");
+        int capacity = ResolveCapacity(memorySetting);
+        int count = Mathf.Min(_recentPatternRecordedCount, capacity);
+        for (int i = 0; i < count; i++)
+        {
+            if (i > 0)
+                builder.Append(',');
+
+            int index = (_recentPatternWriteIndex - 1 - i + capacity) % capacity;
+            builder.Append(_recentPatternNames[index]);
+        }
+        builder.Append(']');
+    }
+}
+
+/// <summary>
+/// BossPatternSelector에 넘길 패턴 데이터/런타임 상태 캐시 (AttackPattern 목록과 인덱스 동기화).
+/// </summary>
+public sealed class BossPatternSelectorCache
+{
+    BossPatternData[] _selectorPatternData = new BossPatternData[0];
+    BossPatternRuntimeState[] _selectorRuntimeStates = new BossPatternRuntimeState[0];
+    AttackPattern[] _selectorPatternLookup = new AttackPattern[0];
+
+    public bool HasData => _selectorPatternData != null && _selectorRuntimeStates != null && _selectorPatternLookup != null;
+
+    public void Rebuild(
+        System.Collections.Generic.List<AttackPattern> patterns,
+        Func<AttackPattern, BossPatternData> buildSelectorData,
+        BossPatternSelector selector,
+        BossPatternHistory history,
+        UnityEngine.Object logContext)
+    {
+        int count = patterns != null ? patterns.Count : 0;
+        if (_selectorPatternData == null || _selectorPatternData.Length != count)
+        {
+            _selectorPatternData = new BossPatternData[count];
+            _selectorRuntimeStates = new BossPatternRuntimeState[count];
+            _selectorPatternLookup = new AttackPattern[count];
+        }
+
+        float now = Application.isPlaying ? Time.time : 0f;
+        for (int i = 0; i < count; i++)
+        {
+            AttackPattern pattern = patterns[i];
+            _selectorPatternLookup[i] = pattern;
+
+            BossPatternData data = buildSelectorData(pattern);
+            _selectorPatternData[i] = data;
+
+            float lastUsedTime = -9999f;
+            if (Application.isPlaying && pattern != null && pattern.currentCooldown > 0f && data.cooldown > 0f)
+                lastUsedTime = now + pattern.currentCooldown - data.cooldown;
+
+            _selectorRuntimeStates[i] = new BossPatternRuntimeState(data.patternId)
+            {
+                lastUsedTime = lastUsedTime
+            };
+        }
+
+        selector.Configure(_selectorPatternData, _selectorRuntimeStates, history, logContext);
+    }
+
+    public void RefreshData(
+        System.Collections.Generic.List<AttackPattern> patterns,
+        Func<AttackPattern, BossPatternData> buildSelectorData,
+        float now)
+    {
+        if (_selectorPatternData == null ||
+            _selectorRuntimeStates == null ||
+            _selectorPatternLookup == null ||
+            patterns == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Min(patterns.Count, _selectorPatternData.Length, _selectorRuntimeStates.Length, _selectorPatternLookup.Length);
+        for (int i = 0; i < count; i++)
+        {
+            AttackPattern pattern = patterns[i];
+            _selectorPatternLookup[i] = pattern;
+
+            BossPatternData data = buildSelectorData(pattern);
+            _selectorPatternData[i] = data;
+            _selectorRuntimeStates[i].patternId = data.patternId;
+
+            if (pattern != null && pattern.currentCooldown > 0f && data.cooldown > 0f)
+                _selectorRuntimeStates[i].lastUsedTime = now + pattern.currentCooldown - data.cooldown;
+        }
+    }
+
+    public bool IsDirty(System.Collections.Generic.List<AttackPattern> patterns)
+    {
+        int count = patterns != null ? patterns.Count : 0;
+        if (_selectorPatternData == null ||
+            _selectorRuntimeStates == null ||
+            _selectorPatternLookup == null ||
+            _selectorPatternData.Length != count ||
+            _selectorRuntimeStates.Length != count ||
+            _selectorPatternLookup.Length != count)
+        {
+            return true;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            if (!ReferenceEquals(_selectorPatternLookup[i], patterns[i]))
+                return true;
+        }
+
+        return false;
+    }
+
+    public void SyncRuntimeCooldowns(float now)
+    {
+        if (_selectorRuntimeStates == null || _selectorPatternData == null || _selectorPatternLookup == null)
+            return;
+
+        int count = Mathf.Min(_selectorRuntimeStates.Length, _selectorPatternLookup.Length);
+        for (int i = 0; i < count; i++)
+        {
+            AttackPattern pattern = _selectorPatternLookup[i];
+            if (pattern == null)
+                continue;
+
+            float cooldown = Mathf.Max(0f, _selectorPatternData[i].cooldown);
+            if (cooldown <= 0f || pattern.currentCooldown <= 0f)
+                continue;
+
+            _selectorRuntimeStates[i].patternId = _selectorPatternData[i].patternId;
+            _selectorRuntimeStates[i].lastUsedTime = now + pattern.currentCooldown - cooldown;
+        }
+    }
+
+    public void MarkUsed(BossPatternSelector selector, AttackPattern pattern, float now)
+    {
+        if (pattern == null || selector == null || _selectorPatternLookup == null)
+            return;
+
+        for (int i = 0; i < _selectorPatternLookup.Length; i++)
+        {
+            if (!ReferenceEquals(_selectorPatternLookup[i], pattern))
+                continue;
+
+            selector.MarkUsed(i, now);
+            return;
+        }
+    }
+
+    public bool TryGetPattern(int index, out AttackPattern pattern)
+    {
+        pattern = null;
+        if (_selectorPatternLookup == null || index < 0 || index >= _selectorPatternLookup.Length)
+            return false;
+
+        pattern = _selectorPatternLookup[index];
+        return true;
+    }
+}
+
+/// <summary>
+/// 가중치 룰렛 선택. 가중치 계산 순서와 UnityEngine.Random.value 호출 횟수(1회)를 기존과 동일하게 유지한다.
+/// </summary>
+public sealed class BossWeightedPatternPicker
+{
+    float[] _selectionWeightCache = new float[16];
+
+    void EnsureCapacity(int count)
+    {
+        if (_selectionWeightCache != null && _selectionWeightCache.Length >= count)
+            return;
+
+        int newCapacity = Mathf.Max(16, count);
+        if (_selectionWeightCache == null)
+        {
+            _selectionWeightCache = new float[newCapacity];
+            return;
+        }
+
+        Array.Resize(ref _selectionWeightCache, newCapacity);
+    }
+
+    /// <param name="emptyTotalThreshold">totalWeight가 이 값 이하이면 첫 후보를 반환.</param>
+    public AttackPattern Pick<TState>(
+        System.Collections.Generic.List<AttackPattern> candidates,
+        TState state,
+        Func<TState, AttackPattern, float> weightOf,
+        float emptyTotalThreshold)
+    {
+        if (candidates == null || candidates.Count == 0)
+            return null;
+
+        EnsureCapacity(candidates.Count);
+
+        float totalWeight = 0f;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            float weight = weightOf(state, candidates[i]);
+            _selectionWeightCache[i] = weight;
+            totalWeight += weight;
+        }
+
+        if (totalWeight <= emptyTotalThreshold)
+            return candidates[0];
+
+        float roll = UnityEngine.Random.value * totalWeight;
+        float accumulated = 0f;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            accumulated += _selectionWeightCache[i];
+            if (roll <= accumulated)
+                return candidates[i];
+        }
+
+        return candidates[candidates.Count - 1];
+    }
+}

@@ -46,7 +46,7 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
 
     [Header("Burst")]
     [SerializeField, Min(1)] private int imageCount = 7;
-    [SerializeField, Min(0f)] private float spawnIntervalRealtime = 0.02f;
+    [SerializeField, Min(0f)] private float spawnIntervalRealtime = 0.05f;
     [SerializeField, Min(0.01f)] private float imageLifetimeRealtime = 0.24f;
     [SerializeField] private bool useRealtime = true;
     [SerializeField, Min(0f)] private float minReplayIntervalRealtime = 0.24f;
@@ -78,7 +78,7 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
     [SerializeField, Min(0f)] private float trailLength = 2f;
     [SerializeField, Range(0.05f, 1f)] private float tailAlphaMultiplier = 0.16f;
     [SerializeField] private AnimationCurve trailDistribution = null;
-    [SerializeField, Min(0.005f)] private float continuousTrailSpawnIntervalRealtime = 0.035f;
+    [SerializeField, Min(0.005f)] private float continuousTrailSpawnIntervalRealtime = 0.055f;
     [SerializeField, Min(0f)] private float continuousTrailFallbackDurationRealtime = 0.35f;
     [SerializeField, Min(0f)] private float continuousTrailMinPlanarSpeed = 0.1f;
 
@@ -463,12 +463,16 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
         List<MaterialState> materialStates,
         float alphaMultiplier)
     {
-        Mesh bakedMesh = AcquireBakedMesh(source.name);
+        // 비활성/숨김 렌더러는 굽지 않음 (BakeMesh 비용 절감)
+        if (source == null || !source.enabled || !source.gameObject.activeInHierarchy)
+            return;
+
+        Mesh bakedMesh = AcquireBakedMesh();
         bakedMesh.Clear(false);
         source.BakeMesh(bakedMesh, true);
         spawnedMeshes.Add(bakedMesh);
 
-        PooledSnapshotNode node = AcquireSnapshotNode(pooledRoot, usedNodeCount++, source.name);
+        PooledSnapshotNode node = AcquireSnapshotNode(pooledRoot, usedNodeCount++, SnapshotNodeName);
         node.Transform.SetPositionAndRotation(source.transform.position, source.transform.rotation);
         node.Transform.localScale = Vector3.Scale(source.transform.lossyScale, Vector3.one * startScaleMultiplier);
 
@@ -486,11 +490,14 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
         List<MaterialState> materialStates,
         float alphaMultiplier)
     {
+        if (source == null || !source.enabled || !source.gameObject.activeInHierarchy)
+            return;
+
         MeshFilter sourceFilter = source.GetComponent<MeshFilter>();
         if (sourceFilter == null || sourceFilter.sharedMesh == null)
             return;
 
-        PooledSnapshotNode node = AcquireSnapshotNode(pooledRoot, usedNodeCount++, source.name);
+        PooledSnapshotNode node = AcquireSnapshotNode(pooledRoot, usedNodeCount++, SnapshotNodeName);
         node.Transform.SetPositionAndRotation(source.transform.position, source.transform.rotation);
         node.Transform.localScale = Vector3.Scale(source.transform.lossyScale, Vector3.one * startScaleMultiplier);
 
@@ -783,10 +790,16 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
         return new Material(shader);
     }
 
-    Mesh AcquireBakedMesh(string sourceName)
+    const string SnapshotNodeName = "AfterImageNode";
+    const string BakedMeshName = "AfterImageMesh";
+
+    Mesh AcquireBakedMesh()
     {
-        Mesh mesh = _bakedMeshPool.Count > 0 ? _bakedMeshPool.Pop() : new Mesh();
-        mesh.name = $"{sourceName}_AfterImageMesh";
+        if (_bakedMeshPool.Count > 0)
+            return _bakedMeshPool.Pop();
+
+        // 이름/동적 플래그는 생성 시 1회만 설정
+        Mesh mesh = new Mesh { name = BakedMeshName };
         mesh.MarkDynamic();
         return mesh;
     }
@@ -979,7 +992,6 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
         }
 
         PooledSnapshotNode pooledNode = pooledRoot.Nodes[nodeIndex];
-        pooledNode.GameObject.name = sourceName;
         if (pooledNode.Renderer != null)
             pooledNode.Renderer.enabled = true;
         pooledNode.GameObject.SetActive(true);

@@ -89,13 +89,13 @@ public class LobbyManager : MonoBehaviour
     [TextArea] public string elevatorResponseLine = "\uba3c\uc800 \uae30\ub2e4\ub9ac\uace0 \uc788\ub2e4\ub294 \ub73b\uc774\uaca0\uc9c0.";
     [TextArea] public string elevatorInstructionLine = "\ud328\ub110\uc744 \uc870\uc791\ud574. \ub9c1\ud06c\uac00 \ub04a\uae30\uae30 \uc804\uc5d0 \ub2e4\uc74c \uce35\uc73c\ub85c \ub0b4\ub824\uac04\ub2e4.";
     [TextArea] public string elevatorThreatCueTitle = "\ube44\uc815\uc0c1 \uc2e0\ud638";
-    [TextArea] public string elevatorThreatCueDescription = "\ub204\uad70\uac00 \uba3c\uc800 \uc544\ub798\uce35 \uacbd\ub85c\ub97c \uc5f4\uc5b4\ub450\uc5c8\ub2e4.";
+    [TextArea] public string elevatorThreatCueDescription = "격납고 층 직통 경로만 열려 있다.";
     [TextArea] public string elevatorPanelCueTitle = "\ud328\ub110 \uc5f0\ub3d9";
     [TextArea] public string elevatorPanelCueDescription = "\ud328\ub110\uc744 \uc870\uc791\ud574 \uce35\uac04 \ub9c1\ud06c\ub97c \uace0\uc815\ud574.";
     [TextArea] public string elevatorPromptText = "F: \ud328\ub110 \uc870\uc791";
     [TextArea] public string elevatorSyncCueTitle = "\ub9c1\ud06c \uace0\uc815";
-    [TextArea] public string elevatorSyncCueDescription = "\ud558\uac15 \uacbd\ub85c \uace0\uc815. \ubc14\ub85c \ub2e4\uc74c \uce35\uc73c\ub85c \uc774\ub3d9\ud55c\ub2e4.";
-    [TextArea] public string elevatorSyncLine = "\ub9c1\ud06c \uace0\uc815 \uc644\ub8cc. \ubc14\ub85c \ub0b4\ub824\uac04\ub2e4.";
+    [TextArea] public string elevatorSyncCueDescription = "하강 경로 고정. 격납고 층으로 이동한다.";
+    [TextArea] public string elevatorSyncLine = "경로 고정. 격납고 층으로 내려간다.";
     [TextArea] public string elevatorSyncPromptText = "\uc5f0\ub3d9 \uc911...";
     [Range(0.1f, 3f)] public float elevatorThreatCueHold = 1.6f;
     [Range(0.1f, 3f)] public float elevatorPanelCueHold = 1.5f;
@@ -119,12 +119,45 @@ public class LobbyManager : MonoBehaviour
     [SerializeField] private Color elevatorBoardMarkerColor = new Color(0.28f, 1f, 0.72f, 0.95f);
 
     [Header("Atmosphere")]
-    [TextArea] public string routeSuspicionLine = "\ub204\uad70\uac00 \uba3c\uc800 \uc774 \uae38\uc744 \uc5f4\uc5b4\ub1a8\uc5b4. \uc548\uc804\ud558\ub2e4\uace0 \uac00\uc815\ud558\uc9c0 \ub9c8.";
+    [TextArea] public string routeSuspicionLine = "프론트 데스크 뒤편 엘리베이터 하나만 살아 있어. 저쪽이야.";
     [Range(0.5f, 4f)] public float routeSuspicionDelay = 2.2f;
 
     [Header("Typing")]
     [Range(0.01f, 0.2f)] public float textTypingSpeed = 0.05f;
     [SerializeField] bool debugLogs = false;
+
+    [Header("Same-Scene Continuation (Level_Facility)")]
+    [Tooltip("When set, the elevator descent fades and raises ElevatorDescentFinished instead of loading nextSceneName.")]
+    [SerializeField] bool continueInSameScene = false;
+    [SerializeField, Min(0f)] float sameSceneFadeOutDuration = 0.65f;
+    [SerializeField, Min(0f)] float sameSceneBlackHold = 0.4f;
+    [SerializeField, Min(0f)] float sameSceneFadeInDuration = 0.9f;
+    [Tooltip("Teach -> test: spawn the first drone alone, then the rest once it is destroyed.")]
+    [SerializeField] bool staggerFirstDroneAlone = false;
+    [SerializeField, Min(0f)] float staggeredWaveDelay = 1.1f;
+    [Tooltip("Optional: the drone wave starts only after the player crosses this transform's plane (forward = into the combat hall).")]
+    [SerializeField] Transform combatStartGate;
+    [Tooltip("Pre-instantiate the drone wave (+ projectile pool) and render it once off-screen during the arrival beat, so combat start has no Instantiate / first-render (shader, texture upload) hitch. Off = original behaviour.")]
+    [SerializeField] bool prewarmDronesBeforeCombat = false;
+    readonly List<GameObject> _prewarmedDrones = new List<GameObject>();
+
+    // Raised when the elevator descent finished in continueInSameScene mode (lower floor should take over).
+    public static event System.Action<LobbyManager> ElevatorDescentFinished;
+    // Raised once the upper floor hands control to the lower floor (descent or checkpoint skip).
+    public static event System.Action<LobbyManager> LowerFloorReached;
+
+    static bool s_skipToLowerFloorOnNextLoad;
+    public static void RequestSkipToLowerFloorOnNextLoad() => s_skipToLowerFloorOnNextLoad = true;
+    static bool ConsumeSkipToLowerFloor()
+    {
+        bool value = s_skipToLowerFloorOnNextLoad;
+        s_skipToLowerFloorOnNextLoad = false;
+        return value;
+    }
+
+    bool _handedOffToLowerFloor;
+    public bool ContinuesInSameScene => continueInSameScene;
+    public bool HasHandedOffToLowerFloor => _handedOffToLowerFloor;
 
     readonly List<Transform> _activeWaypoints = new List<Transform>();
     bool _isDoorReached;
@@ -173,8 +206,30 @@ public class LobbyManager : MonoBehaviour
         }
     }
 
+    void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
+
+        // 씬 로드로 파괴될 때 경고 플래시(Image 요요 페이드) 등 남은 트윈 정리 (DOTween 파괴 대상 경고 방지).
+        // 대상이 이미 먼저 파괴됐을 수 있으므로 Unity null 비교 대신 참조로 Kill 한다.
+        if (!ReferenceEquals(alertOverlay, null))
+            DOTween.Kill(alertOverlay);
+        if (!ReferenceEquals(dialogueGroup, null))
+            DOTween.Kill(dialogueGroup);
+        if (!ReferenceEquals(questPanelGroup, null))
+            DOTween.Kill(questPanelGroup);
+    }
+
     void Start()
     {
+        bool skipToLowerFloor = ConsumeSkipToLowerFloor();
+        if (skipToLowerFloor && continueInSameScene)
+        {
+            ApplyLowerFloorCheckpointState();
+            return;
+        }
+
         if (dialogueGroup != null)
             dialogueGroup.alpha = 0f;
 
@@ -200,33 +255,166 @@ public class LobbyManager : MonoBehaviour
         _fromTutorialTransition = TutorialSceneTransitionState.ConsumeTutorialToLobby();
         SetPhase(LobbyFlowPhase.Arrival);
         StartCoroutine(SequenceArrival());
+        if (prewarmDronesBeforeCombat)
+            StartCoroutine(CoPrewarmLobbyDrones());
+    }
+
+    // 드론 웨이브 사전 생성 + 오프스크린 1회 렌더(셰이더/텍스처 워밍업). 스폰 시에는 SetActive 만 한다.
+    IEnumerator CoPrewarmLobbyDrones()
+    {
+        if (dronePrefab == null || spawnPoints == null || spawnPoints.Length == 0 || spawnPoints[0] == null)
+            yield break;
+
+        yield return null; // 씬 첫 프레임은 건드리지 않는다
+        PrewarmLobbyProjectilePool();
+
+        // 레벨 위쪽 빈 공간(플레이어 시야 밖)에 모아 두고 전용 카메라로 RT 에 2프레임 렌더.
+        Vector3 basePosition = spawnPoints[0].position + Vector3.up * 150f;
+        var cameraObject = new GameObject("__DroneWarmupCamera");
+        cameraObject.transform.SetPositionAndRotation(basePosition + new Vector3(0f, 0.5f, -5f), Quaternion.identity);
+        Camera warmupCamera = cameraObject.AddComponent<Camera>();
+        RenderTexture warmupTarget = RenderTexture.GetTemporary(128, 128, 16);
+        warmupCamera.targetTexture = warmupTarget;
+        warmupCamera.depth = -100f;
+        warmupCamera.nearClipPlane = 0.1f;
+        warmupCamera.farClipPlane = 40f;
+        // 홀과 같은 셰이더 변형(_ADDITIONAL_LIGHTS)을 컴파일하도록 임시 포인트 라이트를 하나 둔다.
+        var lightObject = new GameObject("__DroneWarmupLight");
+        lightObject.transform.position = basePosition + new Vector3(0f, 2f, -2f);
+        Light warmupLight = lightObject.AddComponent<Light>();
+        warmupLight.type = LightType.Point;
+        warmupLight.range = 10f;
+        warmupLight.shadows = LightShadows.None;
+
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            Vector3 position = basePosition + new Vector3((i - (spawnPoints.Length - 1) * 0.5f) * 1.6f, 0f, 0f);
+            GameObject drone = Instantiate(dronePrefab, position, Quaternion.identity);
+            PrepareLobbyDrone(drone);
+            DroneController controller = drone.GetComponent<DroneController>();
+            if (controller != null)
+                controller.target = null; // target 없음 → 이동/사격 tick 은 즉시 반환
+            _prewarmedDrones.Add(drone);
+        }
+
+        DroneController template = dronePrefab.GetComponent<DroneController>();
+        GameObject warmBullet = template != null && template.projectilePrefab != null
+            ? RuntimeObjectPool.Acquire(template.projectilePrefab, basePosition + new Vector3(0f, 2.2f, 1.5f), Quaternion.identity)
+            : null;
+        if (template != null && template.hitVFX != null)
+            TransientVfxPool.Spawn(template.hitVFX, basePosition + new Vector3(-1.2f, 1.6f, 1.5f), Quaternion.identity, null, 0.5f);
+        if (template != null && template.deathVFX != null)
+            TransientVfxPool.Spawn(template.deathVFX, basePosition + new Vector3(1.2f, 1.6f, 1.5f), Quaternion.identity, null, 0.5f);
+
+        yield return null;
+        yield return null;
+
+        if (warmBullet != null)
+            RuntimeObjectPool.Release(warmBullet);
+        for (int i = 0; i < _prewarmedDrones.Count; i++)
+        {
+            if (_prewarmedDrones[i] != null)
+                _prewarmedDrones[i].SetActive(false);
+        }
+
+        warmupCamera.targetTexture = null;
+        RenderTexture.ReleaseTemporary(warmupTarget);
+        Destroy(cameraObject);
+        Destroy(lightObject);
+    }
+
+    GameObject TakePrewarmedDrone(Vector3 position, Quaternion rotation)
+    {
+        while (_prewarmedDrones.Count > 0)
+        {
+            GameObject drone = _prewarmedDrones[_prewarmedDrones.Count - 1];
+            _prewarmedDrones.RemoveAt(_prewarmedDrones.Count - 1);
+            if (drone == null)
+                continue;
+
+            drone.transform.SetPositionAndRotation(position, rotation);
+            Rigidbody body = drone.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.position = position;
+                body.rotation = rotation;
+            }
+
+            drone.SetActive(true);
+            return drone;
+        }
+
+        return null;
     }
 
     IEnumerator SequenceArrival()
     {
         if (_fromTutorialTransition)
         {
-            yield return StartCoroutine(PlayDialogue("EGO", "\uc2dc\ubbac\ub808\uc774\uc158 \ub9c1\ud06c \ud574\uc81c. \uc2e4\uc804 \uc804\ud22c\ub97c \uc2dc\uc791\ud55c\ub2e4.", 2.1f));
-            yield return StartCoroutine(PlayDialogue("ChuOn", "\uc54c\uaca0\uc5b4. \ubc14\ub85c \ud22c\uc785\ud55c\ub2e4.", 1.7f));
+            // \ub300\uc0ac \uc2a4\ud06c\ub9bd\ud2b8: \ud29c\ud1a0\ub9ac\uc5bc(\uac00\uc0c1\ud604\uc2e4 \ud6c8\ub828) \ub2e4\uc74c \ub0a0, \uce20\uce74\uc0ac \ubcf8\uc0ac \ub85c\ube44 \uce68\ud22c
+            yield return StartCoroutine(PlayKeyed("lobby.fromtut.0", "EGO", "\uc2dc\ubbac\ub808\uc774\uc158\uc740 \ub05d\ub0ac\uc5b4, \ucd94\uc628. \uc5ec\uae30\uc11c\ubd80\ud134 \uc2e4\uc804\uc774\uc57c.", 2.1f));
+            yield return StartCoroutine(PlayKeyed("lobby.fromtut.1", "ChuOn", "\uc54c\uaca0\uc5b4. \ubc14\ub85c \ud22c\uc785\ud55c\ub2e4.", 1.7f));
         }
 
-        yield return StartCoroutine(PlayDialogue("ChuOn", "\uc5ec\uae30\uac00 \uce68\ud22c \uc9c0\uc810\uc778\uac00.", 2f));
+        if (_handedOffToLowerFloor)
+            yield break;
+
+        yield return StartCoroutine(PlayKeyed("lobby.arrive.0", "ChuOn", "\uc5ec\uae30\uac00 \ub188\ub4e4\uc758 \uc2ec\uc7a5\ubd80\u2026", 2.2f));
+        yield return StartCoroutine(PlayOptional("lobby.arrive.1", 2f));
+
+        // 하층으로 이미 넘어갔으면(도착 중 엘리베이터 호출 등) 상층 시퀀스를 더 진행하지 않는다.
+        if (_handedOffToLowerFloor)
+            yield break;
 
         if (alertOverlay != null)
-            alertOverlay.DOFade(0.3f, 0.5f).SetLoops(6, LoopType.Yoyo);
+        {
+            alertOverlay.DOKill();
+            alertOverlay.color = new Color(1f, 0f, 0f, 0f);
+            alertOverlay.DOFade(AccessibilityOptionsRuntime.ScaleFlash(0.3f), 0.5f).SetLoops(6, LoopType.Yoyo);
+        }
 
-        yield return StartCoroutine(PlayDialogue("System", "\uce68\uc785\uc790 \uac10\uc9c0. \uc804\ud22c \ud504\ub85c\ud1a0\ucf5c \uae30\ub3d9.", 3f));
-        yield return StartCoroutine(PlayDialogue("EGO", "\uc6b0\ud68c \uacbd\ub85c\ub294 \uc5c6\uc5b4. \uba3c\uc800 \uc815\ub9ac\ud558\uace0 \uc774\ub3d9\ud574.", 2.5f));
-        yield return StartCoroutine(PlayDialogue("ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
+        yield return StartCoroutine(PlayKeyed("lobby.alarm.0", "System", "\uce68\uc785\uc790 \uac10\uc9c0. \ubc29\uc5b4 \ud504\ub85c\ud1a0\ucf5c\uc744 \uac00\ub3d9\ud569\ub2c8\ub2e4.", 3f));
+        yield return StartCoroutine(PlayOptional("lobby.alarm.1", 2f));
+        yield return StartCoroutine(PlayKeyed("lobby.drones.0", "EGO", "\ud504\ub860\ud2b8 \ub370\uc2a4\ud06c \ub4a4\uc5d0\uc11c \ub4dc\ub860\uc774 \ub098\uc628\ub2e4. \uba3c\uc800 \uc815\ub9ac\ud558\uc790.", 2.5f));
+        yield return StartCoroutine(PlayKeyed("lobby.drones.1", "ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
+
+        if (_handedOffToLowerFloor)
+            yield break;
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
 
+        // Optional gate: hold the drone wave until the player crosses combatStartGate (along its forward axis).
+        if (combatStartGate != null)
+        {
+            UpdateQuestUI("침투", "복도를 따라 본사 로비로 진입해.");
+            ShowQuestPanel();
+            yield return new WaitUntil(() => _handedOffToLowerFloor || HasPlayerPassedCombatGate());
+        }
+
+        if (_handedOffToLowerFloor)
+            yield break;
+
         StartCoroutine(SequenceCombat());
+    }
+
+    bool HasPlayerPassedCombatGate()
+    {
+        if (combatStartGate == null)
+            return true;
+
+        GameObject player = GameObject.FindWithTag("Player");
+        if (player == null)
+            return false;
+
+        return Vector3.Dot(player.transform.position - combatStartGate.position, combatStartGate.forward) > 0f;
     }
 
     IEnumerator SequenceCombat()
     {
+        if (_handedOffToLowerFloor)
+            yield break;
+
         SetPhase(LobbyFlowPhase.Combat);
         _currentDeadEnemy = 0;
         _combatEscalationStage = 0;
@@ -248,6 +436,9 @@ public class LobbyManager : MonoBehaviour
                     yield return new WaitForSeconds(threatMarkerLeadTime);
             }
 
+            if (_handedOffToLowerFloor)
+                yield break;
+
             PrewarmLobbyProjectilePool();
             yield return StartCoroutine(SpawnLobbyDrones(playerTransform));
         }
@@ -257,15 +448,26 @@ public class LobbyManager : MonoBehaviour
             OnEnemyKilled();
         }
 
+        if (_handedOffToLowerFloor)
+            yield break;
+
         UpdateQuestUI("\uad50\uc804 \uac1c\uc2dc", $"\uc801 \uc81c\uac70 ({_currentDeadEnemy} / {_totalEnemyCount})");
-        yield return new WaitUntil(() => _currentDeadEnemy >= _totalEnemyCount);
+        yield return new WaitUntil(() => _currentDeadEnemy >= _totalEnemyCount || _handedOffToLowerFloor);
+        if (_handedOffToLowerFloor)
+            yield break;
         yield return new WaitForSeconds(1f);
+        if (_handedOffToLowerFloor)
+            yield break;
         CombatCompleted?.Invoke();
         StartCoroutine(SequencePostCombat());
     }
 
     public void OnEnemyKilled()
     {
+        // 핸드오프 후 상층 드론 정리(SetActive false → LobbyEnemy.OnDisable)는 처치로 세지 않는다
+        if (_handedOffToLowerFloor)
+            return;
+
         _currentDeadEnemy++;
         EvaluateCombatEscalation();
         UpdateQuestUI("\uad50\uc804", $"\uc801 \uc81c\uac70 ({_currentDeadEnemy} / {_totalEnemyCount})");
@@ -292,12 +494,20 @@ public class LobbyManager : MonoBehaviour
         DroneCombatRole[] rolePlan = BuildLobbyDroneRolePlan(playerTransform);
         for (int i = 0; i < spawnPoints.Length; i++)
         {
+            // 하층으로 넘어간 뒤에는 상층 드론을 더 만들지 않는다 (강제/체크포인트 핸드오프 시 상층에서 하층 플레이어를 계속 저격하던 문제)
+            if (_handedOffToLowerFloor)
+                yield break;
+
             Transform spawnPoint = spawnPoints[i];
             if (spawnPoint == null)
                 continue;
 
-            GameObject drone = Instantiate(dronePrefab, spawnPoint.position, spawnPoint.rotation);
-            PrepareLobbyDrone(drone);
+            GameObject drone = TakePrewarmedDrone(spawnPoint.position, spawnPoint.rotation);
+            if (drone == null)
+            {
+                drone = Instantiate(dronePrefab, spawnPoint.position, spawnPoint.rotation);
+                PrepareLobbyDrone(drone);
+            }
             DroneController controller = drone.GetComponent<DroneController>();
             if (controller != null)
             {
@@ -315,6 +525,22 @@ public class LobbyManager : MonoBehaviour
 
             if (drone.GetComponent<LobbyEnemy>() == null)
                 drone.AddComponent<LobbyEnemy>();
+
+            // Teach -> test: the first drone fights alone, the rest arrive together after it falls.
+            if (staggerFirstDroneAlone && i == 0 && spawnPoints.Length > 1)
+            {
+                yield return new WaitUntil(() => _currentDeadEnemy >= 1 || _handedOffToLowerFloor);
+                if (_handedOffToLowerFloor)
+                    yield break;
+                if (staggeredWaveDelay > 0f)
+                    yield return new WaitForSeconds(staggeredWaveDelay);
+                if (presentationController != null && threatMarkerLeadTime > 0f)
+                {
+                    presentationController.ShowThreatMarkers(threatMarkerLeadTime);
+                    yield return new WaitForSeconds(threatMarkerLeadTime);
+                }
+                continue;
+            }
 
             if (droneSpawnInterval > 0f && i < spawnPoints.Length - 1)
                 yield return new WaitForSeconds(droneSpawnInterval);
@@ -803,19 +1029,25 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator SequencePostCombat()
     {
+        if (_handedOffToLowerFloor)
+            yield break;
+
         SetPhase(LobbyFlowPhase.Route);
         UpdateQuestUI("\uad50\uc804 \uc885\ub8cc", "\ubaa8\ub4e0 \uc801 \uc2e0\ud638 \uc81c\uac70.");
         _isDoorReached = false;
 
         yield return new WaitForSeconds(0.5f);
-        yield return StartCoroutine(PlayDialogue("EGO", "\uc88b\uc544. \uacbd\ub85c\uac00 \uc5f4\ub838\uc5b4. \uc2b9\uac15\uae30\ub85c \uc774\ub3d9\ud574.", 2f));
-        yield return StartCoroutine(PlayDialogue("ChuOn", "\ub05d\uae4c\uc9c0 \uae34\uc7a5 \ud480\uc9c0 \ub9c8.", 1.5f));
-        yield return StartCoroutine(PlayDialogue("EGO", routeSuspicionLine, routeSuspicionDelay));
+        yield return StartCoroutine(PlayKeyed("lobby.post.0", "EGO", "\uc88b\uc544, \uc815\ub9ac \ub05d. \uc77c\ubc18 \uc5d8\ub9ac\ubca0\uc774\ud130\ub294 \uc804\ubd80 \uc7a0\uaca8 \uc788\uc5b4.", 2.2f));
+        yield return StartCoroutine(PlayKeyed("lobby.post.1", "ChuOn", "\ub2e4\ub978 \uae38\uc740?", 1.3f));
+        yield return StartCoroutine(PlayKeyed("lobby.post.2", "EGO", routeSuspicionLine, routeSuspicionDelay));
+
+        if (_handedOffToLowerFloor)
+            yield break;
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
 
-        UpdateQuestUI("\uc774\ub3d9", "\ubcf5\ub3c4 \ub05d \uc2b9\uac15\uae30\ub85c \uc774\ub3d9\ud574.");
+        UpdateQuestUI("\uc774\ub3d9", "\ud504\ub860\ud2b8 \ub370\uc2a4\ud06c \ub4a4\ud3b8 \uc5d8\ub9ac\ubca0\uc774\ud130\ub85c \uc774\ub3d9\ud574.");
 
         if (guideSystem != null && ExhibitionPrototypePresentationPolicy.RuntimeLobbyGuidePathEnabled)
         {
@@ -841,7 +1073,9 @@ public class LobbyManager : MonoBehaviour
         ShowLobbyWorldMarker(_approachWorldMarker, true);
         ShowLobbyWorldMarker(_boardWorldMarker, false);
 
-        yield return new WaitUntil(() => _isDoorReached);
+        yield return new WaitUntil(() => _isDoorReached || _handedOffToLowerFloor);
+        if (_handedOffToLowerFloor)
+            yield break;
         StartCoroutine(SequenceAtElevator());
     }
 
@@ -880,12 +1114,21 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator SequenceAtElevator()
     {
+        if (_handedOffToLowerFloor)
+            yield break;
+
         SetPhase(LobbyFlowPhase.Board);
         OpenDoor(doorLeft);
         OpenDoor(doorRight);
 
-        yield return StartCoroutine(PlayDialogue("ChuOn", "\ud3c9\ubc94\ud55c \uc2b9\uac15\uae30\ub85c\ub294 \uc548 \ubcf4\uc774\ub124.", 2f));
-        yield return StartCoroutine(PlayDialogue("EGO", "\uadf8\ub798\ub3c4 \uc9c0\uae08\uc740 \uc774 \uae38\ubfd0\uc774\uc57c. \uc548\uc73c\ub85c \ub4e4\uc5b4\uac00.", 2f));
+        yield return StartCoroutine(PlayKeyed("lobby.elev.0", "EGO", "\uc774 \uc5d8\ub9ac\ubca0\uc774\ud130\ub3c4 \uacbd\ub85c\uac00 \uc81c\ud55c\ub3fc \uc788\uc5b4. \uaca9\ub0a9\uace0 \uce35\uc73c\ub85c\ub9cc \uc5f0\uacb0\ub418\ub294 \ub4ef\ud574.", 2.6f));
+        yield return StartCoroutine(PlayKeyed("lobby.elev.1", "ChuOn", "\ub188\ub4e4\uc774 \uc77c\ubd80\ub7ec \uc5f4\uc5b4\ub454 \uae38\uc778\uac00.", 1.9f));
+        yield return StartCoroutine(PlayKeyed("lobby.elev.2", "EGO", "\uadf8\ub798\ub3c4 \uc9c0\uae08\uc740 \uc774 \uae38\ubfd0\uc774\uc57c. \uc548\uc73c\ub85c \ub4e4\uc5b4\uac00.", 2f));
+        yield return StartCoroutine(PlayOptional("lobby.elev.3", 1.6f));
+        yield return StartCoroutine(PlayOptional("lobby.elev.4", 2f));
+
+        if (_handedOffToLowerFloor)
+            yield break;
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.5f);
@@ -896,7 +1139,9 @@ public class LobbyManager : MonoBehaviour
             guideSystem.ShowPath(triggerBoard);
 
         _isBoarded = false;
-        yield return new WaitUntil(() => _isBoarded);
+        yield return new WaitUntil(() => _isBoarded || _handedOffToLowerFloor);
+        if (_handedOffToLowerFloor)
+            yield break;
 
         if (guideSystem != null)
             guideSystem.HidePath();
@@ -929,6 +1174,9 @@ public class LobbyManager : MonoBehaviour
 
     IEnumerator SequenceInside()
     {
+        if (_handedOffToLowerFloor)
+            yield break;
+
         SetPhase(LobbyFlowPhase.Elevator);
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.15f);
@@ -1005,7 +1253,7 @@ public class LobbyManager : MonoBehaviour
 
     public void OnInteractElevator()
     {
-        if (_isElevatorTransitioning)
+        if (_isElevatorTransitioning || _handedOffToLowerFloor)
             return;
 
         _isElevatorTransitioning = true;
@@ -1034,8 +1282,39 @@ public class LobbyManager : MonoBehaviour
         StartCoroutine(CoTransitionFromElevator(true));
     }
 
+    /// <summary>상층 대사 패널이 보이는 중인가 (전투 bark 가 겹치지 않게).</summary>
+    public bool IsDialogueVisible => dialogueGroup != null && dialogueGroup.alpha > 0.05f && !_handedOffToLowerFloor;
+
+    // 대사 테이블(DialogueTable) 키 우선, 없으면 기존(씬/코드) 문구로 재생
+    IEnumerator PlayKeyed(string key, string speaker, string fallback, float waitTime)
+    {
+        string resolvedSpeaker = speaker;
+        string resolvedText = fallback;
+        float resolvedWait = waitTime;
+        DialogueTable.Resolve(key, ref resolvedSpeaker, ref resolvedText, ref resolvedWait);
+        return PlayDialogue(resolvedSpeaker, resolvedText, resolvedWait);
+    }
+
+    // 테이블에 키가 있을 때만 재생하는 추가 대사 (기획 검토용 확장 슬롯)
+    IEnumerator PlayOptional(string key, float waitTime)
+    {
+        if (!DialogueTable.TryGet(key, out DialogueTable.Entry entry))
+            return EmptyRoutine();
+
+        return PlayKeyed(key, entry.speaker, entry.text, waitTime);
+    }
+
+    static IEnumerator EmptyRoutine()
+    {
+        yield break;
+    }
+
     IEnumerator PlayDialogue(string speaker, string content, float waitTime)
     {
+        // 하층으로 넘어간 뒤에는 상층 대사를 띄우지 않는다.
+        if (_handedOffToLowerFloor)
+            yield break;
+
         if (!ExhibitionPrototypePresentationPolicy.DialogueEnabled)
         {
             if (dialogueGroup != null)
@@ -1051,13 +1330,15 @@ public class LobbyManager : MonoBehaviour
             dialogueGroup.alpha = 1f;
 
         if (speakerText != null)
-            speakerText.text = speaker;
+            speakerText.text = speaker == "ChuOn" ? "\ucd94\uc628" : speaker;
 
         if (contentText != null)
         {
             contentText.text = string.Empty;
             for (int i = 0; i < content.Length; i++)
             {
+                if (_handedOffToLowerFloor)
+                    yield break;
                 contentText.text += content[i];
                 yield return new WaitForSeconds(textTypingSpeed);
             }
@@ -1078,6 +1359,10 @@ public class LobbyManager : MonoBehaviour
 
     void UpdateQuestUI(string title, string desc)
     {
+        // 하층(보스) 퀘스트 위에 상층 퀘스트가 덮어쓰지 않게
+        if (_handedOffToLowerFloor)
+            return;
+
         _currentQuestTitle = title;
         _currentQuestDescription = desc;
 
@@ -1091,7 +1376,7 @@ public class LobbyManager : MonoBehaviour
 
     void ShowQuestPanel()
     {
-        if (questPanelGroup == null)
+        if (questPanelGroup == null || _handedOffToLowerFloor)
             return;
 
         if (_objectivePanelController != null && _objectivePanelController.enabled)
@@ -1109,6 +1394,9 @@ public class LobbyManager : MonoBehaviour
 
     public void ShowTransientQuestCue(string title, string description, float holdDuration = 1.8f, bool flashAlert = false)
     {
+        if (_handedOffToLowerFloor)
+            return;
+
         if (_transientQuestCueRoutine != null)
             StopCoroutine(_transientQuestCueRoutine);
 
@@ -1210,7 +1498,12 @@ public class LobbyManager : MonoBehaviour
         }
 
         if (flashAlert && alertOverlay != null)
-            alertOverlay.DOFade(0.24f, 0.14f).SetLoops(2, LoopType.Yoyo);
+        {
+            // Restart from clear so overlapping yoyo flashes can't leave the overlay stuck tinted.
+            alertOverlay.DOKill();
+            alertOverlay.color = new Color(1f, 0f, 0f, 0f);
+            alertOverlay.DOFade(AccessibilityOptionsRuntime.ScaleFlash(0.24f), 0.14f).SetLoops(2, LoopType.Yoyo);
+        }
 
         yield return new WaitForSeconds(Mathf.Max(0.25f, holdDuration));
 
@@ -1233,12 +1526,18 @@ public class LobbyManager : MonoBehaviour
     IEnumerator CoTransitionFromElevator(bool playSyncLine = true)
     {
         if (playSyncLine && !string.IsNullOrWhiteSpace(elevatorSyncLine))
-            yield return StartCoroutine(PlayDialogue("EGO", elevatorSyncLine, Mathf.Min(0.45f, elevatorSyncCueHold)));
+            yield return StartCoroutine(PlayKeyed("lobby.sync.0", "EGO", elevatorSyncLine, Mathf.Min(0.45f, elevatorSyncCueHold)));
 
         if (dialogueGroup != null)
             dialogueGroup.DOFade(0f, 0.15f);
 
         yield return new WaitForSeconds(Mathf.Max(0.05f, elevatorSyncDelay));
+
+        if (continueInSameScene)
+        {
+            yield return StartCoroutine(CoContinueInSameScene());
+            yield break;
+        }
 
         TutorialSceneTransitionState.MarkLobbyToMain();
 
@@ -1249,6 +1548,140 @@ public class LobbyManager : MonoBehaviour
         }
 
         SceneManager.LoadScene(nextSceneName);
+    }
+
+    // Same-scene descent: fade to black, hand off to the lower floor, fade back in (no scene load).
+    IEnumerator CoContinueInSameScene()
+    {
+        CanvasGroup fade = EnsureSameSceneFadeOverlay();
+        if (fade != null)
+        {
+            fade.blocksRaycasts = true;
+            yield return fade.DOFade(1f, sameSceneFadeOutDuration).SetUpdate(true).SetEase(Ease.InOutQuad).WaitForCompletion();
+        }
+
+        HideUpperFloorPresentation();
+        _handedOffToLowerFloor = true;
+        DisableUpperFloorDrones();
+
+        try
+        {
+            ElevatorDescentFinished?.Invoke(this);
+            LowerFloorReached?.Invoke(this);
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception, this);
+        }
+
+        if (sameSceneBlackHold > 0f)
+            yield return new WaitForSecondsRealtime(sameSceneBlackHold);
+
+        if (fade != null)
+        {
+            yield return fade.DOFade(0f, sameSceneFadeInDuration).SetUpdate(true).SetEase(Ease.InOutQuad).WaitForCompletion();
+            fade.blocksRaycasts = false;
+        }
+    }
+
+    // 핸드오프 후 남은 상층 드론 정리 (상층 전투 도중 엘리베이터가 강제로 쓰인 경우 등)
+    void DisableUpperFloorDrones()
+    {
+        for (int i = _activeLobbyDrones.Count - 1; i >= 0; i--)
+        {
+            DroneController controller = _activeLobbyDrones[i];
+            if (controller != null && controller.gameObject.activeSelf)
+                controller.gameObject.SetActive(false);
+        }
+
+        _activeLobbyDrones.Clear();
+    }
+
+    // Checkpoint retry after the boss arrival: skip the whole upper floor.
+    void ApplyLowerFloorCheckpointState()
+    {
+        _handedOffToLowerFloor = true;
+        DisableUpperFloorDrones();
+        _isElevatorTransitioning = true;
+        if (dialogueGroup != null)
+            dialogueGroup.alpha = 0f;
+        if (alertOverlay != null)
+            alertOverlay.color = new Color(1f, 0f, 0f, 0f);
+        if (elevatorPanel != null)
+            elevatorPanel.SetActive(false);
+        if (guideSystem != null)
+            guideSystem.HidePath();
+
+        SetPhase(LobbyFlowPhase.Elevator);
+        LowerFloorReached?.Invoke(this);
+    }
+
+    void HideUpperFloorPresentation()
+    {
+        if (dialogueGroup != null)
+        {
+            dialogueGroup.DOKill();
+            dialogueGroup.alpha = 0f;
+        }
+
+        if (alertOverlay != null)
+        {
+            alertOverlay.DOKill();
+            alertOverlay.color = new Color(1f, 0f, 0f, 0f);
+        }
+
+        if (guideSystem != null)
+            guideSystem.HidePath();
+
+        if (presentationController != null)
+        {
+            presentationController.HideElevatorPanelGuide();
+            presentationController.HideObjectiveMarker();
+        }
+
+        ShowLobbyWorldMarker(_approachWorldMarker, false);
+        ShowLobbyWorldMarker(_boardWorldMarker, false);
+
+        // 상층 퀘스트 큐/런타임 목표 패널이 하층 보스 퀘스트 위에 남지 않게 정리한다.
+        if (_transientQuestCueRoutine != null)
+        {
+            StopCoroutine(_transientQuestCueRoutine);
+            _transientQuestCueRoutine = null;
+        }
+
+        if (_objectivePanelController != null && _objectivePanelController.enabled)
+            _objectivePanelController.enabled = false;
+    }
+
+    CanvasGroup _sameSceneFade;
+
+    CanvasGroup EnsureSameSceneFadeOverlay()
+    {
+        if (_sameSceneFade != null)
+            return _sameSceneFade;
+
+        GameObject root = new GameObject("LevelTransitionFade", typeof(RectTransform), typeof(Canvas), typeof(CanvasGroup));
+        root.transform.SetParent(transform, false);
+        Canvas canvas = root.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 32000;
+
+        GameObject panel = new GameObject("Black", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        panel.transform.SetParent(root.transform, false);
+        RectTransform rect = panel.GetComponent<RectTransform>();
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = Vector2.zero;
+        rect.offsetMax = Vector2.zero;
+        Image image = panel.GetComponent<Image>();
+        image.color = Color.black;
+        image.raycastTarget = true;
+
+        _sameSceneFade = root.GetComponent<CanvasGroup>();
+        _sameSceneFade.alpha = 0f;
+        _sameSceneFade.blocksRaycasts = false;
+        _sameSceneFade.interactable = false;
+        return _sameSceneFade;
     }
 
     void SetPhase(LobbyFlowPhase phase)

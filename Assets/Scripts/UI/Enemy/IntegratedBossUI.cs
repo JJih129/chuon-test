@@ -35,6 +35,8 @@ public class IntegratedBossUI : MonoBehaviour
     float hideSqr;
     ProximityBossUI currentTopBoss;
     IHealth currentTopBossHealth;
+    WaitForSeconds _pollWait;
+    float _pollWaitSeconds = -1f;
 
     void Awake()
     {
@@ -54,7 +56,7 @@ public class IntegratedBossUI : MonoBehaviour
         float hideDist = showDistance + Mathf.Max(0f, hideHysteresis);
         hideSqr = hideDist * hideDist;
 
-        if (topBossHUDRoot != null)
+        if (topBossHUDRoot != null && !BossUIController.IsTopHudOwned(topBossHUDRoot, topBossHUD))
             topBossHUDRoot.SetActive(false);
 
         StartCoroutine(PollRoutine());
@@ -103,7 +105,15 @@ public class IntegratedBossUI : MonoBehaviour
             EvaluateAll();
             float effectivePollInterval = ResolvePollInterval();
             if (effectivePollInterval > 0f)
-                yield return new WaitForSeconds(effectivePollInterval);
+            {
+                if (_pollWait == null || !Mathf.Approximately(_pollWaitSeconds, effectivePollInterval))
+                {
+                    _pollWaitSeconds = effectivePollInterval;
+                    _pollWait = new WaitForSeconds(effectivePollInterval);
+                }
+
+                yield return _pollWait;
+            }
             else
                 yield return null;
         }
@@ -261,6 +271,14 @@ public class IntegratedBossUI : MonoBehaviour
         if (topBossHUD == null || topBossHUDRoot == null || comp == null)
             return;
 
+        // BossUIController가 같은 상단 HUD를 관리 중이면 양보 (중복 제어 방지)
+        if (BossUIController.IsTopHudOwned(topBossHUDRoot, topBossHUD))
+        {
+            currentTopBoss = null;
+            currentTopBossHealth = null;
+            return;
+        }
+
         IHealth health = comp.healthBehaviour as IHealth;
         if (health == null)
             return;
@@ -286,6 +304,9 @@ public class IntegratedBossUI : MonoBehaviour
 
         currentTopBoss = null;
         currentTopBossHealth = null;
+
+        if (BossUIController.IsTopHudOwned(topBossHUDRoot, topBossHUD))
+            return;
 
         if (topBossHUD != null)
             topBossHUD.Unbind();

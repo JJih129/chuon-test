@@ -921,12 +921,12 @@ public sealed class UltimateSequencePlayer : MonoBehaviour
     void ResolveReferences(bool allowCreate)
     {
         if (targetBinder == null)
-            targetBinder = GetComponent<UltimateTargetBinder>() ?? (allowCreate ? gameObject.AddComponent<UltimateTargetBinder>() : null);
+            targetBinder = GetComponent<UltimateTargetBinder>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateTargetBinder>() : null);
         if (cameraDirector == null)
-            cameraDirector = GetComponent<UltimateCameraDirector>() ?? (allowCreate ? gameObject.AddComponent<UltimateCameraDirector>() : null);
+            cameraDirector = GetComponent<UltimateCameraDirector>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateCameraDirector>() : null);
         if (hitProcessor == null)
-            hitProcessor = GetComponent<UltimateHitProcessor>() ?? (allowCreate ? gameObject.AddComponent<UltimateHitProcessor>() : null);
+            hitProcessor = GetComponent<UltimateHitProcessor>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateHitProcessor>() : null);
         if (vfxPresenter == null)
-            vfxPresenter = GetComponent<UltimateVFXPresenter>() ?? (allowCreate ? gameObject.AddComponent<UltimateVFXPresenter>() : null);
+            vfxPresenter = GetComponent<UltimateVFXPresenter>().OrNull() ?? (allowCreate ? gameObject.AddComponent<UltimateVFXPresenter>() : null);
     }
 }

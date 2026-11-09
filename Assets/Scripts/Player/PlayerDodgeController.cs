@@ -12,6 +12,13 @@ public class PlayerDodgeController : MonoBehaviour
     }
 
     public bool IsDodging => isDodging;
+    // 회피 시작 직후 짧은 구간만 무적. 이후 구간은 피격 가능.
+    public bool IsInvulnerable => isDodging && (Time.time - _dodgeStartTime) <= _currentInvulnerabilityDuration;
+    /// <summary>이번 회피의 무적 시간(초). 연속 회피 감쇠가 걸리면 짧아진다.</summary>
+    public float CurrentInvulnerabilityDuration => _currentInvulnerabilityDuration;
+    public bool LastDodgeWasRapidChain { get; private set; }
+    /// <summary>모든 플레이어 회피 시작 알림 (보스 반응형 패턴: 3초 안 2회 회피 → 사선 베기).</summary>
+    public static event System.Action<PlayerDodgeController> AnyDodgeStarted;
     public float RemainingDodgeTime => isDodging ? Mathf.Max(0f, dodgeDuration - elapsed) : 0f;
     public float DodgeDuration => dodgeDuration;
     public bool HasBufferedDodge => HasBufferedDodgeRequest();
@@ -38,6 +45,9 @@ public class PlayerDodgeController : MonoBehaviour
     [SerializeField] bool denyDodgeWhileAttacking = true;
     [SerializeField] bool denyDodgeWhileGuarding = true;
     [SerializeField] bool denyDodgeWhileInHit = true;
+    [Tooltip("피격 경직 중이라도 이 시간이 지나면 회피로 빠져나올 수 있다 (연속 피격 스턴락 방지).")]
+    [SerializeField] bool allowRecoveryDodgeFromHit = true;
+    [SerializeField, Min(0f)] float recoveryDodgeAfterHitSeconds = 0.3f;
 
     [Header("Movement")]
     [Tooltip("False = speed based, true = distance based")]
@@ -45,13 +55,38 @@ public class PlayerDodgeController : MonoBehaviour
     [SerializeField, Range(4f, 28f)] float dodgeSpeed = 18f;
     [SerializeField, Range(1f, 12f)] float dodgeDistance = 5f;
     [SerializeField, Range(0.05f, 0.6f)] float dodgeDuration = 0.25f;
-    [SerializeField, Range(0f, 3f)] float dodgeCooldown = 1.5f;
+    [Tooltip("Cooldown (realtime) counted from dodge start before the next dodge can begin.")]
+    [SerializeField, Range(0f, 3f)] float dodgeCooldown = 0f;
+    [Tooltip("Invulnerability frames (scaled seconds) after dodge start. Hits after this window land normally.")]
+    [SerializeField, Range(0f, 0.6f)] float dodgeInvulnerabilityDuration = 0.24f;
+    [Tooltip("How many dodges can be chained back-to-back before the exhausted cooldown applies. 0 = unlimited.")]
+    [SerializeField, Range(0, 5)] int maxChainedDodges = 0;
+    [Tooltip("A dodge started within this realtime after the previous dodge ended counts as a chain.")]
+    [SerializeField, Range(0f, 1.5f)] float dodgeChainResetSeconds = 0.45f;
+
+    [Header("Rapid Dodge I-Frame Decay (기획: 연속 회피 무적 감소)")]
+    [Tooltip("켜면 rapidChainWindow 안에 rapidChainThreshold 번째 회피부터 무적 시간이 rapidChainInvulnerabilityDuration 으로 줄어든다. Level_Facility 에서 FacilityCombatRules 가 켠다.")]
+    [SerializeField] bool reduceIFramesOnRapidChain = false;
+    [SerializeField, Range(2, 6)] int rapidChainThreshold = 3;
+    [Tooltip("이 시간(초, realtime) 안의 회피 시작들을 연속으로 센다")]
+    [SerializeField, Range(0.4f, 3f)] float rapidChainWindow = 1.4f;
+    [SerializeField, Range(0f, 0.6f)] float rapidChainInvulnerabilityDuration = 0.12f;
+    readonly System.Collections.Generic.List<float> _recentDodgeStarts = new System.Collections.Generic.List<float>(8);
+    float _currentInvulnerabilityDuration = 0.24f;
+
+    public bool ReduceIFramesOnRapidChain { get => reduceIFramesOnRapidChain; set => reduceIFramesOnRapidChain = value; }
+    public float RapidChainInvulnerabilityDuration { get => rapidChainInvulnerabilityDuration; set => rapidChainInvulnerabilityDuration = Mathf.Max(0f, value); }
+    public float RapidChainWindow { get => rapidChainWindow; set => rapidChainWindow = Mathf.Max(0.1f, value); }
+    public int RapidChainThreshold { get => rapidChainThreshold; set => rapidChainThreshold = Mathf.Max(2, value); }
+    [Tooltip("Cooldown (realtime) applied after the last dodge of an exhausted chain ends.")]
+    [SerializeField, Range(0f, 3f)] float chainExhaustedCooldown = 0.55f;
 
     [Header("Perfect Dodge Redirect")]
     [SerializeField] bool sideStepOnPerfectDodge = true;
     [SerializeField, Range(0f, 1f)] float perfectDodgeRewindNormalizedTime = 0.28f;
     [SerializeField] bool openPerfectDodgeWindowOnDodgeStart = true;
-    [SerializeField, Range(0.05f, 0.35f)] float perfectDodgeStartWindow = 0.22f;
+    [Tooltip("Perfect dodge window (realtime) opened at dodge start. Keep <= dodgeInvulnerabilityDuration so late i-frames are a plain evade.")]
+    [SerializeField, Range(0.05f, 0.35f)] float perfectDodgeStartWindow = 0.16f;
 
     [Header("Speed Curve")]
     [SerializeField] DodgeFeelProfile feelProfile = DodgeFeelProfile.Soulslike;
@@ -131,6 +166,9 @@ public class PlayerDodgeController : MonoBehaviour
     float _smoothedRootMotionDodgeSpeed;
     float _smoothedRootMotionDodgeSpeedVelocity;
     float _dodgeEarliestEndTime;
+    float _dodgeStartTime = float.NegativeInfinity;
+    float _lastDodgeEndRealtime = float.NegativeInfinity;
+    int _chainedDodgeCount;
 
     void Reset()
     {
@@ -184,8 +222,34 @@ public class PlayerDodgeController : MonoBehaviour
         TryConsumeBufferedDodgeRequest();
     }
 
+    bool CanRecoveryDodgeFromHit()
+    {
+        // 상태 리더가 붙어 있어도(항상 ResolveOrAttach) 피격 경과 시간은 전투 컨트롤러 기준으로 판단한다.
+        // 이전에는 리더가 있으면 항상 false라 연타 패턴에서 회피 탈출이 불가능했다(스턴락).
+        return allowRecoveryDodgeFromHit
+            && combatController != null
+            && combatController.IsInHit
+            && combatController.HitStateElapsed >= recoveryDodgeAfterHitSeconds;
+    }
+
+    void ResolveRapidChainInvulnerability()
+    {
+        float now = Time.unscaledTime;
+        for (int i = _recentDodgeStarts.Count - 1; i >= 0; i--)
+            if (now - _recentDodgeStarts[i] > rapidChainWindow)
+                _recentDodgeStarts.RemoveAt(i);
+        _recentDodgeStarts.Add(now);
+        LastDodgeWasRapidChain = reduceIFramesOnRapidChain && _recentDodgeStarts.Count >= Mathf.Max(2, rapidChainThreshold);
+        _currentInvulnerabilityDuration = LastDodgeWasRapidChain
+            ? Mathf.Min(dodgeInvulnerabilityDuration, rapidChainInvulnerabilityDuration)
+            : dodgeInvulnerabilityDuration;
+    }
+
     void StartDodge()
     {
+        if (combatController != null && combatController.IsInHit)
+            combatController.TryRecoverFromHitForDodge();
+
         ClearBufferedDodgeRequest();
         dodgeDir = ResolveDodgeDirection();
         totalDodgeDistance = ResolveDodgeDistance();
@@ -199,6 +263,12 @@ public class PlayerDodgeController : MonoBehaviour
 
         isDodging = true;
         elapsed = 0f;
+        _dodgeStartTime = Time.time;
+        if (Time.unscaledTime - _lastDodgeEndRealtime > dodgeChainResetSeconds)
+            _chainedDodgeCount = 0;
+        _chainedDodgeCount++;
+        ResolveRapidChainInvulnerability();
+        AnyDodgeStarted?.Invoke(this);
         cdTimer = dodgeCooldown;
         _dodgeEarliestEndTime = Time.unscaledTime + Mathf.Max(0.01f, dodgeDuration);
 
@@ -228,7 +298,7 @@ public class PlayerDodgeController : MonoBehaviour
         }
 
         if (openPerfectDodgeWindowOnDodgeStart && perfectDodgeController != null)
-            perfectDodgeController.PerfectDodgeWindow_Pulse(perfectDodgeStartWindow);
+            perfectDodgeController.PerfectDodgeWindow_Pulse(Mathf.Min(perfectDodgeStartWindow, Mathf.Max(0.05f, _currentInvulnerabilityDuration)));
 
         PlayDodgeStartSound();
         OnDodgeStart?.Invoke();
@@ -298,6 +368,12 @@ public class PlayerDodgeController : MonoBehaviour
     {
         isDodging = false;
         _dodgeEarliestEndTime = float.NegativeInfinity;
+        _lastDodgeEndRealtime = Time.unscaledTime;
+        if (maxChainedDodges > 0 && _chainedDodgeCount >= maxChainedDodges)
+        {
+            cdTimer = Mathf.Max(cdTimer, chainExhaustedCooldown);
+            _chainedDodgeCount = 0;
+        }
 
         if (lockMoveDuringDodge && moveLocker != null)
             moveLocker.Unlock("DODGE");
@@ -373,7 +449,7 @@ public class PlayerDodgeController : MonoBehaviour
         if (denyDodgeWhileGuarding && IsPlayerGuarding())
             return false;
 
-        if (denyDodgeWhileInHit && IsPlayerInHitState())
+        if (denyDodgeWhileInHit && IsPlayerInHitState() && !CanRecoveryDodgeFromHit())
             return false;
 
         return true;

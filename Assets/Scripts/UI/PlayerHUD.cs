@@ -17,6 +17,8 @@ public class PlayerHUD : MonoBehaviour
     [Header("Ampoule Slots")]
     [Tooltip("앰플 슬롯 이미지들")]
     public Image[] ampouleSlots = new Image[5];
+    [Tooltip("사용한(빈) 앰플 슬롯의 알파. 최대치를 넘는 슬롯은 숨긴다.")]
+    [SerializeField, Range(0f, 1f)] float spentAmpouleSlotAlpha = 0.22f;
 
     [Header("Ultimate Gauge Text")]
     [SerializeField] Text ultimateGaugePercentText;
@@ -24,7 +26,21 @@ public class PlayerHUD : MonoBehaviour
     [SerializeField] int ultimateGaugePercentFontSize = 18;
     [SerializeField] Color ultimateGaugePercentTextColor = new Color(0.86f, 1f, 1f, 0.98f);
 
+    [Header("Phase Core (Ultimate)")]
+    [Tooltip("기존 % 링 대신 5단 페이즈 코어(PhaseCoreHUD)를 표시")]
+    [SerializeField] bool usePhaseCore = true;
+    [Tooltip("페이즈 코어 사용 시 중앙 % 텍스트 크기 (작게)")]
+    [SerializeField] int phaseCorePercentFontSize = 13;
+    [Tooltip("페이즈 코어 사용 시 % 텍스트 세로 오프셋 (PHASE 라벨과 겹치지 않게)")]
+    [SerializeField] float phaseCorePercentOffsetY = -5f;
+
+    [Header("Frame")]
+    [Tooltip("플레이어 HUD 큰 시안 프레임(UltimateGaugeRoot/BG) 알파. 장면 가독성을 위해 살짝 낮춤 (1 = 원본)")]
+    [SerializeField, Range(0f, 1f)] float frameAlpha = 0.68f;
+
     [Header("Guard Strain")]
+    [Tooltip("구형 가드 안정도 바 표시 여부. 밸런스(체간) 게이지는 PlayerBalanceHudBar가 단독 표시하므로 기본 꺼짐")]
+    [SerializeField] bool showLegacyGuardStrainBar = false;
     [Tooltip("직렬화된 가드 안정도 Fill 이미지가 있으면 우선 사용")]
     public Image guardStrainFillImage;
     [Tooltip("직렬화된 가드 안정도 Track 이미지가 있으면 우선 사용")]
@@ -211,7 +227,7 @@ public class PlayerHUD : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(performanceHudToggleKey))
+        if (Debug.isDebugBuild && Input.GetKeyDown(performanceHudToggleKey))
         {
             showPerformanceHud = !showPerformanceHud;
             if (!showPerformanceHud && _performanceHudRoot != null)
@@ -250,23 +266,79 @@ public class PlayerHUD : MonoBehaviour
         hpFillImage.DOFillAmount(targetFillAmount, dotweenDuration)
             .SetEase(Ease.OutSine)
             .SetUpdate(true);
+
+        if (_hudThemeApplied)
+        {
+            hpFillImage.color = GameplayHudStyler.ResolveHpColor(targetFillAmount);
+            UpdateHpDamageChunk(targetFillAmount);
+        }
     }
 
     public void UpdateAmpoule(int count)
     {
-        int maxDisplayCount = ampouleSlots.Length;
-        int clamped = Mathf.Clamp(count, 0, maxDisplayCount);
+        UpdateAmpoule(count, _boundConsumables != null ? _boundConsumables.MaxAmpoule : ampouleSlots.Length);
+    }
+
+    // 슬롯 수는 실제 최대 앰플 수(PlayerConsumables.MaxAmpoule)만큼만 표시한다. (프리팹 슬롯은 5개, 기본 최대치는 4)
+    // 남은 앰플은 정상 표시, 사용한 앰플은 흐리게 남겨 "몇 개 중 몇 개"가 한눈에 보이게 한다.
+    public void UpdateAmpoule(int count, int maxCount)
+    {
+        int visibleSlots = Mathf.Clamp(maxCount, 0, ampouleSlots.Length);
+        int clamped = Mathf.Clamp(count, 0, visibleSlots);
 
         for (int i = 0; i < ampouleSlots.Length; i++)
         {
-            if (ampouleSlots[i] != null)
-                ampouleSlots[i].enabled = i < clamped;
+            Image slot = ampouleSlots[i];
+            if (slot == null)
+                continue;
+
+            bool visible = i < visibleSlots;
+            if (slot.gameObject.activeSelf != visible)
+                slot.gameObject.SetActive(visible);
+            slot.enabled = visible;
+            slot.canvasRenderer.SetAlpha(i < clamped ? 1f : spentAmpouleSlotAlpha);
         }
+
+        ApplyAmpouleFrameVariant(visibleSlots);
+    }
+
+    // 프레임 아트(chuon_hud_player_white)에는 앰플 슬롯 외곽선 5개가 구워져 있다.
+    // 최대치가 더 적으면 같은 프레임의 N슬롯 변형(UI/HUD/chuon_hud_player_<N>slot_white)으로 바꿔 빈 외곽선이 보이지 않게 한다.
+    const string AmpouleFrameWhiteName = "chuon_hud_player_white";
+    const string AmpouleFrameVariantFormat = "UI/HUD/chuon_hud_player_{0}slot_white";
+    int _appliedAmpouleFrameSlots = -1;
+
+    void ApplyAmpouleFrameVariant(int slotCount)
+    {
+        if (slotCount == _appliedAmpouleFrameSlots)
+            return;
+
+        Transform frame = transform.Find("UltimateGaugeRoot/BG");
+        Image frameImage = frame != null ? frame.GetComponent<Image>() : null;
+        if (frameImage == null || frameImage.sprite == null)
+            return;
+
+        // 흰 프레임(테마 색 적용 완료) 또는 이미 바꾼 변형일 때만 교체 (원본 시안 스프라이트는 건드리지 않음)
+        string current = frameImage.sprite.name;
+        bool isWhiteFrame = current == AmpouleFrameWhiteName || (current.StartsWith("chuon_hud_player_") && current.EndsWith("slot_white"));
+        if (!isWhiteFrame)
+            return;
+
+        Sprite target = slotCount > 0 && slotCount < ampouleSlots.Length
+            ? Resources.Load<Sprite>(string.Format(AmpouleFrameVariantFormat, slotCount))
+            : null;
+        if (target == null)
+            target = Resources.Load<Sprite>("UI/HUD/" + AmpouleFrameWhiteName);
+        if (target != null && frameImage.sprite != target)
+            frameImage.sprite = target;
+
+        _appliedAmpouleFrameSlots = slotCount;
     }
 
     public void Bind(IHealth health, PlayerConsumables consumables = null, PlayerGuardController guard = null, BossController boss = null, PlayerUltimateController ultimate = null)
     {
         Unbind();
+        ApplyFrameAlpha();
 
         _boundHealth = health;
         if (_boundHealth != null)
@@ -279,6 +351,13 @@ public class PlayerHUD : MonoBehaviour
                 hpFillImage.fillAmount = _boundHealth.MaxHP > 0
                     ? Mathf.Clamp01((float)_boundHealth.CurrentHP / _boundHealth.MaxHP)
                     : 0f;
+                if (_hpDamageChunkImage != null)
+                {
+                    _hpDamageChunkImage.DOKill();
+                    _hpDamageChunkImage.fillAmount = hpFillImage.fillAmount;
+                }
+                if (_hudThemeApplied)
+                    hpFillImage.color = GameplayHudStyler.ResolveHpColor(hpFillImage.fillAmount);
             }
         }
 
@@ -290,7 +369,7 @@ public class PlayerHUD : MonoBehaviour
         }
         else
         {
-            UpdateAmpoule(0);
+            UpdateAmpoule(0, 0);
         }
 
         BindGuard(guard);
@@ -317,6 +396,16 @@ public class PlayerHUD : MonoBehaviour
         UnbindBoss();
         UnbindUltimate();
         hpFillImage?.DOKill();
+        if (_hpDamageChunkImage != null)
+            _hpDamageChunkImage.DOKill();
+    }
+
+    void OnDestroy()
+    {
+        if (hpFillImage != null)
+            hpFillImage.DOKill();
+        if (_hpDamageChunkImage != null)
+            _hpDamageChunkImage.DOKill();
     }
 
     public void ShowRuntimeTelegraphMessage(string message, AttackTelegraphType telegraphType = AttackTelegraphType.Auto, float holdTime = 0.72f, bool useDangerFeedback = false, int priority = 0)
@@ -410,7 +499,7 @@ public class PlayerHUD : MonoBehaviour
         for (int i = 0; i < ampouleSlots.Length; i++)
         {
             Image slot = ampouleSlots[i];
-            if (slot == null || slot.rectTransform == null)
+            if (slot == null || slot.rectTransform == null || !slot.gameObject.activeSelf)
                 continue;
 
             slot.rectTransform.GetWorldCorners(s_ampouleFocusCorners);
@@ -442,11 +531,14 @@ public class PlayerHUD : MonoBehaviour
         EnsureGuardStrainVisuals();
         EnsureParryCounterVisuals();
 
-        if (_boundGuard == null || guardStrainFillImage == null)
+        if (_boundGuard == null)
             return;
 
-        _displayedGuardStrain = _boundGuard.GuardStrainNormalized;
-        ApplyGuardStrainVisual(_displayedGuardStrain, true);
+        if (guardStrainFillImage != null)
+        {
+            _displayedGuardStrain = _boundGuard.GuardStrainNormalized;
+            ApplyGuardStrainVisual(_displayedGuardStrain, true);
+        }
 
         if (_boundGuard.OnGuardBreak != null)
             _boundGuard.OnGuardBreak.AddListener(HandleGuardBreak);
@@ -547,6 +639,9 @@ public class PlayerHUD : MonoBehaviour
     {
         EnsureUltimateGaugePercentVisual();
         _boundUltimate = ultimate;
+        EnsurePhaseCore();
+        if (_phaseCore != null)
+            _phaseCore.Bind(ultimate);
 
         if (_boundUltimate == null)
         {
@@ -569,12 +664,45 @@ public class PlayerHUD : MonoBehaviour
             _boundUltimate = null;
         }
 
+        if (_phaseCore != null)
+            _phaseCore.Unbind();
+
         _lastUltimateGaugePercent = -1;
+    }
+
+    // ---- 페이즈 코어: 기존 링(UltimateGaugeRoot/Fill) 자리에 생성하고 링 채움은 숨김 ----
+    PhaseCoreHUD _phaseCore;
+
+    public PhaseCoreHUD PhaseCore => _phaseCore;
+
+    void EnsurePhaseCore()
+    {
+        if (!usePhaseCore)
+            return;
+
+        if (_phaseCore != null)
+        {
+            _phaseCore.SetPercentText(showUltimateGaugePercent ? ultimateGaugePercentText : null);
+            return;
+        }
+
+        RectTransform ringRect = transform.Find("UltimateGaugeRoot/Fill") as RectTransform;
+        if (ringRect == null)
+            ringRect = ResolveUltimateGaugeTextParent();
+        if (ringRect == null)
+            return;
+
+        _phaseCore = PhaseCoreHUD.CreateUnder(ringRect, showUltimateGaugePercent ? ultimateGaugePercentText : null);
+
+        Image ringImage = ringRect.GetComponent<Image>();
+        if (ringImage != null)
+            ringImage.enabled = false;
     }
 
     void HandleUltimateGaugeChanged(float gauge, float normalized, bool ready)
     {
         SetUltimateGaugePercent(normalized);
+        ApplyUltimateGaugeColor(normalized, ready);
     }
 
     void SetUltimateGaugePercent(float normalized)
@@ -1134,6 +1262,14 @@ public class PlayerHUD : MonoBehaviour
         ultimateGaugePercentText.color = ultimateGaugePercentTextColor;
         ultimateGaugePercentText.raycastTarget = false;
         ultimateGaugePercentText.gameObject.SetActive(true);
+
+        if (usePhaseCore)
+        {
+            // 페이즈 코어 중앙의 작은 % 표시
+            ultimateGaugePercentText.fontSize = Mathf.Max(8, phaseCorePercentFontSize);
+            rect.offsetMin = new Vector2(0f, phaseCorePercentOffsetY);
+            rect.offsetMax = new Vector2(0f, phaseCorePercentOffsetY);
+        }
     }
 
     RectTransform ResolveUltimateGaugeTextParent()
@@ -1161,6 +1297,12 @@ public class PlayerHUD : MonoBehaviour
 
     void EnsureGuardStrainVisuals()
     {
+        if (!showLegacyGuardStrainBar)
+        {
+            DisableLegacyGuardStrainVisuals();
+            return;
+        }
+
         if (hpFillImage == null)
             return;
 
@@ -1593,6 +1735,174 @@ public class PlayerHUD : MonoBehaviour
         dangerTelegraphAudioSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(dangerTelegraphVolume));
     }
 
+    void ApplyFrameAlpha()
+    {
+        ApplyHudTheme();
+
+        Transform frame = transform.Find("UltimateGaugeRoot/BG");
+        Image frameImage = frame != null ? frame.GetComponent<Image>() : null;
+        if (frameImage == null)
+            return;
+
+        // 테마(흰 프레임 스프라이트)가 적용되면 테마 알파 사용, 아니면 기존 알파 보정
+        if (GameplayHudStyler.ApplyFrame(frameImage))
+            return;
+
+        Color c = frameImage.color;
+        c.a = frameAlpha;
+        frameImage.color = c;
+    }
+
+    // ---- 아라사카 톤 HUD 테마 (GameplayUiTheme 한 곳에서 색 결정) ----
+    const string RuntimeHpDamageChunkName = "_RuntimeHpDamageChunk";
+    [Header("HP Damage Chunk")]
+    [Tooltip("HP 감소 시 레드 청크가 남아 있는 시간")]
+    public float hpDamageChunkHold = 0.35f;
+    [Tooltip("레드 청크가 줄어드는 시간")]
+    public float hpDamageChunkDrain = 0.45f;
+
+    bool _hudThemeApplied;
+    Image _hpDamageChunkImage;
+    Image _ultimateFillImage;
+
+    void ApplyHudTheme()
+    {
+        if (_hudThemeApplied)
+            return;
+
+        _hudThemeApplied = true;
+        GameplayUiTheme theme = GameplayHudStyler.Theme;
+
+        if (hpFillImage != null)
+        {
+            EnsureHpDamageChunk();
+            GameplayHudStyler.ApplyWhite(hpFillImage, GameplayHudStyler.ResolveHpColor(hpFillImage.fillAmount));
+        }
+
+        if (ampouleSlots != null)
+        {
+            for (int i = 0; i < ampouleSlots.Length; i++)
+                GameplayHudStyler.ApplyWhite(ampouleSlots[i], theme.hudAmpouleColor);
+        }
+
+        Transform ultFill = transform.Find("UltimateGaugeRoot/Fill");
+        _ultimateFillImage = ultFill != null ? ultFill.GetComponent<Image>() : null;
+        if (GameplayHudStyler.ApplyWhite(_ultimateFillImage, GameplayHudStyler.ResolveUltimateColor(0f, false)))
+        {
+            // 흰 프레임(BG)의 어두운 내부가 링 채움을 덮어 탁해지지 않도록 채움을 프레임 위로
+            Transform ultBg = transform.Find("UltimateGaugeRoot/BG");
+            if (ultBg != null && ultBg.parent == ultFill.parent && ultFill.GetSiblingIndex() < ultBg.GetSiblingIndex())
+                ultFill.SetSiblingIndex(ultBg.GetSiblingIndex());
+        }
+
+        ultimateGaugePercentTextColor = theme.hudTextColor;
+        if (ultimateGaugePercentText != null)
+            ultimateGaugePercentText.color = ultimateGaugePercentTextColor;
+
+        // 런타임 배지(패링 카운터/빈틈)·성능 HUD도 같은 팔레트로 (생성 전에 색 확정)
+        parryCounterPanelColor = theme.hudPanelColor;
+        parryCounterFillColor = theme.hudAccentColor;
+        parryCounterTextColor = theme.hudTextColor;
+        punishWindowPanelColor = theme.hudPanelColor;
+        punishWindowFillColor = theme.hudHpFillColor;
+        punishWindowTextColor = theme.hudTextColor;
+        guardStrainLowColor = theme.hudFrameColor;
+        performanceHudTextColor = new Color(theme.hudTextColor.r, theme.hudTextColor.g, theme.hudTextColor.b, 0.8f);
+    }
+
+    void EnsureHpDamageChunk()
+    {
+        if (_hpDamageChunkImage != null || hpFillImage == null)
+            return;
+
+        RectTransform source = hpFillImage.rectTransform;
+        Transform parent = source.parent;
+        if (parent == null)
+            return;
+
+        Transform existing = parent.Find(RuntimeHpDamageChunkName);
+        Image chunk = existing != null ? existing.GetComponent<Image>() : null;
+        if (chunk == null)
+        {
+            GameObject go = new GameObject(RuntimeHpDamageChunkName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.layer = source.gameObject.layer;
+            chunk = go.GetComponent<Image>();
+            chunk.rectTransform.SetParent(parent, false);
+        }
+
+        RectTransform rect = chunk.rectTransform;
+        rect.anchorMin = source.anchorMin;
+        rect.anchorMax = source.anchorMax;
+        rect.pivot = source.pivot;
+        rect.sizeDelta = source.sizeDelta;
+        rect.anchoredPosition = source.anchoredPosition;
+        rect.localScale = source.localScale;
+        rect.localRotation = source.localRotation;
+        rect.SetSiblingIndex(source.GetSiblingIndex());
+
+        Sprite white = GameplayHudStyler.ResolveWhiteSprite(hpFillImage.sprite);
+        chunk.sprite = white != null ? white : hpFillImage.sprite;
+        chunk.type = Image.Type.Filled;
+        chunk.fillMethod = hpFillImage.fillMethod;
+        chunk.fillOrigin = hpFillImage.fillOrigin;
+        chunk.fillClockwise = hpFillImage.fillClockwise;
+        chunk.preserveAspect = hpFillImage.preserveAspect;
+        chunk.fillAmount = hpFillImage.fillAmount;
+        chunk.color = GameplayHudStyler.Theme.hudHpDamageChunkColor;
+        chunk.raycastTarget = false;
+        _hpDamageChunkImage = chunk;
+    }
+
+    void UpdateHpDamageChunk(float targetFillAmount)
+    {
+        if (_hpDamageChunkImage == null)
+            return;
+
+        _hpDamageChunkImage.DOKill();
+        if (targetFillAmount >= _hpDamageChunkImage.fillAmount)
+        {
+            _hpDamageChunkImage.fillAmount = targetFillAmount;
+            return;
+        }
+
+        _hpDamageChunkImage.DOFillAmount(targetFillAmount, hpDamageChunkDrain)
+            .SetDelay(hpDamageChunkHold)
+            .SetEase(Ease.InQuad)
+            .SetUpdate(true);
+    }
+
+    void ApplyUltimateGaugeColor(float normalized, bool ready)
+    {
+        if (_ultimateFillImage != null)
+            _ultimateFillImage.color = GameplayHudStyler.ResolveUltimateColor(normalized, ready);
+    }
+
+    // 밸런스 게이지(PlayerBalanceHudBar)와 같은 값을 중복 표시하지 않도록 구형 가드 안정도 바를 숨김
+    void DisableLegacyGuardStrainVisuals()
+    {
+        RectTransform root = _guardRoot;
+        if (root == null && guardStrainTrackImage != null)
+            root = guardStrainTrackImage.rectTransform.parent as RectTransform;
+        if (root == null && hpFillImage != null && hpFillImage.rectTransform.parent != null)
+            root = hpFillImage.rectTransform.parent.Find(RuntimeGuardRootName) as RectTransform;
+
+        if (root != null && root.name == RuntimeGuardRootName)
+            root.gameObject.SetActive(false);
+        else
+        {
+            if (guardStrainTrackImage != null)
+                guardStrainTrackImage.gameObject.SetActive(false);
+            if (guardStrainFillImage != null)
+                guardStrainFillImage.gameObject.SetActive(false);
+        }
+
+        guardStrainFillImage = null;
+        guardStrainTrackImage = null;
+        _guardRoot = null;
+        _guardCanvasGroup = null;
+        _displayedGuardStrain = 0f;
+    }
+
     void CreateRuntimeGuardStrainBar()
     {
         RectTransform hpRect = hpFillImage.rectTransform;
@@ -1747,6 +2057,6 @@ public class PlayerHUD : MonoBehaviour
     }
 
     void OnHPChanged(int current, int max) => UpdateHP(current, max);
-    void OnAmpouleChanged(int current, int max) => UpdateAmpoule(current);
+    void OnAmpouleChanged(int current, int max) => UpdateAmpoule(current, max);
     void OnDied() { }
 }

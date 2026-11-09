@@ -83,6 +83,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
     bool _stormFinishPrepositioned;
     Vector3 _stormFinishPosition;
     UltimateCinematicFrame _storyboardFrame;
+    UltimateCinematicHudFrame _hudFrame;
     bool _hasStoryboardFrame;
     bool _cachedPlayerPoseValid;
     bool _cachedVisualRootPoseValid;
@@ -246,6 +247,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _owner = owner;
         _data = data;
         _owner.SetActiveUltimateCinematic(this);
+        EnsureHudFrame().Begin();
 
         targetBinder.BeginSequence(owner, data, _boundTarget);
         BuildStoryboardFrame();
@@ -1326,6 +1328,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
             }
         }
 
+        if (_hudFrame != null)
+            _hudFrame.End(!isActiveAndEnabled || reason == "OnDisable" || reason == "OnDestroy");
+
         SetPlayerPresentationState(true, false);
         RestoreTargetIntroVisibility();
         slashStormVfx?.StopStorm(false);
@@ -1354,6 +1359,13 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _cachedAnimationTargetTransform = null;
         _hasStoryboardFrame = false;
 
+    }
+
+    UltimateCinematicHudFrame EnsureHudFrame()
+    {
+        if (_hudFrame == null && !TryGetComponent(out _hudFrame))
+            _hudFrame = gameObject.AddComponent<UltimateCinematicHudFrame>();
+        return _hudFrame;
     }
 
     void OnDrawGizmosSelected()

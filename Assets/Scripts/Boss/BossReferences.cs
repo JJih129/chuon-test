@@ -701,7 +701,7 @@ public class BossReferences : MonoBehaviour
             {
                 Transform visualInstance = visualRoot.Find(VisualInstanceName);
                 if (visualInstance != null)
-                    visualRig = visualInstance.GetComponent<BossVisualRig>() ?? visualInstance.GetComponentInChildren<BossVisualRig>(true);
+                    visualRig = visualInstance.GetComponent<BossVisualRig>().OrNull() ?? visualInstance.GetComponentInChildren<BossVisualRig>(true);
 
                 if (!visualRig)
                     visualRig = visualRoot.GetComponentInChildren<BossVisualRig>(true);

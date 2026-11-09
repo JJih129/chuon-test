@@ -17,6 +17,9 @@ public static class UltimateClipResourceBootstrap
 
     static UltimateClipResourceBootstrap()
     {
+        if (!EditorAutoFixupGate.Enabled)
+            return;
+
         QueueEnsureRuntimeUltimateClips();
     }
 

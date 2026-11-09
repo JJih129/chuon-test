@@ -26,16 +26,24 @@ public sealed class BossTelegraphVfxPresenter : MonoBehaviour
     [SerializeField, Range(0.1f, 1f)] private float baseColorCueBlend = 0.55f;
 
     [Header("Cue Colors")]
-    [SerializeField, ColorUsage(true, true)] private Color normalColor = new Color(0.75f, 0.95f, 1f) * 3.5f;
-    [SerializeField, ColorUsage(true, true)] private Color parryableColor = new Color(1f, 0.62f, 0.08f) * 5f;
-    [SerializeField, ColorUsage(true, true)] private Color dodgeOnlyColor = new Color(1f, 0.16f, 0.16f) * 5f;
-    [SerializeField, ColorUsage(true, true)] private Color unblockableColor = new Color(1f, 0.08f, 0.72f) * 6f;
-    [SerializeField, ColorUsage(true, true)] private Color heavyColor = new Color(1f, 0.34f, 0.04f) * 5.5f;
-    [SerializeField, ColorUsage(true, true)] private Color rangedColor = new Color(0.25f, 0.82f, 1f) * 4.5f;
+    // HDR/Bloom 활성화 기준으로 강도 ~2–3 유지. 카테고리별 색상(hue)을 분리.
+    [SerializeField, ColorUsage(true, true)] private Color normalColor = new Color(0.75f, 0.95f, 1f) * 1.8f;
+    [SerializeField, ColorUsage(true, true)] private Color parryableColor = new Color(1f, 0.78f, 0.22f) * 2.6f;   // warm gold
+    [SerializeField, ColorUsage(true, true)] private Color dodgeOnlyColor = new Color(1f, 0.1f, 0.08f) * 2.6f;    // red
+    [SerializeField, ColorUsage(true, true)] private Color unblockableColor = new Color(1f, 0.12f, 0.85f) * 3f;   // magenta
+    [SerializeField, ColorUsage(true, true)] private Color heavyColor = new Color(1f, 0.6f, 0.04f) * 2.6f;       // amber (red=회피 전용과 구분)
+    [SerializeField, ColorUsage(true, true)] private Color rangedColor = new Color(0.25f, 0.82f, 1f) * 2.2f;
+
+    [Header("Colorblind-Safe Palette")]
+    [Tooltip("색각 이상 대응 팔레트 사용 (Okabe-Ito 기반). 런타임 전역 설정: UseColorblindSafePalette")]
+    [SerializeField] private bool useColorblindSafePalette;
+    public static bool UseColorblindSafePalette;
 
     [Header("Pulse")]
     [SerializeField, Min(0.04f)] private float minimumDuration = 0.08f;
     [SerializeField, Range(1, 5)] private int pulseCount = 2;
+    [Tooltip("카테고리별 모션 차별화 (패리=짧고 날카로운 1회, 회피=빠른 깜빡임, 가드불가=느린 강한 맥동, 강공=묵직한 2회)")]
+    [SerializeField] private bool varyMotionPerCategory = true;
 
     private MaterialPropertyBlock _propertyBlock;
     private RendererBinding[] _weaponBindings = Array.Empty<RendererBinding>();
@@ -46,6 +54,9 @@ public sealed class BossTelegraphVfxPresenter : MonoBehaviour
     private Color _cueColor;
     private float _cueStartTime;
     private float _cueDuration;
+    private int _cuePulseCount = 2;
+    private float _cuePulseSharpness = 1f;
+    private bool _cueSustained;
     private bool _weaponActive;
     private bool _bodyActive;
     private bool _initialized;
@@ -78,8 +89,11 @@ public sealed class BossTelegraphVfxPresenter : MonoBehaviour
         }
 
         float normalized = _cueDuration > 0f ? Mathf.Clamp01(elapsed / _cueDuration) : 1f;
-        float pulse = Mathf.PingPong(normalized * Mathf.Max(1, pulseCount), 1f);
-        float intensity = Mathf.SmoothStep(0.2f, 1f, pulse) * (1f - normalized);
+        float pulse = Mathf.PingPong(normalized * Mathf.Max(1, _cuePulseCount), 1f);
+        if (_cuePulseSharpness != 1f)
+            pulse = Mathf.Pow(pulse, _cuePulseSharpness);
+        float decay = _cueSustained ? 1f - normalized * normalized : 1f - normalized;
+        float intensity = Mathf.SmoothStep(0.2f, 1f, pulse) * decay;
         Color color = _cueColor * intensity;
 
         if (_weaponActive)
@@ -104,6 +118,7 @@ public sealed class BossTelegraphVfxPresenter : MonoBehaviour
             return false;
 
         _cueColor = ResolveCueColor(telegraphType);
+        ResolveCueMotion(telegraphType);
         _cueStartTime = Time.time;
         _cueDuration = Mathf.Max(minimumDuration, duration);
         enabled = true;
@@ -294,8 +309,43 @@ public sealed class BossTelegraphVfxPresenter : MonoBehaviour
         return renderers == null || renderers.Length == 0;
     }
 
+    void ResolveCueMotion(BossAttackTelegraphType telegraphType)
+    {
+        _cuePulseCount = Mathf.Max(1, pulseCount);
+        _cuePulseSharpness = 1f;
+        _cueSustained = false;
+        if (!varyMotionPerCategory)
+            return;
+
+        switch (telegraphType)
+        {
+            case BossAttackTelegraphType.Parryable:
+                _cuePulseCount = 1;          // 한 번의 날카로운 글린트
+                _cuePulseSharpness = 2.2f;
+                break;
+            case BossAttackTelegraphType.DodgeOnly:
+                _cuePulseCount = 3;          // 빠른 경고 깜빡임
+                break;
+            case BossAttackTelegraphType.Unblockable:
+                _cuePulseCount = 2;          // 오래 유지되는 강한 맥동
+                _cuePulseSharpness = 0.6f;
+                _cueSustained = true;
+                break;
+            case BossAttackTelegraphType.Heavy:
+                _cuePulseCount = 2;          // 묵직한 2회 맥동
+                _cueSustained = true;
+                break;
+        }
+    }
+
+    /// <summary>The telegraph colour language (parryable gold / dodge-only red / unblockable magenta ...), colourblind setting included.</summary>
+    public Color GetCueColor(BossAttackTelegraphType telegraphType) => ResolveCueColor(telegraphType);
+
     Color ResolveCueColor(BossAttackTelegraphType telegraphType)
     {
+        if (useColorblindSafePalette || UseColorblindSafePalette)
+            return ResolveColorblindSafeColor(telegraphType);
+
         switch (telegraphType)
         {
             case BossAttackTelegraphType.Parryable:
@@ -310,6 +360,26 @@ public sealed class BossTelegraphVfxPresenter : MonoBehaviour
                 return rangedColor;
             case BossAttackTelegraphType.Normal:
                 return normalColor;
+            default:
+                return normalColor;
+        }
+    }
+
+    // Okabe-Ito 계열: 적/녹 구분 없이 명도·색상으로 식별 가능
+    Color ResolveColorblindSafeColor(BossAttackTelegraphType telegraphType)
+    {
+        switch (telegraphType)
+        {
+            case BossAttackTelegraphType.Parryable:
+                return new Color(0.94f, 0.89f, 0.26f) * 2.4f;  // yellow
+            case BossAttackTelegraphType.DodgeOnly:
+                return new Color(0.84f, 0.37f, 0f) * 2.6f;     // vermillion
+            case BossAttackTelegraphType.Unblockable:
+                return new Color(0.8f, 0.47f, 0.65f) * 3f;     // reddish purple
+            case BossAttackTelegraphType.Heavy:
+                return new Color(0f, 0.45f, 0.7f) * 3f;        // blue
+            case BossAttackTelegraphType.Ranged:
+                return new Color(0.34f, 0.71f, 0.91f) * 2.2f;  // sky blue
             default:
                 return normalColor;
         }

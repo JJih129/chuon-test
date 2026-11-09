@@ -63,14 +63,14 @@ public static class CombatFeelPolicy
         {
             case HitType.Heavy:
             case HitType.Force:
-                return new CombatFeelPreset(1f, 0f, 0f, 0.24f, 0.11f, 1.12f, 0.94f, 1.00f);
+                return new CombatFeelPreset(0.05f, 0.085f, 0f, 0.24f, 0.11f, 1.12f, 0.94f, 1.00f);
 
             case HitType.Strong:
             case HitType.Parried:
-                return new CombatFeelPreset(1f, 0f, 0f, 0.20f, 0.10f, 1.06f, 0.96f, 1.02f);
+                return new CombatFeelPreset(0.08f, 0.065f, 0f, 0.20f, 0.10f, 1.06f, 0.96f, 1.02f);
 
             case HitType.Light:
-                return new CombatFeelPreset(1f, 0f, 0f, 0.11f, 0.07f, 0.90f, 1.00f, 1.05f);
+                return new CombatFeelPreset(0.15f, 0.035f, 0f, 0.11f, 0.07f, 0.90f, 1.00f, 1.05f);
 
             case HitType.Guarded:
                 return new CombatFeelPreset(1f, 0f, 0f, 0.08f, 0.06f, 0.82f, 1.01f, 1.04f);
@@ -78,7 +78,7 @@ public static class CombatFeelPolicy
             case HitType.Normal:
             case HitType.None:
             default:
-                return new CombatFeelPreset(1f, 0f, 0f, 0.14f, 0.08f, 0.96f, 0.98f, 1.04f);
+                return new CombatFeelPreset(0.12f, 0.045f, 0f, 0.14f, 0.08f, 0.96f, 0.98f, 1.04f);
         }
     }
 

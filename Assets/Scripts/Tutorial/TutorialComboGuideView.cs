@@ -32,6 +32,11 @@ public class TutorialComboGuideView : MonoBehaviour
     Image _statusBackgroundImage;
     TMP_FontAsset _fontAsset;
 
+    // Shared combo data (ComboRouteCatalog). Same text as the tutorial step body; also used by the settings COMBO tab.
+    public static string DefaultGuideTitle => ComboRouteCatalog.TutorialGuideTitle;
+    public static string DefaultGuideBody => ComboRouteCatalog.BuildTutorialGuideBody();
+    public static ComboRoute[] Routes => ComboRouteCatalog.Routes;
+
     public void ConfigureRuntime()
     {
         EnsureBuilt();

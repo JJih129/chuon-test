@@ -23,7 +23,7 @@ public class PlayerAnimationEvents : MonoBehaviour
     void AutoWire()
     {
         if (!playerReferences)
-            playerReferences = GetComponent<PlayerReferences>() ?? GetComponentInParent<PlayerReferences>(true);
+            playerReferences = GetComponent<PlayerReferences>().OrNull() ?? GetComponentInParent<PlayerReferences>(true);
 
         if (HasUsableHitboxes(attackHitboxes))
             return;
@@ -90,7 +90,7 @@ public class PlayerAnimationEvents : MonoBehaviour
     void RefreshHitboxes()
     {
         if (!playerReferences)
-            playerReferences = GetComponent<PlayerReferences>() ?? GetComponentInParent<PlayerReferences>(true);
+            playerReferences = GetComponent<PlayerReferences>().OrNull() ?? GetComponentInParent<PlayerReferences>(true);
 
         if (playerReferences == null)
             return;

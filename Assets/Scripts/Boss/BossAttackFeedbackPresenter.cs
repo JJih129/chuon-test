@@ -318,6 +318,11 @@ public sealed class BossAttackFeedbackPresenter : MonoBehaviour
 
     static Material CreateDefaultLineMaterial()
     {
+        // 소프트 엣지 빔 텍스처 + 가산(HDR) 머티리얼 (Assets/Resources/VFX/BossProjectileWarningLine.mat)
+        Material glowMaterial = Resources.Load<Material>("VFX/BossProjectileWarningLine");
+        if (glowMaterial != null)
+            return glowMaterial;
+
         Shader shader = Shader.Find("Sprites/Default");
         return shader != null ? new Material(shader) : null;
     }
@@ -338,6 +343,18 @@ public sealed class BossAttackFeedbackPresenter : MonoBehaviour
                 return AttackTelegraphType.Guard;
             default:
                 return AttackTelegraphType.Auto;
+        }
+    }
+
+    /// <summary>보스전 시작 전 VFX 워밍업용: 피드백 프로필의 트레일 이펙트 프리팹 목록.</summary>
+    public void CollectPrewarmPrefabs(System.Collections.Generic.List<GameObject> into)
+    {
+        if (into == null || profiles == null)
+            return;
+        for (int i = 0; i < profiles.Length; i++)
+        {
+            if (profiles[i].trailEffectPrefab != null)
+                into.Add(profiles[i].trailEffectPrefab);
         }
     }
 }

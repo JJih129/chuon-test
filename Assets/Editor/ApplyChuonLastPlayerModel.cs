@@ -14,6 +14,9 @@ public static class ApplyChuonLastPlayerModel
     [InitializeOnLoadMethod]
     static void AutoApplyOnLoad()
     {
+        if (!EditorAutoFixupGate.Enabled)
+            return;
+
         EditorApplication.delayCall += TryApplyOnce;
     }
 

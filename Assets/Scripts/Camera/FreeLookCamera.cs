@@ -123,7 +123,7 @@ public class FreeLookCamera : MonoBehaviour
     public void AutoResolveReferences()
     {
         if (playerLockOn == null)
-            playerLockOn = GetComponentInParent<PlayerLockOn>() ?? GameplaySceneCache.ResolvePlayerLockOn();
+            playerLockOn = GetComponentInParent<PlayerLockOn>().OrNull() ?? GameplaySceneCache.ResolvePlayerLockOn();
 
         if (player == null)
         {
@@ -216,11 +216,52 @@ public class FreeLookCamera : MonoBehaviour
             ApplyPose();
     }
 
-    public void SnapBehindPlayer(float? overridePitch = null, float yawOffset = 0f)
+    /// <summary>
+    /// The FreeLookCamera that actually drives the gameplay camera. Scenes can contain more than one
+    /// (e.g. a disabled copy on CameraManager plus the one on the "FreeLook Camera" vcam), so callers
+    /// should use this instead of FindObjectOfType: the one attached to the live CinemachineFreeLook wins,
+    /// then any active+enabled instance, then any instance.
+    /// </summary>
+    public static FreeLookCamera FindAuthoritative()
+    {
+        CinemachineVirtualCameraBase legacy = CinemachineCompat.FindLegacyFreeLookCamera();
+        if (legacy != null)
+        {
+            FreeLookCamera attached = legacy.GetComponent<FreeLookCamera>();
+            if (attached != null)
+                return attached;
+        }
+
+        FreeLookCamera fallback = null;
+        FreeLookCamera[] all = FindObjectsByType<FreeLookCamera>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < all.Length; i++)
+        {
+            if (all[i] == null)
+                continue;
+            if (all[i].isActiveAndEnabled)
+                return all[i];
+            if (fallback == null)
+                fallback = all[i];
+        }
+
+        return fallback;
+    }
+
+    /// <param name="forceLegacyCameraPosition">
+    /// With a CinemachineFreeLook using LazyFollow binding, writing the X axis does not turn the camera.
+    /// When true the vcam is also moved with ForceCameraPosition (which re-derives its axes), so the snap
+    /// is actually visible. Off by default to keep existing callers (lock-on end) unchanged.
+    /// </param>
+    public void SnapBehindPlayer(float? overridePitch = null, float yawOffset = 0f, bool forceLegacyCameraPosition = false)
     {
         AutoResolveReferences();
         if (player == null)
             return;
+
+        // 소울라이크 리그가 게임플레이 카메라를 맡는 씬: 연출 복귀(강제 위치) 요청이면 리그 오빗도 등 뒤로 맞춘다.
+        // (락온 해제 시의 스냅은 무시: 소울류는 해제해도 카메라가 그 자리에 머문다)
+        if (forceLegacyCameraPosition && SoulsCameraRig.Active != null)
+            SoulsCameraRig.Active.SnapToYaw(player.eulerAngles.y + yawOffset, overridePitch);
 
         float snappedYaw = NormalizeAngle(player.eulerAngles.y + yawOffset);
         float snappedPitch = overridePitch.HasValue ? Mathf.Clamp(overridePitch.Value, minY, maxY) : pitch;
@@ -229,6 +270,16 @@ public class FreeLookCamera : MonoBehaviour
         {
             float legacyY = ConvertPitchToLegacyFreeLookY(snappedPitch);
             CinemachineCompat.TrySetLegacyFreeLookAxes(legacyFreeLookCamera, snappedYaw, legacyY);
+            if (forceLegacyCameraPosition)
+            {
+                Vector3 focusPoint = player.position + Vector3.up * focusHeight;
+                Vector3 cameraPosition = player.position
+                    + Quaternion.Euler(snappedPitch, snappedYaw, 0f) * new Vector3(0f, 0f, -distance)
+                    + Vector3.up * height;
+                legacyFreeLookCamera.ForceCameraPosition(
+                    cameraPosition,
+                    Quaternion.LookRotation(focusPoint - cameraPosition, Vector3.up));
+            }
             yaw = snappedYaw;
             pitch = snappedPitch;
             SyncManualTargets();

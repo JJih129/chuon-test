@@ -156,8 +156,11 @@ public sealed class TimeScaleController : MonoBehaviour
     void ApplyScale(float scale)
     {
         CurrentScale = scale;
-        Time.timeScale = scale;
-        Time.fixedDeltaTime = baseFixedDeltaTime * Mathf.Max(scale, 0.0001f);
+        // GameTimeScale owns Time.timeScale / fixedDeltaTime.
+        if (scale >= 0.9999f)
+            GameTimeScale.Release(this);
+        else
+            GameTimeScale.Request(this, scale);
     }
 
     void RefreshTickState()

@@ -294,6 +294,11 @@ public class PlayerMoveController : MonoBehaviour
 
     Vector2 ReadMoveInput()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (QaMoveInputOverride.HasValue)
+            return Vector2.ClampMagnitude(QaMoveInputOverride.Value, 1f);
+#endif
+
         // 1. New Input System Action이 연결되어 있다면 사용
         if (moveAction != null && moveAction.action != null)
             return moveAction.action.ReadValue<Vector2>();
@@ -325,6 +330,11 @@ public class PlayerMoveController : MonoBehaviour
 
         return input.magnitude <= inputDeadzone ? Vector2.zero : input;
     }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    /// <summary>Dev/QA only: replaces the move stick (camera-relative) while set. Used by QaCombatBot.</summary>
+    public static Vector2? QaMoveInputOverride;
+#endif
 
     float ComputeTargetSpeed(Vector2 input, bool guarding, bool locked)
     {

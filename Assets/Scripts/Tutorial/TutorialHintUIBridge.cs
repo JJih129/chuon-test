@@ -110,6 +110,12 @@ public class TutorialHintUIBridge : MonoBehaviour
             questPanelGroup.interactable = false;
             questPanelGroup.blocksRaycasts = false;
             questPanelGroup.alpha = 1f;
+
+            // 씬 배치 퀘스트 패널도 Level_Facility와 같은 아라사카 HUD 톤으로
+            GameplayHudStyler.ApplyFrame(questPanelGroup.GetComponent<Image>());
+            Transform legacyGauge = questPanelGroup.transform.Find("QuestGauge");
+            if (legacyGauge != null)
+                GameplayHudStyler.ApplyWhite(legacyGauge.GetComponent<Image>(), GameplayHudStyler.Theme.hudFrameColor);
         }
 
         if (comboGuidePanel != null)
@@ -175,6 +181,37 @@ public class TutorialHintUIBridge : MonoBehaviour
 
         if (contentText != null)
             contentText.text = body ?? string.Empty;
+
+        ApplySubtitleOptions();
+    }
+
+    // 옵션 메뉴의 자막 크기/배경 설정을 가이드 대사 패널에 반영
+    float _baseSpeakerFontSize = -1f;
+    float _baseContentFontSize = -1f;
+
+    void ApplySubtitleOptions()
+    {
+        float scale = Mathf.Clamp(OptionsManagerAdvanced.CurrentSubtitleSize, 0.6f, 1.8f);
+        if (speakerText != null)
+        {
+            if (_baseSpeakerFontSize < 0f)
+                _baseSpeakerFontSize = speakerText.fontSize;
+            speakerText.fontSize = _baseSpeakerFontSize * scale;
+        }
+
+        if (contentText != null)
+        {
+            if (_baseContentFontSize < 0f)
+                _baseContentFontSize = contentText.fontSize;
+            contentText.fontSize = _baseContentFontSize * scale;
+        }
+
+        if (dialogueGroup != null)
+        {
+            Image background = dialogueGroup.GetComponent<Image>();
+            if (background != null)
+                background.enabled = OptionsManagerAdvanced.CurrentSubtitleBackground;
+        }
     }
 
     public void HideGuideText()
@@ -493,6 +530,7 @@ public class TutorialHintUIBridge : MonoBehaviour
         background.type = Image.Type.Simple;
         background.preserveAspect = false;
         background.color = Color.white;
+        GameplayHudStyler.ApplyFrame(background);
     }
 
     void ApplyQuestGaugeSprite(Image gauge)
@@ -511,6 +549,7 @@ public class TutorialHintUIBridge : MonoBehaviour
         gauge.preserveAspect = false;
         gauge.raycastTarget = false;
         gauge.color = Color.white;
+        GameplayHudStyler.ApplyWhite(gauge, GameplayHudStyler.Theme.hudFrameColor);
     }
 
     void CreateComboPanel()

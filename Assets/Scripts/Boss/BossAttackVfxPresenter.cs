@@ -145,10 +145,10 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
     void AutoWire()
     {
         if (bossController == null)
-            bossController = GetComponent<BossController>() ?? GetComponentInParent<BossController>();
+            bossController = GetComponent<BossController>().OrNull() ?? GetComponentInParent<BossController>();
 
         if (bossReferences == null)
-            bossReferences = GetComponent<BossReferences>() ?? GetComponentInParent<BossReferences>();
+            bossReferences = GetComponent<BossReferences>().OrNull() ?? GetComponentInParent<BossReferences>();
 
         if (spawnAnchor == null && bossReferences != null)
             spawnAnchor = bossReferences.AttackHitboxSocket != null ? bossReferences.AttackHitboxSocket : bossReferences.VfxPivot;
@@ -355,11 +355,29 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         if (_proceduralTrailRibbon != null || trailAnchor == null)
             return;
 
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader == null)
-            return;
+        // Prefer a soft additive glow (fades toward the hilt) over the flat Sprites/Default fan,
+        // which rendered as a solid cyan triangle under HDR + bloom.
+        Material glowTemplate = Resources.Load<Material>("VFX/BossProjectileWarningLine");
+        if (glowTemplate != null)
+        {
+            _proceduralTrailMaterial = new Material(glowTemplate);
+            Texture2D gradient = CreateTrailGradientTexture();
+            if (_proceduralTrailMaterial.HasProperty("_BaseMap"))
+                _proceduralTrailMaterial.SetTexture("_BaseMap", gradient);
+            if (_proceduralTrailMaterial.HasProperty("_MainTex"))
+                _proceduralTrailMaterial.SetTexture("_MainTex", gradient);
+            if (_proceduralTrailMaterial.HasProperty("_BaseColor"))
+                _proceduralTrailMaterial.SetColor("_BaseColor", new Color(1f, 1f, 1f, 1f) * 1.6f);
+        }
+        else
+        {
+            Shader shader = Shader.Find("Sprites/Default");
+            if (shader == null)
+                return;
 
-        _proceduralTrailMaterial = new Material(shader);
+            _proceduralTrailMaterial = new Material(shader);
+        }
+
         _proceduralTrailMaterial.name = "BossAttackTrailRuntime";
         _proceduralTrailMaterial.hideFlags = HideFlags.HideAndDontSave;
 
@@ -369,6 +387,41 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         trailObject.transform.localScale = Vector3.one;
 
         _proceduralTrailRibbon = trailObject.AddComponent<BossSwordTrailRibbon>();
+    }
+
+    static Texture2D s_trailGradient;
+
+    // u = 0 at the hilt side of the ribbon, 1 at the blade tip; v = age along the trail.
+    static Texture2D CreateTrailGradientTexture()
+    {
+        if (s_trailGradient != null)
+            return s_trailGradient;
+
+        const int width = 64;
+        const int height = 4;
+        s_trailGradient = new Texture2D(width, height, TextureFormat.RGBA32, false)
+        {
+            name = "BossTrailGradient",
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+
+        var pixels = new Color32[width * height];
+        for (int x = 0; x < width; x++)
+        {
+            float u = x / (width - 1f);
+            float body = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.15f, 0.8f, u));
+            float tipFade = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.92f, 1f, u));
+            float edge = Mathf.Pow(Mathf.InverseLerp(0.55f, 0.95f, u), 3f);
+            float a = Mathf.Clamp01(body * tipFade * 0.75f + edge * 0.35f);
+            byte value = (byte)Mathf.RoundToInt(Mathf.Lerp(0.55f, 1f, u) * 255f);
+            for (int y = 0; y < height; y++)
+                pixels[y * width + x] = new Color32(value, value, value, (byte)Mathf.RoundToInt(a * 255f));
+        }
+
+        s_trailGradient.SetPixels32(pixels);
+        s_trailGradient.Apply(false, true);
+        return s_trailGradient;
     }
 
     static bool TryGetLocalMeshBounds(Transform target, out Bounds bounds)
@@ -479,4 +532,18 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
         };
     }
 #endif
+
+    /// <summary>보스전 시작 전 VFX 워밍업용: 이 프리젠터가 스폰할 수 있는 프리팹 목록.</summary>
+    public void CollectPrewarmPrefabs(List<GameObject> into)
+    {
+        if (into == null)
+            return;
+        if (fallbackVfxPrefab != null)
+            into.Add(fallbackVfxPrefab);
+        for (int i = 0; patternSlashVfx != null && i < patternSlashVfx.Length; i++)
+        {
+            if (patternSlashVfx[i].vfxPrefab != null)
+                into.Add(patternSlashVfx[i].vfxPrefab);
+        }
+    }
 }

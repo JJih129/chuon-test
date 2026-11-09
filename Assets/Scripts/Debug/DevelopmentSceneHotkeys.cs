@@ -25,6 +25,8 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
     const string MainScenePath = "Assets/Scenes/MainScene.unity";
     const string OptionsScenePath = "Assets/Scenes/OptionsScene.unity";
     const string CreditsScenePath = "Assets/Scenes/CreditsScene.unity";
+    const string LevelFacilitySceneName = "Level_Facility";
+    const string LevelFacilityScenePath = "Assets/Scenes/Level_Facility.unity";
 
     static readonly SceneHotkey[] SceneHotkeys =
     {
@@ -34,6 +36,7 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
         new SceneHotkey(KeyCode.F4, TitleSceneName, TitleScenePath),
         new SceneHotkey(KeyCode.F5, OptionsSceneName, OptionsScenePath),
         new SceneHotkey(KeyCode.F6, CreditsSceneName, CreditsScenePath),
+        new SceneHotkey(KeyCode.F7, LevelFacilitySceneName, LevelFacilityScenePath),
     };
 
     static DevelopmentSceneHotkeys _instance;
@@ -42,6 +45,10 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void EnsureInstance()
     {
+        // Scene-skip cheats must never ship in release builds.
+        if (!Debug.isDebugBuild)
+            return;
+
         if (_instance != null)
             return;
 
@@ -84,7 +91,7 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
             return;
 
         TutorialSceneTransitionState.ClearAll();
-        Time.timeScale = 1f;
+        GameTimeScale.ReleaseAll();
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
         _isLoading = true;

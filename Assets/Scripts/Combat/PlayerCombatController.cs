@@ -16,6 +16,14 @@ public class PlayerCombatController : MonoBehaviour
     [SerializeField, Range(0f, 0.25f)] private float comboLateGraceNormalized = 0.08f;
     [SerializeField] private float attackTransitionGraceSeconds = 0.05f;
     [SerializeField, Range(0f, 0.2f)] private float dodgeCancelEarlyBufferNormalized = 0.04f;
+    [Tooltip("Dodge cancel opens at min(cancelStart - early buffer, hitTime + this). 0 = from the hit frame onward.")]
+    [SerializeField, Range(0f, 0.3f)] private float dodgeCancelAfterHitNormalized = 0f;
+    [Tooltip("Guard/parry may cancel the attack once the active hit window has ended (recovery) plus this offset.")]
+    [SerializeField, Range(0f, 0.3f)] private float guardCancelAfterHitWindowNormalized = 0f;
+
+    [Header("▶ Break Finisher")]
+    [Tooltip("Attack input near a broken (staggered) boss triggers the break finisher.")]
+    [SerializeField] private bool enableBreakFinisher = true;
 
     [Header("▶ 데이터 기반 히트 윈도우")]
     [SerializeField] private bool useDataDrivenHitWindows = true;
@@ -85,6 +93,36 @@ public class PlayerCombatController : MonoBehaviour
     // ── 외부 확인용 프로퍼티 ─────────────────────────
     public bool IsAttacking => inAttack;
     public bool IsInHit => inHit;
+    /// <summary>Seconds spent in the current hit reaction (0 when not in hit).</summary>
+    public float HitStateElapsed => inHit ? Time.time - hitStartTime : 0f;
+
+    /// <summary>
+    /// Ends a normal hit reaction early so a recovery dodge can start (Stellar Blade-style escape from
+    /// multi-hit strings). Never ends the death state.
+    /// </summary>
+    public bool TryRecoverFromHitForDodge()
+    {
+        if (!inHit || deathLocked)
+            return false;
+
+        EndHit();
+        return true;
+    }
+
+    /// <summary>True while in a light hit reaction (not heavy / knockdown / death).</summary>
+    public bool IsInLightHit => inHit && !deathLocked && _currentHitIsLight;
+
+    /// <summary>
+    /// 약피격 경직을 가드/패링 입력으로 조기 종료 (minElapsed 이후). 강피격·넉다운·사망은 불가.
+    /// </summary>
+    public bool TryRecoverFromLightHitForGuard(float minElapsed)
+    {
+        if (!IsInLightHit || HitStateElapsed < Mathf.Max(0f, minElapsed))
+            return false;
+
+        EndHit();
+        return true;
+    }
     public int CurrentComboDepth => _currentComboDepth;
     public AttackInput? CurrentAttackInput => _hasCurrentAttackInput ? _currentAttackInput : null;
 
@@ -118,6 +156,7 @@ public class PlayerCombatController : MonoBehaviour
 
     // 피격 상태 변수
     private bool inHit = false;
+    private bool _currentHitIsLight;
     private bool invulnerable = false;
     private float hitStateEndTime = 0f;
     private float hitStartTime = 0f;
@@ -313,6 +352,9 @@ public class PlayerCombatController : MonoBehaviour
 
             if (TryConsumeAnyBufferedInput(out var inp))
             {
+                if (TryPlayBreakFinisher(0f))
+                    return;
+
                 var start = (inp.type == AttackInput.Light) ? firstLight : firstHeavy;
                 if (start) Play(start, 0f, inp.type, 1);
             }
@@ -345,6 +387,12 @@ public class PlayerCombatController : MonoBehaviour
         {
             if (TryPeekAnyBufferedInput(out var inp))
             {
+                if (TryPlayBreakFinisher(0.03f))
+                {
+                    ConsumePeekedBufferedInput();
+                    return;
+                }
+
                 var nx = FindNext(current, inp.type);
                 if (nx)
                 {
@@ -403,6 +451,12 @@ public class PlayerCombatController : MonoBehaviour
         AttackInput endedInput = _currentAttackInput;
         int endedDepth = _currentComboDepth;
 
+        if (_pendingFinisherTarget != null)
+        {
+            _pendingFinisherTarget.CancelPendingFinisher();
+            _pendingFinisherTarget = null;
+        }
+
         DeactivateWeaponHitboxImmediate();
         ResetAttackHitboxWindowState();
         RestoreWeaponHitboxDefaults();
@@ -459,8 +513,83 @@ public class PlayerCombatController : MonoBehaviour
             return false;
 
         normalizedTime = t;
-        cancelStart = Mathf.Max(0f, current.cancelStart - dodgeCancelEarlyBufferNormalized);
+        cancelStart = ResolveDodgeCancelStartNormalized(current);
         cancelEnd = ResolveAttackCancelWindowEnd(current);
+        return true;
+    }
+
+    // 회피 캔슬 시작: 콤보 캔슬 구간보다 이르게, 단 히트 판정 구간이 끝난 뒤부터 허용
+    // (hitTime은 판정 구간 '중간'이라 그때 캔슬하면 늦게 겹치는 타격이 사라진다)
+    private float ResolveDodgeCancelStartNormalized(AttackData attack)
+    {
+        if (attack == null)
+            return 0f;
+
+        float fromCancelWindow = Mathf.Max(0f, attack.cancelStart - dodgeCancelEarlyBufferNormalized);
+        float fromHitWindowEnd = Mathf.Clamp01(ResolveActiveHitWindowEndNormalized(attack) + Mathf.Max(0f, dodgeCancelAfterHitNormalized));
+        return Mathf.Min(fromCancelWindow, fromHitWindowEnd);
+    }
+
+    // 히트 판정 구간 종료 시점(정규화). 이후는 후딜(recovery)로 간주.
+    private float ResolveActiveHitWindowEndNormalized(AttackData attack)
+    {
+        if (attack == null)
+            return 1f;
+
+        if (attack.HasDefinedHitWindows)
+        {
+            float end = 0f;
+            for (int i = 0; i < attack.hitWindows.Length; i++)
+                end = Mathf.Max(end, Mathf.Max(attack.hitWindows[i].startNormalized, attack.hitWindows[i].endNormalized));
+            return end;
+        }
+
+        if (attack.TryBuildFallbackHitWindow(fallbackHitWindowLeadNormalized, fallbackHitWindowTailNormalized, out AttackHitWindow fallback))
+            return fallback.endNormalized;
+
+        return attack.hitTime;
+    }
+
+    public bool CanCancelIntoGuardNow()
+    {
+        if (!inAttack || current == null || inHit || animator == null)
+            return false;
+
+        if (!TryGetAttackProgress(current.animatorLayer, current, out float t))
+            return false;
+
+        float recoveryStart = Mathf.Clamp01(ResolveActiveHitWindowEndNormalized(current) + Mathf.Max(0f, guardCancelAfterHitWindowNormalized));
+        return t >= recoveryStart;
+    }
+
+    public bool TryCancelIntoGuard()
+    {
+        if (!CanCancelIntoGuardNow())
+            return false;
+
+        EndAttack();
+        return true;
+    }
+
+    // 브레이크(그로기) 상태 보스 근처에서 공격 입력 시 피니셔 실행
+    // 피니셔 공격이 판정 전에 끊기면 보스 쪽 피니셔도 취소한다.
+    private BossBreakController _pendingFinisherTarget;
+
+    private bool TryPlayBreakFinisher(float fade)
+    {
+        if (!enableBreakFinisher)
+            return false;
+
+        Transform self = playerRoot != null ? playerRoot : transform;
+        if (!BossBreakController.TryBeginFinisher(self, out BossBreakController target) || target == null)
+            return false;
+
+        AttackData finisherAttack = firstHeavy != null ? firstHeavy : firstLight;
+        if (finisherAttack == null)
+            return true;
+
+        Play(finisherAttack, fade, firstHeavy != null ? AttackInput.Heavy : AttackInput.Light, 1);
+        _pendingFinisherTarget = target;
         return true;
     }
 
@@ -491,7 +620,7 @@ public class PlayerCombatController : MonoBehaviour
         if (!TryGetAttackProgress(layer, current, out float t))
             return false;
 
-        float cancelStart = Mathf.Max(0f, current.cancelStart - dodgeCancelEarlyBufferNormalized);
+        float cancelStart = ResolveDodgeCancelStartNormalized(current);
         float cancelEnd = ResolveAttackCancelWindowEnd(current);
         if (t < cancelStart || t > cancelEnd)
             return false;
@@ -1105,6 +1234,7 @@ public class PlayerCombatController : MonoBehaviour
         ClearBufferedInputs();
 
         inHit = true;
+        _currentHitIsLight = !heavy;
         deathLocked = false;
         hitStartTime = Time.time;
 
@@ -1129,6 +1259,7 @@ public class PlayerCombatController : MonoBehaviour
         ClearBufferedInputs();
 
         inHit = true;
+        _currentHitIsLight = false;
         deathLocked = false;
         invulnerable = true;
         hitStartTime = Time.time;
@@ -1158,6 +1289,7 @@ public class PlayerCombatController : MonoBehaviour
         }
 
         inHit = true;
+        _currentHitIsLight = false;
         inAttack = false;
         deathLocked = true;
         invulnerable = true;

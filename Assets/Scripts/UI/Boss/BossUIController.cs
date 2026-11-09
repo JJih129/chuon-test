@@ -1,10 +1,31 @@
 using System.Collections;
+using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 [DisallowMultipleComponent]
 public class BossUIController : MonoBehaviour
 {
     const float AutoResolveInterval = 0.5f;
+
+    // 상단 보스 HUD의 단일 권한자: 활성 BossUIController가 있으면 IntegratedBossUI는 상단 HUD를 건드리지 않음
+    static readonly List<BossUIController> s_activeControllers = new List<BossUIController>(2);
+
+    public static bool IsTopHudOwned(GameObject root, BossHUD hud)
+    {
+        for (int i = 0; i < s_activeControllers.Count; i++)
+        {
+            BossUIController controller = s_activeControllers[i];
+            if (controller == null)
+                continue;
+
+            if ((root != null && controller.topHudRoot == root) || (hud != null && controller.hpHud == hud))
+                return true;
+        }
+
+        return false;
+    }
 
     [Header("References")]
     [Tooltip("Player transform used for distance checks.")]
@@ -51,6 +72,42 @@ public class BossUIController : MonoBehaviour
     [Tooltip("Keep the boss HUD visible for the whole fight instead of hiding by distance.")]
     public bool alwaysVisibleWhileBossAlive = true;
 
+    [Header("Intro Gate")]
+    [Tooltip("보스 등장 연출(인트로 일시정지) 동안 상단 보스 HUD를 숨기고 전투 시작 시 페이드 인")]
+    public bool hideDuringBossIntro = true;
+    [Tooltip("씬 시작 직후 인트로 상태가 확정되기 전까지 HUD 표시를 미루는 시간")]
+    public float introGateStartupGrace = 0.3f;
+    [Tooltip("전투 시작 시 보스 HUD 페이드 인 시간 (unscaled)")]
+    public float showFadeDuration = 0.45f;
+
+    [Header("Readability Style")]
+    [Tooltip("보스 HUD 색/가독성 스타일 적용 (레이아웃은 유지)")]
+    public bool applyReadabilityStyle = true;
+    [Tooltip("보스 HP 바 아래에 표시할 이름")]
+    public string bossDisplayName = "실험체  TYPE-D";
+    [Tooltip("보스 HP 채움 색 (플레이어 시안과 구분되는 따뜻한 색)")]
+    public Color bossHpFillColor = new Color(1f, 0.50f, 0.34f, 1f);
+    [Tooltip("브레이크(체간) 게이지 채움 색")]
+    public Color breakFillColor = new Color(1f, 0.74f, 0.24f, 1f);
+    [Tooltip("브레이크 게이지 빈 칸 색 (비어 있을 때 어둡게)")]
+    public Color breakTrackColor = new Color(1f, 0.74f, 0.24f, 0.13f);
+    [Tooltip("큰 시안 프레임 알파 (장면 가독성)")]
+    [Range(0f, 1f)] public float frameAlpha = 0.65f;
+    public Color bossNameColor = new Color(1f, 0.95f, 0.90f, 0.94f);
+    public float bossNameFontSize = 24f;
+    [Tooltip("보스 이름 위치 (Boss_HUD 중앙 기준). 프레임 바로 아래")]
+    public Vector2 bossNameAnchoredPosition = new Vector2(0f, 332f);
+
+    const string HpWhiteSpritePath = "UI/HUD/chuon_hud_boss_hpgauge_white";
+    const string BreakWhiteSpritePath = "UI/HUD/chuon_hud_boss_breakgauge_white";
+    const string RuntimeBreakTrackName = "_RuntimeBreakTrack";
+    const string RuntimeBossNameName = "_RuntimeBossName";
+
+    CanvasGroup _topHudGroup;
+    Coroutine _fadeRoutine;
+    bool _styleApplied;
+    BossController _gateBoss;
+
     IHealth boundHealth;
     float showSqr;
     float hideSqr;
@@ -60,6 +117,8 @@ public class BossUIController : MonoBehaviour
     Coroutine pendingHideRoutine;
     bool _presentationSubscribed;
     float _nextAutoResolveAt;
+    WaitForSeconds _pollWait;
+    float _pollWaitSeconds = -1f;
 
     void Awake()
     {
@@ -94,11 +153,15 @@ public class BossUIController : MonoBehaviour
 
         if (boundHealth == null && healthBehaviour != null)
             Debug.LogWarning($"[BossUIController] healthBehaviour does not implement IHealth: {healthBehaviour.GetType().Name}", this);
+
+        ApplyReadabilityStyle();
     }
 
     void OnEnable()
     {
         TryAutoResolveReferences(true);
+        if (!s_activeControllers.Contains(this))
+            s_activeControllers.Add(this);
         RefreshPresentationSubscriptions();
         if (pollRoutine != null)
             StopCoroutine(pollRoutine);
@@ -111,6 +174,7 @@ public class BossUIController : MonoBehaviour
             StopCoroutine(pollRoutine);
         pollRoutine = null;
 
+        s_activeControllers.Remove(this);
         ReleasePresentationSubscriptions();
         CancelPendingShow();
         CancelPendingHide();
@@ -124,7 +188,15 @@ public class BossUIController : MonoBehaviour
             Evaluate();
             float effectivePollInterval = ResolvePollInterval();
             if (effectivePollInterval > 0f)
-                yield return new WaitForSeconds(effectivePollInterval);
+            {
+                if (_pollWait == null || !Mathf.Approximately(_pollWaitSeconds, effectivePollInterval))
+                {
+                    _pollWaitSeconds = effectivePollInterval;
+                    _pollWait = new WaitForSeconds(effectivePollInterval);
+                }
+
+                yield return _pollWait;
+            }
             else
                 yield return null;
         }
@@ -162,6 +234,15 @@ public class BossUIController : MonoBehaviour
             CancelPendingShow();
             CancelPendingHide();
             ShowHUD();
+            return;
+        }
+
+        if (IsBossIntroGateActive())
+        {
+            CancelPendingShow();
+            CancelPendingHide();
+            if (isVisible || (topHudRoot != null && topHudRoot.activeSelf))
+                ForceHideImmediate();
             return;
         }
 
@@ -253,6 +334,9 @@ public class BossUIController : MonoBehaviour
         if (hpHud == null || topHudRoot == null)
             return;
 
+        // breakHud.hudRoot가 topHudRoot와 같은 경우가 있어 활성화 전에 숨김 여부를 기록
+        bool wasHidden = !topHudRoot.activeSelf;
+
         if (boundHealth == null)
             boundHealth = healthBehaviour as IHealth;
 
@@ -267,7 +351,204 @@ public class BossUIController : MonoBehaviour
         if (!topHudRoot.activeSelf)
             topHudRoot.SetActive(true);
 
+        if (wasHidden)
+        {
+            ApplyReadabilityStyle();
+            BeginShowFade();
+        }
+
         isVisible = topHudRoot.activeSelf;
+    }
+
+    // 숨김 → 표시 전환 시 unscaled 페이드 인 (인트로 종료/전투 시작 시점)
+    void BeginShowFade()
+    {
+        if (topHudRoot == null || showFadeDuration <= 0f || !isActiveAndEnabled)
+        {
+            if (_topHudGroup != null)
+                _topHudGroup.alpha = 1f;
+            return;
+        }
+
+        if (_topHudGroup == null)
+        {
+            _topHudGroup = topHudRoot.GetComponent<CanvasGroup>();
+            if (_topHudGroup == null)
+                _topHudGroup = topHudRoot.AddComponent<CanvasGroup>();
+            _topHudGroup.interactable = false;
+            _topHudGroup.blocksRaycasts = false;
+        }
+
+        if (_fadeRoutine != null)
+            StopCoroutine(_fadeRoutine);
+        _fadeRoutine = StartCoroutine(CoFadeIn());
+    }
+
+    IEnumerator CoFadeIn()
+    {
+        float duration = Mathf.Max(0.01f, showFadeDuration);
+        float elapsed = 0f;
+        _topHudGroup.alpha = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            _topHudGroup.alpha = t * t * (3f - 2f * t);
+            yield return null;
+        }
+
+        _topHudGroup.alpha = 1f;
+        _fadeRoutine = null;
+    }
+
+    // 보스 인트로 동안 BossController가 외부 인트로 일시정지 상태를 유지함 (IsExternalIntroPaused).
+    bool IsBossIntroGateActive()
+    {
+        if (!hideDuringBossIntro)
+            return false;
+
+        if (Time.timeSinceLevelLoad < introGateStartupGrace)
+            return true;
+
+        if (_gateBoss == null)
+        {
+            _gateBoss = GetComponentInParent<BossController>();
+            if (_gateBoss == null)
+                _gateBoss = GameplaySceneCache.ResolveBossController();
+            if (_gateBoss == null)
+                return false;
+        }
+
+        return IsBossInIntro(_gateBoss);
+    }
+
+    public static bool IsBossInIntro(BossController boss)
+    {
+        if (boss == null)
+            return false;
+
+        return boss.IsExternalIntroPaused;
+    }
+
+    void ApplyReadabilityStyle()
+    {
+        if (_styleApplied || !applyReadabilityStyle || topHudRoot == null)
+            return;
+
+        _styleApplied = true;
+
+        Image hpImage = hpHud != null ? (hpHud.hpFillImage != null ? hpHud.hpFillImage : hpHud.GetComponent<Image>()) : null;
+        if (hpImage != null)
+        {
+            Sprite hpWhite = Resources.Load<Sprite>(HpWhiteSpritePath);
+            if (hpWhite != null)
+                hpImage.sprite = hpWhite;
+            hpImage.color = bossHpFillColor;
+        }
+
+        Image breakImage = breakHud != null ? breakHud.breakFillImage : null;
+        if (breakImage != null)
+        {
+            Sprite breakWhite = Resources.Load<Sprite>(BreakWhiteSpritePath);
+            if (breakWhite != null)
+                breakImage.sprite = breakWhite;
+            breakImage.color = breakFillColor;
+            EnsureBreakTrack(breakImage, breakWhite);
+        }
+
+        Transform frame = topHudRoot.transform.Find("BG");
+        Image frameImage = frame != null ? frame.GetComponent<Image>() : null;
+        if (frameImage != null && !GameplayHudStyler.ApplyFrame(frameImage))
+        {
+            Color c = frameImage.color;
+            c.a = frameAlpha;
+            frameImage.color = c;
+        }
+
+        EnsureBossNameLabel();
+    }
+
+    void EnsureBreakTrack(Image breakImage, Sprite sprite)
+    {
+        RectTransform source = breakImage.rectTransform;
+        Transform parent = source.parent;
+        if (parent == null)
+            return;
+
+        Transform existing = parent.Find(RuntimeBreakTrackName);
+        Image track = existing != null ? existing.GetComponent<Image>() : null;
+        if (track == null)
+        {
+            GameObject go = new GameObject(RuntimeBreakTrackName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.layer = source.gameObject.layer;
+            track = go.GetComponent<Image>();
+            track.rectTransform.SetParent(parent, false);
+        }
+
+        RectTransform rect = track.rectTransform;
+        rect.anchorMin = source.anchorMin;
+        rect.anchorMax = source.anchorMax;
+        rect.pivot = source.pivot;
+        rect.sizeDelta = source.sizeDelta;
+        rect.anchoredPosition = source.anchoredPosition;
+        rect.localScale = source.localScale;
+        rect.localRotation = source.localRotation;
+        rect.SetSiblingIndex(source.GetSiblingIndex());
+
+        track.sprite = sprite != null ? sprite : breakImage.sprite;
+        track.type = Image.Type.Simple;
+        track.preserveAspect = breakImage.preserveAspect;
+        track.color = breakTrackColor;
+        track.raycastTarget = false;
+    }
+
+    void EnsureBossNameLabel()
+    {
+        if (string.IsNullOrWhiteSpace(bossDisplayName) || topHudRoot == null)
+            return;
+
+        Transform existing = topHudRoot.transform.Find(RuntimeBossNameName);
+        TextMeshProUGUI label = existing != null ? existing.GetComponent<TextMeshProUGUI>() : null;
+        if (label == null)
+        {
+            GameObject go = new GameObject(RuntimeBossNameName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            go.layer = topHudRoot.layer;
+            label = go.GetComponent<TextMeshProUGUI>();
+            label.rectTransform.SetParent(topHudRoot.transform, false);
+        }
+
+        RectTransform rect = label.rectTransform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(520f, 34f);
+        rect.anchoredPosition = bossNameAnchoredPosition;
+        rect.localScale = Vector3.one;
+
+        TMP_FontAsset font = ResolveKoreanFont();
+        if (font != null)
+            label.font = font;
+        label.text = bossDisplayName;
+        label.fontSize = bossNameFontSize;
+        label.fontStyle = FontStyles.Bold;
+        label.characterSpacing = 6f;
+        label.alignment = TextAlignmentOptions.Center;
+        label.enableWordWrapping = false;
+        label.overflowMode = TextOverflowModes.Overflow;
+        label.color = bossNameColor;
+        label.raycastTarget = false;
+    }
+
+    static TMP_FontAsset ResolveKoreanFont()
+    {
+        TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
+        for (int i = 0; i < texts.Length; i++)
+        {
+            TMP_FontAsset font = texts[i] != null ? texts[i].font : null;
+            if (font != null && font.name.Contains("NotoSansKR"))
+                return font;
+        }
+
+        return TMP_Settings.defaultFontAsset;
     }
 
     void HideHUD()

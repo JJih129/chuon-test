@@ -114,7 +114,7 @@ public class AnimationEventRelay : MonoBehaviour
             motionMul = strafeVolumeMultiplier;
 
         float volume = Mathf.Clamp01((footstepVolume + Random.Range(-footstepVolumeJitter, footstepVolumeJitter)) * motionMul);
-        footstepSource.PlayOneShot(clip, volume);
+        footstepSource.PlayOneShot(clip, AudioOptionsRuntime.ScaleSfx(volume)); // 효과음 볼륨 옵션
         footstepSource.pitch = originalPitch;
 
         _lastFootstepAt = now;

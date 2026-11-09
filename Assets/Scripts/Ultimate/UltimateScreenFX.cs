@@ -114,7 +114,8 @@ public class UltimateScreenFX : MonoBehaviour
 
     void BeginPulse(float peak, float duration)
     {
-        _pulsePeak = Mathf.Clamp01(peak);
+        // 접근성: 화면 번쩍임 강도 옵션
+        _pulsePeak = Mathf.Clamp01(AccessibilityOptionsRuntime.ScaleFlash(peak));
         _pulseHalfDuration = Mathf.Max(0.01f, duration * 0.5f);
         _fromStrength = _strength;
         _phaseElapsed = 0f;

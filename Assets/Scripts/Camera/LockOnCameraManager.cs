@@ -322,6 +322,35 @@ public class LockOnCameraManager : MonoBehaviour
     [InspectorName("플레이어 시선 높이 보정")]
     public float playerLookHeightOffset = 0.15f;
 
+    [Header("숄더 오프셋 (커스텀 전투 카메라)")]
+    [Tooltip("락온 중 카메라를 플레이어 옆으로 비켜 세워 플레이어 몸이 보스를 가리지 않게 합니다.")]
+    [InspectorName("숄더 오프셋 사용")]
+    public bool useLockOnShoulderOffset = true;
+
+    [Tooltip("근접(보스와 가까울 때) 카메라 좌우 오프셋(m). 양수 = 카메라가 플레이어 오른쪽 → 플레이어가 화면 왼쪽.")]
+    [InspectorName("근접 숄더 오프셋")]
+    [Range(0f, 1.5f)] public float lockOnShoulderOffsetClose = 0.6f;
+
+    [Tooltip("원거리 카메라 좌우 오프셋(m). 거리 솔버 비율로 근접 값과 블렌딩합니다.")]
+    [InspectorName("원거리 숄더 오프셋")]
+    [Range(0f, 1.5f)] public float lockOnShoulderOffsetFar = 0.45f;
+
+    [Tooltip("숄더 방향. 1 = 오른쪽 어깨(플레이어 화면 왼쪽), -1 = 왼쪽 어깨.")]
+    [InspectorName("숄더 방향")]
+    [Range(-1f, 1f)] public float lockOnShoulderSide = 1f;
+
+    [Tooltip("시선 목표를 숄더 오프셋 방향으로 얼마나 함께 옮길지(0 = 카메라만 이동해 플레이어/보스가 좌우로 갈라짐, 1 = 평행 이동).")]
+    [InspectorName("시선 숄더 추종 비율")]
+    [Range(0f, 1f)] public float lockOnShoulderLookFollow = 0.35f;
+
+    [Tooltip("락온 중 카메라에 추가하는 높이(m). 살짝 내려다보는 피치로 보스가 플레이어 머리 위로 보이게 합니다.")]
+    [InspectorName("숄더 추가 높이")]
+    [Range(-0.5f, 1.5f)] public float lockOnShoulderExtraHeight = 0.25f;
+
+    [Tooltip("숄더 오프셋이 0→1로 블렌드되는 시간(실시간 초). 락온 시작/옵션 토글 시 튀지 않게 합니다.")]
+    [InspectorName("숄더 블렌드 시간")]
+    [Min(0f)] public float lockOnShoulderBlendTime = 0.35f;
+
     [Header("?쎌삩 ?깆뒫")]
     [Tooltip("而ㅼ뒪? ?쎌삩 移대찓??solve瑜?다시 계산하는 최소 간격입니다.")]
     [InspectorName("而ㅼ뒪? 由ш렇 媛깆떊 媛꾧꺽")]
@@ -388,6 +417,7 @@ public class LockOnCameraManager : MonoBehaviour
     Vector3 _cachedCustomRigDesiredPosition;
     Quaternion _cachedCustomRigDesiredRotation;
     float _cachedCustomRigFieldOfView;
+    float _shoulderWeight;
     bool _hasCustomRigDesiredPose;
     float _nextCustomRigSolveAt;
     Vector3 _lastCustomRigPlayerAnchor;
@@ -428,6 +458,10 @@ public class LockOnCameraManager : MonoBehaviour
             return;
 
         if (playerPivot == null || lockOnCam == null)
+            return;
+
+        // 소울라이크 리그가 화면을 맡는 씬: 화면에 안 보이는 CM_LockOnCam 솔브는 건너뛴다.
+        if (SoulsCameraRig.Active != null)
             return;
 
         UpdatePlayerMotionState();
@@ -776,7 +810,8 @@ public class LockOnCameraManager : MonoBehaviour
         {
             freeLookCam.gameObject.SetActive(true);
             freeLookCam.enabled = true;
-            freeLookCam.Priority = 100;
+            // 소울라이크 리그가 있는 씬에서는 리그(95) 아래로 둔다 (연출 복귀 블렌드가 FreeLook 으로 새지 않게).
+            freeLookCam.Priority = SoulsCameraRig.Active != null ? 20 : 100;
         }
 
         if (lockOnCam != null && lockOnCam)
@@ -1501,6 +1536,12 @@ public class LockOnCameraManager : MonoBehaviour
         Vector3 enemyAnchor = _currentEnemyPivot != null ? _currentEnemyPivot.position : playerAnchor;
         Vector3 yawForward = yawRotation * Vector3.forward;
 
+        float shoulderTarget = useLockOnShoulderOffset ? 1f : 0f;
+        if (snap || lockOnShoulderBlendTime <= 0f)
+            _shoulderWeight = shoulderTarget;
+        else
+            _shoulderWeight = Mathf.MoveTowards(_shoulderWeight, shoulderTarget, Time.unscaledDeltaTime / lockOnShoulderBlendTime);
+
         if (snap || ShouldResolveCustomRig(playerAnchor, enemyAnchor, yawForward))
             ResolveCustomRigPose(playerAnchor, yawRotation, enemyAnchor);
 
@@ -1566,10 +1607,19 @@ public class LockOnCameraManager : MonoBehaviour
         Vector3 enemyAimPoint = GetEnemyCameraAimPoint();
         float farDistance = Mathf.Max(solverFarDistance, solverCloseDistance + 0.01f);
         float distanceT = Mathf.InverseLerp(solverCloseDistance, farDistance, Vector3.Distance(playerAnchor, enemyAimPoint));
+
+        // 숄더 오프셋: 카메라를 옆/위로 비켜 플레이어 몸이 보스를 가리지 않게 한다.
+        float shoulderLateral = Mathf.Lerp(lockOnShoulderOffsetClose, lockOnShoulderOffsetFar, distanceT)
+            * Mathf.Clamp(lockOnShoulderSide, -1f, 1f) * _shoulderWeight;
+        Vector3 shoulderRight = yawRotation * Vector3.right;
+        _cachedCustomRigDesiredPosition += shoulderRight * shoulderLateral
+            + Vector3.up * (lockOnShoulderExtraHeight * _shoulderWeight);
+
         float focusBlend = Mathf.Lerp(0.58f, 0.68f, distanceT);
         Vector3 playerLookPoint = playerAnchor + Vector3.up * playerLookHeightOffset;
         Vector3 lookTarget = Vector3.Lerp(playerLookPoint, enemyAimPoint, focusBlend);
         lookTarget.y += framing.lookHeightOffset;
+        lookTarget += shoulderRight * (shoulderLateral * lockOnShoulderLookFollow);
 
         Vector3 lookDirection = lookTarget - _cachedCustomRigDesiredPosition;
         if (lookDirection.sqrMagnitude <= 0.0001f)

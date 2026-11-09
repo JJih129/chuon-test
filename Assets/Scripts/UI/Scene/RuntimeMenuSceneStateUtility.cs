@@ -6,7 +6,6 @@ using UnityEngine;
 /// </summary>
 public static class RuntimeMenuSceneStateUtility
 {
-    const float DefaultFixedDeltaTime = 0.02f;
 
     public static void PrepareForMenuScene(bool unlockCursor = true)
     {
@@ -22,16 +21,24 @@ public static class RuntimeMenuSceneStateUtility
         ApplyCursorState(!lockCursor);
     }
 
+    /// <summary>
+    /// Resume from the pause menu: release only the pause request so other freezes
+    /// (ultimate cinematic, credits, tutorial prompts) keep running correctly.
+    /// </summary>
+    public static void ResumeFromPause(object pauseOwner, bool lockCursor = true)
+    {
+        GameTimeScale.Release(pauseOwner);
+        ResetAudioPause();
+        ApplyCursorState(!lockCursor);
+    }
+
     public static void ResetSimulationClock()
     {
         if (TimeScaleController.Instance != null)
-        {
             TimeScaleController.Instance.ResetTimeScale(0f);
-            return;
-        }
 
-        Time.timeScale = 1f;
-        Time.fixedDeltaTime = DefaultFixedDeltaTime;
+        // Menus / scene entry always start from normal time: drop every pause or slow-mo request.
+        GameTimeScale.ReleaseAll();
     }
 
     public static void ResetAudioPause()

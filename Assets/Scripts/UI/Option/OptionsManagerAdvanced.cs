@@ -49,11 +49,26 @@ public class OptionsManagerAdvanced : MonoBehaviour
     public Slider subtitleSizeSlider;
     public Toggle subtitleBackgroundToggle;
     public Slider cameraShakeSlider;
+    [Tooltip("화면 번쩍임(궁극기 플래시/경보 점멸) 강도. 비어 있으면 카메라 흔들림 행을 복제해 만든다.")]
+    public Slider flashIntensitySlider;
+
+    [Header("▶ 카메라 (비어 있으면 런타임 생성, CameraOptionsRuntime 에 저장/즉시 적용)")]
+    public Slider lookSensitivityMouseSlider;
+    public Slider lookSensitivityPadSlider;
+    public Toggle invertYToggle;
+    public Toggle autoRecenterToggle;
+    public Slider cameraFovSlider;
 
     public Action<float> OnBrightnessChanged;
     public Action<bool> OnMotionBlurToggled;
     public Action<float> OnSubtitleSizeChanged;
     public Action<bool> OnSubtitleBgToggled;
+
+    // 자막 프리젠터용 전역 이벤트 (옵션 매니저 인스턴스가 다른 씬에 있어도 구독 가능)
+    public static event Action<float> SubtitleSizeChangedGlobal;
+    public static event Action<bool> SubtitleBackgroundChangedGlobal;
+    public static float CurrentSubtitleSize => PlayerPrefs.GetFloat(K_SUB_SIZE, 1f);
+    public static bool CurrentSubtitleBackground => PlayerPrefs.GetInt(K_SUB_BG, 1) == 1;
     public Action<float> OnCameraShakeStrengthChanged;
 
     const string K_RES = "opt_resolution_index";
@@ -103,7 +118,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
         OnMotionBlurToggled += VideoOptionsRuntime.SetMotionBlurEnabled;
 
         if (OnCameraShakeStrengthChanged == null)
-            OnCameraShakeStrengthChanged += CameraShake.SetGlobalStrength;
+            OnCameraShakeStrengthChanged += AccessibilityOptionsRuntime.SetCameraShakeStrength;
 
         EnsureRuntimeOptionRows();
 
@@ -186,9 +201,11 @@ public class OptionsManagerAdvanced : MonoBehaviour
         if (sfxSlider != null)    { sfxSlider.onValueChanged.RemoveAllListeners(); sfxSlider.onValueChanged.AddListener(v => SetAudioParam(paramSfx, v)); sfxSlider.value = PlayerPrefs.GetFloat(K_SFX, 1f); }
         if (voiceSlider != null)  { voiceSlider.onValueChanged.RemoveAllListeners(); voiceSlider.onValueChanged.AddListener(v => SetAudioParam(paramVoice, v)); voiceSlider.value = PlayerPrefs.GetFloat(K_VOICE, 1f); }
 
-        if (subtitleSizeSlider != null) { subtitleSizeSlider.onValueChanged.RemoveAllListeners(); subtitleSizeSlider.onValueChanged.AddListener(v => { PlayerPrefs.SetFloat(K_SUB_SIZE, v); OnSubtitleSizeChanged?.Invoke(v); }); subtitleSizeSlider.value = PlayerPrefs.GetFloat(K_SUB_SIZE, 1f); }
-        if (subtitleBackgroundToggle != null) { subtitleBackgroundToggle.onValueChanged.RemoveAllListeners(); subtitleBackgroundToggle.onValueChanged.AddListener(v => { PlayerPrefs.SetInt(K_SUB_BG, v?1:0); OnSubtitleBgToggled?.Invoke(v); }); subtitleBackgroundToggle.isOn = PlayerPrefs.GetInt(K_SUB_BG, 1) == 1; }
+        if (subtitleSizeSlider != null) { subtitleSizeSlider.onValueChanged.RemoveAllListeners(); subtitleSizeSlider.onValueChanged.AddListener(v => { PlayerPrefs.SetFloat(K_SUB_SIZE, v); OnSubtitleSizeChanged?.Invoke(v); SubtitleSizeChangedGlobal?.Invoke(v); }); subtitleSizeSlider.value = PlayerPrefs.GetFloat(K_SUB_SIZE, 1f); }
+        if (subtitleBackgroundToggle != null) { subtitleBackgroundToggle.onValueChanged.RemoveAllListeners(); subtitleBackgroundToggle.onValueChanged.AddListener(v => { PlayerPrefs.SetInt(K_SUB_BG, v?1:0); OnSubtitleBgToggled?.Invoke(v); SubtitleBackgroundChangedGlobal?.Invoke(v); }); subtitleBackgroundToggle.isOn = PlayerPrefs.GetInt(K_SUB_BG, 1) == 1; }
+        if (flashIntensitySlider != null) { flashIntensitySlider.onValueChanged.RemoveAllListeners(); flashIntensitySlider.onValueChanged.AddListener(AccessibilityOptionsRuntime.SetFlashIntensity); flashIntensitySlider.value = AccessibilityOptionsRuntime.FlashIntensity; }
         if (cameraShakeSlider != null) { cameraShakeSlider.onValueChanged.RemoveAllListeners(); cameraShakeSlider.onValueChanged.AddListener(v => { PlayerPrefs.SetFloat(K_CAM_SHAKE, v); OnCameraShakeStrengthChanged?.Invoke(v); }); cameraShakeSlider.value = PlayerPrefs.GetFloat(K_CAM_SHAKE, 1f); }
+        BindCameraOptionControls();
 
         foreach (var b in keybindButtons)
         {
@@ -349,6 +366,65 @@ public class OptionsManagerAdvanced : MonoBehaviour
                 "CameraShake_Row",
                 "Camera Shake",
                 "Slider_CameraShake");
+
+        if (flashIntensitySlider == null)
+            flashIntensitySlider = CreateGeneratedSliderRow(
+                cameraShakeSlider != null ? cameraShakeSlider : masterSlider,
+                "FlashIntensity_Row",
+                "Screen Flash",
+                "Slider_FlashIntensity");
+
+        Slider sliderTemplate = cameraShakeSlider != null ? cameraShakeSlider : masterSlider;
+        Toggle toggleTemplate = subtitleBackgroundToggle != null ? subtitleBackgroundToggle : fullscreenToggle;
+        if (lookSensitivityMouseSlider == null)
+            lookSensitivityMouseSlider = CreateGeneratedSliderRow(sliderTemplate, "LookSensMouse_Row", "Mouse Sensitivity", "Slider_LookSensMouse") ?? CreateHiddenSlider("Slider_LookSensMouse");
+        if (lookSensitivityPadSlider == null)
+            lookSensitivityPadSlider = CreateGeneratedSliderRow(sliderTemplate, "LookSensPad_Row", "Pad Sensitivity", "Slider_LookSensPad") ?? CreateHiddenSlider("Slider_LookSensPad");
+        if (cameraFovSlider == null)
+            cameraFovSlider = CreateGeneratedSliderRow(sliderTemplate, "CameraFov_Row", "Field of View", "Slider_CameraFov") ?? CreateHiddenSlider("Slider_CameraFov");
+        if (invertYToggle == null)
+            invertYToggle = CreateGeneratedToggleRow(toggleTemplate, "InvertY_Row", "Invert Y", "Toggle_InvertY") ?? CreateHiddenToggle("Toggle_InvertY");
+        if (autoRecenterToggle == null)
+            autoRecenterToggle = CreateGeneratedToggleRow(toggleTemplate, "AutoRecenter_Row", "Auto Camera Recenter", "Toggle_AutoRecenter") ?? CreateHiddenToggle("Toggle_AutoRecenter");
+    }
+
+    // 카메라 옵션 (CameraOptionsRuntime: PlayerPrefs 저장 + 즉시 적용)
+    void BindCameraOptionControls()
+    {
+        CameraOptionsRuntime.RefreshFromPrefs();
+        BindRangeSlider(lookSensitivityMouseSlider, CameraOptionsRuntime.MinSensitivity, CameraOptionsRuntime.MaxSensitivity, false, CameraOptionsRuntime.MouseSensitivity, CameraOptionsRuntime.SetMouseSensitivity);
+        BindRangeSlider(lookSensitivityPadSlider, CameraOptionsRuntime.MinSensitivity, CameraOptionsRuntime.MaxSensitivity, false, CameraOptionsRuntime.PadSensitivity, CameraOptionsRuntime.SetPadSensitivity);
+        BindRangeSlider(cameraFovSlider, CameraOptionsRuntime.MinFov, CameraOptionsRuntime.MaxFov, true, CameraOptionsRuntime.FieldOfView, CameraOptionsRuntime.SetFieldOfView);
+        if (invertYToggle != null) { invertYToggle.onValueChanged.RemoveAllListeners(); invertYToggle.isOn = CameraOptionsRuntime.InvertY; invertYToggle.onValueChanged.AddListener(CameraOptionsRuntime.SetInvertY); }
+        if (autoRecenterToggle != null) { autoRecenterToggle.onValueChanged.RemoveAllListeners(); autoRecenterToggle.isOn = CameraOptionsRuntime.AutoRecenter; autoRecenterToggle.onValueChanged.AddListener(CameraOptionsRuntime.SetAutoRecenter); }
+    }
+
+    static void BindRangeSlider(Slider slider, float min, float max, bool wholeNumbers, float value, Action<float> setter)
+    {
+        if (slider == null)
+            return;
+        slider.onValueChanged.RemoveAllListeners();
+        slider.minValue = min;
+        slider.maxValue = max;
+        slider.wholeNumbers = wholeNumbers;
+        slider.SetValueWithoutNotify(value);
+        slider.onValueChanged.AddListener(v => setter(v));
+    }
+
+    Slider CreateHiddenSlider(string objectName)
+    {
+        var go = new GameObject(objectName, typeof(RectTransform), typeof(Slider));
+        go.transform.SetParent(transform, false);
+        go.SetActive(false);
+        return go.GetComponent<Slider>();
+    }
+
+    Toggle CreateHiddenToggle(string objectName)
+    {
+        var go = new GameObject(objectName, typeof(RectTransform), typeof(Toggle));
+        go.transform.SetParent(transform, false);
+        go.SetActive(false);
+        return go.GetComponent<Toggle>();
     }
 
     Slider CreateGeneratedSliderRow(Slider templateSlider, string rowName, string labelText, string sliderName)
@@ -526,6 +602,12 @@ public class OptionsManagerAdvanced : MonoBehaviour
         return "Key_" + b.gameObject.name.Replace("Button_", "");
     }
 
+    // 설정 화면을 닫을 때 디스크에 즉시 기록 (비정상 종료 시 유실 방지)
+    public static void FlushPrefs()
+    {
+        PlayerPrefs.Save();
+    }
+
     public void SaveAll()
     {
         PlayerPrefs.Save();
@@ -539,6 +621,8 @@ public class OptionsManagerAdvanced : MonoBehaviour
         OnMotionBlurToggled?.Invoke(PlayerPrefs.GetInt(K_MBLUR, 0) == 1);
         OnSubtitleSizeChanged?.Invoke(PlayerPrefs.GetFloat(K_SUB_SIZE, 1f));
         OnSubtitleBgToggled?.Invoke(PlayerPrefs.GetInt(K_SUB_BG, 1) == 1);
+        SubtitleSizeChangedGlobal?.Invoke(CurrentSubtitleSize);
+        SubtitleBackgroundChangedGlobal?.Invoke(CurrentSubtitleBackground);
         OnCameraShakeStrengthChanged?.Invoke(PlayerPrefs.GetFloat(K_CAM_SHAKE, 1f));
         FramePacingRuntime.RefreshFromPrefs();
         Debug.Log("[OptionsManagerAdvanced] LoadAll applied.");

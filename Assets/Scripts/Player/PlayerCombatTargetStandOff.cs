@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(CharacterController))]
@@ -107,14 +109,53 @@ public sealed class PlayerCombatTargetStandOff : MonoBehaviour
         if (hitTransform == transform || hitTransform.IsChildOf(transform) || transform.IsChildOf(hitTransform))
             return false;
 
-        int enemyLayer = LayerMask.NameToLayer("Enemy");
-        if (enemyLayer >= 0 && hit.gameObject.layer == enemyLayer)
+        if (_enemyLayer == int.MinValue)
+            _enemyLayer = LayerMask.NameToLayer("Enemy");
+
+        if (_enemyLayer >= 0 && hit.gameObject.layer == _enemyLayer)
             return true;
 
-        return hit.GetComponentInParent<BossHealth>() != null
+        // 콜라이더별 판정 결과 캐시 (GetComponentInParent 반복 호출 방지)
+        // 런타임에 대상 컴포넌트가 추가되는 경우를 대비해 주기적으로 갱신
+        float now = Time.unscaledTime;
+        if (_targetColliderCache.Count >= MaxCachedColliders || now >= _cacheResetAt)
+        {
+            _targetColliderCache.Clear();
+            _cacheResetAt = now + CacheResetIntervalSeconds;
+        }
+
+        int id = hit.GetInstanceID();
+        if (_targetColliderCache.TryGetValue(id, out bool cached))
+            return cached;
+
+        bool isTarget = hit.GetComponentInParent<BossHealth>() != null
             || hit.GetComponentInParent<TrainingDummyController>() != null
             || hit.GetComponentInParent<TutorialEnemyVisualRig>() != null
             || hit.GetComponentInParent<UltimateTargetSimple>() != null
             || hit.GetComponentInParent<IHealth>() != null;
+        _targetColliderCache[id] = isTarget;
+        return isTarget;
+    }
+
+    const int MaxCachedColliders = 512;
+    const float CacheResetIntervalSeconds = 2f;
+    float _cacheResetAt;
+    int _enemyLayer = int.MinValue;
+    readonly Dictionary<int, bool> _targetColliderCache = new Dictionary<int, bool>(64);
+
+    void OnEnable()
+    {
+        SceneManager.activeSceneChanged += HandleActiveSceneChanged;
+    }
+
+    void OnDisable()
+    {
+        SceneManager.activeSceneChanged -= HandleActiveSceneChanged;
+        _targetColliderCache.Clear();
+    }
+
+    void HandleActiveSceneChanged(Scene previous, Scene next)
+    {
+        _targetColliderCache.Clear();
     }
 }

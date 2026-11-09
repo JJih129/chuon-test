@@ -32,7 +32,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
     [Header("Target Indicator")]
     [SerializeField] private bool showTargetIndicator = true;
-    [SerializeField] private Color targetIndicatorColor = new Color(1f, 0.04f, 0.02f, 0.95f);
+    [SerializeField] private Color targetIndicatorColor = new Color(0.86f, 0.97f, 1f, 0.92f);
     [SerializeField, Min(8f)] private float targetIndicatorSize = 24f;
     [SerializeField] private Vector3 targetIndicatorOffset = new Vector3(0f, 0.55f, 0f);
 
@@ -126,11 +126,20 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         if (!_cam)
             _cam = GameplaySceneCache.ResolveMainCameraTransform();
 
+        SoulsCameraProfile souls = SoulsCameraRig.ActiveProfile;
         if (_lockModeActive)
-            TickLockedTarget();
+        {
+            if (souls != null)
+                TickLockedTargetSouls(souls);
+            else
+                TickLockedTarget();
+        }
 
         if (useLegacyInput)
             HandleLockInput();
+
+        if (souls != null && _lockModeActive && CurrentTarget != null && !_timelineOwnsCamera)
+            HandleSoulsSwitchInput(souls);
     }
 
     public void LockTo(Transform enemyRoot)
@@ -154,6 +163,7 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         CurrentTarget = pivot;
         _lockModeActive = true;
         _targetInvalidSince = float.NegativeInfinity;
+        _soulsLosLostSince = float.NegativeInfinity;
         _hasMaintainCheckSample = false;
         _cachedMaintainable = true;
         _facingDriver?.RefreshTickState();
@@ -182,7 +192,8 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
     public bool TryAutoLock()
     {
-        Transform best = FindBestTarget(null, true, lockOnFOV);
+        SoulsCameraProfile souls = SoulsCameraRig.ActiveProfile;
+        Transform best = souls != null ? FindBestTargetSouls(souls, null) : FindBestTarget(null, true, lockOnFOV);
         if (!best)
             return false;
 
@@ -325,6 +336,25 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
     void HandleLockTap()
     {
+        SoulsCameraProfile souls = SoulsCameraRig.ActiveProfile;
+        if (souls != null)
+        {
+            // 소울류: 락온 중 탭 = 해제, 타깃 없이 탭 = 카메라 리셋(등 뒤로)
+            if (IsLocked)
+            {
+                if (souls.tapUnlocks || !TrySwitchTarget())
+                    Unlock();
+                return;
+            }
+
+            Transform best = FindBestTargetSouls(souls, null);
+            if (best)
+                LockTo(best);
+            else
+                SoulsCameraRig.Active?.RequestRecenter();
+            return;
+        }
+
         if (IsLocked)
         {
             if (!TrySwitchTarget())
@@ -491,6 +521,22 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
         EnsureTargetIndicator();
         if (_targetIndicator == null)
             return;
+
+        SoulsCameraProfile souls = SoulsCameraRig.ActiveProfile;
+        if (souls != null)
+        {
+            // 아라사카 톤: 가슴(약점) 위치의 작은 흰 다이아몬드 + 붉은 코어, 전환 시 0.1 s 스냅
+            _targetIndicator.ConfigureDiamond(
+                GameplaySceneCache.ResolveMainCamera(),
+                GameplaySceneCache.ResolveCanvas(),
+                souls.markerColor,
+                souls.markerAccentColor,
+                souls.markerSize,
+                souls.markerSnapTime,
+                souls.chestHeightRatio);
+            _targetIndicator.SetTarget(CurrentTarget);
+            return;
+        }
 
         _targetIndicator.Configure(
             GameplaySceneCache.ResolveMainCamera(),
@@ -889,6 +935,262 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
             _pivotFollowerCache[key] = follower;
 
         return follower;
+    }
+
+    // ------------------------------------------------------------------
+    // 소울라이크 락온 규칙 (SoulsCameraRig + SoulsCameraProfile 이 있는 씬 전용, Docs/CameraDesign_Soulslike.md §2)
+    //  선택: 플레이어 기준 range 안, 카메라 정면 원뿔 안, 가림 없음 → 화면 중앙에 가장 가까운 적 (보스 보너스)
+    //  전환: 마우스 이동량 / 오른쪽 스틱 튕김 방향의 다음 적, 쿨다운
+    //  해제: 거리 초과, 가림 grace 초과, 사망(근처 적이 있으면 자동 재락온)
+    // ------------------------------------------------------------------
+
+    float _soulsLosLostSince = float.NegativeInfinity;
+    float _soulsNextLosCheckAt;
+    float _soulsNextSwitchAt;
+    Vector2 _soulsMouseAccum;
+    float _soulsMouseWindowStart;
+    bool _soulsStickArmed = true;
+    readonly RaycastHit[] _soulsLosHits = new RaycastHit[16];
+
+    public static bool IsRootDead(Transform root)
+    {
+        if (root == null || !root.gameObject.activeInHierarchy)
+            return true;
+        BossHealth bossHealth = root.GetComponentInChildren<BossHealth>();
+        if (bossHealth != null && bossHealth.IsDead)
+            return true;
+        EnemyHealth enemyHealth = root.GetComponentInChildren<EnemyHealth>();
+        if (enemyHealth != null && enemyHealth.IsDead)
+            return true;
+        DroneController drone = root.GetComponentInChildren<DroneController>();
+        return drone != null && drone.IsDead;
+    }
+
+    Vector3 SoulsOrigin => _playerPivot != null ? _playerPivot.position : transform.position + Vector3.up * defaultPivotY;
+
+    bool SoulsHasLineOfSight(Vector3 from, Vector3 to, Transform targetRoot, LayerMask mask)
+    {
+        Vector3 delta = to - from;
+        float length = delta.magnitude;
+        if (length < 0.01f)
+            return true;
+
+        int n = Physics.RaycastNonAlloc(from, delta / length, _soulsLosHits, length, mask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < n; i++)
+        {
+            Collider c = _soulsLosHits[i].collider;
+            if (c == null)
+                continue;
+            Transform r = c.transform.root;
+            if (r == targetRoot || r == transform.root || SoulsCameraRig.IsCharacterCollider(c))
+                continue;
+            return false;
+        }
+        return true;
+    }
+
+    int CollectSoulsCandidates(SoulsCameraProfile p, float range)
+    {
+        int hitCount = Physics.OverlapSphereNonAlloc(SoulsOrigin, range, _overlapHits, ResolveTargetSearchMask(), QueryTriggerInteraction.Collide);
+        int uniqueCount = 0;
+        for (int i = 0; i < hitCount; i++)
+        {
+            Transform root = ResolveLockOnTargetRoot(_overlapHits[i]);
+            if (!root || !root.gameObject.activeInHierarchy)
+                continue;
+            bool duplicate = false;
+            for (int j = 0; j < uniqueCount; j++)
+                if (_uniqueRoots[j] == root) { duplicate = true; break; }
+            if (duplicate || uniqueCount >= _uniqueRoots.Length)
+                continue;
+            _uniqueRoots[uniqueCount++] = root;
+        }
+        return uniqueCount;
+    }
+
+    Transform FindBestTargetSouls(SoulsCameraProfile p, Transform excludedRoot)
+    {
+        Camera cam = GameplaySceneCache.ResolveMainCamera();
+        if (cam == null)
+            return null;
+
+        Transform ct = cam.transform;
+        Vector3 origin = SoulsOrigin;
+        float halfCone = Mathf.Clamp(p.lockSearchCone, 1f, 360f) * 0.5f;
+        int count = CollectSoulsCandidates(p, p.lockSearchRange);
+        float bestScore = float.MaxValue;
+        Transform best = null;
+        for (int i = 0; i < count; i++)
+        {
+            Transform root = _uniqueRoots[i];
+            if (root == excludedRoot || IsRootDead(root))
+                continue;
+            Vector3 aim = SoulsCameraRig.GetTargetChestPoint(root, p.chestHeightRatio);
+            float distance = Vector3.Distance(origin, aim);
+            if (distance > p.lockSearchRange)
+                continue;
+            if (Vector3.Angle(ct.forward, aim - ct.position) > halfCone)
+                continue;
+            if (!SoulsHasLineOfSight(ct.position, aim, root, p.lineOfSightMask))
+                continue;
+
+            Vector3 vp = cam.WorldToViewportPoint(aim);
+            float score = new Vector2((vp.x - 0.5f) * cam.aspect, vp.y - 0.5f).magnitude + distance * 0.002f;
+            if (root.GetComponentInChildren<BossController>() != null)
+                score -= p.bossPriorityBonus;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = root;
+            }
+        }
+        return best;
+    }
+
+    Transform FindNearestTargetSouls(SoulsCameraProfile p, Transform excludedRoot)
+    {
+        Vector3 origin = SoulsOrigin;
+        int count = CollectSoulsCandidates(p, p.lockSearchRange);
+        float best = float.MaxValue;
+        Transform bestRoot = null;
+        for (int i = 0; i < count; i++)
+        {
+            Transform root = _uniqueRoots[i];
+            if (root == excludedRoot || IsRootDead(root))
+                continue;
+            Vector3 aim = SoulsCameraRig.GetTargetChestPoint(root, p.chestHeightRatio);
+            float distance = Vector3.Distance(origin, aim);
+            if (distance > p.lockSearchRange || distance >= best)
+                continue;
+            if (!SoulsHasLineOfSight(origin, aim, root, p.lineOfSightMask))
+                continue;
+            best = distance;
+            bestRoot = root;
+        }
+        return bestRoot;
+    }
+
+    Transform FindSwitchTargetSouls(SoulsCameraProfile p, Vector2 screenDirection)
+    {
+        Camera cam = GameplaySceneCache.ResolveMainCamera();
+        if (cam == null || _currentTargetRoot == null)
+            return null;
+
+        Vector3 currentVp = cam.WorldToViewportPoint(SoulsCameraRig.GetTargetChestPoint(_currentTargetRoot, p.chestHeightRatio));
+        Vector2 current = currentVp.z > 0f ? new Vector2(currentVp.x * cam.aspect, currentVp.y) : new Vector2(0.5f * cam.aspect, 0.5f);
+        int count = CollectSoulsCandidates(p, p.lockSearchRange);
+        float bestScore = float.MaxValue;
+        Transform best = null;
+        for (int i = 0; i < count; i++)
+        {
+            Transform root = _uniqueRoots[i];
+            if (root == _currentTargetRoot || IsRootDead(root))
+                continue;
+            Vector3 aim = SoulsCameraRig.GetTargetChestPoint(root, p.chestHeightRatio);
+            if (Vector3.Distance(SoulsOrigin, aim) > p.lockSearchRange)
+                continue;
+            Vector3 vp = cam.WorldToViewportPoint(aim);
+            if (vp.z <= 0f)
+                continue;
+            if (!SoulsHasLineOfSight(cam.transform.position, aim, root, p.lineOfSightMask))
+                continue;
+            Vector2 delta = new Vector2(vp.x * cam.aspect, vp.y) - current;
+            float length = delta.magnitude;
+            if (length < 0.01f)
+                continue;
+            float cos = Vector2.Dot(delta / length, screenDirection);
+            if (cos < 0.35f)
+                continue;
+            float score = length * (2f - cos);
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = root;
+            }
+        }
+        return best;
+    }
+
+    void HandleSoulsSwitchInput(SoulsCameraProfile p)
+    {
+        float now = Time.unscaledTime;
+        Vector2 flick = Vector2.zero;
+
+        UnityEngine.InputSystem.Mouse mouse = UnityEngine.InputSystem.Mouse.current;
+        if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
+        {
+            Vector2 delta = mouse.delta.ReadValue() * (1080f / Mathf.Max(1f, Screen.height));
+            if (now - _soulsMouseWindowStart > p.mouseSwitchWindow)
+            {
+                _soulsMouseAccum = Vector2.zero;
+                _soulsMouseWindowStart = now;
+            }
+            _soulsMouseAccum += delta;
+            if (_soulsMouseAccum.magnitude >= p.mouseSwitchThreshold)
+            {
+                flick = _soulsMouseAccum;
+                _soulsMouseAccum = Vector2.zero;
+            }
+        }
+
+        UnityEngine.InputSystem.Gamepad pad = UnityEngine.InputSystem.Gamepad.current;
+        if (pad != null)
+        {
+            Vector2 stick = pad.rightStick.ReadValue();
+            float m = stick.magnitude;
+            if (_soulsStickArmed && m >= p.stickFlickThreshold)
+            {
+                flick = stick;
+                _soulsStickArmed = false;
+            }
+            else if (m <= p.stickResetThreshold)
+            {
+                _soulsStickArmed = true;
+            }
+        }
+
+        if (flick.sqrMagnitude < 0.0001f || now < _soulsNextSwitchAt)
+            return;
+
+        _soulsNextSwitchAt = now + p.switchCooldown;
+        Transform next = FindSwitchTargetSouls(p, flick.normalized);
+        if (next)
+            LockTo(next);
+    }
+
+    void TickLockedTargetSouls(SoulsCameraProfile p)
+    {
+        if (!CurrentTarget || !_currentTargetRoot || IsRootDead(_currentTargetRoot))
+        {
+            Transform replacement = autoRetargetOnLost ? FindNearestTargetSouls(p, _currentTargetRoot) : null;
+            if (replacement)
+                LockTo(replacement);
+            else
+                Unlock();
+            return;
+        }
+
+        Vector3 aim = SoulsCameraRig.GetTargetChestPoint(_currentTargetRoot, p.chestHeightRatio);
+        if (Vector3.Distance(SoulsOrigin, aim) > p.lockBreakDistance)
+        {
+            Unlock();
+            return;
+        }
+
+        float now = Time.unscaledTime;
+        if (now >= _soulsNextLosCheckAt)
+        {
+            _soulsNextLosCheckAt = now + 0.1f;
+            bool visible = SoulsHasLineOfSight(SoulsOrigin, aim, _currentTargetRoot, p.lineOfSightMask)
+                || (_cam != null && SoulsHasLineOfSight(_cam.position, aim, _currentTargetRoot, p.lineOfSightMask));
+            if (visible)
+                _soulsLosLostSince = float.NegativeInfinity;
+            else if (float.IsNegativeInfinity(_soulsLosLostSince))
+                _soulsLosLostSince = now;
+        }
+
+        if (!float.IsNegativeInfinity(_soulsLosLostSince) && now - _soulsLosLostSince > p.lockLineOfSightGrace)
+            Unlock();
     }
 
 #if UNITY_EDITOR

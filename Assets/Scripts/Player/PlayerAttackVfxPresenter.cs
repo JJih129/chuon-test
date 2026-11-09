@@ -606,17 +606,26 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         ApplySpawnedVfxTint(spawned, heavyAttack);
 
-        ParticleSystem[] particles = spawned.GetComponentsInChildren<ParticleSystem>(true);
+        // TransientVfxPool 이 캐시한 배열 재사용 + 풀에서 이미 재시작했으므로 이중 Stop/Play 생략
+        bool restartedByPool = TransientVfxPool.TryGetCachedParticleSystems(spawned, out ParticleSystem[] particles);
+        if (!restartedByPool)
+            particles = spawned.GetComponentsInChildren<ParticleSystem>(true);
+
         for (int i = 0; i < particles.Length; i++)
         {
             ParticleSystem particle = particles[i];
             if (particle == null)
                 continue;
 
-            particle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            if (!restartedByPool)
+                particle.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
+
             ParticleSystem.MainModule main = particle.main;
-            main.loop = false;
-            particle.Play(true);
+            if (main.loop)
+                main.loop = false;
+
+            if (!restartedByPool)
+                particle.Play(false);
         }
     }
 
@@ -645,12 +654,24 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (input == AttackInput.Heavy)
             return true;
 
-        string name = attackData != null ? attackData.name : string.Empty;
-        return !string.IsNullOrWhiteSpace(name)
+        if (attackData == null)
+            return false;
+
+        // 에셋 이름 문자열 할당을 피하기 위해 AttackData 별 판정 결과 캐시
+        int id = attackData.GetInstanceID();
+        if (s_heavyAttackNameCache.TryGetValue(id, out bool cached))
+            return cached;
+
+        string name = attackData.name;
+        bool isHeavy = !string.IsNullOrWhiteSpace(name)
             && (name.IndexOf("AD_H", StringComparison.OrdinalIgnoreCase) >= 0
                 || name.IndexOf("_H", StringComparison.OrdinalIgnoreCase) >= 0
                 || name.IndexOf("Heavy", StringComparison.OrdinalIgnoreCase) >= 0);
+        s_heavyAttackNameCache[id] = isHeavy;
+        return isHeavy;
     }
+
+    static readonly Dictionary<int, bool> s_heavyAttackNameCache = new Dictionary<int, bool>(32);
 
     GameObject ResolveSlashVfxPrefab(AttackSlashProfile slashProfile)
     {
@@ -691,13 +712,13 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     void AutoWire()
     {
         if (playerReferences == null)
-            playerReferences = GetComponent<PlayerReferences>() ?? GetComponentInParent<PlayerReferences>(true);
+            playerReferences = GetComponent<PlayerReferences>().OrNull() ?? GetComponentInParent<PlayerReferences>(true);
 
         if (combatController == null)
-            combatController = GetComponent<PlayerCombatController>() ?? GetComponentInParent<PlayerCombatController>(true);
+            combatController = GetComponent<PlayerCombatController>().OrNull() ?? GetComponentInParent<PlayerCombatController>(true);
 
         if (lockOnTargetProvider == null)
-            lockOnTargetProvider = GetComponent<PlayerLockOn>() ?? GetComponentInParent<PlayerLockOn>(true);
+            lockOnTargetProvider = GetComponent<PlayerLockOn>().OrNull() ?? GetComponentInParent<PlayerLockOn>(true);
 
         if (slashSpawnPoint == null)
             slashSpawnPoint = ResolveSlashSpawnAnchor();
@@ -818,6 +839,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return false;
 
         if (swordMotionTrail == null || swordMotionTrailPoints == null || !swordMotionTrailPoints.HasValidPoints)
+            TryResolveSwordMotionTrailAtRuntime();
+
+        if (swordMotionTrail == null || swordMotionTrailPoints == null || !swordMotionTrailPoints.HasValidPoints)
         {
             WarnMissingSwordMotionTrailSetup();
             return false;
@@ -842,6 +866,111 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         swordMotionTrail.gameObject.layer = gameObject.layer;
         swordMotionTrail.StartTrail();
         return true;
+    }
+
+    bool _triedRuntimeSwordTrailResolve;
+
+    // 플레이어 비주얼(검 모델)이 런타임에 생성되는 씬에서는 프리팹에 SwordTrailPoints 참조가 비어 있다.
+    // 에디터 설치 도구(SwordTrailStaticInstaller)와 같은 규칙으로 런타임에 한 번 찾아/만들어 연결한다.
+    void TryResolveSwordMotionTrailAtRuntime()
+    {
+        if (_triedRuntimeSwordTrailResolve)
+            return;
+        _triedRuntimeSwordTrailResolve = true;
+
+        Transform owner = playerReferences != null ? playerReferences.transform : transform;
+        if (swordMotionTrail == null)
+            swordMotionTrail = owner.GetComponentInChildren<SwordTrailMeshRenderer>(true);
+
+        if (swordMotionTrailPoints != null && swordMotionTrailPoints.HasValidPoints)
+            return;
+
+        Transform visualRoot = playerReferences != null && playerReferences.VisualRoot != null ? playerReferences.VisualRoot : owner;
+        SwordTrailPoints existing = visualRoot.GetComponentInChildren<SwordTrailPoints>(true);
+        if (existing != null && existing.HasValidPoints)
+        {
+            swordMotionTrailPoints = existing;
+            return;
+        }
+
+        Transform sword = FindChildByNameRecursive(visualRoot, "Object002") ?? FindChildByNameRecursive(visualRoot, "Object009");
+        if (sword == null || !TryGetLocalSwordMeshBounds(sword, out Bounds bounds))
+            return;
+
+        Transform basePoint = sword.Find("Player_TrailBase");
+        if (basePoint == null)
+        {
+            basePoint = new GameObject("Player_TrailBase").transform;
+            basePoint.SetParent(sword, false);
+        }
+
+        Transform tipPoint = sword.Find("Player_TrailTip");
+        if (tipPoint == null)
+        {
+            tipPoint = new GameObject("Player_TrailTip").transform;
+            tipPoint.SetParent(sword, false);
+        }
+
+        basePoint.localPosition = ResolveSwordBladePoint(bounds, false);
+        tipPoint.localPosition = ResolveSwordBladePoint(bounds, true);
+
+        SwordTrailPoints points = existing != null ? existing : sword.gameObject.AddComponent<SwordTrailPoints>();
+        points.SetPoints(basePoint, tipPoint);
+        swordMotionTrailPoints = points;
+    }
+
+    static Transform FindChildByNameRecursive(Transform root, string childName)
+    {
+        if (root == null)
+            return null;
+        if (string.Equals(root.name, childName, System.StringComparison.OrdinalIgnoreCase))
+            return root;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform found = FindChildByNameRecursive(root.GetChild(i), childName);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
+
+    static bool TryGetLocalSwordMeshBounds(Transform target, out Bounds bounds)
+    {
+        MeshFilter meshFilter = target.GetComponent<MeshFilter>();
+        if (meshFilter != null && meshFilter.sharedMesh != null)
+        {
+            bounds = meshFilter.sharedMesh.bounds;
+            return true;
+        }
+
+        SkinnedMeshRenderer skinned = target.GetComponent<SkinnedMeshRenderer>();
+        if (skinned != null && skinned.sharedMesh != null)
+        {
+            bounds = skinned.sharedMesh.bounds;
+            return true;
+        }
+
+        bounds = default;
+        return false;
+    }
+
+    static Vector3 ResolveSwordBladePoint(Bounds bounds, bool tip)
+    {
+        Vector3 size = bounds.size;
+        int axis = 0;
+        if (size.y > size.x && size.y >= size.z)
+            axis = 1;
+        else if (size.z > size.x && size.z >= size.y)
+            axis = 2;
+
+        Vector3 point = bounds.center;
+        if (axis == 1)
+            point.y = tip ? bounds.max.y : bounds.min.y;
+        else if (axis == 2)
+            point.z = tip ? bounds.max.z : bounds.min.z;
+        else
+            point.x = tip ? bounds.max.x : bounds.min.x;
+        return point;
     }
 
     void WarnMissingSwordMotionTrailSetup()
@@ -2039,7 +2168,10 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             yield break;
 
         int leaseId = instance.LeaseId;
-        yield return new WaitForSeconds(Mathf.Max(0.05f, lifetime));
+        // WaitForSeconds 할당 대신 타이머 사용 (동일한 스케일 시간 기준)
+        float returnAt = Time.time + Mathf.Max(0.05f, lifetime);
+        while (Time.time < returnAt)
+            yield return null;
 
         if (instance.GameObject == null || instance.LeaseId != leaseId)
             yield break;
@@ -2070,9 +2202,9 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
                 if (particle == null)
                     continue;
 
-                particle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-                particle.Clear(true);
-                particle.Play(true);
+                // 배열에 모든 자식 시스템이 포함되어 있으므로 withChildren=false (중복 순회 방지)
+                particle.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
+                particle.Play(false);
             }
         }
 
@@ -2101,7 +2233,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             {
                 ParticleSystem particle = instance.Particles[i];
                 if (particle != null)
-                    particle.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                    particle.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
             }
         }
 

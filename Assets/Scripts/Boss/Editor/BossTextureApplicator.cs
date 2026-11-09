@@ -26,6 +26,9 @@ namespace ChuOn.Editor
         [InitializeOnLoadMethod]
         private static void AutoApplyOnceOnEditorLoad()
         {
+            if (!EditorAutoFixupGate.Enabled)
+                return;
+
             EditorApplication.delayCall += delegate
             {
                 if (EditorApplication.isPlayingOrWillChangePlaymode)
