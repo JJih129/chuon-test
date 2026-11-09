@@ -63,8 +63,17 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     public Color hitFlashColor = Color.red;
     public float hitFlashDuration = 0.2f;
 
+    public event Action<DroneController, int> Damaged;
+
     public DroneCombatRole CombatRole => combatRole;
     public bool IsDead => _isDead;
+    public int CurrentHP => _currentHP;
+    public int MaxHP => maxHP;
+    public bool UsesAttackTokens
+    {
+        get => useAttackTokens;
+        set => useAttackTokens = value;
+    }
     public float AttackTelegraphLeadTime => _attackTelegraphLeadTime;
 
     [Header("Death Cleanup")]
@@ -80,6 +89,13 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     [SerializeField, Min(0f)] float hitFireDelay = 0.18f;
     [SerializeField] bool interruptTelegraphOnHit = true;
     [SerializeField] bool cancelPostShotStrafeOnHit = true;
+
+    [Header("Shared AI (optional, default off = original behaviour)")]
+    [Tooltip("EnemyAttackTokenDirector 원거리 토큰 사용: 대상당 동시에 1기만 텔레그래프→사격. 끄면 기존 동작 그대로.")]
+    [SerializeField] bool useAttackTokens = false;
+    [SerializeField, Min(0.05f)] float tokenRetryDelay = 0.3f;
+    [Tooltip("같은 오브젝트의 EnemyHealth 를 드론 HP 와 동기화 (HP 바 / 락온 사망 판정).")]
+    [SerializeField] bool mirrorEnemyHealth = false;
 
     [Header("Debug")]
     [SerializeField] bool debugLogs = false;
@@ -135,10 +151,13 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     Collider _movementCollider;
     readonly RaycastHit[] _movementCastHits = new RaycastHit[8];
     Vector3 _initialLocalScale;
+    EnemyHealth _mirrorHealth;
+    Transform _tokenTarget;
 
     void Awake()
     {
         _rigidbody = GetComponent<Rigidbody>();
+        _mirrorHealth = mirrorEnemyHealth ? GetComponent<EnemyHealth>() : null;
         _currentHP = maxHP;
         CacheBaseCombatTuning();
         CacheColliders();
@@ -188,6 +207,32 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         ApplyRendererPerformanceOverrides();
         ApplySimulationMode();
         ApplyRendererColor(_originalColor);
+        if (_mirrorHealth != null)
+        {
+            _mirrorHealth.maxHP = maxHP;
+            _mirrorHealth.currentHP = maxHP;
+        }
+    }
+
+    void OnDisable()
+    {
+        ReleaseFireToken();
+    }
+
+    bool TryAcquireFireToken()
+    {
+        if (!useAttackTokens || target == null)
+            return true;
+        _tokenTarget = target;
+        return EnemyAttackTokenDirector.TryAcquire(target, this, EnemyTokenKind.Ranged, _attackTelegraphLeadTime + 0.6f);
+    }
+
+    void ReleaseFireToken()
+    {
+        if (_tokenTarget == null)
+            return;
+        EnemyAttackTokenDirector.Release(_tokenTarget, this, EnemyTokenKind.Ranged);
+        _tokenTarget = null;
     }
 
     public void SetCombatRole(DroneCombatRole role, bool reapplyImmediately = true)
@@ -414,6 +459,13 @@ public class DroneController : MonoBehaviour, IDamageReceiver
                 float telegraphStartTime = _nextFireTime - _attackTelegraphLeadTime;
                 if (Time.time >= telegraphStartTime && facingAngle <= telegraphFacingAngleThreshold)
                 {
+                    // 공유 AI: 원거리 토큰이 없으면 텔레그래프를 미룬다 (대상당 동시 1기). 기본 off.
+                    if (useAttackTokens && !TryAcquireFireToken())
+                    {
+                        _nextFireTime = Time.time + _attackTelegraphLeadTime + tokenRetryDelay;
+                        return;
+                    }
+
                     _attackTelegraphIssuedForCurrentShot = true;
                     AttackTelegraphed?.Invoke(this);
 
@@ -428,7 +480,15 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             if (facingAngle > fireFacingAngleThreshold)
                 return;
 
+            if (useAttackTokens && _attackTelegraphLeadTime <= 0f && !TryAcquireFireToken())
+            {
+                _nextFireTime = Time.time + tokenRetryDelay;
+                return;
+            }
+
             Fire();
+            if (useAttackTokens)
+                ReleaseFireToken();
             _nextFireTime = Time.time + fireCooldown;
             _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
             _postShotStrafeUntil = Time.time + Mathf.Max(0f, postShotStrafeDuration);
@@ -705,9 +765,14 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         if (_isDead || _currentHP <= 0 || amount <= 0)
             return;
 
+        int hpBefore = _currentHP;
         _currentHP -= amount;
         if (debugLogs)
             Debug.Log($"[Drone] Hit {amount} => {_currentHP}/{maxHP}", this);
+
+        if (_mirrorHealth != null)
+            _mirrorHealth.TakeDamage(Mathf.Min(amount, Mathf.Max(0, hpBefore)), hitType, hitPoint);
+        Damaged?.Invoke(this, amount);
 
         if (hitVFX != null)
         {
@@ -744,6 +809,8 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         float delayedFireTime = Time.time + Mathf.Max(0f, hitFireDelay);
         if (interruptTelegraphOnHit)
         {
+            if (useAttackTokens && _attackTelegraphIssuedForCurrentShot)
+                ReleaseFireToken();
             _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
             delayedFireTime = Mathf.Max(delayedFireTime, Time.time + _attackTelegraphLeadTime);
         }
@@ -801,6 +868,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         if (deathVFX != null)
             TransientVfxPool.Spawn(deathVFX, transform.position, Quaternion.identity, null, 2f);
 
+        ReleaseFireToken();
         Died?.Invoke(this);
         BeginDeathState();
 
