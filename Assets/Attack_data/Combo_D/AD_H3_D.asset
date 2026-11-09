@@ -18,9 +18,9 @@ MonoBehaviour:
   hitTime: 0.35
   cancelStart: 0.44
   cancelEnd: 0.92
-  baseDamage: 10
-  attackDamageMultiplier: 1.3
-  hitType: 1
+  baseDamage: 17
+  attackDamageMultiplier: 1
+  hitType: 4
   hitWindows: []
   hitWindowLeadNormalized: -1
   hitWindowTailNormalized: -1

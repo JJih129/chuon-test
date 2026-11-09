@@ -1,0 +1,104 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5e2931f049507248811ae28c43b9784, type: 3}
+  m_Name: SoulsCameraProfile_Default
+  m_EditorClassIdentifier: 
+  pivotHeight: 1.55
+  distance: 3.8
+  minDistance: 2.6
+  maxDistance: 5
+  allowWheelZoom: 0
+  freeShoulderOffset: 0.25
+  fieldOfView: 50
+  minPitch: -35
+  maxPitch: 55
+  defaultPitch: 10
+  freeFramingTilt: 7
+  mouseDegreesPerPixel: 0.06
+  padYawSpeed: 300
+  padPitchSpeed: 170
+  padResponseExponent: 2
+  padAccelRampTime: 0.25
+  padAccelStartMultiplier: 0.55
+  padDeadZone: 0.15
+  followDampingHorizontal: 0.08
+  followDampingVertical: 0.22
+  autoRecenterDelay: 2
+  autoRecenterSpeed: 70
+  recenterDuration: 0.25
+  lockSearchRange: 20
+  lockSearchCone: 70
+  bossPriorityBonus: 0.25
+  lineOfSightMask:
+    serializedVersion: 2
+    m_Bits: 8193
+  tapUnlocks: 1
+  switchCooldown: 0.25
+  mouseSwitchWindow: 0.15
+  mouseSwitchThreshold: 90
+  stickFlickThreshold: 0.8
+  stickResetThreshold: 0.35
+  lockBreakDistance: 25
+  lockLineOfSightGrace: 1.5
+  lockYawDamping: 0.18
+  lockMaxYawSpeed: 240
+  lockLookTargetBias: 0.65
+  lockPitch: 10
+  lockPitchDamping: 0.25
+  lockDistance: 3.8
+  bigTargetHeight: 2.5
+  bigTargetExtraDistance: 0.8
+  bigTargetExtraPivot: 0.3
+  bigTargetCloseDistance: 3
+  bigTargetClosePitchUp: 8
+  closeDeadZone: 1.5
+  closeDeadZoneFollow: 0.5
+  lockShoulderClose: 0.6
+  lockShoulderFar: 0.45
+  lockShoulderCloseDistance: 2
+  lockShoulderFarDistance: 8
+  chestHeightRatio: 0.72
+  playerChestHeight: 1.3
+  lockTransitionTime: 0.3
+  collisionRadius: 0.25
+  collisionPullInTime: 0.04
+  collisionReleaseTime: 0.35
+  collisionMask:
+    serializedVersion: 2
+    m_Bits: 8193
+  thinPropMaxSize: 1.2
+  minCollisionDistance: 0.35
+  playerFadeStartDistance: 0.8
+  playerFadeEndDistance: 0.4
+  playerFadeMinAlpha: 0.2
+  shakeRotationScale: 1.2
+  shakeVerticalScale: 0.5
+  shakeFrequency: 24
+  maxStackedShake: 0.12
+  parryFovPunch: -3
+  parryFovPunchDuration: 0.12
+  perfectDodgeFov: 4
+  perfectDodgeFovRelease: 0.2
+  cinematicBlendTime: 0.35
+  markerColor: {r: 1, g: 1, b: 1, a: 0.95}
+  markerAccentColor: {r: 1, g: 0.16, b: 0.18, a: 1}
+  markerSize: 24
+  markerSnapTime: 0.1
+  enableOffscreenThreats: 1
+  threatParryableColor: {r: 1, g: 0.78, b: 0.22, a: 1}
+  threatDodgeColor: {r: 1, g: 0.1, b: 0.08, a: 1}
+  threatUnblockableColor: {r: 1, g: 0.12, b: 0.85, a: 1}
+  threatHeavyColor: {r: 1, g: 0.6, b: 0.04, a: 1}
+  threatEdgeMargin: 70
+  threatMinDisplay: 0.6
+  threatMaxDisplay: 1.4
+  threatMaxDistance: 30

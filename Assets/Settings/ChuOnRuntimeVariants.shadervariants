@@ -1,0 +1,370 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!200 &20000000
+ShaderVariantCollection:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: ChuOnRuntimeVariants
+  m_Shaders:
+  - first: {fileID: 10770, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+      - keywords: UNITY_UI_ALPHACLIP
+        passType: 0
+  - first: {fileID: 66, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 108, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 211, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: FOG_EXP PROCEDURAL_INSTANCING_ON _ALPHABLEND_ON
+        passType: 0
+      - keywords: FOG_EXP _ALPHABLEND_ON
+        passType: 0
+      - keywords: FOG_EXP _ALPHABLEND_ON _FADING_ON
+        passType: 0
+      - keywords: PROCEDURAL_INSTANCING_ON _ALPHABLEND_ON
+        passType: 8
+  - first: {fileID: 9000, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 9001, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 9002, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 9003, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 9004, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 9007, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 9101, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 9103, guid: 0000000000000000f000000000000000, type: 0}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 4800000, guid: d6dae50ee9e1bfa4db75f19f99355220, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+      - keywords: _OUTPUT_DEPTH
+        passType: 0
+  - first: {fileID: 4800000, guid: ec9fec698a3456d4fb18cf8bacb7a2bc, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+      - keywords: _TONEMAP_NEUTRAL
+        passType: 0
+  - first: {fileID: 4800000, guid: e7857e9d0c934dc4f83f270f8447b006, type: 3}
+    second:
+      variants:
+      - keywords: _BLOOM_LQ _CHROMATIC_ABERRATION _HDR_GRADING
+        passType: 0
+      - keywords: _CHROMATIC_ABERRATION _HDR_GRADING
+        passType: 0
+  - first: {fileID: 4800000, guid: e6e9a19c3678ded42a3bc431ebef7dbd, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 4800000, guid: 93446b5c5339d4f00b85c159e1159b7c, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 4800000, guid: 5f1864addb451f54bae8c86d230f736e, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 8
+      - keywords: 
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHAPREMULTIPLY_ON _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE
+          _METALLICSPECGLOSSMAP _NORMALMAP _SHADOWS_SOFT _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHAPREMULTIPLY_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _SHADOWS_SOFT _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE
+          _METALLICSPECGLOSSMAP _NORMALMAP _OCCLUSIONMAP _SHADOWS_SOFT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE
+          _METALLICSPECGLOSSMAP _NORMALMAP _OCCLUSIONMAP _SHADOWS_SOFT _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE
+          _METALLICSPECGLOSSMAP _NORMALMAP _SHADOWS_SOFT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE
+          _METALLICSPECGLOSSMAP _NORMALMAP _SHADOWS_SOFT _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE
+          _METALLICSPECGLOSSMAP _SHADOWS_SOFT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE
+          _METALLICSPECGLOSSMAP _SHADOWS_SOFT _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _MAIN_LIGHT_SHADOWS_CASCADE _SHADOWS_SOFT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _MAIN_LIGHT_SHADOWS_CASCADE _SHADOWS_SOFT
+          _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _ALPHAPREMULTIPLY_ON _EMISSION _METALLICSPECGLOSSMAP _NORMALMAP
+          _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _ALPHAPREMULTIPLY_ON _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _ALPHATEST_ON _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _EMISSION _METALLICSPECGLOSSMAP _NORMALMAP _OCCLUSIONMAP _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _EMISSION _METALLICSPECGLOSSMAP _NORMALMAP _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _EMISSION _METALLICSPECGLOSSMAP _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _EMISSION _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _METALLICSPECGLOSSMAP _NORMALMAP _OCCLUSIONMAP _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _METALLICSPECGLOSSMAP _NORMALMAP _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+  - first: {fileID: 4800000, guid: 0406db5a14f94604a8c57ccfbc9f3b46, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP _SURFACE_TYPE_TRANSPARENT
+        passType: 0
+  - first: {fileID: 4800000, guid: 55a54603fab88d940a3374f8ae9f78e8, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 8
+      - keywords: INSTANCING_ON
+        passType: 8
+      - keywords: _ALPHATEST_ON
+        passType: 8
+      - keywords: 
+        passType: 13
+      - keywords: FOG_EXP INSTANCING_ON _ADDITIONAL_LIGHTS _DEPTH_RIMLIGHTING_ON
+          _MAIN_LIGHT_SHADOWS_CASCADE _RIMLIGHTING_ON _SHADOWS_SOFT _STYLE_CELSHADING
+          _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP INSTANCING_ON _ADDITIONAL_LIGHTS _DEPTH_RIMLIGHTING_ON
+          _MAIN_LIGHT_SHADOWS_CASCADE _SHADOWS_SOFT _STYLE_CELSHADING _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP INSTANCING_ON _ADDITIONAL_LIGHTS _MAIN_LIGHT_SHADOWS_CASCADE
+          _NORMALMAP _RIMLIGHTING_ON _SHADOWS_SOFT _SPECULAR_LIGHTING_ON _STYLE_STYLIZEPBR
+          _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP INSTANCING_ON _ADDITIONAL_LIGHTS _MAIN_LIGHT_SHADOWS_CASCADE
+          _RECEIVE_OFFSETED_SHADOW_ON _RECEIVE_SHADOWS_OFF _SHADOWS_SOFT _SPECULAR_LIGHTING_ON
+          _SSSMAP _STYLE_FACE _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP INSTANCING_ON _ADDITIONAL_LIGHTS _MAIN_LIGHT_SHADOWS_CASCADE
+          _RECEIVE_OFFSETED_SHADOW_ON _RIMLIGHTING_ON _SHADOWS_SOFT _SPECULAR_LIGHTING_ON
+          _SSSMAP _STYLE_CELSHADING _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _DEPTH_RIMLIGHTING_ON
+          _EMISSION _MAIN_LIGHT_SHADOWS_CASCADE _NORMALMAP _SHADOWS_SOFT _STYLE_CELSHADING
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _DEPTH_RIMLIGHTING_ON
+          _MAIN_LIGHT_SHADOWS_CASCADE _SHADOWS_SOFT _STYLE_CELSHADING
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _NORMALMAP _RIMLIGHTING_ON _SHADOWS_SOFT _SPECULAR_LIGHTING_ON _STYLE_STYLIZEPBR
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _NORMALMAP _RIMLIGHTING_ON _SHADOWS_SOFT _STYLE_STYLIZEPBR
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _RECEIVE_OFFSETED_SHADOW_ON _RECEIVE_SHADOWS_OFF _SHADOWS_SOFT _SPECULAR_LIGHTING_ON
+          _SSSMAP _STYLE_FACE
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _RECEIVE_OFFSETED_SHADOW_ON _RIMLIGHTING_ON _SHADOWS_SOFT _SPECULAR_LIGHTING_ON
+          _SSSMAP _STYLE_CELSHADING
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _RECEIVE_OFFSETED_SHADOW_ON _RIMLIGHTING_ON _SHADOWS_SOFT _SPECULAR_LIGHTING_ON
+          _SSSMAP _STYLE_FACE
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _SHADOWS_SOFT _STYLE_CELSHADING
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _DEPTH_RIMLIGHTING_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _RIMLIGHTING_ON _SHADOWS_SOFT _STYLE_CELSHADING
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _MAIN_LIGHT_SHADOWS_CASCADE _NORMALMAP
+          _SHADOWS_SOFT _STYLE_STYLIZEPBR
+        passType: 13
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _MAIN_LIGHT_SHADOWS_CASCADE _SHADOWS_SOFT
+          _SPECULAR_LIGHTING_ON _STYLE_CELSHADING
+        passType: 13
+      - keywords: _ALPHATEST_ON
+        passType: 13
+  - first: {fileID: 4800000, guid: d335bd7e40eb4e38b3f713f921d731cf, type: 3}
+    second:
+      variants:
+      - keywords: _ALPHATEST_ON
+        passType: 8
+      - keywords: FOG_EXP _ADDITIONAL_LIGHTS _ALPHATEST_ON _MAIN_LIGHT_SHADOWS_CASCADE
+          _SHADOWS_SOFT _STYLE_FLATLIGHTING
+        passType: 13
+      - keywords: _ALPHATEST_ON
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: c3b6dd7519323cc4bb41c71f8be5bfa0, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP _ALPHA_USEALPHAFADE _BLENDBETWEENMASK_MULTIPLY _SURFACE_TYPE_TRANSPARENT
+        passType: 0
+      - keywords: FOG_EXP _ALPHA_USEDISSOLVE _BLENDBETWEENMASK_MULTIPLY _SURFACE_TYPE_TRANSPARENT
+        passType: 0
+      - keywords: _ALPHA_USEALPHAFADE _BLENDBETWEENMASK_MULTIPLY
+        passType: 8
+      - keywords: _ALPHA_USEALPHAFADE _BLENDBETWEENMASK_MULTIPLY _BUILTIN_ALPHATEST_ON
+          _BUILTIN_AlphaClip _BUILTIN_SURFACE_TYPE_TRANSPARENT
+        passType: 8
+      - keywords: _ALPHA_USEDISSOLVE _BLENDBETWEENMASK_MULTIPLY
+        passType: 8
+      - keywords: _ALPHA_USEDISSOLVE _BLENDBETWEENMASK_MULTIPLY _BUILTIN_ALPHATEST_ON
+          _BUILTIN_AlphaClip _BUILTIN_SURFACE_TYPE_TRANSPARENT
+        passType: 8
+      - keywords: _ALPHA_USEALPHAFADE _BLENDBETWEENMASK_MULTIPLY _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+      - keywords: _ALPHA_USEDISSOLVE _BLENDBETWEENMASK_MULTIPLY _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: 4115401363447dc4a80ad55d19905407, type: 3}
+    second:
+      variants:
+      - keywords: _ALPHATEST_ON _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: 1a29b4d27eb8b04479ef89c00dea533d, type: 3}
+    second:
+      variants:
+      - keywords: _ALPHABLEND_ON _CFXR_DISSOLVE
+        passType: 8
+      - keywords: _ALPHABLEND_ON _CFXR_DITHERED_SHADOWS_ON
+        passType: 8
+      - keywords: FOG_EXP _ALPHABLEND_ON _CFXR_DISSOLVE
+        passType: 13
+      - keywords: FOG_EXP _ALPHABLEND_ON _CFXR_DISSOLVE _FADING_ON
+        passType: 13
+      - keywords: FOG_EXP _ALPHABLEND_ON _FADING_ON
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: 611663b87192dbd45be65b042f60fe5e, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP INSTANCING_ON _SURFACE_TYPE_TRANSPARENT
+        passType: 0
+      - keywords: INSTANCING_ON
+        passType: 8
+      - keywords: _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: 680bc0248b1aeac48b87ca26169be1ec, type: 3}
+    second:
+      variants:
+      - keywords: _ALPHATEST_ON _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: 0ea03c6f06acdb44c896931cd11ade84, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP _SURFACE_TYPE_TRANSPARENT
+        passType: 0
+      - keywords: 
+        passType: 8
+      - keywords: _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: eccfcaef82ebd42de87abcf38e3c9d5e, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP
+        passType: 0
+      - keywords: 
+        passType: 8
+  - first: {fileID: -6465566751694194690, guid: 1581eccce46ba384596a1dce7936ab19, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 8
+      - keywords: FOG_EXP _FADING_ON
+        passType: 13
+  - first: {fileID: -6465566751694194690, guid: ffa05d119916ad44782487ca457e0015, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP _ALPHA_USEALPHAFADE _BLENDBETWEENMASK_MULTIPLY
+        passType: 0
+      - keywords: FOG_EXP _ALPHA_USEDISSOLVE _BLENDBETWEENMASK_MULTIPLY
+        passType: 0
+      - keywords: _ALPHA_USEALPHAFADE _BLENDBETWEENMASK_MULTIPLY
+        passType: 8
+      - keywords: _ALPHA_USEDISSOLVE _BLENDBETWEENMASK_MULTIPLY
+        passType: 8
+  - first: {fileID: -6465566751694194690, guid: c9f29e0077330d6409b9d521eb01a89c, type: 3}
+    second:
+      variants:
+      - keywords: _ALPHATEST_ON _SURFACE_TYPE_TRANSPARENT
+        passType: 13
+  - first: {fileID: 4800000, guid: 650dd9526735d5b46b79224bc6e94025, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP
+        passType: 0
+      - keywords: FOG_EXP _SURFACE_TYPE_TRANSPARENT
+        passType: 0
+      - keywords: 
+        passType: 13
+  - first: {fileID: 4800000, guid: 68e6db2ebdc24f95958faec2be5558d6, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 4800000, guid: 36e335017ad71d54fbb10842863188ae, type: 3}
+    second:
+      variants:
+      - keywords: 
+        passType: 0
+  - first: {fileID: 4800000, guid: 1ed966a715b48b347adebc85e7057b11, type: 3}
+    second:
+      variants:
+      - keywords: FOG_EXP
+        passType: 0

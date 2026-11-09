@@ -15,15 +15,15 @@ MonoBehaviour:
   stateName: H4_B
   animatorLayer: 1
   playSpeed: 1
-  hitTime: 0.35
+  hitTime: 0.15
   cancelStart: 0.44
   cancelEnd: 0.92
-  baseDamage: 10
-  attackDamageMultiplier: 1.38
-  hitType: 1
+  baseDamage: 14
+  attackDamageMultiplier: 1
+  hitType: 3
   hitWindows: []
-  hitWindowLeadNormalized: -1
-  hitWindowTailNormalized: -1
+  hitWindowLeadNormalized: 0.09
+  hitWindowTailNormalized: 0.14
   hitDetectionMode: 0
   hitboxExpandedPadding: -1
   hitboxMeshPaddingScale: -1

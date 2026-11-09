@@ -669,6 +669,7 @@ MonoBehaviour:
   visualRoot: {fileID: 5390803772263566519}
   mainAnimator: {fileID: 4464748757035259180}
   attackHitboxes: []
+  normalizeVisualRootLocalPose: 1
 --- !u!1 &2772914167193846672
 GameObject:
   m_ObjectHideFlags: 0
@@ -1216,6 +1217,7 @@ MonoBehaviour:
   currentHP: 100
   invincibleDuration: 1
   grantInvincibilityOnStandardDamage: 0
+  standardHitGraceSeconds: 0.3
   hitEffectPrefab: {fileID: 6263782476919498309, guid: 607e21a67da6e1844bf2059eb0888f52, type: 3}
   cameraShake: {fileID: 0}
   useCombatFeelPolicy: 1
@@ -1270,6 +1272,7 @@ MonoBehaviour:
   lockOnStrafeMul: 0.72
   gravity: 20
   groundSnap: 0.03
+  maxFallSpeed: 35
   p_Speed: speed
 --- !u!114 &3629856975197315660
 MonoBehaviour:
@@ -1306,7 +1309,7 @@ MonoBehaviour:
   holdToUnlockDuration: 0.35
   cameraMgr: {fileID: 0}
   showTargetIndicator: 1
-  targetIndicatorColor: {r: 1, g: 0.04, b: 0.02, a: 0.95}
+  targetIndicatorColor: {r: 0.86, g: 0.97, b: 1, a: 0.92}
   targetIndicatorSize: 24
   targetIndicatorOffset: {x: 0, y: 0.55, z: 0}
   autoUnlockWhenTargetDisabled: 1
@@ -1346,15 +1349,25 @@ MonoBehaviour:
   denyDodgeWhileAttacking: 1
   denyDodgeWhileGuarding: 1
   denyDodgeWhileInHit: 1
+  allowRecoveryDodgeFromHit: 1
+  recoveryDodgeAfterHitSeconds: 0.3
   useDistanceBased: 0
   dodgeSpeed: 8.4
   dodgeDistance: 12
   dodgeDuration: 0.4
-  dodgeCooldown: 1.5
+  dodgeCooldown: 0
+  dodgeInvulnerabilityDuration: 0.24
+  maxChainedDodges: 0
+  dodgeChainResetSeconds: 0.45
+  reduceIFramesOnRapidChain: 0
+  rapidChainThreshold: 3
+  rapidChainWindow: 1.4
+  rapidChainInvulnerabilityDuration: 0.12
+  chainExhaustedCooldown: 0.55
   sideStepOnPerfectDodge: 1
   perfectDodgeRewindNormalizedTime: 0.28
   openPerfectDodgeWindowOnDodgeStart: 1
-  perfectDodgeStartWindow: 0.22
+  perfectDodgeStartWindow: 0.16
   feelProfile: 0
   speedCurve:
     serializedVersion: 2
@@ -1408,6 +1421,7 @@ MonoBehaviour:
   disableRootMotionOnDodge: 0
   useDirectionalRootMotionDodge: 1
   smoothDirectionalRootMotionDodge: 1
+  remapRootMotionDodgeDuringLockOn: 1
   rootMotionDodgeSpeedSmoothTime: 0.045
   OnDodgeStart:
     m_PersistentCalls:
@@ -1436,8 +1450,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxAmpoule: 5
   currentAmpoule: 5
-  healRatio: 0.4
+  healRatio: 0.35
   allowUseAtFullHP: 1
+  useHealMotion: 1
+  healMotionDuration: 0.7
+  healApplyNormalized: 0.6
+  lockMovementDuringHeal: 1
 --- !u!114 &921766824939686666
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1471,6 +1489,9 @@ MonoBehaviour:
   comboLateGraceNormalized: 0.08
   attackTransitionGraceSeconds: 0.08
   dodgeCancelEarlyBufferNormalized: 0.04
+  dodgeCancelAfterHitNormalized: 0
+  guardCancelAfterHitWindowNormalized: 0
+  enableBreakFinisher: 1
   useDataDrivenHitWindows: 1
   useFallbackWindowFromHitTime: 1
   fallbackHitWindowLeadNormalized: 0.04
@@ -1496,6 +1517,8 @@ MonoBehaviour:
   characterController: {fileID: 0}
   playerLockOn: {fileID: 0}
   perfectDodgeController: {fileID: 0}
+  remapAttackRootMotionDuringLockOn: 1
+  forceUnlockedAttackRootMotionForward: 1
   usePerfectDodgeAttackAssist: 1
   perfectDodgeAssistStopDistance: 0.2
   perfectDodgeAssistMinRange: 0
@@ -1532,8 +1555,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gaugeMax: 100
   gaugePerH: 2
-  gaugePerParry: 12.5
-  gaugePerPerfectDodge: 10
   activateAction: {fileID: 0}
   useLegacyHotkey: 1
   legacyHotkey: 114
@@ -1559,6 +1580,7 @@ MonoBehaviour:
   runtimeStage: {fileID: 0}
   useScriptedSequence: 1
   allowDirectorFallbackWhenScriptedUnavailable: 0
+  disableLegacyUltimatePath: 1
   scriptedCameraPriority: 100
   scriptedAnimator: {fileID: 0}
   slashBurstSpawner: {fileID: 0}
@@ -1571,6 +1593,8 @@ MonoBehaviour:
   scriptedWalkTrigger: Ultimate_Walk
   scriptedMultiHitCount: 7
   scriptedCloseupDuration: 0.32
+  scriptedIntroHoldFrameNormalized: 0
+  holdScriptedIntroPoseFrame: 1
   scriptedWideDuration: 0.45
   scriptedHitInterval: 0.11
   scriptedFinisherHold: 0.35
@@ -1593,6 +1617,8 @@ MonoBehaviour:
   enableDebugFillGaugeShortcut: 1
   debugFillGaugeKey: 49
   enableUltimateCameraDebugLogs: 0
+  oncePerFight: 0
+  prewarmPresentationClones: 0
 --- !u!114 &794500035358795120
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1738,6 +1764,8 @@ MonoBehaviour:
   length: 6
   thickness: 0.08
   coneAngle: 25
+  alignSlashRollToObject002: 1
+  object002BladeRollWeight: 0.85
   propIntensity: _Intensity
   propScroll: _ScrollSpeed
   propAlpha: _Alpha
@@ -1811,6 +1839,11 @@ MonoBehaviour:
   chipDamageMul: 0.1
   suppressHitAnimWhenGuarding: 1
   invulnerableWhileDodging: 1
+  enableStringDamageScaling: 1
+  stringGapSeconds: 0.85
+  stringScaleFromHit: 3
+  stringLateHitMultiplier: 0.6
+  stringDamageCapFraction: 0.45
   debugLogs: 0
 --- !u!114 &6669824055994905385
 MonoBehaviour:
@@ -1837,6 +1870,10 @@ MonoBehaviour:
   frontArcDegrees: 120
   flattenToGround: 1
   denyGuardWhileAttacking: 1
+  allowGuardCancelAttackRecovery: 1
+  allowGuardCancelFromLightHit: 0
+  guardCancelFromLightHitSeconds: 0.25
+  guardCancelFromLightHitBuffer: 0.1
   autoResumeGuardIfHolding: 1
   splitTapParryAndHoldGuard: 1
   guardHoldDelay: 0.18
@@ -1852,6 +1889,7 @@ MonoBehaviour:
   maxParrySpamPenaltyStacks: 3
   parryEventAcceptWindow: 0.35
   useRealtimeParryWindow: 1
+  balance: {fileID: 0}
   enableGuardStrain: 1
   maxGuardStrain: 100
   guardStrainPerBlockedDamage: 1
@@ -2026,6 +2064,8 @@ MonoBehaviour:
   lockOn: {fileID: 3629856975197315660}
   playerRoot: {fileID: 9217704258761649807}
   yawSpeedDeg: 540
+  snapAngleDeg: 75
+  rotateOwnerRoot: 1
   autoUnlockWhenFar: 1
   maxDistance: 30
 --- !u!114 &2570013235222381821
@@ -2099,7 +2139,7 @@ MonoBehaviour:
   initialFreezeTimeScale: 0.04
   initialFreezeDuration: 0.03
   slowTimeScale: 0.28
-  slowDuration: 2
+  slowDuration: 0.45
   playerHealth: {fileID: 192257646706784962}
   perfectDodgeInvincibleRealtime: 0.65
   adjustFixedDelta: 1
@@ -2129,7 +2169,7 @@ MonoBehaviour:
     m_RotationOrder: 4
   forceAnimatorsToScaled: 1
   includeChildAnimators: 1
-  overrideAnimatorSpeed: 1
+  overrideAnimatorSpeed: 0
   animatorsToAffect: []
   moveLocker: {fileID: 2996402383616999470}
   lockMoveWhileWindow: 1
@@ -2146,6 +2186,9 @@ MonoBehaviour:
   ultimate: {fileID: 5692553494910946447}
   ultimateGainOnPerfect: 12
   autoUltimateGain: 1
+  perfectDodgeClip: {fileID: 8300000, guid: ba27498893221b84f9b6e60bc4ce5cad, type: 3}
+  perfectDodgeVolume: 0.9
+  perfectDodgeAudioSource: {fileID: 0}
   enableAttackFollowUpAssist: 1
   attackFollowUpWindowRealtime: 1.5
   OnWindowOpened:
@@ -2562,6 +2605,7 @@ MonoBehaviour:
     parentRangeVfxToHitbox: 0
     scaleRangeVfxToHitbox: 0
     fallbackLifetime: 0.38
+  heavyAttackVfxTint: {r: 1, g: 0.12, b: 0.04, a: 1}
   lightAttackVfxTint: {r: 0.92, g: 0.16, b: 0.08, a: 1}
   debugLog: 0
 --- !u!1 &3795597417212057411
@@ -5006,7 +5050,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-    - {fileID: 2100000, guid: ffcea61cae8e7cc4bb5d8771e664eba9, type: 2}
+  - {fileID: 2100000, guid: ffcea61cae8e7cc4bb5d8771e664eba9, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
