@@ -11378,6 +11378,7 @@ MonoBehaviour:
   subtitleBackgroundToggle: {fileID: 0}
   cameraShakeSlider: {fileID: 0}
   flashIntensitySlider: {fileID: 0}
+  bwAbsorbToggle: {fileID: 0}
   lookSensitivityMouseSlider: {fileID: 0}
   lookSensitivityPadSlider: {fileID: 0}
   invertYToggle: {fileID: 0}
@@ -16466,6 +16467,7 @@ MonoBehaviour:
   warmupRenderFrames: 2
   includeUltimateVfx: 1
   extraPrefabs: []
+  prewarmUltimateCode: 1
 --- !u!4 &530706159
 Transform:
   m_ObjectHideFlags: 0
@@ -74008,12 +74010,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   patternPivot: {fileID: 0}
   telegraphMaterial: {fileID: 0}
-  baseScale: 0.78
   verticalOffset: 0.02
   cameraPullForward: 0.32
-  pulseAmount: 0.18
-  pulseSpeed: 9
-  rotateSpeed: 120
   fallbackColor: {r: 1, g: 0.94, b: 0.02, a: 0.96}
   flashDuration: 0.22
   flashWorldSize: 0.9

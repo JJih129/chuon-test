@@ -128,15 +128,21 @@ Shader "Hidden/ChuOn/ScreenShatter"
                 // 균열선: 화면 공간 두께가 일정하도록 fwidth 사용
                 // (fan 삼각형의 edge 값은 외곽선에서 1 → 두께 ≈ 1 px 코어 + 3 px 희미한 번짐)
                 float w = max(fwidth(i.edge), 1e-4);
-                float crackLine = 1.0 - smoothstep(w * 0.4, w * 1.1, 1.0 - i.edge);
-                float glow = 1.0 - smoothstep(0.0, w * 3.0, 1.0 - i.edge);
+                // 외곽선까지의 화면 거리(px). 비행 중엔 MSAA 없는 파편 실루엣이 계단지므로(4K 확인)
+                // 선을 1px 안쪽으로 옮기고 가장 바깥 ~1.5px 를 알파로 페이드 (커버리지 AA).
+                float edgePx = (1.0 - i.edge) / w;
+                float inFlight = saturate(flight * 6.0);
+                float linePx = max(edgePx - inFlight, 0.0);
+                float crackLine = 1.0 - smoothstep(0.4, 1.1, linePx);
+                float glow = 1.0 - smoothstep(0.0, 3.0, linePx);
+                float edgeCoverage = lerp(1.0, smoothstep(0.0, 1.5, edgePx), inFlight);
                 // 충격점 가까운 균열이 더 밝다
                 float crack = i.crackMask * saturate(crackLine * (0.55 + 0.45 * i.crackMask) + glow * 0.18);
                 // 비행 중엔 파편 가장자리가 빛을 받아 살짝 반짝임
                 crack = max(crack, crackLine * 0.35 * saturate(flight * 4.0) * (1.0 - flight));
                 col = lerp(col, _ShatterCrackColor.rgb, saturate(crack * _ShatterCrackColor.a));
 
-                float alpha = _ShatterState.z * (1.0 - smoothstep(0.55, 1.0, flight));
+                float alpha = _ShatterState.z * (1.0 - smoothstep(0.55, 1.0, flight)) * edgeCoverage;
                 return half4(col, alpha);
             }
             ENDHLSL

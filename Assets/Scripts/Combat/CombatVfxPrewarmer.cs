@@ -150,6 +150,180 @@ public sealed class CombatVfxPrewarmer : MonoBehaviour
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         Debug.Log($"[CombatVfxPrewarmer] Prewarmed {prefabs.Count} VFX prefabs (+ sword wave).", this);
 #endif
+
+        if (prewarmUltimateCode)
+            yield return CoPrewarmUltimateCode();
+    }
+
+    // ------------------------------------------------------------------
+    // 궁극기 첫 발동 히치(반복 12 프로파일: ~99 ms = Mono JIT ~60 ms + Timeline 그래프 첫 생성 ~33 ms)를
+    // 하층 도착 암전 중에 미리 소진한다. 렌더/애니메이터 문제가 아니라 첫 호출 JIT 였다.
+    // 1) 궁극기 관련 타입(중첩 코루틴 타입 포함) 메서드를 프레임당 1타입씩 PrepareMethod 로 JIT
+    // 2) 씬의 PlayableDirector 타임라인을 바인딩 없는 임시 그래프로 1회 생성·평가 후 파괴 (Timeline/Cinemachine 코드 JIT)
+    [Tooltip("궁극기 코드 JIT + 타임라인 그래프를 하층 도착 시 미리 돌린다 (첫 발동 히치 제거)")]
+    [SerializeField] bool prewarmUltimateCode = true;
+
+    static readonly string[] UltimateTypeNames =
+    {
+        "PlayerUltimateController", "UltimatePhaseSeveringBeats", "UltimateCinematicController", "UltimateSkillController",
+        "UltimateVFXPresenter", "UltimateCameraDirector", "UltimateCameraSessionController", "UltimateScreenFX",
+        "UltimateCinematicHudFrame", "UltimateSlashBurstSpawner", "UltimateSwordCoreChargeFx", "UltimateScreenCrackOverlay",
+        "UltimateEnemyCinematicState", "UltimateTargetBinder", "UltimateSequencePlayer", "UltimateHitProcessor",
+        "SlashSequenceClip", "SlashSequenceBehaviour", "ScreenFXSignalHooks", "TimeScaleController",
+        "ActionColourDirector", "ScreenShatter", "PhaseCoreHUD", "MusicDirector"
+    };
+
+    IEnumerator CoPrewarmUltimateCode()
+    {
+        float start = Time.realtimeSinceStartup;
+        int methods = 0;
+        System.Reflection.Assembly asm = typeof(CombatVfxPrewarmer).Assembly;
+
+        // 대상 타입: 궁극기 목록 + 플레이어/보스 계층의 모든 게임 컴포넌트 타입 + 궁극기 이벤트 구독자 타입
+        // (발동 프레임에 TryActivate 아래에서 처음 호출되는 코드가 이 범위에 몰려 있다)
+        var types = new List<System.Type>(128);
+        var seen = new HashSet<System.Type>();
+        void AddType(System.Type t)
+        {
+            if (t == null || t.Assembly != asm || !seen.Add(t))
+                return;
+            types.Add(t);
+            foreach (System.Type nested in t.GetNestedTypes(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
+                AddType(nested);
+        }
+        for (int i = 0; i < UltimateTypeNames.Length; i++)
+            AddType(asm.GetType(UltimateTypeNames[i]));
+        var components = new List<MonoBehaviour>(256);
+        PlayerHealth playerHealth = FindObjectOfType<PlayerHealth>();
+        BossController bossController = FindObjectOfType<BossController>();
+        if (playerHealth != null)
+            playerHealth.transform.root.GetComponentsInChildren(true, components);
+        foreach (MonoBehaviour c in components)
+            if (c != null) AddType(c.GetType());
+        components.Clear();
+        if (bossController != null)
+            bossController.transform.root.GetComponentsInChildren(true, components);
+        foreach (MonoBehaviour c in components)
+            if (c != null) AddType(c.GetType());
+        foreach (PlayerUltimateController ult in FindObjectsOfType<PlayerUltimateController>(true))
+            AddDelegateTargets(ult, AddType);
+
+        // Timeline / Cinemachine(타임라인 트랙·믹서·브레인 블렌드) 코드도 같은 예산으로 JIT
+        // → 아래 임시 그래프 생성이 한 프레임에 몰아 JIT 하던 ~65 ms 를 분산
+        void AddExternal(System.Type t)
+        {
+            if (t != null && !t.ContainsGenericParameters && seen.Add(t))
+                types.Add(t);
+        }
+        foreach (System.Type t in typeof(UnityEngine.Timeline.TimelineAsset).Assembly.GetTypes())
+            AddExternal(t);
+        foreach (System.Type t in typeof(Unity.Cinemachine.CinemachineBrain).Assembly.GetTypes())
+        {
+            string n = t.Name;
+            if (n.Contains("Brain") || n.Contains("Blend") || n.Contains("Track") || n.Contains("Shot") || n.Contains("Mixer") || n.Contains("Playable"))
+                AddExternal(t);
+        }
+
+        // 프레임당 ~4 ms 예산으로 메서드 단위 JIT (도착 암전 중 큰 히치 방지)
+        var budget = System.Diagnostics.Stopwatch.StartNew();
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+            | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly;
+        for (int i = 0; i < types.Count; i++)
+        {
+            System.Type type = types[i];
+            if (type.ContainsGenericParameters)
+                continue;
+            foreach (System.Reflection.MethodBase method in EnumerateMethods(type, flags))
+            {
+                if (TryPrepare(method))
+                    methods++;
+                if (budget.Elapsed.TotalMilliseconds > 4.0)
+                {
+                    yield return null;
+                    budget.Restart();
+                }
+            }
+        }
+        yield return null;
+
+        int graphs = 0;
+        foreach (UnityEngine.Playables.PlayableDirector director in FindObjectsOfType<UnityEngine.Playables.PlayableDirector>(true))
+        {
+            if (director == null || director.playableAsset == null || director.state == UnityEngine.Playables.PlayState.Playing)
+                continue;
+            UnityEngine.Playables.PlayableGraph graph = UnityEngine.Playables.PlayableGraph.Create("__UltimatePrewarm");
+            try
+            {
+                graph.SetTimeUpdateMode(UnityEngine.Playables.DirectorUpdateMode.Manual);
+                director.playableAsset.CreatePlayable(graph, director.gameObject);
+                graph.Evaluate(0f);
+                graphs++;
+            }
+            catch (System.Exception e)
+            {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                Debug.LogWarning($"[CombatVfxPrewarmer] timeline prewarm skipped ({director.name}): {e.Message}", director);
+#endif
+            }
+            finally
+            {
+                if (graph.IsValid())
+                    graph.Destroy();
+            }
+            yield return null;
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log($"[CombatVfxPrewarmer] Ultimate code prewarm: {methods} methods JIT, {graphs} timeline graphs, {(Time.realtimeSinceStartup - start) * 1000f:F0} ms over frames.", this);
+#endif
+    }
+
+    static IEnumerable<System.Reflection.MethodBase> EnumerateMethods(System.Type type, System.Reflection.BindingFlags flags)
+    {
+        foreach (System.Reflection.MethodInfo method in type.GetMethods(flags))
+            yield return method;
+        foreach (System.Reflection.ConstructorInfo ctor in type.GetConstructors(flags))
+            yield return ctor;
+    }
+
+    static bool TryPrepare(System.Reflection.MethodBase method)
+    {
+        if (method.IsAbstract || method.ContainsGenericParameters)
+            return false;
+        try
+        {
+            if (method.GetMethodBody() == null)
+                return false;
+            // Mono 의 PrepareMethod 는 사실상 no-op (반복 12 측정: JIT 31 ms 그대로) → GetFunctionPointer 가 mono_compile_method 로 실제 JIT
+            method.MethodHandle.GetFunctionPointer();
+            return true;
+        }
+        catch (System.Exception)
+        {
+            // 일부 메서드(extern/특수)는 미리 컴파일할 수 없다 → 첫 호출 때 JIT
+            return false;
+        }
+    }
+
+    // 궁극기 컨트롤러의 C# 이벤트(OnUltimateStarted 등) 구독자 타입도 발동 프레임에 처음 호출된다
+    static void AddDelegateTargets(object owner, System.Action<System.Type> add)
+    {
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static
+            | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic;
+        foreach (System.Reflection.FieldInfo field in owner.GetType().GetFields(flags))
+        {
+            if (!typeof(System.Delegate).IsAssignableFrom(field.FieldType))
+                continue;
+            if (!(field.GetValue(field.IsStatic ? null : owner) is System.Delegate d))
+                continue;
+            foreach (System.Delegate entry in d.GetInvocationList())
+            {
+                if (entry.Target != null)
+                    add(entry.Target.GetType());
+                if (entry.Method != null)
+                    add(entry.Method.DeclaringType);
+            }
+        }
     }
 
     static void MuteAudio(GameObject spawned)

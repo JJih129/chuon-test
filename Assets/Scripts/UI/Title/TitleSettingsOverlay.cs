@@ -421,6 +421,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         CreateSectionHeader(content, "카메라 편의", "강한 연출과 화면 흔들림을 제어합니다.");
         CreateSliderRow(content, "카메라 흔들림 강도", _optionsManager.cameraShakeSlider, rowIndex++, SliderDisplayMode.Percent);
         CreateSliderRow(content, "화면 번쩍임 강도", _optionsManager.flashIntensitySlider, rowIndex++, SliderDisplayMode.Percent);
+        CreateToggleRow(content, "흑백 흡수 연출", _optionsManager.bwAbsorbToggle, rowIndex++);
         CreateStaticBindingRow(content, "권장 프리셋", "흔들림 40% 이하", "보스전 가독성 중심 권장값", rowIndex++);
     }
 

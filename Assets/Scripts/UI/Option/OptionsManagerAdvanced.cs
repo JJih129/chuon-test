@@ -51,6 +51,8 @@ public class OptionsManagerAdvanced : MonoBehaviour
     public Slider cameraShakeSlider;
     [Tooltip("화면 번쩍임(궁극기 플래시/경보 점멸) 강도. 비어 있으면 카메라 흔들림 행을 복제해 만든다.")]
     public Slider flashIntensitySlider;
+    [Tooltip("궁극기/패링 흑백 흡수(채도 제거) 사용. 비어 있으면 자막 배경 행을 복제해 만든다.")]
+    public Toggle bwAbsorbToggle;
 
     [Header("▶ 카메라 (비어 있으면 런타임 생성, CameraOptionsRuntime 에 저장/즉시 적용)")]
     public Slider lookSensitivityMouseSlider;
@@ -204,6 +206,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
         if (subtitleSizeSlider != null) { subtitleSizeSlider.onValueChanged.RemoveAllListeners(); subtitleSizeSlider.onValueChanged.AddListener(v => { PlayerPrefs.SetFloat(K_SUB_SIZE, v); OnSubtitleSizeChanged?.Invoke(v); SubtitleSizeChangedGlobal?.Invoke(v); }); subtitleSizeSlider.value = PlayerPrefs.GetFloat(K_SUB_SIZE, 1f); }
         if (subtitleBackgroundToggle != null) { subtitleBackgroundToggle.onValueChanged.RemoveAllListeners(); subtitleBackgroundToggle.onValueChanged.AddListener(v => { PlayerPrefs.SetInt(K_SUB_BG, v?1:0); OnSubtitleBgToggled?.Invoke(v); SubtitleBackgroundChangedGlobal?.Invoke(v); }); subtitleBackgroundToggle.isOn = PlayerPrefs.GetInt(K_SUB_BG, 1) == 1; }
         if (flashIntensitySlider != null) { flashIntensitySlider.onValueChanged.RemoveAllListeners(); flashIntensitySlider.onValueChanged.AddListener(AccessibilityOptionsRuntime.SetFlashIntensity); flashIntensitySlider.value = AccessibilityOptionsRuntime.FlashIntensity; }
+        if (bwAbsorbToggle != null) { bwAbsorbToggle.onValueChanged.RemoveAllListeners(); bwAbsorbToggle.onValueChanged.AddListener(AccessibilityOptionsRuntime.SetBwAbsorbEnabled); bwAbsorbToggle.isOn = AccessibilityOptionsRuntime.BwAbsorbEnabled; }
         if (cameraShakeSlider != null) { cameraShakeSlider.onValueChanged.RemoveAllListeners(); cameraShakeSlider.onValueChanged.AddListener(v => { PlayerPrefs.SetFloat(K_CAM_SHAKE, v); OnCameraShakeStrengthChanged?.Invoke(v); }); cameraShakeSlider.value = PlayerPrefs.GetFloat(K_CAM_SHAKE, 1f); }
         BindCameraOptionControls();
 
@@ -376,6 +379,8 @@ public class OptionsManagerAdvanced : MonoBehaviour
 
         Slider sliderTemplate = cameraShakeSlider != null ? cameraShakeSlider : masterSlider;
         Toggle toggleTemplate = subtitleBackgroundToggle != null ? subtitleBackgroundToggle : fullscreenToggle;
+        if (bwAbsorbToggle == null)
+            bwAbsorbToggle = CreateGeneratedToggleRow(toggleTemplate, "BwAbsorb_Row", "B&W Absorb Effect", "Toggle_BwAbsorb") ?? CreateHiddenToggle("Toggle_BwAbsorb");
         if (lookSensitivityMouseSlider == null)
             lookSensitivityMouseSlider = CreateGeneratedSliderRow(sliderTemplate, "LookSensMouse_Row", "Mouse Sensitivity", "Slider_LookSensMouse") ?? CreateHiddenSlider("Slider_LookSensMouse");
         if (lookSensitivityPadSlider == null)

@@ -49,6 +49,8 @@ public sealed class QaCombatBot : MonoBehaviour
     bool _wasCinematic;
     int _parryBaseline;
     int _parries, _dodges, _attacks, _finishers, _ultimates, _cues;
+    static readonly bool QaProfileUltRequested = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-qaProfileUlt") >= 0;
+    int _profileUltState, _profileUltStopFrame;
     System.Random _rng = new System.Random(1234);
 
     public string Summary =>
@@ -471,6 +473,15 @@ public sealed class QaCombatBot : MonoBehaviour
         if (inBreak && !_wasInBreak) { Note("BREAK start"); Capture("break"); }
         _wasInBreak = inBreak;
 
+        if (_profileUltState == 1 && Time.frameCount >= _profileUltStopFrame)
+        {
+            _profileUltState = 2;
+            UnityEngine.Profiling.Profiler.enabled = false;
+            UnityEngine.Profiling.Profiler.enableBinaryLog = false;
+            UnityEngine.Profiling.Profiler.logFile = "";
+            Note("profiler off");
+        }
+
         bool cinematic = _ultimate != null && _ultimate.IsCinematic;
         if (cinematic && !_wasCinematic) { Note("ULTIMATE start"); Capture("ultimate"); }
         if (!cinematic && _wasCinematic) Note("ULTIMATE end");
@@ -478,8 +489,25 @@ public sealed class QaCombatBot : MonoBehaviour
         if (cinematic)
             return;
 
+        // -qaProfileUlt: 궁극기 발동 직전부터 ~120프레임을 프로파일러 바이너리 로그(Temp/qa/ult_profile.raw)로 남긴다 (첫 발동 히치 분석용)
+        if (_ultimate != null && _ultimate.IsGaugeReady && QaProfileUltRequested && _profileUltState == 0)
+        {
+            _profileUltState = 1;
+            Directory.CreateDirectory(OutputDir);
+            UnityEngine.Profiling.Profiler.logFile = Path.Combine(OutputDir, "ult_profile");
+            UnityEngine.Profiling.Profiler.enableBinaryLog = true;
+            UnityEngine.Profiling.Profiler.enabled = true;
+            _profileUltStopFrame = Time.frameCount + 1200; // 발동 성공 시 +90 프레임으로 줄인다
+            Note("profiler on");
+            return;
+        }
+        if (_profileUltState == 1 && Time.frameCount < _profileUltStopFrame - 1190)
+            return;
+
         if (_ultimate != null && _ultimate.IsGaugeReady && _ultimate.TryActivate())
         {
+            if (_profileUltState == 1)
+                _profileUltStopFrame = Time.frameCount + 90;
             _ultimates++;
             Note("ultimate activate");
             return;

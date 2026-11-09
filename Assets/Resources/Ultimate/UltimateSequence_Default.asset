@@ -104,7 +104,7 @@ MonoBehaviour:
     lightBeamVfxPrefab: {fileID: 2411774245160808706, guid: 6354926733bd68948806832890f33e78, type: 3}
     crackWorldVfxPrefab: {fileID: 6366026470070092117, guid: 8a8ba7e20e37d8544a78a859054126a3, type: 3}
     crackScreenVfxPrefab: {fileID: 0}
-    explosionVfxPrefab: {fileID: 5994169781622799023, guid: 3fd4f4a70252fe940aa09834467733bf, type: 3}
+    explosionVfxPrefab: {fileID: 4669697555684712952, guid: 3018bb7634c0d874f87754793c8fac9e, type: 3}
     shardVfxPrefab: {fileID: 7229793754096018441, guid: be87923a1d00334438f3d93701889602, type: 3}
     walkoutVfxPrefab: {fileID: 8232990265197679967, guid: a615c46ec6f57fd4faebdb1e33dd9c9b, type: 3}
     slashStormAoeVfxPrefab: {fileID: 6855955652325114174, guid: f8dc879bd6649cb4782409815764d676, type: 3}
@@ -166,13 +166,13 @@ MonoBehaviour:
     dashSlashLifetime: 0.7
     crackLifetime: 0.9
     explosionLifetime: 3.8
-    explosionVfxScale: 1.8
+    explosionVfxScale: 1
     tintExplosionVfx: 1
-    explosionPrimaryTint: {r: 0.85, g: 0.12, b: 0.08, a: 1}
-    explosionAccentTint: {r: 1, g: 0.38, b: 0.16, a: 1}
-    explosionHighlightTint: {r: 1, g: 0.78, b: 0.62, a: 1}
-    explosionSmokeTint: {r: 0.48, g: 0.08, b: 0.06, a: 0.72}
-    explosionEmissionTint: {r: 3, g: 0.32, b: 0.12, a: 1}
+    explosionPrimaryTint: {r: 0.14, g: 0.13, b: 0.14, a: 1}
+    explosionAccentTint: {r: 0.85, g: 0.07, b: 0.07, a: 1}
+    explosionHighlightTint: {r: 1, g: 0.97, b: 0.95, a: 1}
+    explosionSmokeTint: {r: 0.12, g: 0.12, b: 0.13, a: 0.65}
+    explosionEmissionTint: {r: 1.5, g: 0.1, b: 0.08, a: 1}
     walkoutLifetime: 0.8
   useThreeStageCameraSplit: 1
   introStageCamera:
@@ -338,12 +338,12 @@ MonoBehaviour:
   introTrigger: Ultimate_Start
   dashTrigger: Ultimate_Dash
   multiSlashTrigger: Ultimate_Slash
-  finalExplosionTrigger:
+  finalExplosionTrigger: 
   walkoutTrigger: Ultimate_Walk
   introFallbackState: 
   dashFallbackState: Base Layer.H3_D
   multiSlashFallbackState: Base Layer.H4_C
-  finalExplosionFallbackState:
+  finalExplosionFallbackState: 
   walkoutFallbackState: Base Layer.Locomotion
   animatorCrossFadeDuration: 0.08
   slashSteps:

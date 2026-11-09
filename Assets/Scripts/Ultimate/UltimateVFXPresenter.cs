@@ -403,7 +403,9 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         Color smoke = _data.Vfx.explosionSmokeTint;
         Color emission = _data.Vfx.explosionEmissionTint;
         Gradient fireGradient = CreateSlashStormGradient(primary, accent, highlight);
-        Gradient smokeGradient = CreateTrailGradient(smoke, primary, accent);
+        Color smokeHot = Color.Lerp(smoke, accent, 0.45f);
+        smokeHot.a = smoke.a;
+        Gradient smokeGradient = CreateTrailGradient(smoke, smoke, smokeHot);
 
         _speedParticles.Clear();
         root.GetComponentsInChildren(true, _speedParticles);
@@ -411,7 +413,9 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
         {
             ParticleSystem particle = _speedParticles[i];
             bool smokeLike = IsSmokeLike(particle.name);
-            ApplyParticlePalette(particle, smokeLike ? smoke : primary, smokeLike ? smokeGradient : fireGradient, smokeLike ? smokeGradient : fireGradient);
+            // 시작색은 흰색 — 팔레트는 그라디언트가 담당(시작색×그라디언트 이중 곱으로 탁해지는 것 방지).
+            // 커스텀 데이터는 프리팹 원본 유지(셰이더 디졸브/오프셋 구동용).
+            ApplyParticlePalette(particle, Color.white, smokeLike ? smokeGradient : fireGradient, smokeLike ? smokeGradient : fireGradient, false);
         }
 
         _tintTrails.Clear();
@@ -424,7 +428,8 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
             trailRenderer.colorGradient = fireGradient;
         }
 
-        ApplyRendererPalette(root, primary, accent, highlight, emission, smoke);
+        // 머티리얼 기본색도 흰색(곱셈 중립) — 색은 파티클 그라디언트에서만 결정
+        ApplyRendererPalette(root, Color.white, accent, highlight, emission, Color.white);
     }
 
     void SuppressSlashStormAoeBlueParticles(GameObject root)
@@ -510,7 +515,7 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
             && objectName.IndexOf("smoke", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
-    static void ApplyParticlePalette(ParticleSystem particle, Color primary, Gradient particleGradient, Gradient trailGradient)
+    static void ApplyParticlePalette(ParticleSystem particle, Color primary, Gradient particleGradient, Gradient trailGradient, bool overrideCustomData = true)
     {
         ParticleSystem.MainModule main = particle.main;
         main.startColor = new ParticleSystem.MinMaxGradient(primary);
@@ -529,6 +534,9 @@ public sealed class UltimateVFXPresenter : MonoBehaviour
             trails.colorOverLifetime = new ParticleSystem.MinMaxGradient(trailGradient);
             trails.colorOverTrail = new ParticleSystem.MinMaxGradient(trailGradient);
         }
+
+        if (!overrideCustomData)
+            return;
 
         ParticleSystem.CustomDataModule customData = particle.customData;
         customData.enabled = true;

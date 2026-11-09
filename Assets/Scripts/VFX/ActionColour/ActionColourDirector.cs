@@ -504,7 +504,7 @@ public sealed class ActionColourDirector : MonoBehaviour
             {
                 _bw = default;
             }
-            else
+            else if (AccessibilityOptionsRuntime.BwAbsorbEnabled)   // 접근성: 흑백 끄기면 채도/링 모두 생략 (타이밍은 그대로 진행)
             {
                 float floor = _bw.Sustained ? 0.6f : 0.35f;
                 s.Desaturation = desat * Mathf.Lerp(floor, 1f, flash);
@@ -736,14 +736,18 @@ public sealed class ActionColourDirector : MonoBehaviour
 
     void WriteShatter(float crack, float burst, float flash = 1f)
     {
+        // 접근성 대체: 번쩍임 0 근처에서는 파편 비산(급격한 고대비 움직임) 대신
+        // 낮은 대비의 정지 균열 → 정지 프레임에서 라이브 화면으로 크로스페이드.
+        float calm = 1f - Mathf.Clamp01(flash / 0.25f);
+        float fade = burst * burst * (3f - 2f * burst);
         var snap = new ActionColourState.ShatterSnapshot
         {
             Impact = _shatterImpact,
             Crack = crack * crack * (3f - 2f * crack),
-            Burst = burst,
-            Alpha = 1f,
+            Burst = burst * (1f - calm),
+            Alpha = Mathf.Lerp(1f, 1f - fade, calm),
             ChromaticAberration = 0.006f * flash,
-            CrackColor = new Color(0.86f, 0.93f, 1f, Mathf.Lerp(0.5f, 0.9f, flash))
+            CrackColor = Color.Lerp(new Color(0.86f, 0.93f, 1f, Mathf.Lerp(0.5f, 0.9f, flash)), new Color(0.62f, 0.63f, 0.66f, 0.45f), calm)
         };
         ActionColourState.SetShatter(snap, true);
     }
