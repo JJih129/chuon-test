@@ -109,10 +109,10 @@ public class TutorialManager : MonoBehaviour
 
     void Update()
     {
-        if (currentStep == TutorialStep.Movement && Input.GetKeyDown(KeyCode.LeftShift))
+        if (currentStep == TutorialStep.Movement && ChuonInput.PressedOr(ChuonAction.Dodge, KeyCode.LeftShift))
             OnDodgeAction();
 
-        if (currentStep == TutorialStep.Heal && Input.GetKeyDown(KeyCode.Q))
+        if (currentStep == TutorialStep.Heal && ChuonInput.PressedOr(ChuonAction.Heal, KeyCode.Q))
             OnHealAction();
     }
 
@@ -410,13 +410,25 @@ public class TutorialManager : MonoBehaviour
         questPanelGroup.transform.DOPunchScale(Vector3.one * 0.15f, 0.5f);
     }
 
+    // "X 키" 표기를 현재 장치/리바인드 표기로 (키보드 기본 배치면 원문 그대로)
+    static string GlyphKeys(string text)
+    {
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Move, "WASD");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Dodge, "Shift");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Guard, "E");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Heal, "Q");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.AttackLight, "좌클릭");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.AttackHeavy, "우클릭");
+        return text;
+    }
+
     void UpdateQuestUI(string title, string desc)
     {
         ShowQuestPanel();
         if (questTitleText != null)
             questTitleText.text = title;
         if (questDescriptionText != null)
-            questDescriptionText.text = desc;
+            questDescriptionText.text = GlyphKeys(desc);
     }
 
     TutorialHintUIBridge ResolveHintBridge()

@@ -39,7 +39,9 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         if (!string.Equals(scene.path, TutorialScenePath, StringComparison.OrdinalIgnoreCase))
             return;
 
-        if (FindFirstObjectByType<TutorialFlowController>() != null || FindFirstObjectByType<TutorialRuntimeBootstrap>() != null)
+        // 반복 13: 씬에 침투 튜토리얼 디렉터(TutorialFlowController 포함)가 있으면 구 사격장 프로토타입을 만들지 않는다.
+        if (FindFirstObjectByType<InfiltrationTutorialDirector>() != null ||
+            FindFirstObjectByType<TutorialFlowController>() != null || FindFirstObjectByType<TutorialRuntimeBootstrap>() != null)
             return;
 
         GameObject root = new GameObject("TutorialPrototypeRuntimeRoot");
@@ -769,7 +771,8 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         return controller;
     }
 
-    void ConfigureTutorialModernUltimate(GameObject player, GameObject ultimateTargetObject, Camera mainCamera)
+    // 반복 13: 침투 튜토리얼(InfiltrationTutorialDirector)도 같은 궁극기 구성을 쓴다 (대상 = 잡몹).
+    internal static void ConfigureTutorialModernUltimate(GameObject player, GameObject ultimateTargetObject, Camera mainCamera)
     {
         if (player == null || ultimateTargetObject == null || mainCamera == null)
             return;
@@ -1398,6 +1401,19 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
         return steps.ToArray();
     }
 
+    // "X 키" 표기 → 현재 장치/리바인드 표기 (키보드 기본 배치면 원문 그대로). 생성 시점 기준.
+    static string GlyphKeys(string text)
+    {
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Move, "WASD");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Dodge, "Shift");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Guard, "E");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Heal, "Q");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.Ultimate, "R");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.LockOn, "휠 클릭");
+        text = InputGlyphs.ReplaceKeyToken(text, ChuonAction.AttackHeavy, "좌클릭/우클릭");
+        return text;
+    }
+
     TutorialStepDefinition CreateStep(
         string stepId,
         TutorialStepType stepType,
@@ -1419,7 +1435,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
             stepId = stepId,
             stepType = stepType,
             hintLine1 = hint1,
-            hintLine2 = hint2,
+            hintLine2 = GlyphKeys(hint2),
             introLines = new[] { introLine },
             successLines = new[] { successLine },
             showComboGuide = showComboGuide,

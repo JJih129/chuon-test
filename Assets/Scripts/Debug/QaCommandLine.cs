@@ -36,6 +36,7 @@ public sealed class QaCommandLine : MonoBehaviour
     bool _quit;
     bool _occlusionShot;
     bool _fullRun;
+    bool _tutorialRun;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -83,6 +84,7 @@ public sealed class QaCommandLine : MonoBehaviour
                 case "-qaQuit": _quit = true; break;
                 case "-qaOcclusionShot": _occlusionShot = true; break;
                 case "-qaFullRun": _fullRun = true; break;
+                case "-qaTutorialRun": _tutorialRun = true; break;
                 case "-qaDifficulty": // easy|normal|hard (저장하지 않음)
                     if (next != null && System.Enum.TryParse(next, true, out BossDifficultyTier tier))
                         GameDifficulty.Set(tier, save: false);
@@ -334,8 +336,49 @@ public sealed class QaCommandLine : MonoBehaviour
         }
         LobbyManager.LowerFloorReached -= onLower;
         QaFrameSampler.Mark("facility_boss");
+        yield return null;
+        PlayerUltimateController ult = FindObjectOfType<PlayerUltimateController>();
+        if (ult != null)
+            Debug.Log($"[QA-RUN] arrival ultimate gauge {ult.Gauge:F1}/{ult.gaugeMax:F0} = {ult.Gauge / Mathf.Max(1f, ult.gaugeMax):P0} (cap 40%)");
         Debug.Log($"[QA-RUN] t={Time.realtimeSinceStartup - start:F1}s lower floor reached={lower}\n[QA-RUN] bot: {(bot != null ? bot.Summary : "gone")}\n[QA-RUN] mobs:\n{QaCombatBot.MobReport()}");
     }
+
+    // -qaTutorialRun (with -qaScene Tutorial -qaBot S): infiltration tutorial start -> Level_Facility. Logs "[QA-TUT]" step times;
+    // a step stuck for 90 s is force-completed and counted (target 0 forced).
+    IEnumerator WatchTutorialRun(QaCombatBot bot)
+    {
+        float start = Time.realtimeSinceStartup;
+        int forced = 0;
+        string step = null;
+        float stepAt = start;
+        InfiltrationTutorialDirector d = null;
+        QaFrameSampler.Mark("tutorial");
+        while (ActiveScene == "Tutorial")
+        {
+            if (d == null) d = InfiltrationTutorialDirector.Active;
+            string now = d != null ? d.CurrentStepId : null;
+            if (now != step)
+            {
+                if (step != null)
+                    Debug.Log($"[QA-TUT] t={Time.realtimeSinceStartup - start:F1}s step {step} took {Time.realtimeSinceStartup - stepAt:F1}s");
+                step = now;
+                stepAt = Time.realtimeSinceStartup;
+            }
+            if (d != null && step != null && Time.realtimeSinceStartup - stepAt > 90f)
+            {
+                forced++;
+                Debug.Log($"[QA-TUT] FORCED step {step} after 90 s");
+                d.QaForceCompleteStep();
+                stepAt = Time.realtimeSinceStartup;
+            }
+            if (d != null)
+                _tutSummary = $"steps={d.CurrentStepIndex + 1}/{d.StepCount} resyncs={d.ResyncCount} lessonRespawns={d.LessonRespawns} pdAssists={d.PerfectDodgeAssists} forced={forced} bot: {(bot != null ? bot.Summary : "gone")}\n  log: {string.Join(" | ", d.StepLog)}";
+            yield return new WaitForSecondsRealtime(0.25f);
+        }
+        QaFrameSampler.Mark("after_tutorial");
+        Debug.Log($"[QA-TUT] t={Time.realtimeSinceStartup - start:F1}s tutorial finished -> {ActiveScene} (last step {step})\n[QA-TUT] {_tutSummary}\n[QA] frame report (tutorial):\n{QaFrameSampler.Report()}");
+    }
+    string _tutSummary;
 
     IEnumerator Run()
     {
@@ -376,6 +419,11 @@ public sealed class QaCommandLine : MonoBehaviour
             {
                 bot.followLobbyRoute = true;
                 StartCoroutine(WatchFullRun(bot));
+            }
+            if (_tutorialRun)
+            {
+                bot.followTutorialRoute = true;
+                StartCoroutine(WatchTutorialRun(bot));
             }
         }
         CameraMetricsSampler.Begin(_scene + (SoulsCameraRig.Active != null ? " (souls rig)" : " (legacy cam)"));

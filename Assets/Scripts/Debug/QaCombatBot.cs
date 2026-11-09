@@ -35,6 +35,8 @@ public sealed class QaCombatBot : MonoBehaviour
     public float mobAttackRange = 2.3f;
     [Tooltip("Full-level run: with no enemy around, walk the Level_Facility upper-floor route (combat gate -> elevator approach -> board).")]
     public bool followLobbyRoute = false;
+    [Tooltip("Infiltration tutorial run (Tutorial.unity): walk InfiltrationTutorialDirector goals and perform each step's taught action.")]
+    public bool followTutorialRoute = false;
 
     public static string OutputDir => Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Temp", "qa"));
 
@@ -272,7 +274,8 @@ public sealed class QaCombatBot : MonoBehaviour
     // Cued attacks (turret lock, android thrust/3rd hit, enforcer bash): turret bursts only come through here.
     void HandleMobCue(EnemyBrain b, EnemyCueType type, float lead)
     {
-        if (b == null || _player == null || Mathf.Abs(b.transform.position.y - _player.position.y) > 6f)
+        // 9 m: 벽 터렛(높이 ~6.8 m)의 큐도 받는다 (층이 다른 적은 여전히 무시)
+        if (b == null || _player == null || Mathf.Abs(b.transform.position.y - _player.position.y) > 9f)
             return;
         _cues++;
         _lastThreatTime = Time.time;
@@ -502,11 +505,13 @@ public sealed class QaCombatBot : MonoBehaviour
 
         _cues++;
         bool react = _rng.NextDouble() < defenseSkill;
-        float travel = Vector3.Distance(drone.transform.position, _player.position) / Mathf.Max(1f, drone.projectileSpeed);
+        // 탄은 총구(전방 0.65 m)에서 출발해 몸통 표면(~0.45 m)에 닿고, 봇은 접근 중이라 거리가 줄어든다 → 사람처럼 "탄이 보이는" 쪽으로 보정
+        float dist = Mathf.Max(0f, Vector3.Distance(drone.transform.position, _player.position) - 1.1f);
+        float travel = dist / Mathf.Max(1f, drone.projectileSpeed) * 0.85f;
         float t = drone.AttackTelegraphLeadTime + travel;
         Note($"drone shot in {t:F2}s react={react}");
         if (react)
-            _scheduled.Add((Time.time + Mathf.Max(0f, t - dodgeLead), true));
+            _scheduled.Add((Time.time + Mathf.Max(0f, t - dodgeLead - 0.08f), true));
     }
 
     void Resolve()
@@ -674,7 +679,14 @@ public sealed class QaCombatBot : MonoBehaviour
 
         if (_playerHealth != null && !_playerHealth.IsDead)
         {
+            if (followTutorialRoute && TutorialStepActions())
+                return;
             AnswerMobStrikes();
+            if (target == null && followTutorialRoute && FollowTutorialRoute())
+            {
+                RunScheduledDefense();
+                return;
+            }
             if (target == null && followLobbyRoute && FollowLobbyRoute())
             {
                 RunScheduledDefense();
@@ -821,6 +833,125 @@ public sealed class QaCombatBot : MonoBehaviour
         }
 
         if (_releaseGuardAt > 0f && Time.unscaledTime >= _releaseGuardAt) { PlayerGuardController.QaReleaseGuard(); _releaseGuardAt = 0f; }
+    }
+
+    // ---- Infiltration tutorial route (Tutorial.unity, iteration 13) ----
+    string _tutStep;
+    float _tutStepAt, _nextTutActionAt;
+    bool _tutGuardHeld;
+
+    /// <summary>Per-step taught action, like a player following the prompt. Returns true when it used the frame.</summary>
+    bool TutorialStepActions()
+    {
+        InfiltrationTutorialDirector d = InfiltrationTutorialDirector.Active;
+        if (d == null || _player == null || _input == null)
+            return false;
+        string id = d.CurrentStepId;
+        if (id != _tutStep)
+        {
+            if (_tutGuardHeld) { PlayerGuardController.QaReleaseGuard(); _tutGuardHeld = false; }
+            _tutStep = id;
+            _tutStepAt = Time.unscaledTime;
+            Note($"tutorial step -> {id}");
+            Capture("tut_" + id);
+        }
+
+        if (id == "guard")
+        {
+            // 가드 레슨: 막기만 한다 (패링/공격 안 함) — E 를 누르고 버티기
+            _scheduled.Clear();
+            if (!_tutGuardHeld) { PlayerGuardController.QaPressGuard(); _tutGuardHeld = true; Note("tutorial guard hold"); }
+            if (_mob != null) UpdateLockOn(_mob.transform);
+            PlayerMoveController.QaMoveInputOverride = null;
+            return true;
+        }
+
+        if (id == "pd" || id == "red")
+        {
+            // 회피 레슨: 터렛을 때리지 않고(경직으로 사격을 끊지 않게) 목표 지점에서 큐에만 반응
+            if (d.CurrentGoal != null && (d.CurrentGoal.position - _player.position).sqrMagnitude > 1.2f)
+            {
+                Vector3 to = d.CurrentGoal.position - _player.position; to.y = 0f;
+                UpdateApproach(d.CurrentGoal, to.magnitude, false, 0f);
+            }
+            else
+                PlayerMoveController.QaMoveInputOverride = null;
+            RunScheduledDefense();
+            return true;
+        }
+
+        if (Time.unscaledTime < _nextTutActionAt)
+            return false;
+        switch (id)
+        {
+            case "look":
+                if (SoulsCameraRig.Active != null && d.LookTarget != null)
+                {
+                    Vector3 to = d.LookTarget.position - _player.position;
+                    SoulsCameraRig.Active.SnapToYaw(Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, -8f);
+                    Note("tutorial look: camera toward emblem");
+                }
+                _nextTutActionAt = Time.unscaledTime + 1.5f;
+                break;
+            case "dodge":
+                _input.RecordDodgePress(); _dodges++;
+                _nextTutActionAt = Time.unscaledTime + 0.9f;
+                break;
+            case "scan":
+                if (d.Scanner != null)
+                {
+                    float dz = d.Scanner.transform.position.z - _player.position.z;
+                    if (dz > 0.5f && dz < 1.8f)
+                    {
+                        _input.RecordDodgePress(); _dodges++;
+                        _nextTutActionAt = Time.unscaledTime + 1.2f;
+                        Note("tutorial scan: dodge through curtain");
+                    }
+                }
+                break;
+            case "heal":
+                if (_consumables != null && _consumables.TryUseAmpoule()) { Heals++; Note("tutorial heal"); }
+                _nextTutActionAt = Time.unscaledTime + 1.5f;
+                break;
+            case "ultimate":
+                if (_ultimate != null && _ultimate.IsGaugeReady && !_ultimate.IsCinematic && _ultimate.TryActivate()) { _ultimates++; Note("tutorial ultimate activate"); }
+                _nextTutActionAt = Time.unscaledTime + 0.5f;
+                break;
+            case "exit":
+                SceneLoadInteractable exit = d.ExitInteractable;
+                if (exit != null && Vector3.Distance(exit.transform.position, _player.position) < 3.4f && Time.unscaledTime - _tutStepAt > 0.8f)
+                {
+                    Note("tutorial exit TryInteract -> " + exit.TryInteract(_player.gameObject));
+                    _nextTutActionAt = Time.unscaledTime + 2f;
+                }
+                break;
+        }
+        return false;
+    }
+
+    /// <summary>No enemy around: walk to the current tutorial goal (route marker).</summary>
+    bool FollowTutorialRoute()
+    {
+        InfiltrationTutorialDirector d = InfiltrationTutorialDirector.Active;
+        if (d == null)
+            return false;
+        Transform goal = d.CurrentGoal;
+        if (d.CurrentStepId == "exit" && d.ExitInteractable != null)
+            goal = d.ExitInteractable.transform;
+        if (goal == null)
+        {
+            PlayerMoveController.QaMoveInputOverride = null;
+            return true;
+        }
+        Vector3 to = goal.position - _player.position;
+        to.y = 0f;
+        if (to.magnitude < 0.9f)
+        {
+            PlayerMoveController.QaMoveInputOverride = null;
+            return true;
+        }
+        UpdateApproach(goal, to.magnitude, false, 0f);
+        return true;
     }
 
     // ---- Level_Facility upper-floor route (full-run mode) ----

@@ -722,17 +722,20 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     Sprite ResolveKeyCueSprite(string body, string speaker)
     {
+        // 키 이미지(E/Shift/Q)는 키보드 기본 배치일 때만. 패드·리바인드면 null → 글리프 표기 텍스트 큐로 대체.
         if (ShouldUseParryKeyCue(body, speaker))
-            return ResolveKeySprite(ref parryKeySprite, "E");
+            return KeyboardDefault(ChuonAction.Guard) ? ResolveKeySprite(ref parryKeySprite, "E") : null;
 
         if (ShouldUseDodgeKeyCue(body, speaker))
-            return ResolveKeySprite(ref dodgeKeySprite, "Shift");
+            return KeyboardDefault(ChuonAction.Dodge) ? ResolveKeySprite(ref dodgeKeySprite, "Shift") : null;
 
         if (ShouldUseHealKeyCue(body, speaker))
-            return ResolveKeySprite(ref healKeySprite, "Q");
+            return KeyboardDefault(ChuonAction.Heal) ? ResolveKeySprite(ref healKeySprite, "Q") : null;
 
         return null;
     }
+
+    static bool KeyboardDefault(ChuonAction a) => !ChuonInput.IsGamepadScheme && !ChuonInput.KeyboardOverridden(a);
 
     Sprite ResolveKeySprite(ref Sprite keySprite, string filePrefix)
     {

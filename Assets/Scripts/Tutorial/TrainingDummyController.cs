@@ -727,29 +727,12 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
     static bool WasParryPromptPressed()
     {
-        Keyboard keyboard = Keyboard.current;
-        if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
-            return true;
-
-#if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.E);
-#else
-        return false;
-#endif
+        return ChuonInput.PressedOr(ChuonAction.Guard, KeyCode.E);
     }
 
     static bool WasDodgePromptPressed()
     {
-        Keyboard keyboard = Keyboard.current;
-        if (keyboard != null &&
-            (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame))
-            return true;
-
-#if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift);
-#else
-        return false;
-#endif
+        return ChuonInput.PressedOr(ChuonAction.Dodge, KeyCode.LeftShift, KeyCode.RightShift);
     }
 
     void RestoreForcedParryFreezeIfNeeded()

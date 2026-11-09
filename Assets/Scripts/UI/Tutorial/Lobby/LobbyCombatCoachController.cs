@@ -176,7 +176,9 @@ public class LobbyCombatCoachController : MonoBehaviour
 
         _telegraphAssistCount++;
         _lastTelegraphAssistTime = Time.unscaledTime;
-        presentationController?.ShowShotTelegraph(origin, targetPoint, GetTelegraphCueDuration());
+        // 사격선 표시 시간 = 드론의 실제 경고 리드 (공정 하한 0.65 s 적용 후 값) — 선이 사라지는 순간 = 발사
+        float shotLine = drone != null && drone.AttackTelegraphLeadTime > 0f ? drone.AttackTelegraphLeadTime : GetTelegraphCueDuration();
+        presentationController?.ShowShotTelegraph(origin, targetPoint, shotLine);
 
         if (!_firstFireCueShown)
         {

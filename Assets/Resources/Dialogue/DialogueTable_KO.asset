@@ -14,313 +14,613 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   entries:
   - key: tut.open.0
-    speaker: "EGO"
-    text: "\uac00\uc0c1\ud604\uc2e4 \ubd80\ud305 \uc644\ub8cc.\n\uac10\uac01 \ub3d9\uae30\ud654, \uc774\uc0c1 \uc5c6\uc74c."
+    speaker: EGO
+    text: "\uAC00\uC0C1\uD604\uC2E4 \uBD80\uD305 \uC644\uB8CC.\n\uAC10\uAC01 \uB3D9\uAE30\uD654,
+      \uC774\uC0C1 \uC5C6\uC74C."
     duration: 0
   - key: tut.open.1
-    speaker: "EGO"
-    text: "\ub0b4\uc77c \uc2f8\uc6b0\ub7ec \uac00\uae30 \uc804 \ub9c8\uc9c0\ub9c9 \ud6c8\ub828\uc774\uc57c.\n\uae34\uc7a5 \ud480\uc5b4, \ucd94\uc628."
+    speaker: EGO
+    text: "\uB0B4\uC77C \uC2F8\uC6B0\uB7EC \uAC00\uAE30 \uC804 \uB9C8\uC9C0\uB9C9
+      \uD6C8\uB828\uC774\uC57C.\n\uAE34\uC7A5 \uD480\uC5B4, \uCD94\uC628."
     duration: 0
   - key: tut.open.2
-    speaker: "\ucd94\uc628"
-    text: "\uc7a1\ub2f4\uc740 \ub410\uc5b4. \uc2dc\uc791\ud574."
+    speaker: "\uCD94\uC628"
+    text: "\uC7A1\uB2F4\uC740 \uB410\uC5B4. \uC2DC\uC791\uD574."
     duration: 0
   - key: tut.open.3
-    speaker: "EGO"
-    text: "\ub124\ub124, \ubc14\ub85c \uac11\ub2c8\ub2e4. \ubb34\uc12d\uae34."
+    speaker: EGO
+    text: "\uB124\uB124, \uBC14\uB85C \uAC11\uB2C8\uB2E4. \uBB34\uC12D\uAE34."
     duration: 0
   - key: tut.movement.intro.0
-    speaker: "EGO"
-    text: "WASD\ub85c \uc55e\ucabd \uccb4\ud06c \uc9c0\uc810\uae4c\uc9c0 \uc774\ub3d9\ud574.\n\uac00\ubcbc\uc6b4 \uc0b0\ucc45\uc774\uc57c."
+    speaker: EGO
+    text: "WASD\uB85C \uC55E\uCABD \uCCB4\uD06C \uC9C0\uC810\uAE4C\uC9C0 \uC774\uB3D9\uD574.\n\uAC00\uBCBC\uC6B4
+      \uC0B0\uCC45\uC774\uC57C."
     duration: 0
   - key: tut.movement.success.0
-    speaker: "EGO"
-    text: "\ub2e4\ub9ac\ub294 \uba40\uca61\ud558\ub124. \ub2e4\uc74c."
+    speaker: EGO
+    text: "\uB2E4\uB9AC\uB294 \uBA40\uCA61\uD558\uB124. \uB2E4\uC74C."
     duration: 0
   - key: tut.camera.intro.0
-    speaker: "EGO"
-    text: "\ub9c8\uc6b0\uc2a4\ub85c \uc2dc\uc57c\ub97c \ub3cc\ub824\uc11c\n\ud45c\uc801\uc744 \ud654\uba74 \uc911\uc559\uc5d0 \uc7a1\uc544."
+    speaker: EGO
+    text: "\uB9C8\uC6B0\uC2A4\uB85C \uC2DC\uC57C\uB97C \uB3CC\uB824\uC11C\n\uD45C\uC801\uC744
+      \uD654\uBA74 \uC911\uC559\uC5D0 \uC7A1\uC544."
     duration: 0
   - key: tut.camera.remind.0
-    speaker: "EGO"
-    text: "\ud654\uba74 \ud45c\uc2dc\ub97c \ub530\ub77c\uac00.\n\ud45c\uc801\uc740 \uc548 \ub3c4\ub9dd\uac00. \uc544\uc9c1\uc740."
+    speaker: EGO
+    text: "\uD654\uBA74 \uD45C\uC2DC\uB97C \uB530\uB77C\uAC00.\n\uD45C\uC801\uC740
+      \uC548 \uB3C4\uB9DD\uAC00. \uC544\uC9C1\uC740."
     duration: 0
   - key: tut.camera.success.0
-    speaker: "EGO"
-    text: "\ud45c\uc801 \ud3ec\ucc29. \ub208\uc370\ubbf8 \uc88b\uc740\ub370?"
+    speaker: EGO
+    text: "\uD45C\uC801 \uD3EC\uCC29. \uB208\uC370\uBBF8 \uC88B\uC740\uB370?"
     duration: 0
   - key: tut.lockon.intro.0
-    speaker: "EGO"
-    text: "\ub9c8\uc6b0\uc2a4 \ud720\uc744 \ub20c\ub7ec \ub77d\uc628\ud574.\n\uc2dc\uc120\uc774 \ub188\ud55c\ud14c \ub531 \ubd99\uc744 \uac70\uc57c."
+    speaker: EGO
+    text: "\uB9C8\uC6B0\uC2A4 \uD720\uC744 \uB20C\uB7EC \uB77D\uC628\uD574.\n\uC2DC\uC120\uC774
+      \uB188\uD55C\uD14C \uB531 \uBD99\uC744 \uAC70\uC57C."
     duration: 0
   - key: tut.lockon.remind.0
-    speaker: "EGO"
-    text: "\ud45c\uc801\uc744 \ubcf4\uace0 \ud720 \ud074\ub9ad.\n\ub193\uce58\uba74 \ub2e4\uc2dc \ub204\ub974\uba74 \ub3fc."
+    speaker: EGO
+    text: "\uD45C\uC801\uC744 \uBCF4\uACE0 \uD720 \uD074\uB9AD.\n\uB193\uCE58\uBA74
+      \uB2E4\uC2DC \uB204\uB974\uBA74 \uB3FC."
     duration: 0
   - key: tut.lockon.success.0
-    speaker: "EGO"
-    text: "\uace0\uc815 \uc644\ub8cc. \uc774\uc81c \ubca8 \uc77c\ub9cc \ub0a8\uc558\uc5b4."
+    speaker: EGO
+    text: "\uACE0\uC815 \uC644\uB8CC. \uC774\uC81C \uBCA8 \uC77C\uB9CC \uB0A8\uC558\uC5B4."
     duration: 0
   - key: tut.basic_attack.intro.0
-    speaker: "EGO"
-    text: "\uc88c\ud074\ub9ad \uc57d\uacf5, \uc6b0\ud074\ub9ad \uac15\uacf5.\n\uac01\uac01 10\ubc88\uc529 \ub9de\ud600."
+    speaker: EGO
+    text: "\uC88C\uD074\uB9AD \uC57D\uACF5, \uC6B0\uD074\uB9AD \uAC15\uACF5.\n\uAC01\uAC01
+      10\uBC88\uC529 \uB9DE\uD600."
     duration: 0
   - key: tut.basic_attack.intro.1
-    speaker: "EGO"
-    text: "\uc57d\uacf5 4\uc5f0\ud0c0\ub97c \ub04a\uc9c0 \ub9d0\uace0 \uc774\uc5b4 \ubd10.\n\uadf8\uac8c \uae30\ubcf8 \ucf64\ubcf4\uc57c."
+    speaker: EGO
+    text: "\uC57D\uACF5 4\uC5F0\uD0C0\uB97C \uB04A\uC9C0 \uB9D0\uACE0 \uC774\uC5B4
+      \uBD10.\n\uADF8\uAC8C \uAE30\uBCF8 \uCF64\uBCF4\uC57C."
     duration: 0
   - key: tut.basic_attack.remind.0
-    speaker: "EGO"
-    text: "\uc88c\ud074\ub9ad, \uc6b0\ud074\ub9ad \uac01\uac01 10\ud68c.\n\ud5c8\uc218\uc544\ube44\ub294 \uc548 \uc544\ud30c\ud574."
+    speaker: EGO
+    text: "\uC88C\uD074\uB9AD, \uC6B0\uD074\uB9AD \uAC01\uAC01 10\uD68C.\n\uD5C8\uC218\uC544\uBE44\uB294
+      \uC548 \uC544\uD30C\uD574."
     duration: 0
   - key: tut.basic_attack.success.0
-    speaker: "EGO"
-    text: "\ud0c0\uaca9 \uac10\uac01 \ud655\uc778. \ud5c8\uc218\uc544\ube44\ud55c\ud14c\n\uc0b4\uc9dd \ubbf8\uc548\ud574\uc9c8 \uc815\ub3c4\ub124."
+    speaker: EGO
+    text: "\uD0C0\uACA9 \uAC10\uAC01 \uD655\uC778. \uD5C8\uC218\uC544\uBE44\uD55C\uD14C\n\uC0B4\uC9DD
+      \uBBF8\uC548\uD574\uC9C8 \uC815\uB3C4\uB124."
     duration: 0
   - key: tut.guard.intro.0
-    speaker: "EGO"
-    text: "\ubd89\uc740 \uacbd\uace0\uc120\uc774 \ub728\uba74 E\ub85c \ub9c9\uc544.\n\uc77c\ub2e8 \ubc84\ud2f0\ub294 \ubc95\ubd80\ud130."
+    speaker: EGO
+    text: "\uBD89\uC740 \uACBD\uACE0\uC120\uC774 \uB728\uBA74 E\uB85C \uB9C9\uC544.\n\uC77C\uB2E8
+      \uBC84\uD2F0\uB294 \uBC95\uBD80\uD130."
     duration: 0
   - key: tut.guard.remind.0
-    speaker: "EGO"
-    text: "\ube68\uac04 \uc120\uc774\ub791 \ub9c8\ucee4 \ubcf4\uc774\uc9c0?\n\ubcf4\uc774\uba74 E. \uadf8\uac8c \uc804\ubd80\uc57c."
+    speaker: EGO
+    text: "\uBE68\uAC04 \uC120\uC774\uB791 \uB9C8\uCEE4 \uBCF4\uC774\uC9C0?\n\uBCF4\uC774\uBA74
+      E. \uADF8\uAC8C \uC804\uBD80\uC57C."
     duration: 0
   - key: tut.guard.success.0
-    speaker: "EGO"
-    text: "\uc88b\uc544, \ubc29\uc5b4 \ub9ac\ub4ec \uc7a1\ud614\uc5b4."
+    speaker: EGO
+    text: "\uC88B\uC544, \uBC29\uC5B4 \uB9AC\uB4EC \uC7A1\uD614\uC5B4."
     duration: 0
   - key: tut.parry.intro.0
-    speaker: "EGO"
-    text: "\uc774\ubc88\uc5d4 \ub9c9\ub294 \uac8c \uc544\ub2c8\ub77c \ub04a\ub294 \uac70\uc57c.\n\ub9de\uae30 \uc9c1\uc804\uc5d0 E."
+    speaker: EGO
+    text: "\uC774\uBC88\uC5D4 \uB9C9\uB294 \uAC8C \uC544\uB2C8\uB77C \uB04A\uB294
+      \uAC70\uC57C.\n\uB9DE\uAE30 \uC9C1\uC804\uC5D0 E."
     duration: 0
   - key: tut.parry.intro.1
-    speaker: "EGO"
-    text: "\ud5ec\uba67\uc774 \ube5b\ub098\ub294 \uacf5\uaca9\uc740 \ud328\ub9c1 \uac00\ub2a5.\n\uadf8 \ube5b\uc774 \uc2e0\ud638\uc57c."
+    speaker: EGO
+    text: "\uD5EC\uBA67\uC774 \uBE5B\uB098\uB294 \uACF5\uACA9\uC740 \uD328\uB9C1
+      \uAC00\uB2A5.\n\uADF8 \uBE5B\uC774 \uC2E0\uD638\uC57C."
     duration: 0
   - key: tut.parry.remind.0
-    speaker: "EGO"
-    text: "\uc11c\ub450\ub974\uc9c0 \ub9c8.\n\uacbd\uace0\uac00 \uacb9\uce58\ub294 \uc21c\uac04\uc5d0 E."
+    speaker: EGO
+    text: "\uC11C\uB450\uB974\uC9C0 \uB9C8.\n\uACBD\uACE0\uAC00 \uACB9\uCE58\uB294
+      \uC21C\uAC04\uC5D0 E."
     duration: 0
   - key: tut.parry.success.0
-    speaker: "EGO"
-    text: "\uae54\ub054\ud574. \uadf8 \uac10\uac01 \uc78a\uc9c0 \ub9c8."
+    speaker: EGO
+    text: "\uAE54\uB054\uD574. \uADF8 \uAC10\uAC01 \uC78A\uC9C0 \uB9C8."
     duration: 0
   - key: tut.dodge.intro.0
-    speaker: "EGO"
-    text: "\uc774\uac74 \ubc1b\uc9c0 \ub9c8. L-Shift\ub85c\n\uacf5\uaca9 \ubc94\uc704 \ubc16\uc73c\ub85c \ube60\uc838."
+    speaker: EGO
+    text: "\uC774\uAC74 \uBC1B\uC9C0 \uB9C8. L-Shift\uB85C\n\uACF5\uACA9 \uBC94\uC704
+      \uBC16\uC73C\uB85C \uBE60\uC838."
     duration: 0
   - key: tut.dodge.remind.0
-    speaker: "EGO"
-    text: "\ub9c9\uc9c0 \ub9d0\uace0 \ud53c\ud574.\n\ub9c8\ucee4 \ubc14\uae65\uc73c\ub85c, L-Shift."
+    speaker: EGO
+    text: "\uB9C9\uC9C0 \uB9D0\uACE0 \uD53C\uD574.\n\uB9C8\uCEE4 \uBC14\uAE65\uC73C\uB85C,
+      L-Shift."
     duration: 0
   - key: tut.dodge.success.0
-    speaker: "EGO"
-    text: "\uc815\ub2f5. \uc548 \ub9de\ub294 \uac8c \uc81c\uc77c \uc2f8\uac8c \uba39\ud600."
+    speaker: EGO
+    text: "\uC815\uB2F5. \uC548 \uB9DE\uB294 \uAC8C \uC81C\uC77C \uC2F8\uAC8C \uBA39\uD600."
     duration: 0
   - key: tut.perfect_dodge.intro.0
-    speaker: "EGO"
-    text: "\ud22c\uc0ac\uccb4\uac00 \ub2ff\uae30 \uc9c1\uc804, \ud55c \ubc15\uc790 \ub2a6\uac8c\nL-Shift. \uadf8\uac8c \ud37c\ud399\ud2b8 \ud68c\ud53c\uc57c."
+    speaker: EGO
+    text: "\uD22C\uC0AC\uCCB4\uAC00 \uB2FF\uAE30 \uC9C1\uC804, \uD55C \uBC15\uC790
+      \uB2A6\uAC8C\nL-Shift. \uADF8\uAC8C \uD37C\uD399\uD2B8 \uD68C\uD53C\uC57C."
     duration: 0
   - key: tut.perfect_dodge.intro.1
-    speaker: "EGO"
-    text: "\uc131\uacf5\ud558\uba74 \uc2dc\uac04\uc774 \ub290\ub824\uc9c0\uace0\n\uac8c\uc774\uc9c0\uac00 \ucc28. \uaf64 \uc9dc\ub9bf\ud558\uc9c0."
+    speaker: EGO
+    text: "\uC131\uACF5\uD558\uBA74 \uC2DC\uAC04\uC774 \uB290\uB824\uC9C0\uACE0\n\uAC8C\uC774\uC9C0\uAC00
+      \uCC28. \uAF64 \uC9DC\uB9BF\uD558\uC9C0."
     duration: 0
   - key: tut.perfect_dodge.remind.0
-    speaker: "EGO"
-    text: "\ub108\ubb34 \ube68\ub77c. \ud55c \ubc15\uc790 \ub2a6\uac8c.\n\ub2ff\uae30 \uc9c1\uc804\uc5d0 \ud53c\ud574."
+    speaker: EGO
+    text: "\uB108\uBB34 \uBE68\uB77C. \uD55C \uBC15\uC790 \uB2A6\uAC8C.\n\uB2FF\uAE30
+      \uC9C1\uC804\uC5D0 \uD53C\uD574."
     duration: 0
   - key: tut.perfect_dodge.success.0
-    speaker: "EGO"
-    text: "\uadf8\uac70\uc57c. \ubc29\uae08 \uc138\uc0c1\uc774\n\uba48\ucd98 \uac83 \uac19\uc558\uc9c0?"
+    speaker: EGO
+    text: "\uADF8\uAC70\uC57C. \uBC29\uAE08 \uC138\uC0C1\uC774\n\uBA48\uCD98 \uAC83
+      \uAC19\uC558\uC9C0?"
     duration: 0
   - key: tut.heal.intro.0
-    speaker: "EGO"
-    text: "\uccb4\ub825\uc774 \uae4e\uc600\uc5b4. Q\ub85c \uc570\ud50c \ud22c\uc5ec.\n\uc228 \ub3cc\ub9b4 \ud2c8\uc5d0 \uc4f0\ub294 \uac70\uc57c."
+    speaker: EGO
+    text: "\uCCB4\uB825\uC774 \uAE4E\uC600\uC5B4. Q\uB85C \uC570\uD50C \uD22C\uC5EC.\n\uC228
+      \uB3CC\uB9B4 \uD2C8\uC5D0 \uC4F0\uB294 \uAC70\uC57C."
     duration: 0
   - key: tut.heal.success.0
-    speaker: "EGO"
-    text: "\ud68c\ubcf5 \uc644\ub8cc. \uc570\ud50c\uc740 \uac04\uc2dd \uc544\ub2c8\uc57c,\n\ucd94\uc628. \uc544\uaef4 \uba39\uc5b4."
+    speaker: EGO
+    text: "\uD68C\uBCF5 \uC644\uB8CC. \uC570\uD50C\uC740 \uAC04\uC2DD \uC544\uB2C8\uC57C,\n\uCD94\uC628.
+      \uC544\uAEF4 \uBA39\uC5B4."
     duration: 0
   - key: tut.ultimate.intro.0
-    speaker: "EGO"
-    text: "\ud398\uc774\uc988 \uac8c\uc774\uc9c0\uac00 \uaf49 \ucc3c\uc5b4.\nR\ub85c \uad81\uadf9\uae30. \ud310\uc744 \ub4a4\uc9d1\uc790."
+    speaker: EGO
+    text: "\uD398\uC774\uC988 \uAC8C\uC774\uC9C0\uAC00 \uAF49 \uCC3C\uC5B4.\nR\uB85C
+      \uAD81\uADF9\uAE30. \uD310\uC744 \uB4A4\uC9D1\uC790."
     duration: 0
   - key: tut.ultimate.success.0
-    speaker: "EGO"
-    text: "\ubd24\uc9c0? \uc6b0\ub9ac \ub458\uc774 \uc81c\ub300\ub85c\n\ub9de\ubb3c\ub9ac\uba74 \uc774 \uc815\ub3c4\uc57c."
+    speaker: EGO
+    text: "\uBD24\uC9C0? \uC6B0\uB9AC \uB458\uC774 \uC81C\uB300\uB85C\n\uB9DE\uBB3C\uB9AC\uBA74
+      \uC774 \uC815\uB3C4\uC57C."
     duration: 0
   - key: tut.exit.intro.0
-    speaker: "EGO"
-    text: "\ud6c8\ub828 \uc885\ub8cc. \ucd9c\uad6c\ub85c \uac00.\n\uc774\uc81c \ud604\uc2e4\ub85c \ub3cc\uc544\uac04\ub2e4."
+    speaker: EGO
+    text: "\uD6C8\uB828 \uC885\uB8CC. \uCD9C\uAD6C\uB85C \uAC00.\n\uC774\uC81C \uD604\uC2E4\uB85C
+      \uB3CC\uC544\uAC04\uB2E4."
     duration: 0
   - key: tut.exit.success.0
-    speaker: "\ucd94\uc628"
-    text: "\uc900\ube44\ub294 \ub05d\ub0ac\uc5b4. \uc9c4\uc9dc\ub85c \uac04\ub2e4."
+    speaker: "\uCD94\uC628"
+    text: "\uC900\uBE44\uB294 \uB05D\uB0AC\uC5B4. \uC9C4\uC9DC\uB85C \uAC04\uB2E4."
     duration: 0
   - key: tutm.move.0
-    speaker: "EGO"
-    text: "WASD\ub85c \uc9c0\uc815 \uc704\uce58\uae4c\uc9c0 \uc774\ub3d9\ud574.\n\uac00\ubcbc\uc6b4 \uc0b0\ucc45\uc774\uc57c."
+    speaker: EGO
+    text: "WASD\uB85C \uC9C0\uC815 \uC704\uCE58\uAE4C\uC9C0 \uC774\uB3D9\uD574.\n\uAC00\uBCBC\uC6B4
+      \uC0B0\uCC45\uC774\uC57C."
     duration: 0
   - key: tutm.move.1
-    speaker: "EGO"
-    text: "\uc2dc\uc57c\ub294 \ub9c8\uc6b0\uc2a4, \ud68c\ud53c\ub294 L-Shift.\n\ub2e4\uc12f \ubc88 \uad74\ub7ec \ubd10."
+    speaker: EGO
+    text: "\uC2DC\uC57C\uB294 \uB9C8\uC6B0\uC2A4, \uD68C\uD53C\uB294 L-Shift.\n\uB2E4\uC12F
+      \uBC88 \uAD74\uB7EC \uBD10."
     duration: 0
   - key: tutm.attack.0
-    speaker: "EGO"
-    text: "\uc774\uc81c \uce7c \uc880 \uc368 \ubcf4\uc790."
+    speaker: EGO
+    text: "\uC774\uC81C \uCE7C \uC880 \uC368 \uBCF4\uC790."
     duration: 0
   - key: tutm.attack.1
-    speaker: "EGO"
-    text: "\uc88c\ud074\ub9ad \uc57d\uacf5, \uc6b0\ud074\ub9ad \uac15\uacf5.\n\uc57d\uacf5 4\uc5f0\ud0c0\uac00 \uae30\ubcf8 \ucf64\ubcf4\uc57c."
+    speaker: EGO
+    text: "\uC88C\uD074\uB9AD \uC57D\uACF5, \uC6B0\uD074\uB9AD \uAC15\uACF5.\n\uC57D\uACF5
+      4\uC5F0\uD0C0\uAC00 \uAE30\uBCF8 \uCF64\uBCF4\uC57C."
     duration: 0
   - key: tutm.mid.0
-    speaker: "\ucd94\uc628"
-    text: "\ubab8 \ud480\ub838\uc5b4. \ub2e4\uc74c."
+    speaker: "\uCD94\uC628"
+    text: "\uBAB8 \uD480\uB838\uC5B4. \uB2E4\uC74C."
     duration: 0
   - key: tutm.defense.0
-    speaker: "EGO"
-    text: "\uc774\ubc88\uc5d4 \ubc29\uc5b4\uc640 \ud328\ub9c1.\n\ub9de\uc73c\uba74\uc11c \ubc30\uc6b0\ub294 \uc2dc\uac04\uc774\uc57c."
+    speaker: EGO
+    text: "\uC774\uBC88\uC5D4 \uBC29\uC5B4\uC640 \uD328\uB9C1.\n\uB9DE\uC73C\uBA74\uC11C
+      \uBC30\uC6B0\uB294 \uC2DC\uAC04\uC774\uC57C."
     duration: 0
   - key: tutm.defense.1
-    speaker: "EGO"
-    text: "E\ub85c \ubc29\uc5b4, \ub9de\uae30 \uc9c1\uc804\uc5d0 E\uba74 \ud328\ub9c1.\n\ud5ec\uba67\uc774 \ube5b\ub098\uba74 \uadf8\uac8c \uc2e0\ud638\uc57c."
+    speaker: EGO
+    text: "E\uB85C \uBC29\uC5B4, \uB9DE\uAE30 \uC9C1\uC804\uC5D0 E\uBA74 \uD328\uB9C1.\n\uD5EC\uBA67\uC774
+      \uBE5B\uB098\uBA74 \uADF8\uAC8C \uC2E0\uD638\uC57C."
     duration: 0
   - key: tutm.heal.0
-    speaker: "\ucd94\uc628"
-    text: "\ub2e4\uce58\uba74 \ubc14\ub85c \ud68c\ubcf5. \uae30\ubcf8\uc774\uc9c0."
+    speaker: "\uCD94\uC628"
+    text: "\uB2E4\uCE58\uBA74 \uBC14\uB85C \uD68C\uBCF5. \uAE30\uBCF8\uC774\uC9C0."
     duration: 0
   - key: tutm.heal.1
-    speaker: "EGO"
-    text: "Q\ub85c \uc570\ud50c \ud22c\uc5ec.\n\uc228 \ub3cc\ub9b4 \ud2c8\uc5d0 \uc368."
+    speaker: EGO
+    text: "Q\uB85C \uC570\uD50C \uD22C\uC5EC.\n\uC228 \uB3CC\uB9B4 \uD2C8\uC5D0 \uC368."
     duration: 0
   - key: tutm.complete.0
-    speaker: "EGO"
-    text: "\uae30\ubcf8 \ud6c8\ub828 \ub05d. \ud569\uaca9\uc774\uc57c, \ucd94\uc628.\n\u2026\uc6d0\ub798 \ud569\uaca9 \uac19\uc740 \uac74 \uc5c6\uc9c0\ub9cc."
+    speaker: EGO
+    text: "\uAE30\uBCF8 \uD6C8\uB828 \uB05D. \uD569\uACA9\uC774\uC57C, \uCD94\uC628.\n\u2026\uC6D0\uB798
+      \uD569\uACA9 \uAC19\uC740 \uAC74 \uC5C6\uC9C0\uB9CC."
     duration: 0
   - key: lobby.fromtut.0
-    speaker: "EGO"
-    text: "\uc2dc\ubbac\ub808\uc774\uc158\uc740 \ub05d\ub0ac\uc5b4, \ucd94\uc628.\n\uc5ec\uae30\uc11c\ubd80\ud134 \uc9c4\uc9dc\uc57c."
+    speaker: EGO
+    text: "\uC2DC\uBBAC\uB808\uC774\uC158\uC740 \uB05D\uB0AC\uC5B4, \uCD94\uC628.\n\uC5EC\uAE30\uC11C\uBD80\uD134
+      \uC9C4\uC9DC\uC57C."
     duration: 0
   - key: lobby.fromtut.1
-    speaker: "\ucd94\uc628"
-    text: "\uc54c\uc544. \ub4e4\uc5b4\uac04\ub2e4."
+    speaker: "\uCD94\uC628"
+    text: "\uC54C\uC544. \uB4E4\uC5B4\uAC04\uB2E4."
     duration: 0
   - key: lobby.arrive.0
-    speaker: "\ucd94\uc628"
-    text: "\uc5ec\uae30\uac00 \ub188\ub4e4\uc758 \uc2ec\uc7a5\ubd80\u2026"
+    speaker: "\uCD94\uC628"
+    text: "\uC5EC\uAE30\uAC00 \uB188\uB4E4\uC758 \uC2EC\uC7A5\uBD80\u2026"
     duration: 0
   - key: lobby.arrive.1
-    speaker: "EGO"
-    text: "\uc2ec\uc7a5\uce58\uace4 \uaf64 \ubc18\uc9dd\uac70\ub9ac\ub124.\n\ud53c \ub0c4\uc0c8\ub294 \uc798\ub3c4 \uc9c0\uc6e0\uc5b4."
+    speaker: EGO
+    text: "\uC2EC\uC7A5\uCE58\uACE4 \uAF64 \uBC18\uC9DD\uAC70\uB9AC\uB124.\n\uD53C
+      \uB0C4\uC0C8\uB294 \uC798\uB3C4 \uC9C0\uC6E0\uC5B4."
     duration: 0
   - key: lobby.alarm.0
-    speaker: "System"
-    text: "\uce68\uc785\uc790 \uac10\uc9c0.\n\ubc29\uc5b4 \ud504\ub85c\ud1a0\ucf5c\uc744 \uac00\ub3d9\ud569\ub2c8\ub2e4."
+    speaker: System
+    text: "\uCE68\uC785\uC790 \uAC10\uC9C0.\n\uBC29\uC5B4 \uD504\uB85C\uD1A0\uCF5C\uC744
+      \uAC00\uB3D9\uD569\uB2C8\uB2E4."
     duration: 0
   - key: lobby.alarm.1
-    speaker: "System"
-    text: "\uc784\uc9c1\uc6d0 \uc5ec\ub7ec\ubd84\uc740\n\uc5c5\ubb34\ub97c \uacc4\uc18d\ud574 \uc8fc\uc2ed\uc2dc\uc624."
+    speaker: System
+    text: "\uC784\uC9C1\uC6D0 \uC5EC\uB7EC\uBD84\uC740\n\uC5C5\uBB34\uB97C \uACC4\uC18D\uD574
+      \uC8FC\uC2ED\uC2DC\uC624."
     duration: 0
   - key: lobby.drones.0
-    speaker: "EGO"
-    text: "\ud504\ub860\ud2b8 \ub370\uc2a4\ud06c \ub4a4\uc5d0\uc11c \ub4dc\ub860\uc774 \ub098\uc640.\n\uc190\ub2d8 \uc811\ub300 \ud55c\ubc88 \uac70\uce60\ub2e4."
+    speaker: EGO
+    text: "\uD504\uB860\uD2B8 \uB370\uC2A4\uD06C \uB4A4\uC5D0\uC11C \uB4DC\uB860\uC774
+      \uB098\uC640.\n\uC190\uB2D8 \uC811\uB300 \uD55C\uBC88 \uAC70\uCE60\uB2E4."
     duration: 0
   - key: lobby.drones.1
-    speaker: "\ucd94\uc628"
-    text: "\uc804\ubd80 \ubd80\uc21c\ub2e4."
+    speaker: "\uCD94\uC628"
+    text: "\uC804\uBD80 \uBD80\uC21C\uB2E4."
     duration: 0
   - key: lobby.post.0
-    speaker: "EGO"
-    text: "\uc815\ub9ac \ub05d. \uc77c\ubc18 \uc5d8\ub9ac\ubca0\uc774\ud130\ub294\n\uc804\ubd80 \uc7a0\uaca8 \uc788\uc5b4."
+    speaker: EGO
+    text: "\uC815\uB9AC \uB05D. \uC77C\uBC18 \uC5D8\uB9AC\uBCA0\uC774\uD130\uB294\n\uC804\uBD80
+      \uC7A0\uACA8 \uC788\uC5B4."
     duration: 0
   - key: lobby.post.1
-    speaker: "\ucd94\uc628"
-    text: "\ub2e4\ub978 \uae38\uc740?"
+    speaker: "\uCD94\uC628"
+    text: "\uB2E4\uB978 \uAE38\uC740?"
     duration: 0
   - key: lobby.post.2
-    speaker: "EGO"
-    text: "\ud504\ub860\ud2b8 \ub370\uc2a4\ud06c \ub4a4\ud3b8 \uc5d8\ub9ac\ubca0\uc774\ud130 \ud558\ub098\ub9cc\n\uc0b4\uc544 \uc788\uc5b4. \uc800\ucabd\uc774\uc57c."
+    speaker: EGO
+    text: "\uD504\uB860\uD2B8 \uB370\uC2A4\uD06C \uB4A4\uD3B8 \uC5D8\uB9AC\uBCA0\uC774\uD130
+      \uD558\uB098\uB9CC\n\uC0B4\uC544 \uC788\uC5B4. \uC800\uCABD\uC774\uC57C."
     duration: 0
   - key: lobby.elev.0
-    speaker: "EGO"
-    text: "\uc774 \uc5d8\ub9ac\ubca0\uc774\ud130, \uaca9\ub0a9\uace0 \uce35\uc73c\ub85c\ub9cc \uac00.\n\ubc84\ud2bc\uc774 \ub531 \ud558\ub098\uc57c."
+    speaker: EGO
+    text: "\uC774 \uC5D8\uB9AC\uBCA0\uC774\uD130, \uACA9\uB0A9\uACE0 \uCE35\uC73C\uB85C\uB9CC
+      \uAC00.\n\uBC84\uD2BC\uC774 \uB531 \uD558\uB098\uC57C."
     duration: 0
   - key: lobby.elev.1
-    speaker: "\ucd94\uc628"
-    text: "\ub188\ub4e4\uc774 \uc77c\ubd80\ub7ec \uc5f4\uc5b4\ub454 \uae38\uc778\uac00."
+    speaker: "\uCD94\uC628"
+    text: "\uB188\uB4E4\uC774 \uC77C\uBD80\uB7EC \uC5F4\uC5B4\uB454 \uAE38\uC778\uAC00."
     duration: 0
   - key: lobby.elev.2
-    speaker: "EGO"
-    text: "\ud568\uc815 \ub0c4\uc0c8\uac00 \ub098. \uadf8\ub798\ub3c4 \uae38\uc740 \uc774\uac83\ubfd0.\n\ud0c0, \ucd94\uc628."
+    speaker: EGO
+    text: "\uD568\uC815 \uB0C4\uC0C8\uAC00 \uB098. \uADF8\uB798\uB3C4 \uAE38\uC740
+      \uC774\uAC83\uBFD0.\n\uD0C0, \uCD94\uC628."
     duration: 0
   - key: lobby.elev.3
-    speaker: "\ucd94\uc628"
-    text: "\u2026\ub05d\ub098\uba74 \ubc25\ubd80\ud130 \uba39\uc744 \uac70\uc57c."
+    speaker: "\uCD94\uC628"
+    text: "\u2026\uB05D\uB098\uBA74 \uBC25\uBD80\uD130 \uBA39\uC744 \uAC70\uC57C."
     duration: 0
   - key: lobby.elev.4
-    speaker: "EGO"
-    text: "\uc88b\uc740 \ub3d9\uae30\uc57c. \uc0b4\uc544 \ub098\uac00\uba74 \uacf1\ube7c\uae30."
+    speaker: EGO
+    text: "\uC88B\uC740 \uB3D9\uAE30\uC57C. \uC0B4\uC544 \uB098\uAC00\uBA74 \uACF1\uBE7C\uAE30."
     duration: 0
   - key: lobby.sync.0
-    speaker: "EGO"
-    text: "\uacbd\ub85c \uace0\uc815. \uaca9\ub0a9\uace0 \uce35\uc73c\ub85c \ub0b4\ub824\uac04\ub2e4."
+    speaker: EGO
+    text: "\uACBD\uB85C \uACE0\uC815. \uACA9\uB0A9\uACE0 \uCE35\uC73C\uB85C \uB0B4\uB824\uAC04\uB2E4."
     duration: 0
   - key: boss.intro.0
-    speaker: "EGO"
-    text: "\ub3c4\ucc29. \uaca9\ub0a9\uace0 \uce35\uc774\uc57c, \ucd94\uc628."
+    speaker: EGO
+    text: "\uB3C4\uCC29. \uACA9\uB0A9\uACE0 \uCE35\uC774\uC57C, \uCD94\uC628."
     duration: 0
   - key: boss.intro.1
-    speaker: "\ucd94\uc628"
-    text: "\uc77c\ubd80\ub7ec \uc5ec\uae30\ub85c \ubcf4\ub0b8 \uac70\uad70."
+    speaker: "\uCD94\uC628"
+    text: "\uC77C\uBD80\uB7EC \uC5EC\uAE30\uB85C \uBCF4\uB0B8 \uAC70\uAD70."
     duration: 0
   - key: boss.intro.2
-    speaker: "EGO"
-    text: "\ubcf4\uc548\ub9dd\uc774 \uc870\uc6a9\ud574. \ub108\ubb34 \uc870\uc6a9\ud574.\n\uc774\ub7f0 \uac74 \ubcf4\ud1b5 \ubcf5\uc120\uc774\uac70\ub4e0."
+    speaker: EGO
+    text: "\uBCF4\uC548\uB9DD\uC774 \uC870\uC6A9\uD574. \uB108\uBB34 \uC870\uC6A9\uD574.\n\uC774\uB7F0
+      \uAC74 \uBCF4\uD1B5 \uBCF5\uC120\uC774\uAC70\uB4E0."
     duration: 0
   - key: boss.intro.3
-    speaker: "EGO"
-    text: "\uc815\uc815\ud560\uac8c. \ubc29\uae08\ubd80\ub85c \uc2dc\ub044\ub7ec\uc6cc\uc84c\uc5b4."
+    speaker: EGO
+    text: "\uC815\uC815\uD560\uAC8C. \uBC29\uAE08\uBD80\uB85C \uC2DC\uB044\uB7EC\uC6CC\uC84C\uC5B4."
     duration: 0
   - key: boss.intro.4
-    speaker: "EGO"
-    text: "\uc804\ubc29 \uace0\uc5d0\ub108\uc9c0 \ubc18\uc751. \uc778\uac04\ud615\u2026\n\uc544\ub2c8, \uc2e4\ud5d8\uccb4\uc57c."
+    speaker: EGO
+    text: "\uC804\uBC29 \uACE0\uC5D0\uB108\uC9C0 \uBC18\uC751. \uC778\uAC04\uD615\u2026\n\uC544\uB2C8,
+      \uC2E4\uD5D8\uCCB4\uC57C."
     duration: 0
   - key: boss.intro.5
-    speaker: "\ucd94\uc628"
-    text: "\u2026\ub098\ub791 \uac19\uc740 \ubd80\ub958\uad70."
+    speaker: "\uCD94\uC628"
+    text: "\u2026\uB098\uB791 \uAC19\uC740 \uBD80\uB958\uAD70."
     duration: 0
   - key: boss.intro.6
-    speaker: "EGO"
-    text: "Type-D. \ub108\uc640 \uac19\uc740 \uc2e4\ud5d8\uccb4 \uc2dc\ub9ac\uc988\uc57c.\n\uc774 \uaca9\ub0a9\uace0\uc758 \ubb38\uc9c0\uae30\uc9c0."
+    speaker: EGO
+    text: "Type-D. \uB108\uC640 \uAC19\uC740 \uC2E4\uD5D8\uCCB4 \uC2DC\uB9AC\uC988\uC57C.\n\uC774
+      \uACA9\uB0A9\uACE0\uC758 \uBB38\uC9C0\uAE30\uC9C0."
     duration: 0
   - key: boss.intro.7
-    speaker: "\ucd94\uc628"
-    text: "\uadf8\ub7fc \ubca0\uba74 \ub418\uaca0\ub124."
+    speaker: "\uCD94\uC628"
+    text: "\uADF8\uB7FC \uBCA0\uBA74 \uB418\uACA0\uB124."
     duration: 0
   - key: boss.intro.8
-    speaker: "EGO"
-    text: "\uba3c\uc800 \uc77d\uace0 \ub4e4\uc5b4\uac00. \ud798\uc73c\ub85c \ubc00\uba74\n\ub124\uac00 \uba3c\uc800 \ubd80\uc11c\uc838, \ucd94\uc628."
+    speaker: EGO
+    text: "\uBA3C\uC800 \uC77D\uACE0 \uB4E4\uC5B4\uAC00. \uD798\uC73C\uB85C \uBC00\uBA74\n\uB124\uAC00
+      \uBA3C\uC800 \uBD80\uC11C\uC838, \uCD94\uC628."
     duration: 0
   - key: boss.intro.9
-    speaker: "\ucd94\uc628"
-    text: "\uac71\uc815 \ub9c8. \ub05d\uae4c\uc9c0 \ubca8 \uac70\uc57c."
+    speaker: "\uCD94\uC628"
+    text: "\uAC71\uC815 \uB9C8. \uB05D\uAE4C\uC9C0 \uBCA8 \uAC70\uC57C."
     duration: 0
   - key: boss.intro.typed
-    speaker: "Type-D"
-    text: "\uc2e4\ud5d8\uccb4 07\ud638 \ud655\uc778.\n\ud3d0\uae30 \uc808\ucc28\ub97c \uc7ac\uac1c\ud55c\ub2e4."
+    speaker: Type-D
+    text: "\uC2E4\uD5D8\uCCB4 07\uD638 \uD655\uC778.\n\uD3D0\uAE30 \uC808\uCC28\uB97C
+      \uC7AC\uAC1C\uD55C\uB2E4."
     duration: 0
   - key: ending.tsukasa
-    speaker: "\uce20\uce74\uc0ac"
-    text: "\uacb0\uad6d \uc77c\uc5b4\ub098 \ubc84\ub838\ub098.. \ud558\uc9c0\ub9cc \ub10c \uc544\uc9c1 \ub0b4\uac00 \uc124\uacc4\ud55c \uada4\ub3c4 \uc704\ub97c \uac77\uace0 \uc788\uc744 \ubfd0\uc774\ub2e4."
+    speaker: "\uCE20\uCE74\uC0AC"
+    text: "\uACB0\uAD6D \uC77C\uC5B4\uB098 \uBC84\uB838\uB098.. \uD558\uC9C0\uB9CC
+      \uB10C \uC544\uC9C1 \uB0B4\uAC00 \uC124\uACC4\uD55C \uADA4\uB3C4 \uC704\uB97C
+      \uAC77\uACE0 \uC788\uC744 \uBFD0\uC774\uB2E4."
     duration: 0
   - key: ending.reply.0
-    speaker: "\ucd94\uc628"
-    text: "\uadf8 \uada4\ub3c4, \ub0b4\uac00 \ub04a\uc5b4 \uc8fc\uc9c0."
-    duration: 2.0
+    speaker: "\uCD94\uC628"
+    text: "\uADF8 \uADA4\uB3C4, \uB0B4\uAC00 \uB04A\uC5B4 \uC8FC\uC9C0."
+    duration: 2
   - key: ending.reply.1
-    speaker: "EGO"
-    text: "\uc124\uacc4\uc790 \uc591\ubc18, \ub0a0 \ubc84\ub9b0 \uac70 \ud6c4\ud68c\ud560\uac78.\n\ub09c \uc608\uce21 \ubd88\uac00\ub2a5\ud558\uac70\ub4e0."
+    speaker: EGO
+    text: "\uC124\uACC4\uC790 \uC591\uBC18, \uB0A0 \uBC84\uB9B0 \uAC70 \uD6C4\uD68C\uD560\uAC78.\n\uB09C
+      \uC608\uCE21 \uBD88\uAC00\uB2A5\uD558\uAC70\uB4E0."
     duration: 2.6
+  - key: tut.inf.move.intro.0
+    speaker: EGO
+    text: "\uB808\uC9C0\uC2A4\uD0D5\uC2A4\uAC00 \uC9E0 \uB0B4\uC77C \uCE68\uD22C
+      \uACBD\uB85C\uC57C.\n\uAC70\uB9AC\uC5D0\uC11C \uBCF8\uC0AC \uB85C\uBE44 \uBB38
+      \uC55E\uAE4C\uC9C0."
+    duration: 0
+  - key: tut.inf.move.intro.1
+    speaker: EGO
+    text: "{move}\uB85C \uAC00\uB85C\uB4F1 \uC544\uB798 \uD45C\uC2DD\uAE4C\uC9C0.\n\uB0B4\uC77C\uC740
+      \uC774 \uAE38\uC744 \uC9C4\uC9DC\uB85C \uAC77\uB294 \uAC70\uC57C."
+    duration: 0
+  - key: tut.inf.move.success.0
+    speaker: EGO
+    text: "\uB2E4\uB9AC\uB294 \uBA40\uCA61\uD558\uB124. \uB2E4\uC74C."
+    duration: 0
+  - key: tut.inf.look.intro.0
+    speaker: EGO
+    text: "{look}\uB85C \uC2DC\uC57C\uB97C \uB3CC\uB824 \uBD10.\n\uAC70\uB9AC \uB05D,
+      \uBD89\uC740 \uC5E0\uBE14\uB7FC."
+    duration: 0
+  - key: tut.inf.look.remind.0
+    speaker: EGO
+    text: "\uACE0\uAC1C \uB4E4\uC5B4, \uCD94\uC628.\n\uAC70\uB9AC \uB05D\uC5D0\uC11C
+      \uC81C\uC77C \uD070 \uBE4C\uB529."
+    duration: 0
+  - key: tut.inf.look.success.0
+    speaker: "\uCD94\uC628"
+    text: "\uCE20\uCE74\uC0AC \uBCF8\uC0AC\u2026"
+    duration: 0
+  - key: tut.inf.look.success.1
+    speaker: EGO
+    text: "\uB0B4\uC77C\uC758 \uBAA9\uC801\uC9C0. \uC624\uB298\uC740\n\uB85C\uBE44
+      \uBB38 \uC55E\uAE4C\uC9C0\uB9CC \uAC00 \uBCF4\uC790."
+    duration: 0
+  - key: tut.inf.dodge.intro.0
+    speaker: EGO
+    text: "{dodge}\uB85C \uD68C\uD53C. \uB450 \uBC88 \uAD74\uB7EC \uBD10.\n\uAD6C\uB974\uB294
+      \uC21C\uAC04\uC5D4 \uC544\uBB34\uAC83\uB3C4 \uC548 \uB2FF\uC544."
+    duration: 0
+  - key: tut.inf.dodge.success.0
+    speaker: EGO
+    text: "\uC88B\uC544. \uADF8 \uBB34\uC801 \uD504\uB808\uC784\uC774\n\uC624\uB298\uC758
+      \uCCAB \uBC88\uC9F8 \uC5F4\uC1E0\uC57C."
+    duration: 0
+  - key: tut.inf.scan.intro.0
+    speaker: EGO
+    text: "\uC55E\uC5D0 \uBCF4\uC548 \uC2A4\uCE90\uB108 \uBE54. \uAC78\uC5B4\uAC00\uBA74
+      \uAC78\uB824.\n\uBE54 \uBC14\uB85C \uC55E\uC5D0\uC11C \uAD74\uB7EC\uC11C \uD1B5\uACFC\uD574."
+    duration: 0
+  - key: tut.inf.scan.remind.0
+    speaker: EGO
+    text: "\uAC78\uC5B4\uAC00\uBA74 \uAC10\uC9C0\uB3FC.\n\uBE54 \uBC14\uB85C \uC55E\uC5D0\uC11C
+      {dodge}."
+    duration: 0
+  - key: tut.inf.scan.success.0
+    speaker: EGO
+    text: "\uC2A4\uCE90\uB108 \uD1B5\uACFC. \uAE30\uB85D\uC5D4\n\uACE0\uC591\uC774
+      \uD55C \uB9C8\uB9AC \uC815\uB3C4\uB85C \uB0A8\uC558\uC744\uAC78."
+    duration: 0
+  - key: tut.inf.lockon.intro.0
+    speaker: EGO
+    text: "\uAC80\uBB38\uC18C \uACBD\uBE44 \uC548\uB4DC\uB85C\uC774\uB4DC. \uB4F1
+      \uB3CC\uB838\uC9C0?\n{lockon}\uC73C\uB85C \uB77D\uC628\uD574."
+    duration: 0
+  - key: tut.inf.lockon.remind.0
+    speaker: EGO
+    text: "\uB188\uC744 \uD654\uBA74\uC5D0 \uB450\uACE0 {lockon}.\n\uC2DC\uC120\uC774
+      \uB531 \uBD99\uC744 \uAC70\uC57C."
+    duration: 0
+  - key: tut.inf.lockon.success.0
+    speaker: EGO
+    text: "\uACE0\uC815 \uC644\uB8CC. \uC774\uC81C \uBCA8 \uC77C\uB9CC \uB0A8\uC558\uC5B4."
+    duration: 0
+  - key: tut.inf.combo.intro.0
+    speaker: EGO
+    text: "{light} \uC57D\uACF5, {heavy} \uAC15\uACF5.\n\uC57D\uACF5 \uC138 \uBC88,
+      \uAC15\uACF5 \uD55C \uBC88 \uB123\uACE0 \uC815\uB9AC\uD574."
+    duration: 0
+  - key: tut.inf.combo.remind.0
+    speaker: EGO
+    text: "\uC57D\uACF5\uC740 {light}, \uAC15\uACF5\uC740 {heavy}.\n\uB04A\uC9C0
+      \uB9D0\uACE0 \uC774\uC5B4."
+    duration: 0
+  - key: tut.inf.combo.success.0
+    speaker: EGO
+    text: "\uAE54\uB054\uD574. \uC2DC\uBBAC\uB808\uC774\uC158 \uACBD\uBE44\uB77C\uB3C4\n\uC0B4\uC9DD
+      \uBBF8\uC548\uD574\uC9C8 \uC815\uB3C4\uB124."
+    duration: 0
+  - key: tut.inf.guard.intro.0
+    speaker: EGO
+    text: "\uBD80\uC2A4\uC5D0\uC11C \uD558\uB098 \uB354 \uB098\uC628\uB2E4.\n{guard}\uB97C
+      \uB204\uB974\uACE0 \uC788\uC73C\uBA74 \uB9C9\uC544."
+    duration: 0
+  - key: tut.inf.guard.remind.0
+    speaker: EGO
+    text: "\uB188\uC774 \uD718\uB450\uB97C \uB54C E.\n\uC77C\uB2E8 \uBC84\uD2F0\uB294
+      \uBC95\uBD80\uD130."
+    duration: 0
+  - key: tut.inf.guard.success.0
+    speaker: EGO
+    text: "\uC88B\uC544, \uBC29\uC5B4 \uB9AC\uB4EC \uC7A1\uD614\uC5B4."
+    duration: 0
+  - key: tut.inf.parry.intro.0
+    speaker: EGO
+    text: "\uC138 \uBC88\uC9F8 \uACF5\uACA9 \uC804\uC5D0 \uD5EC\uBA67\uC774 \uAE08\uC0C9\uC73C\uB85C\n\uBC88\uCA4D\uC5EC.
+      \uADF8\uAC8C \uD328\uB9C1 \uC2E0\uD638\uC57C."
+    duration: 0
+  - key: tut.inf.parry.intro.1
+    speaker: EGO
+    text: "\uB9DE\uAE30 \uC9C1\uC804\uC5D0 {guard}.\n\uB9C9\uB294 \uAC8C \uC544\uB2C8\uB77C
+      \uB04A\uB294 \uAC70\uC57C."
+    duration: 0
+  - key: tut.inf.parry.remind.0
+    speaker: EGO
+    text: "\uAE08\uC0C9 \uC12C\uAD11\uC774 \uBCF4\uC774\uBA74\n\uD55C \uBC15\uC790
+      \uAE30\uB2E4\uB838\uB2E4\uAC00 {guard}."
+    duration: 0
+  - key: tut.inf.parry.success.0
+    speaker: EGO
+    text: "\uADF8\uAC70\uC57C! \uD295\uACA8\uB0B8 \uC21C\uAC04\uC774\n\uC81C\uC77C
+      \uD06C\uAC8C \uBCA8 \uAE30\uD68C\uC57C."
+    duration: 0
+  - key: tut.inf.clear.intro.0
+    speaker: EGO
+    text: "\uB0A8\uC740 \uACBD\uBE44 \uC815\uB9AC\uD558\uBA74\n\uCC28\uB2E8\uAE30\uAC00
+      \uC5F4\uB824."
+    duration: 0
+  - key: tut.inf.clear.success.0
+    speaker: EGO
+    text: "\uAC80\uBB38\uC18C \uD1B5\uACFC. \uB0B4\uC77C \uC9C4\uC9DC \uACBD\uBE44\uB294\n\uC774\uB807\uAC8C
+      \uC21C\uC21C\uD788 \uC548 \uC5F4\uC5B4 \uC904 \uAC70\uC57C."
+    duration: 0
+  - key: tut.inf.to_dock.intro.0
+    speaker: EGO
+    text: "\uC815\uBB38\uC740 \uBD09\uC1C4\uC57C.\n\uC11C\uBE44\uC2A4 \uACE8\uBAA9
+      \uC9C0\uB098 \uD558\uC5ED\uC7A5\uC73C\uB85C."
+    duration: 0
+  - key: tut.inf.to_dock.success.0
+    speaker: "\uCD94\uC628"
+    text: "\uD558\uC5ED\uC7A5\uC774\uAD70."
+    duration: 0
+  - key: tut.inf.red.intro.0
+    speaker: EGO
+    text: "\uD558\uC5ED\uC7A5 \uBCBD\uC5D0 \uD130\uB81B. \uBE68\uAC04 \uBE5B\uC740\n\uB9C9\uC744
+      \uC218\uB3C4, \uD328\uB9C1\uD560 \uC218\uB3C4 \uC5C6\uC5B4."
+    duration: 0
+  - key: tut.inf.red.intro.1
+    speaker: EGO
+    text: "\uC870\uC900\uC120\uC774 \uACE0\uC815\uB418\uBA74 \uC606\uC73C\uB85C \uBE44\uCF1C.\n\uCEE8\uD14C\uC774\uB108\uB97C
+      \uC5C4\uD3D0\uBB3C\uB85C \uC368."
+    duration: 0
+  - key: tut.inf.red.remind.0
+    speaker: EGO
+    text: "\uBE68\uAC15\uC740 \uBC1B\uC9C0 \uB9C8.\n\uC870\uC900\uC120 \uBC16\uC73C\uB85C
+      \uD55C \uAC78\uC74C."
+    duration: 0
+  - key: tut.inf.red.success.0
+    speaker: EGO
+    text: "\uD130\uB81B \uC7A0\uAE50 \uBA48\uCDC4\uC5B4.\n\uBE68\uAC15 = \uD53C\uD55C\uB2E4.
+      \uC78A\uC9C0 \uB9C8."
+    duration: 0
+  - key: tut.inf.heal.intro.0
+    speaker: EGO
+    text: "\uAE01\uD614\uB124. {heal}\uB85C \uC570\uD50C \uD22C\uC5EC.\n\uC228 \uB3CC\uB9B4
+      \uD2C8\uC5D0 \uC4F0\uB294 \uAC70\uC57C."
+    duration: 0
+  - key: tut.inf.heal.success.0
+    speaker: EGO
+    text: "\uD68C\uBCF5 \uC644\uB8CC. \uC570\uD50C\uC740 \uAC04\uC2DD \uC544\uB2C8\uC57C,\n\uCD94\uC628.
+      \uC544\uAEF4 \uBA39\uC5B4."
+    duration: 0
+  - key: tut.inf.pd.intro.0
+    speaker: EGO
+    text: "\uD50C\uB7AB\uD3FC\uC740 \uC881\uC544\uC11C \uBE44\uD0AC \uB370\uAC00
+      \uC5C6\uC5B4.\n\uC774\uBC88\uC5D4 \uBE68\uAC15\uC744 \uC815\uBA74\uC73C\uB85C
+      \uB118\uB294\uB2E4."
+    duration: 0
+  - key: tut.inf.pd.intro.1
+    speaker: EGO
+    text: "\uD0C4\uC774 \uB2FF\uAE30 \uC9C1\uC804, \uD55C \uBC15\uC790 \uB2A6\uAC8C\n{dodge}.
+      \uADF8\uAC8C \uD37C\uD399\uD2B8 \uD68C\uD53C\uC57C."
+    duration: 0
+  - key: tut.inf.pd.remind.0
+    speaker: EGO
+    text: "\uB108\uBB34 \uBE68\uB77C. \uC870\uC900\uC120\uC774 \uBA48\uCD94\uACE0\n\uD55C
+      \uBC15\uC790 \uB4A4\uC5D0 \uAD74\uB7EC."
+    duration: 0
+  - key: tut.inf.pd.assist.0
+    speaker: EGO
+    text: "\uD310\uC815 \uBCF4\uC870 \uCF30\uC5B4. \uC2DC\uBBAC\uB808\uC774\uC158\uC774\uB2C8\uAE4C\n\uC774\uBC88\uB9CC
+      \uBD10\uC900\uB2E4."
+    duration: 0
+  - key: tut.inf.pd.success.0
+    speaker: EGO
+    text: "\uADF8\uAC70\uC57C. \uBC29\uAE08 \uC138\uC0C1\uC774\n\uBA48\uCD98 \uAC83
+      \uAC19\uC558\uC9C0?"
+    duration: 0
+  - key: tut.inf.to_side.intro.0
+    speaker: EGO
+    text: "\uC154\uD130 \uD1B5\uB85C \uB108\uBA38\uAC00 \uCE21\uBA74 \uCD9C\uC785\uAD6C.\n\uB85C\uBE44
+      \uBC14\uB85C \uC55E\uC774\uC57C."
+    duration: 0
+  - key: tut.inf.enforcer.intro.0
+    speaker: EGO
+    text: "\uBC29\uD328 \uC9D1\uD589\uAD00. \uC815\uBA74 \uC57D\uACF5\uC740\n\uB2E4
+      \uB9C9\uD600. \uC2DC\uAC04 \uB0AD\uBE44\uC57C."
+    duration: 0
+  - key: tut.inf.enforcer.intro.1
+    speaker: EGO
+    text: "{heavy} \uAC15\uACF5\uC73C\uB85C \uBC29\uD328\uB97C \uAE68\uAC70\uB098\n\uC606\uC73C\uB85C
+      \uB3CC\uC544. \uB4A4 \uD130\uB81B \uC870\uC900\uC120\uB3C4 \uC870\uC2EC."
+    duration: 0
+  - key: tut.inf.enforcer.remind.0
+    speaker: EGO
+    text: "\uC815\uBA74 \uC57D\uACF5\uC740 \uD295\uACA8.\n\uAC15\uACF5\uC73C\uB85C
+      \uAE68, \uCD94\uC628."
+    duration: 0
+  - key: tut.inf.enforcer.success.0
+    speaker: EGO
+    text: "\uBC29\uD328 \uBD95\uAD34! \uC9C0\uAE08 \uB05D\uB0B4\uC790."
+    duration: 0
+  - key: tut.inf.ultimate.intro.0
+    speaker: EGO
+    text: "\uC2DC\uBBAC\uB808\uC774\uC158\uC774 \uD398\uC774\uC988 \uAC8C\uC774\uC9C0\uB97C\n\uCC44\uC6CC
+      \uB480\uC5B4. {ult}\uB85C \uAD81\uADF9\uAE30."
+    duration: 0
+  - key: tut.inf.ultimate.success.0
+    speaker: EGO
+    text: "\uBD24\uC9C0? \uC6B0\uB9AC \uB458\uC774 \uC81C\uB300\uB85C\n\uB9DE\uBB3C\uB9AC\uBA74
+      \uC774 \uC815\uB3C4\uC57C."
+    duration: 0
+  - key: tut.inf.exit.intro.0
+    speaker: EGO
+    text: "\uD6C8\uB828 \uC885\uB8CC. \uB85C\uBE44 \uBB38 \uD328\uB110\uC5D0\uC11C
+      {interact}.\n\uC774\uC81C \uD604\uC2E4\uB85C \uB3CC\uC544\uAC04\uB2E4."
+    duration: 0
+  - key: tut.inf.exit.success.0
+    speaker: "\uCD94\uC628"
+    text: "\uC900\uBE44\uB294 \uB05D\uB0AC\uC5B4. \uC9C4\uC9DC\uB85C \uAC04\uB2E4."
+    duration: 0
+  - key: tut.inf.resync.0
+    speaker: EGO
+    text: "\uB3D9\uAE30\uD654 \uB04A\uACBC\uC5B4. \uCCB4\uD06C\uD3EC\uC778\uD2B8\uB85C\n\uB418\uAC10\uC744\uAC8C.
+      \uB2E4\uC2DC \uAC00 \uBCF4\uC790, \uCD94\uC628."
+    duration: 0
+  - key: tut.inf.respawn.0
+    speaker: EGO
+    text: "\uB808\uC2A8 \uB2E4\uC2DC. \uC2DC\uBBAC\uB808\uC774\uC158\uC774\n\uD558\uB098
+      \uB354 \uB744\uC6CC \uC904\uAC8C."
+    duration: 0
   barkGroups:
   - key: parry.first
     cooldown: 0
@@ -331,8 +631,9 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uadf8\uac70\uc57c! \ud5ec\uba67 \ube5b,\n\uacc4\uc18d \uadf8\ub807\uac8c \ubd10."
+      speaker: EGO
+      text: "\uADF8\uAC70\uC57C! \uD5EC\uBA67 \uBE5B,\n\uACC4\uC18D \uADF8\uB807\uAC8C
+        \uBD10."
       duration: 0
   - key: parry
     cooldown: 16
@@ -343,20 +644,20 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uae54\ub054\ud574."
+      speaker: EGO
+      text: "\uAE54\uB054\uD574."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\ud295\uaca8\ub0c8\uc5b4. \uc9c0\uae08 \ubab0\uc544\uccd0!"
+      speaker: EGO
+      text: "\uD295\uACA8\uB0C8\uC5B4. \uC9C0\uAE08 \uBAB0\uC544\uCCD0!"
       duration: 0
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\uc77d\ud614\uc5b4."
+      speaker: "\uCD94\uC628"
+      text: "\uC77D\uD614\uC5B4."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\ud0c0\uc774\ubc0d \uc608\uc220\uc774\ub124."
+      speaker: EGO
+      text: "\uD0C0\uC774\uBC0D \uC608\uC220\uC774\uB124."
       duration: 0
   - key: perfect_dodge
     cooldown: 16
@@ -367,20 +668,20 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uc2a4\ucce4\ub2e4! \uc9c0\uae08 \ubc18\uaca9\ud574!"
+      speaker: EGO
+      text: "\uC2A4\uCCE4\uB2E4! \uC9C0\uAE08 \uBC18\uACA9\uD574!"
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\ub290\ub824\uc84c\uc744 \ub54c \ubca0\uc5b4, \ucd94\uc628!"
+      speaker: EGO
+      text: "\uB290\uB824\uC84C\uC744 \uB54C \uBCA0\uC5B4, \uCD94\uC628!"
       duration: 0
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\ub2a6\uc5b4."
+      speaker: "\uCD94\uC628"
+      text: "\uB2A6\uC5B4."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc637\uae43\ub3c4 \ubabb \uac74\ub4dc\ub838\ub124."
+      speaker: EGO
+      text: "\uC637\uAE43\uB3C4 \uBABB \uAC74\uB4DC\uB838\uB124."
       duration: 0
   - key: break
     cooldown: 10
@@ -391,16 +692,16 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uc790\uc138 \ubb34\ub108\uc84c\uc5b4! \uc9c0\uae08\uc774\uc57c!"
+      speaker: EGO
+      text: "\uC790\uC138 \uBB34\uB108\uC84C\uC5B4! \uC9C0\uAE08\uC774\uC57C!"
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\ube0c\ub808\uc774\ud06c! \ub2e4 \uc3df\uc544\ubd80\uc5b4!"
+      speaker: EGO
+      text: "\uBE0C\uB808\uC774\uD06C! \uB2E4 \uC3DF\uC544\uBD80\uC5B4!"
       duration: 0
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\ud2c8\uc774\ub2e4."
+      speaker: "\uCD94\uC628"
+      text: "\uD2C8\uC774\uB2E4."
       duration: 0
   - key: finisher
     cooldown: 10
@@ -411,16 +712,16 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\ub05d\uc774\uc57c."
+      speaker: "\uCD94\uC628"
+      text: "\uB05D\uC774\uC57C."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc81c\ub300\ub85c \uaf42\ud614\uc5b4!"
+      speaker: EGO
+      text: "\uC81C\uB300\uB85C \uAF42\uD614\uC5B4!"
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc544\ud504\uaca0\ub2e4. \uc800\ucabd\uc774."
+      speaker: EGO
+      text: "\uC544\uD504\uACA0\uB2E4. \uC800\uCABD\uC774."
       duration: 0
   - key: low_hp
     cooldown: 25
@@ -431,16 +732,16 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\ucd94\uc628, \uccb4\ub825 \uc704\ud5d8!\nQ\ub85c \ud68c\ubcf5\ud574!"
+      speaker: EGO
+      text: "\uCD94\uC628, \uCCB4\uB825 \uC704\uD5D8!\nQ\uB85C \uD68C\uBCF5\uD574!"
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc228 \ub3cc\ub824. \ubb34\ub9ac\ud558\uba74 \ub05d\uc774\uc57c."
+      speaker: EGO
+      text: "\uC228 \uB3CC\uB824. \uBB34\uB9AC\uD558\uBA74 \uB05D\uC774\uC57C."
       duration: 0
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\u2026\uc544\uc9c1 \uc548 \ub05d\ub0ac\uc5b4."
+      speaker: "\uCD94\uC628"
+      text: "\u2026\uC544\uC9C1 \uC548 \uB05D\uB0AC\uC5B4."
       duration: 0
   - key: heal
     cooldown: 20
@@ -451,16 +752,17 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uc88b\uc544, \uc228 \ub3cc\ub838\uc5b4."
+      speaker: EGO
+      text: "\uC88B\uC544, \uC228 \uB3CC\uB838\uC5B4."
       duration: 0
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\ub2e4\uc2dc \uac04\ub2e4."
+      speaker: "\uCD94\uC628"
+      text: "\uB2E4\uC2DC \uAC04\uB2E4."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc570\ud50c \ub9d0\uace0 \uc9c4\uc9dc \ubc25\uc740\n\uc774\ub530\uac00 \uba39\uc790."
+      speaker: EGO
+      text: "\uC570\uD50C \uB9D0\uACE0 \uC9C4\uC9DC \uBC25\uC740\n\uC774\uB530\uAC00
+        \uBA39\uC790."
       duration: 0
   - key: ult_ready
     cooldown: 30
@@ -471,16 +773,16 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uac8c\uc774\uc9c0 \uac00\ub4dd!\nR\ub85c \ud310\uc744 \ub4a4\uc9d1\uc790."
+      speaker: EGO
+      text: "\uAC8C\uC774\uC9C0 \uAC00\uB4DD!\nR\uB85C \uD310\uC744 \uB4A4\uC9D1\uC790."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc900\ube44 \ub05d. R\uc774\uc57c, \ucd94\uc628."
+      speaker: EGO
+      text: "\uC900\uBE44 \uB05D. R\uC774\uC57C, \uCD94\uC628."
       duration: 0
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\ub05d\ub0bc \ub54c\ub2e4. R."
+      speaker: "\uCD94\uC628"
+      text: "\uB05D\uB0BC \uB54C\uB2E4. R."
       duration: 0
   - key: phase2.typed
     cooldown: 0
@@ -491,8 +793,8 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "Type-D"
-      text: "\ucd9c\ub825 \uc81c\ud55c \ud574\uc81c."
+      speaker: Type-D
+      text: "\uCD9C\uB825 \uC81C\uD55C \uD574\uC81C."
       duration: 0
   - key: phase2.ego
     cooldown: 0
@@ -503,12 +805,12 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uc18d\ub3c4 \uc62c\ub77c\uac04\ub2e4.\n\ubc1b\uace0 \uc9e7\uac8c \uccd0!"
+      speaker: EGO
+      text: "\uC18D\uB3C4 \uC62C\uB77C\uAC04\uB2E4.\n\uBC1B\uACE0 \uC9E7\uAC8C \uCCD0!"
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\ud15c\ud3ec \ubc14\ub00c\uc5c8\uc5b4. \uc695\uc2ec\ub0b4\uc9c0 \ub9c8."
+      speaker: EGO
+      text: "\uD15C\uD3EC \uBC14\uB00C\uC5C8\uC5B4. \uC695\uC2EC\uB0B4\uC9C0 \uB9C8."
       duration: 0
   - key: phase3.typed
     cooldown: 0
@@ -519,8 +821,9 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "Type-D"
-      text: "\ud3d0\uae30 \uc6b0\uc120\uc21c\uc704 \uac31\uc2e0.\n\uc804 \ucd9c\ub825 \uac1c\ubc29."
+      speaker: Type-D
+      text: "\uD3D0\uAE30 \uC6B0\uC120\uC21C\uC704 \uAC31\uC2E0.\n\uC804 \uCD9C\uB825
+        \uAC1C\uBC29."
       duration: 0
   - key: phase3.ego
     cooldown: 0
@@ -531,12 +834,13 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\ud3ed\uc8fc \uad6c\uac04\uc774\uc57c.\n\ud328\ud134 \ub05d\uae4c\uc9c0 \ubd10!"
+      speaker: EGO
+      text: "\uD3ED\uC8FC \uAD6C\uAC04\uC774\uC57C.\n\uD328\uD134 \uB05D\uAE4C\uC9C0
+        \uBD10!"
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\ub9c8\uc9c0\ub9c9 \ubc1c\uc545\uc774\uc57c.\n\ubc84\ud2f0\uba74 \uc774\uaca8."
+      speaker: EGO
+      text: "\uB9C8\uC9C0\uB9C9 \uBC1C\uC545\uC774\uC57C.\n\uBC84\uD2F0\uBA74 \uC774\uACA8."
       duration: 0
   - key: death
     cooldown: 0
@@ -547,12 +851,12 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\ucd94\uc628! \u2026\uc815\uc2e0 \ucc28\ub824."
+      speaker: EGO
+      text: "\uCD94\uC628! \u2026\uC815\uC2E0 \uCC28\uB824."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc5ec\uae30\uc11c \uba48\ucd94\uba74 \uc548 \ub3fc, \ucd94\uc628."
+      speaker: EGO
+      text: "\uC5EC\uAE30\uC11C \uBA48\uCD94\uBA74 \uC548 \uB3FC, \uCD94\uC628."
       duration: 0
   - key: retry
     cooldown: 0
@@ -563,16 +867,18 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\ub2e4\uc2dc \uac04\ub2e4, \ucd94\uc628.\n\ud328\ud134\uc740 \uc774\uc81c \uc54c\uc544."
+      speaker: EGO
+      text: "\uB2E4\uC2DC \uAC04\uB2E4, \uCD94\uC628.\n\uD328\uD134\uC740 \uC774\uC81C
+        \uC54C\uC544."
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\ub450 \ubc88\uc9f8 \ud310. \uc774\ubc88\uc5d4\n\uc6b0\ub9ac\uac00 \uc77d\uc744 \ucc28\ub840\uc57c."
+      speaker: EGO
+      text: "\uB450 \uBC88\uC9F8 \uD310. \uC774\uBC88\uC5D4\n\uC6B0\uB9AC\uAC00 \uC77D\uC744
+        \uCC28\uB840\uC57C."
       duration: 0
     - key: 
-      speaker: "\ucd94\uc628"
-      text: "\ud55c \ubc88 \ub354."
+      speaker: "\uCD94\uC628"
+      text: "\uD55C \uBC88 \uB354."
       duration: 0
   - key: boss.intro_cut
     cooldown: 0
@@ -583,10 +889,10 @@ MonoBehaviour:
     followUpDelay: 0.4
     lines:
     - key: 
-      speaker: "EGO"
-      text: "\uc124\uba85\uc740 \ub098\uc911\uc5d0! \uc77c\ub2e8 \ub9c9\uc544!"
+      speaker: EGO
+      text: "\uC124\uBA85\uC740 \uB098\uC911\uC5D0! \uC77C\uB2E8 \uB9C9\uC544!"
       duration: 0
     - key: 
-      speaker: "EGO"
-      text: "\uc778\uc0ac\ub294 \uc0dd\ub7b5\uc774\ub798. \uc628\ub2e4!"
+      speaker: EGO
+      text: "\uC778\uC0AC\uB294 \uC0DD\uB7B5\uC774\uB798. \uC628\uB2E4!"
       duration: 0
