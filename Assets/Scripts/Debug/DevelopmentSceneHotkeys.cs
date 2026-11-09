@@ -1,3 +1,5 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+// 개발/QA 전용: 릴리스 빌드에서는 컴파일되지 않는다.
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -133,3 +135,4 @@ public sealed class DevelopmentSceneHotkeys : MonoBehaviour
         }
     }
 }
+#endif

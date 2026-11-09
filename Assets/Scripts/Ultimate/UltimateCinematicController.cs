@@ -84,6 +84,8 @@ public sealed class UltimateCinematicController : MonoBehaviour
     Vector3 _stormFinishPosition;
     UltimateCinematicFrame _storyboardFrame;
     UltimateCinematicHudFrame _hudFrame;
+    UltimatePhaseSeveringBeats _beats;
+    readonly System.Collections.Generic.List<Transform> _beatKeepSubjects = new System.Collections.Generic.List<Transform>(6);
     bool _hasStoryboardFrame;
     bool _cachedPlayerPoseValid;
     bool _cachedVisualRootPoseValid;
@@ -247,7 +249,8 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _owner = owner;
         _data = data;
         _owner.SetActiveUltimateCinematic(this);
-        EnsureHudFrame().Begin();
+        // 반복 11: 페이즈 코어 플레어가 먼저 보이고 HUD 가 빠진다
+        EnsureHudFrame().Begin(0.35f);
 
         targetBinder.BeginSequence(owner, data, _boundTarget);
         BuildStoryboardFrame();
@@ -291,6 +294,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         playableDirector.time = 0d;
         playableDirector.initialTime = 0d;
         playableDirector.Play(playableDirector.playableAsset);
+        BeginPhaseSeveringBeats();
         StartDirectorStartVerify();
         StartSafetyCleanupWatchdog();
 
@@ -719,7 +723,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         float elapsed = 0f;
         while (elapsed < duration && _data != null)
         {
-            elapsed += Time.unscaledDeltaTime;
+            elapsed += Time.unscaledDeltaTime * BeatPlaybackSpeed;
             float normalized = Mathf.Clamp01(elapsed / duration);
             Vector3 lookTarget = targetBinder.GetWalkoutLookTarget(endPosition);
             targetBinder.MovePlayerLinear(startPosition, endPosition, lookTarget, normalized);
@@ -731,7 +735,12 @@ public sealed class UltimateCinematicController : MonoBehaviour
             yield break;
 
         PlayFinalExplosionOnce();
-        yield return new WaitForSecondsRealtime(finalExplosionReturnDelay);
+        float waited = 0f;
+        while (waited < finalExplosionReturnDelay && !_cleanupCompleted)
+        {
+            waited += Time.unscaledDeltaTime * BeatPlaybackSpeed;
+            yield return null;
+        }
         CleanupIfNeeded("WalkoutExplosionEnd");
     }
 
@@ -771,7 +780,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         while (!_cleanupCompleted && _data != null)
         {
             UpdateSlashStormShotAnchors(angle);
-            angle += shot03OrbitDegreesPerSecond * Time.unscaledDeltaTime;
+            angle += shot03OrbitDegreesPerSecond * Time.unscaledDeltaTime * (_beats != null ? _beats.OrbitScale : 1f);
             yield return null;
         }
 
@@ -1079,7 +1088,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (duration <= 0d && playableDirector != null && playableDirector.playableAsset is TimelineAsset asset)
             duration = asset.duration;
 
-        float timeout = Mathf.Max(0.5f, (float)duration + 0.35f);
+        float timeout = Mathf.Max(0.5f, (float)duration + 0.35f + UltimatePhaseSeveringBeats.ExtraDurationBudget);
         _safetyCleanupRoutine = StartCoroutine(CoSafetyCleanupWatchdog(timeout));
     }
 
@@ -1290,6 +1299,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
         _cleanupCompleted = true;
 
+        if (_beats != null)
+            _beats.End();
+
         if (_walkoutRoutine != null)
         {
             StopCoroutine(_walkoutRoutine);
@@ -1359,6 +1371,36 @@ public sealed class UltimateCinematicController : MonoBehaviour
         _cachedAnimationTargetTransform = null;
         _hasStoryboardFrame = false;
 
+    }
+
+    float BeatPlaybackSpeed => _beats != null ? _beats.PlaybackSpeed : 1f;
+
+    /// <summary>QA/외부: 진행 중인 궁극기 연출 건너뛰기.</summary>
+    public void RequestSkip()
+    {
+        if (_beats != null)
+            _beats.RequestSkip();
+    }
+
+    void BeginPhaseSeveringBeats()
+    {
+        if (_beats == null && !TryGetComponent(out _beats))
+            _beats = gameObject.AddComponent<UltimatePhaseSeveringBeats>();
+
+        _beatKeepSubjects.Clear();
+        if (bindings != null)
+        {
+            if (bindings.PlayerRoot != null) _beatKeepSubjects.Add(bindings.PlayerRoot);
+            if (bindings.TargetRoot != null) _beatKeepSubjects.Add(bindings.TargetRoot);
+        }
+        if (playerVisualRoot != null) _beatKeepSubjects.Add(playerVisualRoot.transform);
+        if (playerGhostHelper != null) _beatKeepSubjects.Add(playerGhostHelper.transform);
+
+        Transform focus = _owner != null ? _owner.GetUltimateSwordFocusTransform() : null;
+        if (focus == null && bindings != null)
+            focus = bindings.PlayerRoot;
+        Transform impact = bindings != null ? (bindings.TargetCenter != null ? bindings.TargetCenter : bindings.TargetRoot) : null;
+        _beats.Begin(playableDirector, _owner, focus, impact, _beatKeepSubjects);
     }
 
     UltimateCinematicHudFrame EnsureHudFrame()

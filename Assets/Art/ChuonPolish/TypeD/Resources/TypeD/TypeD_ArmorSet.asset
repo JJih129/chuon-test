@@ -18,6 +18,7 @@ MonoBehaviour:
     materials:
     - {fileID: 2100000, guid: f6d2b5558f3d5eb47a88f0cefffaf24f, type: 2}
     - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
+    - {fileID: 2100000, guid: 510c6004a5cccca45ae2829eb4479e4d, type: 2}
     bone: 54
     localPosition: {x: -0.000095026684, y: -2.084836, z: 0.057207886}
     localRotation: {x: -0.007767354, y: 1.6478059e-11, z: -8.847977e-12, w: 0.9999699}
@@ -52,7 +53,6 @@ MonoBehaviour:
     mesh: {fileID: 4300000, guid: f3ed3dd834f411e4b9571aaacfcadce6, type: 2}
     materials:
     - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
-    - {fileID: 2100000, guid: 510c6004a5cccca45ae2829eb4479e4d, type: 2}
     bone: 54
     localPosition: {x: -0.000095026684, y: -2.084836, z: 0.057207886}
     localRotation: {x: -0.007767354, y: 1.6478059e-11, z: -8.847977e-12, w: 0.9999699}
@@ -274,7 +274,7 @@ MonoBehaviour:
     localScale: {x: 1.0008409, y: 1.0008409, z: 1.0008409}
     role: 1
     glowSubmesh: -1
-    anchorLocal: {x: 0, y: 2.4850001, z: 0.19098443}
+    anchorLocal: {x: 0, y: 2.585, z: 0.18702054}
     useBlendBone: 0
     blendBone: 0
     blendLocalPosition: {x: 0, y: 0, z: 0}
@@ -301,6 +301,7 @@ MonoBehaviour:
   - name: LeftTasset
     mesh: {fileID: 4300000, guid: 2bdc3d31408b57e4799abb6eaca068f5, type: 2}
     materials:
+    - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
     - {fileID: 2100000, guid: 510c6004a5cccca45ae2829eb4479e4d, type: 2}
     bone: 1
     localPosition: {x: -0.11526528, y: 1.5900849, z: 0.06413261}
@@ -318,6 +319,7 @@ MonoBehaviour:
   - name: RightTasset
     mesh: {fileID: 4300000, guid: 475c7cde352154449a7887376907d552, type: 2}
     materials:
+    - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
     - {fileID: 2100000, guid: 510c6004a5cccca45ae2829eb4479e4d, type: 2}
     bone: 2
     localPosition: {x: 0.115468904, y: 1.5903833, z: 0.054602206}
@@ -325,6 +327,78 @@ MonoBehaviour:
     localScale: {x: 1.000841, y: 1.000841, z: 1.000841}
     role: 0
     glowSubmesh: -1
+    anchorLocal: {x: 0, y: 0, z: 0}
+    useBlendBone: 0
+    blendBone: 0
+    blendLocalPosition: {x: 0, y: 0, z: 0}
+    blendLocalRotation: {x: 0, y: 0, z: 0, w: 1}
+    blendWeight: 0.5
+    pivotLocal: {x: 0, y: 0, z: 0}
+  - name: LeftThighGuard
+    mesh: {fileID: 4300000, guid: 2d8b4ea54f3baa64f82bd611a4cee521, type: 2}
+    materials:
+    - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
+    bone: 1
+    localPosition: {x: -0.11526528, y: 1.5900849, z: 0.06413261}
+    localRotation: {x: 0.00030923108, y: 0.008052537, z: -0.9999668, w: -0.0012332243}
+    localScale: {x: 1.000841, y: 1.000841, z: 1.000841}
+    role: 0
+    glowSubmesh: -1
+    anchorLocal: {x: 0, y: 0, z: 0}
+    useBlendBone: 0
+    blendBone: 0
+    blendLocalPosition: {x: 0, y: 0, z: 0}
+    blendLocalRotation: {x: 0, y: 0, z: 0, w: 1}
+    blendWeight: 0.5
+    pivotLocal: {x: 0, y: 0, z: 0}
+  - name: LeftShinGuard
+    mesh: {fileID: 4300000, guid: 2ce82a09b8d3dba48a6dfe8588bf9864, type: 2}
+    materials:
+    - {fileID: 2100000, guid: f6d2b5558f3d5eb47a88f0cefffaf24f, type: 2}
+    - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
+    - {fileID: 2100000, guid: 510c6004a5cccca45ae2829eb4479e4d, type: 2}
+    bone: 3
+    localPosition: {x: -0.11991745, y: 0.899294, z: 0.08924211}
+    localRotation: {x: 0.00030597782, y: 0.02199463, z: -0.9997573, w: 0.0013421928}
+    localScale: {x: 1.000841, y: 1.000841, z: 1.000841}
+    role: 0
+    glowSubmesh: 0
+    anchorLocal: {x: 0, y: 0, z: 0}
+    useBlendBone: 0
+    blendBone: 0
+    blendLocalPosition: {x: 0, y: 0, z: 0}
+    blendLocalRotation: {x: 0, y: 0, z: 0, w: 1}
+    blendWeight: 0.5
+    pivotLocal: {x: 0, y: 0, z: 0}
+  - name: RightThighGuard
+    mesh: {fileID: 4300000, guid: c3d80f6d51b20ec4084e84776a8580ef, type: 2}
+    materials:
+    - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
+    bone: 2
+    localPosition: {x: 0.115468904, y: 1.5903833, z: 0.054602206}
+    localRotation: {x: -0.00033065904, y: 0.0060152276, z: -0.99998116, w: 0.0012346075}
+    localScale: {x: 1.000841, y: 1.000841, z: 1.000841}
+    role: 0
+    glowSubmesh: -1
+    anchorLocal: {x: 0, y: 0, z: 0}
+    useBlendBone: 0
+    blendBone: 0
+    blendLocalPosition: {x: 0, y: 0, z: 0}
+    blendLocalRotation: {x: 0, y: 0, z: 0, w: 1}
+    blendWeight: 0.5
+    pivotLocal: {x: 0, y: 0, z: 0}
+  - name: RightShinGuard
+    mesh: {fileID: 4300000, guid: 9b72f0aaf05fc7e4783bcf0529b179f6, type: 2}
+    materials:
+    - {fileID: 2100000, guid: f6d2b5558f3d5eb47a88f0cefffaf24f, type: 2}
+    - {fileID: 2100000, guid: 5251b58678e9df24990d910cda272a5f, type: 2}
+    - {fileID: 2100000, guid: 510c6004a5cccca45ae2829eb4479e4d, type: 2}
+    bone: 4
+    localPosition: {x: 0.12013011, y: 0.8987079, z: 0.09160176}
+    localRotation: {x: -0.00033438127, y: 0.026559466, z: -0.9996463, w: -0.0013429876}
+    localScale: {x: 1.0008411, y: 1.0008411, z: 1.0008411}
+    role: 0
+    glowSubmesh: 0
     anchorLocal: {x: 0, y: 0, z: 0}
     useBlendBone: 0
     blendBone: 0
@@ -345,6 +419,6 @@ MonoBehaviour:
   requiredRendererName: Plane009
   requiredVertexCount: 5176
   coreColor: {r: 0.55, g: 0.85, b: 1.4, a: 1}
-  glowColor: {r: 0.45, g: 0.8, b: 1.3, a: 1}
+  glowColor: {r: 1.317, g: 0.282, b: 0.3405, a: 1}
   visorIdleColor: {r: 0.35, g: 0.7, b: 1.1, a: 1}
   suitCircuitColor: {r: 0.3, g: 0.65, b: 1, a: 1}

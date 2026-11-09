@@ -89,6 +89,7 @@ public static class OneShotAudio
             source.rolloffMode = AudioRolloffMode.Linear;
             source.minDistance = DefaultMinDistance;
             source.maxDistance = DefaultMaxDistance;
+            ChuonAudioMix.Route(source, ChuonAudioMix.Bus.Sfx); // 반복 11: 믹서 SFX 버스
             s_pool[i] = source;
         }
     }

@@ -6,11 +6,13 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-// 반복 10 아트 파이프라인 (메뉴로만 실행, 로드 시 자동 실행 없음)
+// Type-D 장갑 아트 파이프라인 (메뉴로만 실행, 로드 시 자동 실행 없음 — EditorAutoFixupGate 규칙)
+//  0) Tools/ChuOn/Type-D/0. Regenerate All : 아래 1→2→3 을 한 번에 (Blender 경로: EditorPrefs "ChuOn.BlenderExe" 또는 env BLENDER_EXE)
 //  1) Tools/ChuOn/Type-D/1. Export Reference : 편집 모드 T-포즈 보스(Body/Object012/Plane009)를 Blender 참조용 OBJ 로 내보냄
-//  2) Blender: Tools/ArtGen/typed_armor_blender.py  -> typed_armor.json
-//  3) Tools/ChuOn/Type-D/2. Build From Json : 메시/텍스처/재질/TypeD_ArmorSet(Resources) 생성, 뼈 기준 로컬 포즈 굽기
+//  2) Blender: Tools/ArtGen/typed_armor_blender.py -> typed_armor.json + 아틀라스 (albedo/normal/osm png, 결정적 생성)
+//  3) Tools/ChuOn/Type-D/2. Build From Json : 메시/아틀라스 텍스처/재질/TypeD_ArmorSet(Resources) 생성, 뼈 기준 로컬 포즈 굽기
 //  + Tools/ChuOn/VFX/Build Iteration 10 Assets : 검기·텔레그래프 재질(Resources/VFX), 텔레그래프 큐 효과음(Resources/Audio)
+// 반복 11 (품질 패스): 그라파이트 금속 + 세라믹(명도 ~0.55) 악센트, ASP StylizePBR + 노멀/OSM 아틀라스, 가는 츠카사 레드 발광선.
 public static class TypeDArmorBuilder
 {
     const string Root = "Assets/Art/ChuonPolish/TypeD";
@@ -18,11 +20,60 @@ public static class TypeDArmorBuilder
     const string VfxResources = "Assets/Art/ChuonPolish/VFX/Resources/VFX";
     const string AudioResources = "Assets/Art/ChuonPolish/Audio/Resources/Audio";
     static readonly string DefaultWorkDir = Path.Combine(Path.GetFullPath("Temp"), "TypeDArmor");
+    const string BlenderPrefKey = "ChuOn.BlenderExe";
+    const string DefaultBlender = "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe";
+    const string GeneratorScript = "Tools/ArtGen/typed_armor_blender.py";
+    // 츠카사 레드 (UI 와 같은 색) — 장갑 발광선 평상시 색, HDR ~1.5 (텔레그래프 램프 시 큐 색으로 덮인다)
+    static readonly Color TsukasaRed = new Color(0.878f, 0.188f, 0.227f);
+    const float AccentHdr = 1.5f;
+    static Color AccentColor() => new Color(TsukasaRed.r * AccentHdr, TsukasaRed.g * AccentHdr, TsukasaRed.b * AccentHdr, 1f);
 
     // ───────────────────────── JSON 형식 (typed_armor_blender.py export) ─────────────────────────
     [Serializable] class JSub { public string material; public int[] indices; }
     [Serializable] class JPart { public string name; public string bone; public string role; public float[] positions; public float[] normals; public float[] uvs; public JSub[] submeshes; public float[] anchor; }
     [Serializable] class JRoot { public JPart[] parts; }
+
+    // ───────────────────────── 0. 전체 재생성 ─────────────────────────
+    [MenuItem("Tools/ChuOn/Type-D/0. Regenerate All (export + Blender + build)")]
+    public static void RegenerateAllMenu() => Debug.Log(RegenerateAll(DefaultWorkDir));
+
+    public static string RegenerateAll(string dir)
+    {
+        if (Application.isPlaying)
+            return "stop play mode first";
+        string export = ExportReference(dir);
+        if (!export.StartsWith("exported"))
+            return export;
+        string blender = RunBlender(dir);
+        if (blender != null)
+            return blender;
+        return Build(Path.Combine(dir, "typed_armor.json"));
+    }
+
+    static string RunBlender(string dir)
+    {
+        string exe = EditorPrefs.GetString(BlenderPrefKey, Environment.GetEnvironmentVariable("BLENDER_EXE") ?? DefaultBlender);
+        if (!File.Exists(exe))
+            return "Blender not found: " + exe + " (set EditorPrefs '" + BlenderPrefKey + "' or env BLENDER_EXE)";
+        string script = Path.GetFullPath(GeneratorScript);
+        string json = Path.Combine(dir, "typed_armor.json");
+        string args = "-b --factory-startup --python \"" + script + "\" -- \"" + dir + "\" \"" + json + "\" \"" + Path.Combine(dir, "preview") + "\"";
+        var psi = new System.Diagnostics.ProcessStartInfo(exe, args)
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        using (var proc = System.Diagnostics.Process.Start(psi))
+        {
+            var err = proc.StandardError.ReadToEndAsync();
+            string stdout = proc.StandardOutput.ReadToEnd();
+            if (!proc.WaitForExit(15 * 60 * 1000))
+                return "Blender timed out";
+            File.WriteAllText(Path.Combine(dir, "blender_log.txt"), stdout + "\n" + err.Result);
+            if (proc.ExitCode != 0 || !stdout.Contains("DONE"))
+                return "Blender failed (see " + Path.Combine(dir, "blender_log.txt") + ")";
+        }
+        return null;
+    }
 
     // ───────────────────────── 1. 참조 내보내기 ─────────────────────────
     [MenuItem("Tools/ChuOn/Type-D/1. Export Reference (edit-mode T-pose)")]
@@ -101,7 +152,7 @@ public static class TypeDArmorBuilder
         EnsureFolder(Root + "/Resources/TypeD");
 
         var report = new StringBuilder();
-        Dictionary<string, Material> mats = BuildMaterials(boss.transform, report);
+        Dictionary<string, Material> mats = BuildMaterials(boss.transform, Path.GetDirectoryName(Path.GetFullPath(jsonPath)), report);
 
         JRoot data = JsonUtility.FromJson<JRoot>(File.ReadAllText(jsonPath));
         Transform root = boss.transform;
@@ -114,18 +165,17 @@ public static class TypeDArmorBuilder
             if (bone == null)
                 continue;
 
-            Mesh mesh = BuildMesh(jp, out List<string> subMats);
+            // 기존 에셋은 제자리에서 다시 채운다 (CopySerialized 는 GPU 버퍼를 갱신하지 않아 에디터 세션에서 옛 메시가 그려졌다)
             string meshPath = Root + "/Meshes/TypeD_" + jp.name + ".asset";
-            Mesh existing = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
-            if (existing != null)
-            {
-                EditorUtility.CopySerialized(mesh, existing);
-                mesh = existing;
-            }
-            else
-            {
+            Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(meshPath);
+            bool created = mesh == null;
+            if (created)
+                mesh = new Mesh();
+            List<string> subMats = FillMesh(mesh, jp);
+            if (created)
                 AssetDatabase.CreateAsset(mesh, meshPath);
-            }
+            else
+                EditorUtility.SetDirty(mesh);
 
             var materials = new Material[subMats.Count];
             int glow = -1;
@@ -184,6 +234,7 @@ public static class TypeDArmorBuilder
             Override("Object012", mats, "Suit_Legs"),
             Override("Plane009", mats, "Suit_Outer"),
         };
+        set.glowColor = AccentColor();
         EditorUtility.SetDirty(set);
         AssetDatabase.SaveAssets();
         return "built " + parts.Count + " parts: " + report;
@@ -194,7 +245,7 @@ public static class TypeDArmorBuilder
         return new TypeDArmorSet.MaterialOverride { rendererName = renderer, materials = mats.TryGetValue(key, out Material m) ? new[] { m } : Array.Empty<Material>() };
     }
 
-    static Mesh BuildMesh(JPart jp, out List<string> subMats)
+    static List<string> FillMesh(Mesh mesh, JPart jp)
     {
         int n = jp.positions.Length / 3;
         var v = new Vector3[n];
@@ -210,8 +261,9 @@ public static class TypeDArmorBuilder
         // 서브메시 순서: 발광/코어/바이저 먼저, 장갑 본체(Metal/Ceramic) 마지막 → 균열 오버레이(추가 재질)가 본체에 그려진다
         var order = new List<JSub>(jp.submeshes);
         order.Sort((a, b) => Rank(a.material).CompareTo(Rank(b.material)));
-        subMats = new List<string>();
-        var mesh = new Mesh { name = "TypeD_" + jp.name };
+        var subMats = new List<string>();
+        mesh.Clear();
+        mesh.name = "TypeD_" + jp.name;
         mesh.indexFormat = n > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
         mesh.vertices = v;
         mesh.normals = nr;
@@ -225,7 +277,7 @@ public static class TypeDArmorBuilder
         mesh.RecalculateTangents();
         mesh.RecalculateBounds();
         mesh.UploadMeshData(false);
-        return mesh;
+        return subMats;
     }
 
     static int Rank(string m)
@@ -241,11 +293,53 @@ public static class TypeDArmorBuilder
     }
 
     // ───────────────────────── 재질/텍스처 ─────────────────────────
-    static Dictionary<string, Material> BuildMaterials(Transform boss, StringBuilder report)
+    // Blender 가 굽는 공용 아틀라스 (Metal/Ceramic 서브메시가 같은 UV 아틀라스를 공유)
+    struct ArmorAtlas
+    {
+        public Texture2D albedo, normal, osm;
+    }
+
+    static ArmorAtlas ImportAtlas(string workDir, StringBuilder report)
+    {
+        return new ArmorAtlas
+        {
+            albedo = ImportAtlasTexture(workDir, "typed_armor_albedo.png", "T_TypeD_Armor_Albedo", TextureImporterType.Default, true, report),
+            normal = ImportAtlasTexture(workDir, "typed_armor_normal.png", "T_TypeD_Armor_Normal", TextureImporterType.NormalMap, false, report),
+            osm = ImportAtlasTexture(workDir, "typed_armor_osm.png", "T_TypeD_Armor_OSM", TextureImporterType.Default, false, report),
+        };
+    }
+
+    static Texture2D ImportAtlasTexture(string workDir, string file, string assetName, TextureImporterType type, bool srgb, StringBuilder report)
+    {
+        string src = Path.Combine(workDir, file);
+        string path = Root + "/Textures/" + assetName + ".png";
+        if (File.Exists(src))
+        {
+            File.Copy(src, path, true);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+        }
+        else
+        {
+            report.Append("[missing ").Append(file).Append(", keeping existing] ");
+        }
+        var imp = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (imp == null)
+            return null;
+        imp.textureType = type;
+        imp.sRGBTexture = srgb;
+        imp.mipmapEnabled = true;
+        imp.wrapMode = TextureWrapMode.Clamp;
+        imp.anisoLevel = 4;
+        imp.maxTextureSize = 2048;
+        imp.textureCompression = TextureImporterCompression.CompressedHQ;
+        imp.SaveAndReimport();
+        return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+    }
+
+    static Dictionary<string, Material> BuildMaterials(Transform boss, string workDir, StringBuilder report)
     {
         var d = new Dictionary<string, Material>();
-        Texture2D brushed = SaveTexture(BrushedMetal(512), Root + "/Textures/T_TypeD_BrushedMetal.png", true);
-        Texture2D ceramic = SaveTexture(CeramicNoise(512), Root + "/Textures/T_TypeD_Ceramic.png", true);
+        ArmorAtlas atlas = ImportAtlas(workDir, report);
 
         Material bodySrc = FindSkinned(boss, "Body")?.sharedMaterial;
         Material legsSrc = FindSkinned(boss, "Object012")?.sharedMaterial;
@@ -259,12 +353,13 @@ public static class TypeDArmorBuilder
         d["Suit_Legs"] = SuitMaterial("M_TypeD_Suit_Legs", legsSrc, "boss3", report);
         d["Suit_Outer"] = SuitMaterial("M_TypeD_Suit_Outer", outerSrc, "boss1", report);
 
-        d["Metal"] = ArmorMaterial("M_TypeD_ArmorMetal", bodySrc, brushed, new Color(0.22f, 0.23f, 0.26f), 0.12f, new Color(0.9f, 0.92f, 1f), 0.75f, 0.62f);
-        d["Ceramic"] = ArmorMaterial("M_TypeD_ArmorCeramic", bodySrc, ceramic, new Color(0.66f, 0.68f, 0.72f), 0.2f, new Color(0.45f, 0.48f, 0.52f), 0.1f, 0.45f);
+        // 아틀라스가 색/거칠기/금속도를 모두 담는다 (BaseColor 흰색). 재질 차이는 PBR 영향도/림만.
+        d["Metal"] = PbrArmorMaterial("M_TypeD_ArmorMetal", bodySrc, atlas, 0.45f, 0.14f);
+        d["Ceramic"] = PbrArmorMaterial("M_TypeD_ArmorCeramic", bodySrc, atlas, 0.25f, 0.12f);
         d["Visor"] = ArmorMaterial("M_TypeD_Visor", bodySrc, null, new Color(0.035f, 0.04f, 0.05f), 0.06f, new Color(1.6f, 1.7f, 1.9f), 0.2f, 0.95f);
 
         Shader energy = Shader.Find("ChuOn/EnergyEmissive");
-        d["Glow"] = EnergyMaterial("M_TypeD_Glow", energy, new Color(0.45f, 0.8f, 1.3f), 0.15f);
+        d["Glow"] = EnergyMaterial("M_TypeD_Glow", energy, AccentColor(), 0.15f);
         d["Core"] = EnergyMaterial("M_TypeD_Core", energy, new Color(0.55f, 0.85f, 1.4f), 0.5f);
         d["VisorGlow"] = EnergyMaterial("M_TypeD_VisorGlow", energy, new Color(0.35f, 0.7f, 1.1f), 0.1f);
         return d;
@@ -336,6 +431,52 @@ public static class TypeDArmorBuilder
         return m;
     }
 
+    // 하드서피스 장갑: ASP 'StylizePBR' 스타일 (금속이 환경 반사로 읽히게) + 아틀라스 노멀/OSM(R 차폐, G 매끈함, B 금속도).
+    // 외곽선/셀 램프/림은 몸 재질(템플릿)과 같은 계열 → 슈트와 톤이 이어진다. 큰 면은 발광 없음(블룸은 발광선/코어/바이저만).
+    static Material PbrArmorMaterial(string name, Material template, ArmorAtlas atlas, float pbrInfluence, float rim)
+    {
+        Material m = LoadOrCreate(Root + "/Materials/" + name + ".mat", template, null);
+        foreach (string k in new[] { "_STYLE_EYE", "_EYESTYLE_FLATLIGHTING", "_USEPUPILMASK", "_ALPHATEST_ON", "_STYLE_CELSHADING", "_STYLE_FACE",
+                                     "_FACESHADOW", "_HAIRMAP", "_SSSMAP", "_RAMP_OCCLUSION_MAP", "_ENVIRONMENTREFLECTIONS_OFF" })
+            m.DisableKeyword(k);
+        m.SetFloat("_style", 0f);
+        m.EnableKeyword("_STYLE_STYLIZEPBR");
+        m.SetFloat("_AlphaClip", 0f);
+        m.SetTexture("_BaseMap", atlas.albedo);
+        m.SetColor("_BaseColor", Color.white);
+        m.SetTexture("_BumpMap", atlas.normal);
+        m.SetFloat("_BumpScale", 1f);
+        SetKeyword(m, "_NORMALMAP", atlas.normal != null);
+        m.SetTexture("_OSMTexture", atlas.osm);
+        SetKeyword(m, "_METALLICSPECGLOSSMAP", atlas.osm != null);
+        m.SetFloat("_IsUsingOSMTexture", atlas.osm != null ? 1f : 0f);
+        m.SetFloat("_PBROcclusionStrength", 1f);
+        m.SetFloat("_PBRSmoothness", 1f);   // OSM.g 가 절대값 (금속 0.56 = 거칠기 0.44, 마모 모서리 0.7)
+        m.SetFloat("_PBRMetallic", 0.8f);   // OSM 없을 때만 사용
+        m.SetFloat("_PBRInfluenceDirectLighting", pbrInfluence);
+        m.SetFloat("_SpecularHighlights", 1f);
+        m.EnableKeyword("_SPECULAR_LIGHTING_ON");
+        m.SetFloat("_EnvironmentReflections", 1f);
+        m.SetFloat("_RimLightOn", 1f);
+        m.EnableKeyword("_RIMLIGHTING_ON");
+        m.SetColor("_RimLightColor", new Color(0.62f, 0.72f, 0.9f));
+        m.SetFloat("_RimLightStrength", rim);
+        m.SetFloat("_EmissionToggle", 0f);
+        m.DisableKeyword("_EMISSION");
+        m.SetColor("_EmissionColor", Color.black);
+        EditorUtility.SetDirty(m);
+        return m;
+    }
+
+    static void SetKeyword(Material m, string keyword, bool on)
+    {
+        if (on)
+            m.EnableKeyword(keyword);
+        else
+            m.DisableKeyword(keyword);
+    }
+
+    // 바이저 유리 띠 (셀 셰이딩 + 강한 스펙큘러)
     static Material ArmorMaterial(string name, Material template, Texture2D baseMap, Color baseColor, float specSize, Color specColor, float metallic, float smoothness)
     {
         Material m = LoadOrCreate(Root + "/Materials/" + name + ".mat", template, null);
@@ -412,9 +553,9 @@ public static class TypeDArmorBuilder
             Color.RGBToHSV(c, out float hh, out float ss, out float vv);
             float hueW = Mathf.Clamp01(1f - Mathf.Abs(hh * 360f - 36f) / 26f);
             float w0 = hueW * Smooth(0.25f, 0.5f, ss) * Smooth(0.22f, 0.42f, vv);
-            // 백색 세라믹: 원래 명암을 살리고 채도를 빼서 차가운 흰색으로
-            float lum = 0.42f + 0.4f * vv;
-            Color ceramic = new Color(lum * 0.92f, lum * 0.95f, lum, c.a);
+            // 세라믹: 원래 명암을 살리고 채도를 빼서 차가운 회백색으로 (반복 11: 명도 ~0.55 상한 — 허벅지/정강이가 하얗게 뜨지 않게)
+            float lum = 0.3f + 0.27f * vv;
+            Color ceramic = new Color(lum * 0.96f, lum * 0.98f, lum, c.a);
             Color o = Color.Lerp(c, ceramic, w0);
             outPx[i] = o;
             // 슈트(회색, 저채도, 중간 명도) 영역 = 회로 후보
@@ -500,47 +641,6 @@ public static class TypeDArmorBuilder
             if (d <= r && d >= r - 1.6f)
                 m[py * cs + px] = 255;
         }
-    }
-
-    static Texture2D BrushedMetal(int size)
-    {
-        var rng = new System.Random(77);
-        var rows = new float[size];
-        for (int y = 0; y < size; y++)
-            rows[y] = (float)rng.NextDouble();
-        var t = new Texture2D(size, size, TextureFormat.RGBA32, true, false);
-        var px = new Color32[size * size];
-        for (int y = 0; y < size; y++)
-        {
-            float r0 = rows[y], r1 = rows[(y + 1) % size], r2 = rows[(y + size - 1) % size];
-            for (int x = 0; x < size; x++)
-            {
-                float streak = (r0 * 0.5f + (r1 + r2) * 0.25f);
-                float fine = Mathf.PerlinNoise(x * 0.9f, y * 0.04f);
-                float v = 0.78f + 0.14f * streak + 0.08f * fine;
-                byte b = (byte)(Mathf.Clamp01(v) * 255f);
-                px[y * size + x] = new Color32(b, b, (byte)Mathf.Min(255, b + 4), 255);
-            }
-        }
-        t.SetPixels32(px);
-        t.Apply();
-        return t;
-    }
-
-    static Texture2D CeramicNoise(int size)
-    {
-        var t = new Texture2D(size, size, TextureFormat.RGBA32, true, false);
-        var px = new Color32[size * size];
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
-        {
-            float n = Mathf.PerlinNoise(x * 0.02f, y * 0.02f) * 0.5f + Mathf.PerlinNoise(x * 0.11f + 13f, y * 0.11f) * 0.5f;
-            byte b = (byte)(Mathf.Clamp01(0.9f + 0.1f * n) * 255f);
-            px[y * size + x] = new Color32(b, b, b, 255);
-        }
-        t.SetPixels32(px);
-        t.Apply();
-        return t;
     }
 
     static Texture2D SaveTexture(Texture2D tex, string path, bool srgb)

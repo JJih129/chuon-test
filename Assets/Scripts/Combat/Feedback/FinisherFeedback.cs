@@ -55,6 +55,7 @@ public class FinisherFeedback
             return;
 
         _host = host;
+        ActionColourDirector.NotifyFinisher(hitPoint); // 반복 11: 0.6 s 흑백 흡수
         // Coroutines keep running on a disabled behaviour; only an inactive GameObject blocks them.
         bool canRunCoroutines = host.gameObject.activeInHierarchy;
 

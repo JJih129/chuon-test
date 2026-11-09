@@ -15,14 +15,10 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
 
     [SerializeField] Transform patternPivot;
     [SerializeField] Material telegraphMaterial;
-    [Tooltip("섬광 크기 (m, 보스 스케일과 무관한 월드 크기)")]
-    [SerializeField, Min(0.05f)] float baseScale = 1.45f;
+    // (이전 링 쿼드용 baseScale/pulseAmount/pulseSpeed/rotateSpeed 는 섬광 구현에서 쓰이지 않아 제거 — CS0414)
     [SerializeField, Min(0f)] float verticalOffset = 0.03f;
     [Tooltip("헬멧에서 카메라 쪽으로 당기는 거리 (머리에 가려지지 않게)")]
     [SerializeField, Min(0f)] float cameraPullForward = 0.58f;
-    [SerializeField, Min(0f)] float pulseAmount = 0.26f;
-    [SerializeField, Min(0f)] float pulseSpeed = 12f;
-    [SerializeField, Min(0f)] float rotateSpeed = 185f;
     [SerializeField] Color fallbackColor = new Color(1f, 0.96f, 0.02f, 1f);
     [Header("Flash (iteration 10)")]
     [SerializeField, Range(0.08f, 0.6f)] float flashDuration = 0.22f;

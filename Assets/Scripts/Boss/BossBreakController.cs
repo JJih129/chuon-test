@@ -273,6 +273,7 @@ public class BossBreakController : MonoBehaviour
         _isInBreak = true;
         _breakTimer = breakDuration;
         _breakEnteredTime = Time.time;
+        ActionColourDirector.NotifyBreakStart(); // 반복 11: 채도 딥 + 로우패스 0.3 s
         _finisherUsed = false;
         enabled = true;
         ReleaseBreakAnimationHold();

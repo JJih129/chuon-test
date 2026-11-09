@@ -97,6 +97,20 @@ public sealed class PhaseCoreHUD : MonoBehaviour
         return core;
     }
 
+    const float ActivationFlareDuration = 0.55f;
+    float _activationFlare;
+
+    /// <summary>QA: 마지막 활성화 플레어 시각 (realtime).</summary>
+    public static float LastActivationFlareAt { get; private set; } = -1f;
+
+    /// <summary>궁극기 발동 순간: 코어가 하얗게 달아오르며 빛이 퍼진다 (HUD 가 페이드되기 직전).</summary>
+    public void PlayActivationFlare()
+    {
+        _activationFlare = ActivationFlareDuration;
+        LastActivationFlareAt = Time.unscaledTime;
+        _visualDirty = true;
+    }
+
     public void SetPercentText(Text percentText)
     {
         _percentText = percentText;
@@ -279,8 +293,36 @@ public sealed class PhaseCoreHUD : MonoBehaviour
             _plasmaRect.localRotation = Quaternion.Euler(0f, 0f, _plasmaAngle);
         }
 
-        if (_visualDirty || flashing || plasma)
+        if (_visualDirty || flashing || plasma || _activationFlare > 0f)
             RefreshVisuals(plasma);
+
+        if (_activationFlare > 0f)
+        {
+            _activationFlare = Mathf.Max(0f, _activationFlare - dt);
+            ApplyActivationFlare(1f - _activationFlare / ActivationFlareDuration);
+            if (_activationFlare <= 0f)
+                _visualDirty = true;
+        }
+    }
+
+    void ApplyActivationFlare(float k)
+    {
+        // k: 0 → 1. 코어 백열 → 붉은 링이 퍼지며 사라짐
+        GameplayUiTheme theme = GameplayHudStyler.Theme;
+        Color red = theme.hudAccentColor;
+        float fade = 1f - k;
+        _glow.enabled = true;
+        _glow.color = Color.Lerp(new Color(1f, 1f, 1f, 0.95f), new Color(red.r, red.g, red.b, 0f), k);
+        float glowScale = 1f + 1.8f * Mathf.Sqrt(k);
+        _glowRect.localScale = new Vector3(glowScale, glowScale, 1f);
+        _coreDisc.color = Color.Lerp(Color.white, _coreDisc.color, k * k);
+        float coreScale = 1.1f + 0.25f * fade;
+        _coreDisc.rectTransform.localScale = new Vector3(coreScale, coreScale, 1f);
+        _plasma.enabled = true;
+        _plasma.color = new Color(1f, 0.9f, 0.88f, 0.9f * fade);
+        _spinAngle = Mathf.Repeat(_spinAngle + 900f * Time.unscaledDeltaTime * fade, 360f);
+        _spinOuter.localRotation = Quaternion.Euler(0f, 0f, -_spinAngle);
+        _plasmaRect.localRotation = Quaternion.Euler(0f, 0f, _spinAngle * 1.4f);
     }
 
     // ------------------------------------------------------------------

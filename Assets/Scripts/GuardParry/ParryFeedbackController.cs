@@ -107,6 +107,7 @@ public class ParryFeedbackController : MonoBehaviour
         CombatFeelPreset preset = ResolveDefensePreset(DefenseFeelKind.Parry);
         if (debugLog) Debug.Log("[ParryFX] Parry", this);
         SoulsCameraRig.NotifyParry(); // FOV 펀치 (리그가 있는 씬만)
+        ActionColourDirector.NotifyParry(hitPoint); // 반복 11: 짧은 흑백 + 색수차/비네트 펄스
         if (useHitStop && useParryHitStop)
             StartHitStop(preset.TimeScale, preset.StopDuration, parryHitStopMinIntervalRealtime);
 

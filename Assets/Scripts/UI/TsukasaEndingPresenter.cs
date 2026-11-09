@@ -49,6 +49,8 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
         var presenter = go.AddComponent<TsukasaEndingPresenter>();
         presenter._onDone = onDone;
         presenter.Build();
+        // 반복 11: 결전의 세계가 유리처럼 깨지며 홀로그램 통신으로 전환
+        ScreenShatter.Play(new Vector2(0.5f, 0.52f), 0.2f, 0.75f);
         s_active = presenter;
         PlayCount++;
         presenter.StartCoroutine(presenter.CoPlay());

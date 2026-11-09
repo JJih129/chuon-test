@@ -229,6 +229,7 @@ public class PerfectDodgeController : MonoBehaviour
         if (playerHealth != null && perfectDodgeInvincibleRealtime > 0f)
             playerHealth.SetInvincibleRealtime(perfectDodgeInvincibleRealtime);
         StartSlow(slowTimeScale, slowDuration);
+        ActionColourDirector.NotifyPerfectDodge(slowDuration + 0.15f); // 반복 11: 슬로모 동안 쿨 틴트
 
         if (autoFeedback && feedback)
             feedback.PlayPerfectDodgeFeedback(hitPoint, attacker);

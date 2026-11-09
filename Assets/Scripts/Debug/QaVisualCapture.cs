@@ -1,3 +1,5 @@
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+// 개발/QA 전용: 릴리스 빌드에서는 컴파일되지 않는다.
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -251,3 +253,4 @@ public sealed class QaVisualCapture : MonoBehaviour
         Shots++;
     }
 }
+#endif

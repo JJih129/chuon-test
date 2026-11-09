@@ -30,11 +30,20 @@ public sealed class UltimateCinematicHudFrame : MonoBehaviour
     float _progress;
     int _direction;
     bool _active;
+    float _delayUntil;
+    Text _skipHint;
 
     public bool IsActive => _active;
 
     public void Begin()
     {
+        Begin(0f);
+    }
+
+    /// <summary>startDelay: HUD 페이드를 늦춘다 (궁극기 시작 시 페이즈 코어 플레어가 먼저 보이도록).</summary>
+    public void Begin(float startDelay)
+    {
+        _delayUntil = Time.unscaledTime + Mathf.Max(0f, startDelay);
         if (!_active)
         {
             CollectHud();
@@ -69,6 +78,9 @@ public sealed class UltimateCinematicHudFrame : MonoBehaviour
         // Idle while holding the faded state. Do NOT toggle `enabled` here:
         // OnDisable treats disabling as a cancel and would restore the HUD mid-cinematic.
         if (_direction == 0)
+            return;
+
+        if (_direction > 0 && Time.unscaledTime < _delayUntil)
             return;
 
         float duration = _direction > 0 ? fadeInDuration : fadeOutDuration;
@@ -114,6 +126,8 @@ public sealed class UltimateCinematicHudFrame : MonoBehaviour
             _top.anchorMin = new Vector2(0f, 1f - barHeight);
         if (_bottom != null)
             _bottom.anchorMax = new Vector2(1f, barHeight);
+        if (_skipHint != null)
+            _skipHint.color = new Color(1f, 1f, 1f, 0.5f * eased);
 
         for (int i = 0; i < _hud.Count; i++)
         {
@@ -216,6 +230,22 @@ public sealed class UltimateCinematicHudFrame : MonoBehaviour
 
         _top = CreateBar(root.transform, "LetterboxTop", new Vector2(0f, 1f), new Vector2(1f, 1f));
         _bottom = CreateBar(root.transform, "LetterboxBottom", new Vector2(0f, 0f), new Vector2(1f, 0f));
+
+        // 건너뛰기 안내 (아래 레터박스 안, 오른쪽)
+        var hintGo = new GameObject("SkipHint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        hintGo.transform.SetParent(_bottom, false);
+        _skipHint = hintGo.GetComponent<Text>();
+        _skipHint.font = RuntimeBuiltInFontUtility.GetDefaultFont();
+        _skipHint.fontSize = 18;
+        _skipHint.alignment = TextAnchor.MiddleRight;
+        _skipHint.raycastTarget = false;
+        _skipHint.text = "F / Space  건너뛰기";
+        _skipHint.color = new Color(1f, 1f, 1f, 0f);
+        var hintRect = (RectTransform)hintGo.transform;
+        hintRect.anchorMin = new Vector2(0.6f, 0f);
+        hintRect.anchorMax = new Vector2(1f, 1f);
+        hintRect.offsetMin = new Vector2(0f, 0f);
+        hintRect.offsetMax = new Vector2(-36f, 0f);
         root.SetActive(false);
     }
 
