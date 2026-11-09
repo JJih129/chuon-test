@@ -33,21 +33,37 @@ public class PauseManager : MonoBehaviour
 
     void Update()
     {
-        // 일시정지 메뉴에서 C = 설정 > 콤보 탭 바로 열기
-        if (isPaused && !isSettingsOpen && Input.GetKeyDown(KeyCode.C))
+        // 리바인드 중 ESC / START / B 는 리바인드 취소·바인딩 입력이다 (메뉴로 새지 않게)
+        if (ChuonInputRebinding.IsRebinding)
+            return;
+
+        // 일시정지 메뉴에서 C (패드 Y / Triangle) = 설정 > 콤보 탭 바로 열기
+        if (isPaused && !isSettingsOpen && (Input.GetKeyDown(KeyCode.C) || ChuonInput.Pressed(ChuonAction.MenuAlt)))
         {
             OpenComboGuide();
             return;
         }
 
-        if (!Input.GetKeyDown(KeyCode.Escape))
+        // 패드: START = 일시정지 토글 / 설정 닫기, B = 뒤로 (설정 → 일시정지 메뉴 → 게임)
+        bool padStart = ChuonInput.Pressed(ChuonAction.Pause);
+        bool padBack = isPaused && ChuonInput.PadBackPressed();
+        if (!Input.GetKeyDown(KeyCode.Escape) && !padStart && !padBack)
             return;
 
+        if (padBack || padStart)
+            LastMenuButtonFrame = Time.frameCount; // B 는 회피와 같은 버튼: 이 프레임의 회피 입력은 무시 (PlayerDodgeController)
         if (isSettingsOpen)
             CloseSettings();
+        else if (padBack)
+            ResumeGame();
         else
             TogglePause();
     }
+
+    public bool IsPaused => isPaused;
+    /// <summary>패드 B/START 로 메뉴를 조작한 마지막 프레임 (같은/다음 프레임의 회피 입력 무시용).</summary>
+    public static int LastMenuButtonFrame { get; private set; } = -10;
+    public bool IsSettingsOpen => isSettingsOpen;
 
     public void TogglePause()
     {

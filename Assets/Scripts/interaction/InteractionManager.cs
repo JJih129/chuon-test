@@ -178,7 +178,7 @@ public class InteractionManager : MonoBehaviour
         {
             Component currentComponent = _current as Component;
             if (_current.TryInteract(this) && _promptUI && currentComponent != null)
-                _promptUI.Show(currentComponent.transform, _current.GetPromptText());
+                _promptUI.Show(currentComponent.transform, FormatPrompt(_current.GetPromptText()));
         }
 
         float effectiveCheckInterval = Mathf.Max(0.06f, interactionCheckInterval);
@@ -236,7 +236,7 @@ public class InteractionManager : MonoBehaviour
 
             _promptAnchor.position = anchorPos + Vector3.up * promptYOffset;
 
-            if (_promptUI) _promptUI.Show(_promptAnchor, _current.GetPromptText());
+            if (_promptUI) _promptUI.Show(_promptAnchor, FormatPrompt(_current.GetPromptText()));
         }
 
     }
@@ -253,11 +253,17 @@ public class InteractionManager : MonoBehaviour
         if (_promptUI) _promptUI.Hide();
     }
 
+    // 패드 사용 중(또는 상호작용 키 리바인드 시) 프롬프트의 'F' 표기를 현재 버튼으로 (KB+M 기본이면 원문 그대로)
+    string FormatPrompt(string prompt)
+    {
+        return InputGlyphs.ReplaceKeyToken(prompt, ChuonAction.Interact, interactKey.ToString());
+    }
+
     bool GetInteractPressed()
     {
         if (IsInputBlocked())
             return false;
-        return Input.GetKeyDown(interactKey);
+        return ChuonInput.PressedOr(ChuonAction.Interact, interactKey); // 패드 A
     }
 
     bool IsLockOn()

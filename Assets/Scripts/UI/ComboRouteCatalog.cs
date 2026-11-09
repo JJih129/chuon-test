@@ -63,7 +63,13 @@ public static class ComboRouteCatalog
             H, H, H),
     };
 
-    public static string KeyOf(ComboInputKind input) => input == ComboInputKind.Heavy ? HeavyKey : LightKey;
+    /// <summary>현재 장치/리바인드 표기 (키보드 기본 배치면 LMB/RMB 그대로).</summary>
+    public static string KeyOf(ComboInputKind input) => input == ComboInputKind.Heavy
+        ? GlyphOr(ChuonAction.AttackHeavy, HeavyKey)
+        : GlyphOr(ChuonAction.AttackLight, LightKey);
+
+    static string GlyphOr(ChuonAction a, string keyboardDefault)
+        => !ChuonInput.IsGamepadScheme && !ChuonInput.KeyboardOverridden(a) ? keyboardDefault : InputGlyphs.Get(a);
 
     /// <summary>한 글자 표기 (약 / 강).</summary>
     public static string ShortLabelOf(ComboInputKind input) => input == ComboInputKind.Heavy ? "강" : "약";
@@ -85,8 +91,8 @@ public static class ComboRouteCatalog
     public static string BuildTutorialGuideBody()
     {
         StringBuilder builder = new StringBuilder(160);
-        builder.Append(LightLabel).Append("  ").Append(LightKey).Append('\n');
-        builder.Append(HeavyLabel).Append("  ").Append(HeavyKey).Append("\n\n");
+        builder.Append(LightLabel).Append("  ").Append(KeyOf(ComboInputKind.Light)).Append('\n');
+        builder.Append(HeavyLabel).Append("  ").Append(KeyOf(ComboInputKind.Heavy)).Append("\n\n");
 
         for (int i = 0; i < Routes.Length; i++)
         {

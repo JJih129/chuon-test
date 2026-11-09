@@ -297,8 +297,23 @@ public sealed class LoadingTipOverlay : MonoBehaviour
 
         Tip tip = Tips[index];
         _tagText.text = "// " + tip.Tag;
-        _bodyText.text = tip.Body;
+        _bodyText.text = GlyphBody(tip.Body);
         _counterText.text = GetCounterLabel(index);
+    }
+
+    // 팁 문구의 키 표기를 현재 장치/리바인드 표기로 (키보드 기본 배치면 원문 그대로)
+    static string GlyphBody(string body)
+    {
+        body = InputGlyphs.ReplaceKeyToken(body, ChuonAction.Dodge, "L-SHIFT");
+        body = InputGlyphs.ReplaceKeyToken(body, ChuonAction.Guard, "E");
+        body = InputGlyphs.ReplaceKeyToken(body, ChuonAction.LockOn, "TAB");
+        body = InputGlyphs.ReplaceKeyToken(body, ChuonAction.Heal, "Q");
+        body = InputGlyphs.ReplaceKeyToken(body, ChuonAction.Ultimate, "R");
+        if (ChuonInput.IsGamepadScheme || ChuonInput.KeyboardOverridden(ChuonAction.AttackLight))
+            body = body.Replace("좌클릭", InputGlyphs.Get(ChuonAction.AttackLight));
+        if (ChuonInput.IsGamepadScheme || ChuonInput.KeyboardOverridden(ChuonAction.AttackHeavy))
+            body = body.Replace("우클릭", InputGlyphs.Get(ChuonAction.AttackHeavy));
+        return body;
     }
 
     static string GetCounterLabel(int index)

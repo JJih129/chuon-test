@@ -106,6 +106,9 @@ public class PauseMenuView : MonoBehaviour
         menuContainer.localScale = Vector3.one * 0.8f;
         menuContainer.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetUpdate(true);
         EnsureComboGuideHint();
+        RefreshComboGuideHint();
+        // 패드: 맨 위 버튼(계속하기)에 포커스. 마우스 사용 중이면 기존처럼 선택 없음.
+        ChuonInputRuntime.SelectForGamepad(FindFirstMenuButton());
 
         var menuCanvasGroup = menuContainer.GetComponent<CanvasGroup>();
         if (menuCanvasGroup != null)
@@ -384,7 +387,10 @@ public class PauseMenuView : MonoBehaviour
             if (isOpen)
                 unifiedSettingsOverlay.Show();
             else
+            {
                 unifiedSettingsOverlay.Hide();
+                ChuonInputRuntime.SelectForGamepad(FindFirstMenuButton());
+            }
 
             return;
         }
@@ -454,7 +460,37 @@ public class PauseMenuView : MonoBehaviour
         text.supportRichText = true;
         text.raycastTarget = false;
         text.color = new Color(0.93f, 0.94f, 0.95f, 0.82f);
-        text.text = "<color=#E0303A>[C]</color>  콤보 표  ·  설정 > 콤보 / COMBO";
+        text.text = ComboGuideHintText();
+    }
+
+    static string ComboGuideHintText()
+    {
+        string key = InputGlyphs.IsGamepad ? InputGlyphs.Get(ChuonAction.MenuAlt) : "C";
+        return "<color=#E0303A>[" + key + "]</color>  콤보 표  ·  설정 > 콤보 / COMBO";
+    }
+
+    void RefreshComboGuideHint()
+    {
+        Transform hint = menuRoot != null ? menuRoot.transform.Find(RuntimeComboHintName) : null;
+        Text text = hint != null ? hint.GetComponent<Text>() : null;
+        if (text != null)
+            text.text = ComboGuideHintText();
+    }
+
+    GameObject FindFirstMenuButton()
+    {
+        if (menuContainer == null)
+            return null;
+        Button[] buttons = menuContainer.GetComponentsInChildren<Button>(false);
+        if (buttons == null || buttons.Length == 0)
+            return null;
+        System.Array.Sort(buttons, CompareButtonTopToBottom);
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            if (buttons[i] != null && buttons[i].interactable)
+                return buttons[i].gameObject;
+        }
+        return null;
     }
 
     bool EnsureUnifiedSettingsOverlay()

@@ -207,7 +207,10 @@ public class PlayerDodgeController : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(dodgeKey))
+        // 일시정지 중이거나 패드 B 로 일시정지를 닫은 프레임(B = 뒤로 = 회피)에는 회피 입력을 받지 않는다
+        bool menuFrame = (PauseManager.Instance != null && PauseManager.Instance.IsPaused)
+                         || Time.frameCount - PauseManager.LastMenuButtonFrame <= 1;
+        if (!menuFrame && ChuonInput.PressedOr(ChuonAction.Dodge, dodgeKey))
             inputCommandBuffer?.RecordDodgePress();
 
         if (TryConsumeDodgePressCommand())
@@ -654,7 +657,7 @@ public class PlayerDodgeController : MonoBehaviour
     {
         Transform basis = GetDodgeBasis();
         Vector3 right = Flat(basis.right);
-        float horizontalInput = Input.GetAxisRaw("Horizontal");
+        float horizontalInput = ChuonInput.ReadMove("Horizontal", "Vertical").x;
 
         if (Mathf.Abs(horizontalInput) > 0.1f)
             return right * Mathf.Sign(horizontalInput);
@@ -687,7 +690,7 @@ public class PlayerDodgeController : MonoBehaviour
 
         if (candidate.sqrMagnitude <= 0.0004f)
         {
-            Vector2 rawInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+            Vector2 rawInput = ChuonInput.ReadMove("Horizontal", "Vertical");
             if (rawInput.sqrMagnitude > 0.0001f)
             {
                 Transform basis = GetDodgeBasis();
@@ -718,7 +721,7 @@ public class PlayerDodgeController : MonoBehaviour
 
         if (wish.sqrMagnitude <= 0.0004f)
         {
-            Vector2 input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+            Vector2 input = ChuonInput.ReadMove("Horizontal", "Vertical");
             if (input.sqrMagnitude > 0.0001f)
             {
                 Transform basis = GetDodgeBasis();

@@ -2382,7 +2382,7 @@ MonoBehaviour:
     lungeDistance: 1.4
     lungeDuration: 0.28
     recovery: 1.15
-    clipImpactTime: 0.10000001
+    clipImpactTime: 0.6333334
     hyperArmor: 1
   batonStrike:
     name: Baton
@@ -2402,11 +2402,14 @@ MonoBehaviour:
     clipImpactTime: 0.36666667
     hyperArmor: 0
   bashChance: 0.55
-  bashCoilLeanDeg: 13
-  bashCoilPullBack: 0.24
+  bashCoilLeanDeg: 8
+  bashCoilPullBack: 0.16
   bashCoilCrouch: 0.1
   bashSnapTime: 0.14
   bashCoilGlowBoost: 2.4
+  guardShieldOffset: {x: 0.05, y: 0, z: 0.14}
+  batonRestDirection: {x: 0.2, y: -1, z: -0.3}
+  batonTransform: {fileID: 0}
 --- !u!1 &6547532128052292885
 GameObject:
   m_ObjectHideFlags: 0

@@ -82,7 +82,7 @@ public class PlayerConsumables : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Q))
+        if (ChuonInput.PressedOr(ChuonAction.Heal, KeyCode.Q)) // 패드 X / Square
             TryUseAmpoule();
     }
 

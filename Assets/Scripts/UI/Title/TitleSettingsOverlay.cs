@@ -59,6 +59,20 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         public Func<string> GetValueText;
     }
 
+    // 반복 13: 실제 리바인드 행 (키보드·마우스 칸 + 게임패드 칸, Input System 인터랙티브 리바인딩)
+    sealed class ActionBindingRow
+    {
+        public ChuonAction Action;
+        public int KeyboardIndex;
+        public bool PadEnabled;
+        public Button KeyboardButton;
+        public Text KeyboardText;
+        public Image KeyboardImage;
+        public Button PadButton;
+        public Text PadText;
+        public Image PadImage;
+    }
+
     const float FadeDuration = 0.16f;
     const float SliderSyncThreshold = 0.001f;
     const string TargetFrameRateKey = "opt_target_fps";
@@ -95,6 +109,10 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
     readonly List<ToggleRow> _toggleRows = new List<ToggleRow>(8);
     readonly List<CycleRow> _cycleRows = new List<CycleRow>(4);
     readonly List<CustomCycleRow> _customCycleRows = new List<CustomCycleRow>(2);
+    readonly List<ActionBindingRow> _actionRows = new List<ActionBindingRow>(16);
+    readonly List<SettingsTab> _tabOrder = new List<SettingsTab>(6);
+    Text _rebindStatusText;
+    string _rebindStatus = string.Empty;
 
     CanvasGroup _canvasGroup;
     RectTransform _rootRect;
@@ -160,6 +178,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         RefreshAllRows();
         ApplyTab(_activeTab);
         FadeTo(1f, true);
+        FocusActiveTabButton();
     }
 
     public void Hide()
@@ -168,6 +187,8 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
             return;
 
         CancelPendingRebind();
+        if (ChuonInputRebinding.IsRebinding)
+            ChuonInputRebinding.Cancel();
         _isVisible = false;
         FadeTo(0f, false);
         OptionsManagerAdvanced.FlushPrefs(); // 닫을 때 설정을 디스크에 기록
@@ -182,6 +203,19 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         SyncSliderRows();
         SyncToggleRows();
         SyncCycleRows();
+        SyncActionRows();
+
+        // 패드 LB / RB = 탭 전환
+        int tabDelta = ChuonInput.PadTabDelta();
+        if (tabDelta != 0 && _tabOrder.Count > 0)
+        {
+            int index = Mathf.Max(0, _tabOrder.IndexOf(_activeTab));
+            index = (index + tabDelta + _tabOrder.Count) % _tabOrder.Count;
+            ApplyTab(_tabOrder[index]);
+            FocusActiveTabButton();
+        }
+
+        KeepSelectionVisible();
     }
 
     void OnDestroy()
@@ -351,19 +385,27 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         RectTransform content = CreateTabView(SettingsTab.Controls, "조작", "핵심 이동과 공격 입력을 재배치하고,\n현재 빌드 기준 전투 기본 조작을 확인합니다.");
 
         int rowIndex = 0;
-        CreateSectionHeader(content, "기본 조작", "현재 빌드 기준 기본 조작입니다. 점프 입력은 사용하지 않습니다.");
-        CreateStaticBindingRow(content, "이동", "W / A / S / D", "상하좌우 이동", rowIndex++);
-        CreateStaticBindingRow(content, "기본공격", "마우스 좌클릭", "기본 공격 및 콤보 시작", rowIndex++);
-        CreateStaticBindingRow(content, "강공격", "마우스 우클릭", "강공격 시작 및 공격 파생", rowIndex++);
-        CreateStaticBindingRow(content, "가드 / 패링", "E", "가드 유지, 짧게 탭하면 패링", rowIndex++);
-        CreateStaticBindingRow(content, "회피", "L-SHIFT", "짧은 무적 회피", rowIndex++);
+        CreateSectionHeader(content, "키 설정  ·  키보드·마우스 | 게임패드", "칸을 선택해 새 키를 누르면 바로 바뀝니다. 겹치는 키는 서로 교체됩니다. ESC / START = 취소.");
+        CreateRebindStatusRow(content);
+        CreateActionBindingRow(content, "이동 (앞)", ChuonAction.Move, ChuonInput.MoveUpIndex, rowIndex++);
+        CreateActionBindingRow(content, "이동 (뒤)", ChuonAction.Move, ChuonInput.MoveDownIndex, rowIndex++);
+        CreateActionBindingRow(content, "이동 (왼쪽)", ChuonAction.Move, ChuonInput.MoveLeftIndex, rowIndex++);
+        CreateActionBindingRow(content, "이동 (오른쪽)", ChuonAction.Move, ChuonInput.MoveRightIndex, rowIndex++);
+        CreateActionBindingRow(content, "기본공격", ChuonAction.AttackLight, 0, rowIndex++);
+        CreateActionBindingRow(content, "강공격", ChuonAction.AttackHeavy, 0, rowIndex++);
+        CreateActionBindingRow(content, "가드 / 패링", ChuonAction.Guard, 0, rowIndex++);
+        CreateActionBindingRow(content, "회피", ChuonAction.Dodge, 0, rowIndex++);
+        CreateActionBindingRow(content, "락온", ChuonAction.LockOn, 0, rowIndex++);
+        CreateActionBindingRow(content, "락온 (보조)", ChuonAction.LockOn, 1, rowIndex++);
+        CreateActionBindingRow(content, "상호작용", ChuonAction.Interact, 0, rowIndex++);
+        CreateActionBindingRow(content, "궁극기", ChuonAction.Ultimate, 0, rowIndex++);
+        CreateActionBindingRow(content, "회복 앰플", ChuonAction.Heal, 0, rowIndex++);
+        CreateResetBindingsRow(content, rowIndex++);
 
-        CreateSectionHeader(content, "기능 단축키", "전투와 디버그 관련 빠른 전환 키입니다.");
-        CreateStaticBindingRow(content, "락온", "TAB / MOUSE3", "가까운 적 타겟 고정 및 해제", rowIndex++);
-        CreateStaticBindingRow(content, "상호작용", "F", "오브젝트 상호작용", rowIndex++);
-        CreateStaticBindingRow(content, "궁극기", "R", "페이즈 코어 5단 충전 후 발동 (보스전마다 1회)", rowIndex++);
-        CreateStaticBindingRow(content, "회복 앰플", "Q", "HP 35% 회복. 사용 동작 중 피격되면 취소되고 앰플은 소모", rowIndex++);
-        CreateStaticBindingRow(content, "콤보 표", "설정 > 콤보", "콤보 루트 A–E 입력표 (일시정지 중 C 키)", rowIndex++);
+        CreateSectionHeader(content, "고정 키", "전투와 디버그 관련 빠른 전환 키입니다 (변경 불가).");
+        CreateStaticBindingRow(content, "일시정지", "ESC  |  START", "일시정지 메뉴 · 메뉴에서 B = 뒤로, LB / RB = 탭 전환", rowIndex++);
+        CreateStaticBindingRow(content, "카메라", "마우스  |  R 스틱", "락온 중 스틱을 튕기면 대상 전환", rowIndex++);
+        CreateStaticBindingRow(content, "콤보 표", "C  |  Y", "콤보 루트 A–E 입력표 (일시정지 중)", rowIndex++);
         CreateStaticBindingRow(content, "성능 HUD", "F11", "좌상단 프레임 / ms 표시 토글", rowIndex++);
         CreateStaticBindingRow(content, "전투 디버그 HUD", "F12", "우상단 전투 상태 디버그 토글", rowIndex++);
 
@@ -644,6 +686,8 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         layout.preferredWidth = 128f;
 
         _tabButtons[tab] = button;
+        if (!_tabOrder.Contains(tab))
+            _tabOrder.Add(tab);
         return button;
     }
 
@@ -1121,6 +1165,175 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
             return Mathf.RoundToInt(value) + "°";
 
         return Mathf.RoundToInt(Mathf.Clamp01(value) * 100f) + "%";
+    }
+
+    // ------------------------------------------------------------------ 리바인드 행 (반복 13)
+
+    void CreateRebindStatusRow(RectTransform parent)
+    {
+        RectTransform row = CreateRect("Row_RebindStatus", parent);
+        FitHeight(row, 40f);
+        row.gameObject.AddComponent<Image>().color = SoftPanelColor;
+        _rebindStatusText = CreateText("Status", row, string.Empty, 14, FontStyle.Bold, TextAnchor.MiddleLeft, AmberColor, new Vector2(0.03f, 0f), new Vector2(0.97f, 1f));
+    }
+
+    void CreateActionBindingRow(RectTransform parent, string label, ChuonAction action, int keyboardIndex, int rowIndex)
+    {
+        RectTransform holder = CreateRow(parent, label, rowIndex);
+        var row = new ActionBindingRow
+        {
+            Action = action,
+            KeyboardIndex = keyboardIndex,
+            // 패드 칸: 이동은 L 스틱 고정, 락온 보조(마우스 휠클릭)는 키보드 전용
+            PadEnabled = ChuonInputRebinding.CanRebind(action, true) && !(action == ChuonAction.LockOn && keyboardIndex > 0)
+        };
+
+        row.KeyboardButton = CreateButton("KeyboardBinding", holder, "-", 15);
+        SetRect(row.KeyboardButton.GetComponent<RectTransform>(), new Vector2(0.00f, 0f), new Vector2(0.48f, 1f));
+        row.KeyboardText = row.KeyboardButton.GetComponentInChildren<Text>(true);
+        row.KeyboardImage = row.KeyboardButton.GetComponent<Image>();
+        row.KeyboardButton.onClick.AddListener(() => BeginRowRebind(row, false));
+
+        row.PadButton = CreateButton("GamepadBinding", holder, "-", 15);
+        SetRect(row.PadButton.GetComponent<RectTransform>(), new Vector2(0.52f, 0f), new Vector2(1f, 1f));
+        row.PadText = row.PadButton.GetComponentInChildren<Text>(true);
+        row.PadImage = row.PadButton.GetComponent<Image>();
+        row.PadButton.interactable = row.PadEnabled;
+        if (row.PadEnabled)
+            row.PadButton.onClick.AddListener(() => BeginRowRebind(row, true));
+
+        _actionRows.Add(row);
+        SyncActionRow(row);
+    }
+
+    void CreateResetBindingsRow(RectTransform parent, int rowIndex)
+    {
+        RectTransform holder = CreateRow(parent, "기본값 복원", rowIndex);
+        Button reset = CreateButton("ResetBindings", holder, "모든 키 기본값으로", 15);
+        SetRect(reset.GetComponent<RectTransform>(), new Vector2(0.00f, 0f), new Vector2(1f, 1f));
+        reset.onClick.AddListener(() =>
+        {
+            if (ChuonInputRebinding.IsRebinding)
+                return;
+            ChuonInputRebinding.ResetAll();
+            _rebindStatus = "모든 키를 기본값으로 되돌렸습니다.";
+            SyncActionRows();
+        });
+    }
+
+    void BeginRowRebind(ActionBindingRow row, bool gamepad)
+    {
+        if (row == null || ChuonInputRebinding.IsRebinding)
+            return;
+
+        Button source = gamepad ? row.PadButton : row.KeyboardButton;
+        bool started = ChuonInputRebinding.Start(row.Action, gamepad, gamepad ? 0 : row.KeyboardIndex, result =>
+        {
+            if (!result.completed)
+                _rebindStatus = "변경을 취소했습니다.";
+            else if (!string.IsNullOrEmpty(result.swappedWith))
+                _rebindStatus = "'" + result.swappedWith + "' 와(과) 겹쳐 두 키를 서로 교체했습니다.";
+            else
+                _rebindStatus = ChuonInput.DisplayName(result.action) + " → " + InputGlyphs.PathLabel(result.newPath, gamepad ? PadLabelScheme() : ChuonInputScheme.KeyboardMouse);
+            SyncActionRows();
+            if (source != null)
+                ChuonInputRuntime.SelectForGamepad(source.gameObject);
+        });
+
+        if (started)
+            _rebindStatus = gamepad
+                ? "새 버튼을 누르세요  ·  START = 취소  (" + Mathf.RoundToInt(ChuonInputRebinding.TimeoutSeconds) + "초)"
+                : "새 키 / 마우스 버튼을 누르세요  ·  ESC = 취소  (" + Mathf.RoundToInt(ChuonInputRebinding.TimeoutSeconds) + "초)";
+        SyncActionRows();
+    }
+
+    static ChuonInputScheme PadLabelScheme()
+    {
+        return ChuonInput.Scheme == ChuonInputScheme.PlayStation ? ChuonInputScheme.PlayStation : ChuonInputScheme.Xbox;
+    }
+
+    void SyncActionRows()
+    {
+        for (int i = 0; i < _actionRows.Count; i++)
+            SyncActionRow(_actionRows[i]);
+        if (_rebindStatusText != null && _rebindStatusText.text != _rebindStatus)
+            _rebindStatusText.text = _rebindStatus;
+    }
+
+    void SyncActionRow(ActionBindingRow row)
+    {
+        if (row == null)
+            return;
+        bool rebinding = ChuonInputRebinding.IsRebinding && ChuonInputRebinding.CurrentAction == row.Action && ChuonInputRebinding.CurrentBindingIndex >= 0;
+        bool waitingKb = rebinding && !ChuonInputRebinding.CurrentIsGamepad && ChuonInputRebinding.CurrentBindingIndex == row.KeyboardIndex;
+        bool waitingPad = rebinding && ChuonInputRebinding.CurrentIsGamepad && row.PadEnabled;
+
+        string kb = waitingKb ? "입력 대기..." : InputGlyphs.BindingLabel(ChuonInput.KeyboardAction(row.Action), row.KeyboardIndex, ChuonInputScheme.KeyboardMouse);
+        string pad;
+        if (waitingPad)
+            pad = "입력 대기...";
+        else if (row.Action == ChuonAction.Move)
+            pad = "L 스틱";
+        else if (!row.PadEnabled)
+            pad = "-";
+        else
+            pad = InputGlyphs.BindingLabel(ChuonInput.GamepadAction(row.Action), 0, PadLabelScheme());
+
+        if (row.KeyboardText != null && row.KeyboardText.text != kb)
+            row.KeyboardText.text = kb;
+        if (row.PadText != null && row.PadText.text != pad)
+            row.PadText.text = pad;
+        if (row.KeyboardImage != null)
+            row.KeyboardImage.color = waitingKb ? ControlHighlightColor : ControlColor;
+        if (row.PadImage != null)
+            row.PadImage.color = waitingPad ? ControlHighlightColor : ControlColor;
+        if (row.KeyboardText != null)
+            row.KeyboardText.color = waitingKb ? AmberColor : TextColor;
+        if (row.PadText != null)
+            row.PadText.color = waitingPad ? AmberColor : (row.PadEnabled ? TextColor : MutedTextColor);
+    }
+
+    void FocusActiveTabButton()
+    {
+        if (_tabButtons.TryGetValue(_activeTab, out Button tabButton) && tabButton != null)
+            ChuonInputRuntime.SelectForGamepad(tabButton.gameObject);
+    }
+
+    // 패드로 선택이 스크롤 영역 밖으로 나가면 보이도록 스크롤한다 (마우스 휠 스크롤은 그대로).
+    void KeepSelectionVisible()
+    {
+        if (!ChuonInput.IsGamepadScheme || UnityEngine.EventSystems.EventSystem.current == null)
+            return;
+        GameObject selected = UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject;
+        if (selected == null || !_tabViews.TryGetValue(_activeTab, out RectTransform view) || view == null)
+            return;
+        if (!selected.transform.IsChildOf(view))
+            return;
+        ScrollRect scroll = view.GetComponent<ScrollRect>();
+        if (scroll == null || scroll.content == null || scroll.viewport == null)
+            return;
+
+        Transform rowT = selected.transform;
+        while (rowT != null && rowT.parent != scroll.content)
+            rowT = rowT.parent;
+        RectTransform row = rowT as RectTransform;
+        if (row == null)
+            return;
+
+        Bounds b = RectTransformUtility.CalculateRelativeRectTransformBounds(scroll.viewport, row);
+        Rect vp = scroll.viewport.rect;
+        float shift = 0f;
+        if (b.max.y > vp.yMax)
+            shift = b.max.y - vp.yMax + 12f;
+        else if (b.min.y < vp.yMin)
+            shift = b.min.y - vp.yMin - 12f;
+        if (Mathf.Abs(shift) < 0.5f)
+            return;
+        Vector2 pos = scroll.content.anchoredPosition;
+        float maxY = Mathf.Max(0f, scroll.content.rect.height - vp.height);
+        pos.y = Mathf.Clamp(pos.y - shift, 0f, maxY);
+        scroll.content.anchoredPosition = pos;
+        scroll.velocity = Vector2.zero;
     }
 
     static RectTransform CreateRect(string objectName, Transform parent)

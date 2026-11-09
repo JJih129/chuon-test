@@ -305,7 +305,13 @@ public class PlayerMoveController : MonoBehaviour
 
         // 2. Legacy Input (Project Settings가 Both/Old일 때)
         Vector2 input = Vector2.zero;
-        if (legacyFallback)
+        bool moveKeysRebound = ChuonInput.KeyboardOverridden(ChuonAction.Move);
+        if (legacyFallback && moveKeysRebound)
+        {
+            // 옵션에서 이동 키를 바꾼 경우: 리바인드된 키 + 패드 (레거시 WASD 축은 무시)
+            input = ChuonInput.ReadMove(axisX, axisY);
+        }
+        else if (legacyFallback)
         {
             try
             {
@@ -317,13 +323,18 @@ public class PlayerMoveController : MonoBehaviour
 
         // 3. ★ [비상용] 강제 키보드 입력 체크
         // (설정이 꼬여서 위 1,2번이 다 실패해도 이건 작동함)
-        if (input == Vector2.zero && Keyboard.current != null)
+        if (input == Vector2.zero && Keyboard.current != null && !moveKeysRebound)
         {
             if (Keyboard.current.wKey.isPressed) input.y += 1;
             if (Keyboard.current.sKey.isPressed) input.y -= 1;
             if (Keyboard.current.dKey.isPressed) input.x += 1;
             if (Keyboard.current.aKey.isPressed) input.x -= 1;
         }
+
+        // 4. 패드 왼스틱 (반복 13, ChuonInput): 키보드 입력보다 크면 사용. 패드를 안 쓰면 영향 없음.
+        Vector2 padMove = ChuonInput.PadMove();
+        if (padMove.sqrMagnitude > input.sqrMagnitude)
+            input = padMove;
 
         if (input.sqrMagnitude > 1f)
             input.Normalize();

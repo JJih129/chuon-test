@@ -72,7 +72,11 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     public bool UsesAttackTokens
     {
         get => useAttackTokens;
-        set => useAttackTokens = value;
+        set
+        {
+            useAttackTokens = value;
+            _attackTelegraphLeadTime = ResolveFairTelegraphLead(_requestedTelegraphLeadTime);
+        }
     }
     public float AttackTelegraphLeadTime => _attackTelegraphLeadTime;
 
@@ -96,6 +100,16 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     [SerializeField, Min(0.05f)] float tokenRetryDelay = 0.3f;
     [Tooltip("같은 오브젝트의 EnemyHealth 를 드론 HP 와 동기화 (HP 바 / 락온 사망 판정).")]
     [SerializeField] bool mirrorEnemyHealth = false;
+
+    [Header("Fair ranged rules (useAttackTokens 일 때만 적용)")]
+    [Tooltip("정직한 큐 최소 시간: 외부(로비 코치 감소 모드/에스컬레이션 0.8x)가 더 짧게 요청해도 이 값 아래로 내려가지 않는다. 반응 0.25s + 회피 시동 0.2s + 여유.")]
+    [SerializeField, Range(0f, 1.2f)] float fairMinTelegraphLead = 0.65f;
+    [Tooltip("사격 후 토큰을 이 시간 동안 더 쥔다 (탄이 날아가는 동안 다음 드론이 텔레그래프를 시작하지 않음). 실제 그룹 간격 = 큐 + 이 값 + 디렉터 원거리 쿨다운(0.7s).")]
+    [SerializeField, Min(0f)] float postShotTokenHold = 0.85f;
+    [Tooltip("텔레그래프 동안 몸체를 큐 색(회피 전용 = 주황/빨강)으로 물들이고 판정 순간 최대 밝기 + 큐 효과음.")]
+    [SerializeField] bool showBodyTelegraph = true;
+    [SerializeField, Range(0f, 1f)] float telegraphCueVolume = 0.7f;
+    [SerializeField] AudioClip telegraphCueClip;
 
     [Header("Debug")]
     [SerializeField] bool debugLogs = false;
@@ -153,11 +167,21 @@ public class DroneController : MonoBehaviour, IDamageReceiver
     Vector3 _initialLocalScale;
     EnemyHealth _mirrorHealth;
     Transform _tokenTarget;
+    float _tokenReleaseAt = float.PositiveInfinity;
+    float _telegraphStartedAt = float.NegativeInfinity;
+    bool _telegraphTintApplied;
+    float _requestedTelegraphLeadTime;
+
+    /// <summary>QA: 지금까지 발사한 탄 수.</summary>
+    public int ShotsFired { get; private set; }
 
     void Awake()
     {
         _rigidbody = GetComponent<Rigidbody>();
         _mirrorHealth = mirrorEnemyHealth ? GetComponent<EnemyHealth>() : null;
+        _attackTelegraphLeadTime = ResolveFairTelegraphLead(_requestedTelegraphLeadTime);
+        if (useAttackTokens && showBodyTelegraph && telegraphCueClip == null)
+            telegraphCueClip = Resources.Load<AudioClip>("Audio/TelegraphCue_DodgeOnly");
         _currentHP = maxHP;
         CacheBaseCombatTuning();
         CacheColliders();
@@ -189,6 +213,9 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         _flashApplied = false;
         _nextLightweightTickAt = Time.time;
         _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
+        _tokenReleaseAt = float.PositiveInfinity;
+        _telegraphStartedAt = float.NegativeInfinity;
+        _telegraphTintApplied = false;
         _hitRecoverUntil = 0f;
         _hitPushDirection = Vector3.zero;
         _hitPushSpeed = 0f;
@@ -229,10 +256,39 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     void ReleaseFireToken()
     {
+        _tokenReleaseAt = float.PositiveInfinity;
         if (_tokenTarget == null)
             return;
         EnemyAttackTokenDirector.Release(_tokenTarget, this, EnemyTokenKind.Ranged);
         _tokenTarget = null;
+    }
+
+    // 사격 후: 토큰을 postShotTokenHold 동안 더 쥐고(탄 비행 중) 그 뒤 반납 → 반납 후 디렉터 쿨다운.
+    void HoldFireTokenAfterShot()
+    {
+        if (_tokenTarget == null || postShotTokenHold <= 0.01f)
+        {
+            ReleaseFireToken();
+            return;
+        }
+
+        EnemyAttackTokenDirector.TryAcquire(_tokenTarget, this, EnemyTokenKind.Ranged, postShotTokenHold + 0.1f);
+        _tokenReleaseAt = Time.time + postShotTokenHold;
+    }
+
+    void TickPendingTokenRelease()
+    {
+        if (_tokenTarget != null && Time.time >= _tokenReleaseAt && !_attackTelegraphIssuedForCurrentShot)
+            ReleaseFireToken();
+    }
+
+    // 공정 모드(토큰 사용)에서는 요청이 0(큐 없음)이어도 최소 큐를 보장한다 — 큐 없는 저격 금지.
+    float ResolveFairTelegraphLead(float requested)
+    {
+        requested = Mathf.Max(0f, requested);
+        if (!useAttackTokens)
+            return requested;
+        return Mathf.Max(requested, fairMinTelegraphLead);
     }
 
     public void SetCombatRole(DroneCombatRole role, bool reapplyImmediately = true)
@@ -251,7 +307,8 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     public void SetAttackTelegraph(float leadTime)
     {
-        _attackTelegraphLeadTime = Mathf.Max(0f, leadTime);
+        _requestedTelegraphLeadTime = Mathf.Max(0f, leadTime);
+        _attackTelegraphLeadTime = ResolveFairTelegraphLead(_requestedTelegraphLeadTime);
         _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
     }
 
@@ -418,6 +475,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
 
     void TickMovementAndFire(float deltaTime)
     {
+        TickPendingTokenRelease();
         if (target == null)
             return;
         if (_isDead)
@@ -467,10 +525,15 @@ public class DroneController : MonoBehaviour, IDamageReceiver
                     }
 
                     _attackTelegraphIssuedForCurrentShot = true;
-                    AttackTelegraphed?.Invoke(this);
+                    _tokenReleaseAt = float.PositiveInfinity;
 
+                    // 정직한 큐: 판정(발사)까지 남은 시간이 정확히 lead 가 되도록 먼저 시각을 맞춘 뒤 이벤트를 쏜다
                     if (Time.time > telegraphStartTime + 0.01f)
                         _nextFireTime = Time.time + _attackTelegraphLeadTime;
+                    _telegraphStartedAt = Time.time;
+                    if (useAttackTokens && showBodyTelegraph && telegraphCueClip != null)
+                        OneShotAudio.PlayAt(telegraphCueClip, transform.position, telegraphCueVolume, 1.2f, 0.75f);
+                    AttackTelegraphed?.Invoke(this);
                 }
             }
 
@@ -487,8 +550,9 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             }
 
             Fire();
+            _attackTelegraphIssuedForCurrentShot = false;
             if (useAttackTokens)
-                ReleaseFireToken();
+                HoldFireTokenAfterShot();
             _nextFireTime = Time.time + fireCooldown;
             _attackTelegraphIssuedForCurrentShot = _attackTelegraphLeadTime <= 0f;
             _postShotStrafeUntil = Time.time + Mathf.Max(0f, postShotStrafeDuration);
@@ -695,11 +759,42 @@ public class DroneController : MonoBehaviour, IDamageReceiver
             return;
         }
 
+        if (UpdateTelegraphTint())
+            return;
+
         if (!_flashApplied)
             return;
 
         _flashApplied = false;
         ApplyRendererColor(_originalColor);
+    }
+
+    // 텔레그래프 몸체 색: 큐 시작 → 발사 순간까지 원래 색에서 회피 전용 큐 색으로 선형 증가 (끝 = 판정).
+    bool UpdateTelegraphTint()
+    {
+        bool active = useAttackTokens && showBodyTelegraph && !_isDead
+            && _attackTelegraphIssuedForCurrentShot && _attackTelegraphLeadTime > 0f
+            && Time.time >= _telegraphStartedAt;
+        if (!active)
+        {
+            if (_telegraphTintApplied)
+            {
+                _telegraphTintApplied = false;
+                ApplyRendererColor(_originalColor);
+            }
+            return false;
+        }
+
+        float t = Mathf.Clamp01((Time.time - (_nextFireTime - _attackTelegraphLeadTime)) / Mathf.Max(0.05f, _attackTelegraphLeadTime));
+        Color cue = EnemyCuePalette.GetColor(EnemyCueType.DodgeOnly); // HDR 섬광색 → 알베도용으로 정규화
+        float peak = Mathf.Max(cue.r, Mathf.Max(cue.g, cue.b));
+        if (peak > 1f)
+            cue /= peak;
+        cue.a = 1f;
+        ApplyRendererColor(Color.LerpUnclamped(_originalColor, cue, 0.35f + 0.65f * t * t));
+        _telegraphTintApplied = true;
+        _flashApplied = true; // 끝나면 원래 색 복원 경로를 탄다
+        return true;
     }
 
     void ApplyRendererColor(Color color)
@@ -740,6 +835,7 @@ public class DroneController : MonoBehaviour, IDamageReceiver
         if (tutorialProjectile != null)
             tutorialProjectile.owner = transform;
 
+        ShotsFired++;
         Fired?.Invoke(this);
     }
 

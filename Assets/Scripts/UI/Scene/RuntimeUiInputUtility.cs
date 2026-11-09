@@ -12,19 +12,29 @@ public static class RuntimeUiInputUtility
         EventSystem eventSystem = EventSystem.current;
         if (eventSystem == null)
         {
-            eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule))
-                .GetComponent<EventSystem>();
+            // 반복 13: 게임패드 메뉴 조작 (D-패드/스틱, A/B) — Input System UI 모듈 + ChuonInput UI 맵 (키보드 메뉴 키는 레거시와 동일)
+            eventSystem = new GameObject("EventSystem", typeof(EventSystem)).GetComponent<EventSystem>();
+            ChuonInputRuntime.ConfigureModule(eventSystem.gameObject.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>());
             return;
         }
 
         eventSystem.enabled = true;
+        ChuonInputRuntime.UpgradeLegacyInputModule(eventSystem);
 
-        BaseInputModule inputModule = eventSystem.GetComponent<BaseInputModule>();
+        BaseInputModule inputModule = eventSystem.GetComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
         if (inputModule == null)
-            inputModule = eventSystem.gameObject.AddComponent<StandaloneInputModule>();
+            inputModule = eventSystem.GetComponent<BaseInputModule>();
+        if (inputModule == null)
+        {
+            var created = eventSystem.gameObject.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+            ChuonInputRuntime.ConfigureModule(created);
+            inputModule = created;
+        }
 
         inputModule.enabled = true;
     }
+
+    public static bool HasActiveModal => activeModalCanvas != null;
 
     public static void ForceMenuCursor()
     {

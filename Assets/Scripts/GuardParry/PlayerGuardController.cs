@@ -313,13 +313,13 @@ public class PlayerGuardController : MonoBehaviour
         {
             bool pressedThisFrame = hasGuardAction
                 ? guardAction.action.WasPressedThisFrame()
-                : Input.GetKeyDown(KeyCode.E);
+                : ChuonInput.PressedOr(ChuonAction.Guard, KeyCode.E);
             bool releasedThisFrame = hasGuardAction
                 ? guardAction.action.WasReleasedThisFrame()
-                : Input.GetKeyUp(KeyCode.E);
+                : ChuonInput.ReleasedOr(ChuonAction.Guard, KeyCode.E);
             bool holding = hasGuardAction
                 ? guardAction.action.IsPressed()
-                : Input.GetKey(KeyCode.E);
+                : ChuonInput.HeldOr(ChuonAction.Guard, KeyCode.E);
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
             ApplyQaGuardInput(ref pressedThisFrame, ref releasedThisFrame, ref holding);
@@ -893,7 +893,7 @@ public class PlayerGuardController : MonoBehaviour
             return guardAction.action.IsPressed();
 
         if (ShouldUseLegacyGuardFallback())
-            return Input.GetKey(KeyCode.E);
+            return ChuonInput.HeldOr(ChuonAction.Guard, KeyCode.E);
 
         return false;
     }

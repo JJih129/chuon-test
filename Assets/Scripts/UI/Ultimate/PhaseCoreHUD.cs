@@ -443,7 +443,7 @@ public sealed class PhaseCoreHUD : MonoBehaviour
         {
             _phaseLabel.text = "READY";
             _phaseLabel.color = theme.hudTextColor;
-            _stateLabel.text = "R";
+            _stateLabel.text = InputGlyphs.Get(ChuonAction.Ultimate); // KB+M 기본 = "R", 패드 = LT / L2
             _stateLabel.color = theme.hudTextColor;
             _stateLabel.enabled = true;
         }

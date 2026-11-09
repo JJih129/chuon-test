@@ -23,6 +23,9 @@ public sealed class FacilityCombatRules : MonoBehaviour
     [Header("Elevator / Respawn")]
     [SerializeField] bool refillAmpoulesOnLowerFloor = true;
     [SerializeField, Range(0f, 100f)] float elevatorUltimateGain = 30f;
+    [Tooltip("반복 13: 하층 도착 시 게이지 상한 (%). 상층 잡몹 처치로 모은 게이지가 그대로 넘어가 보스 앞에서 궁극기가 이미 준비되던 문제 → " +
+             "상층 기여는 최대 10% 까지만 인정 (30% 충전 + 10%). 남은 60% = 명중 24회(2.5) 또는 패링 10회(6) 를 보스전에서 벌어야 한다.")]
+    [SerializeField, Range(0f, 100f)] float maxArrivalUltimatePercent = 40f;
 
     [Header("Dodge")]
     [SerializeField] bool rapidDodgeIFrameDecay = true;
@@ -162,7 +165,9 @@ public sealed class FacilityCombatRules : MonoBehaviour
         if (ultimate != null && elevatorUltimateGain > 0f)
         {
             // 새 전투(보스전) 시작: 소진 해제 + 상층에서 모은 게이지에 30% 추가. 체크포인트 재시작이면 0 → 30%.
-            float target = Mathf.Min(ultimate.gaugeMax, ultimate.Gauge + ultimate.gaugeMax * elevatorUltimateGain / 100f);
+            // 반복 13: 도착 게이지는 maxArrivalUltimatePercent(40%) 로 상한 → 보스전 궁극기는 보스전에서 번다.
+            float cap = ultimate.gaugeMax * Mathf.Max(elevatorUltimateGain, maxArrivalUltimatePercent) / 100f;
+            float target = Mathf.Min(ultimate.gaugeMax, cap, ultimate.Gauge + ultimate.gaugeMax * elevatorUltimateGain / 100f);
             ultimate.ResetForNewFight(target);
         }
 

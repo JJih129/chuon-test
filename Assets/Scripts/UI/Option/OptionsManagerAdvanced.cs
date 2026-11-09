@@ -94,16 +94,12 @@ public class OptionsManagerAdvanced : MonoBehaviour
         if (!_waitingForKey)
             return;
 
-        if (_currentRebindButton != null)
-        {
-            string keyName = GetPrefKeyForButton(_currentRebindButton);
-            string saved = PlayerPrefs.GetString(keyName, string.Empty);
-            var label = _currentRebindButton.GetComponentInChildren<Text>();
-            if (label != null)
-                label.text = string.IsNullOrEmpty(saved) ? keyName.Replace("Key_", string.Empty) : saved;
-        }
+        if (ChuonInputRebinding.IsRebinding)
+            ChuonInputRebinding.Cancel();
 
         _waitingForKey = false;
+        if (_currentRebindButton != null)
+            RefreshKeybindLabel(_currentRebindButton);
         _currentRebindButton = null;
         enabled = false;
     }
@@ -165,16 +161,19 @@ public class OptionsManagerAdvanced : MonoBehaviour
         if (resolutionDropdown != null)
         {
             resolutionDropdown.onValueChanged.RemoveAllListeners();
-            resolutionDropdown.onValueChanged.AddListener(OnResolutionChanged);
-            resolutionDropdown.value = PlayerPrefs.GetInt(K_RES, currentIndex);
             resolutionDropdown.RefreshShownValue();
+            // 반복 13: 저장값은 인덱스가 아니라 w×h@Hz 로 찾는다 (모니터/드라이버마다 Screen.resolutions 순서·개수가 달라 인덱스가 엉뚱한 해상도를 가리키던 문제)
+            //  + 값 설정은 알림 없이 → Awake 마다(씬 로드마다) SetResolution 이 다시 호출되지 않는다.
+            resolutionDropdown.SetValueWithoutNotify(ResolveSavedResolutionIndex(currentIndex));
+            resolutionDropdown.RefreshShownValue();
+            resolutionDropdown.onValueChanged.AddListener(OnResolutionChanged);
         }
 
         if (fullscreenToggle != null)
         {
             fullscreenToggle.onValueChanged.RemoveAllListeners();
+            fullscreenToggle.SetIsOnWithoutNotify(PlayerPrefs.GetInt(K_FULLSCREEN, Screen.fullScreen ? 1 : 0) == 1);
             fullscreenToggle.onValueChanged.AddListener(OnFullscreenToggled);
-            fullscreenToggle.isOn = PlayerPrefs.GetInt(K_FULLSCREEN, Screen.fullScreen ? 1 : 0) == 1;
         }
 
         if (vSyncToggle != null)
@@ -212,10 +211,9 @@ public class OptionsManagerAdvanced : MonoBehaviour
 
         foreach (var b in keybindButtons)
         {
-            var keyName = GetPrefKeyForButton(b);
-            string saved = PlayerPrefs.GetString(keyName, "");
-            var label = b.GetComponentInChildren<Text>();
-            if (!string.IsNullOrEmpty(saved) && label != null) label.text = saved;
+            if (b == null)
+                continue;
+            RefreshKeybindLabel(b);
             b.onClick.RemoveAllListeners();
             b.onClick.AddListener(() => StartRebind(b));
         }
@@ -234,9 +232,7 @@ public class OptionsManagerAdvanced : MonoBehaviour
 
     void Start()
     {
-        int idx = PlayerPrefs.GetInt(K_RES, resolutionDropdown != null ? resolutionDropdown.value : 0);
-        bool fs = PlayerPrefs.GetInt(K_FULLSCREEN, Screen.fullScreen ? 1 : 0) == 1;
-        ApplyResolutionIndex(idx, fs);
+        // 저장된 해상도/전체화면은 DisplayModeRuntime 이 부팅 시 1회 복원한다. 여기서는 UI 표시만 맞춘다 (씬마다 SetResolution 반복 금지).
         bool vs = PlayerPrefs.GetInt(K_VSYNC, 0) == 1;
         QualitySettings.vSyncCount = vs ? 1 : 0;
         FramePacingRuntime.RefreshFromPrefs();
@@ -246,14 +242,53 @@ public class OptionsManagerAdvanced : MonoBehaviour
     void OnResolutionChanged(int idx)
     {
         PlayerPrefs.SetInt(K_RES, idx);
+        SaveResolutionPrefs(idx);
         bool fs = (fullscreenToggle != null) ? fullscreenToggle.isOn : Screen.fullScreen;
         ApplyResolutionIndex(idx, fs);
+        PlayerPrefs.Save();
     }
 
     void OnFullscreenToggled(bool v)
     {
         PlayerPrefs.SetInt(K_FULLSCREEN, v ? 1 : 0);
-        ApplyResolutionIndex(resolutionDropdown != null ? resolutionDropdown.value : 0, v);
+        int idx = resolutionDropdown != null ? resolutionDropdown.value : ResolveSavedResolutionIndex(0);
+        SaveResolutionPrefs(idx);
+        ApplyResolutionIndex(idx, v);
+        PlayerPrefs.Save();
+    }
+
+    int ResolveSavedResolutionIndex(int fallback)
+    {
+        if (_resolutions == null || _resolutions.Length == 0)
+            return 0;
+        if (DisplayModeRuntime.TryGetSaved(out int w, out int h, out int hz, out _))
+        {
+            int best = -1;
+            for (int i = 0; i < _resolutions.Length; i++)
+            {
+                Resolution r = _resolutions[i];
+                if (r.width != w || r.height != h)
+                    continue;
+                if (best < 0 || Mathf.Abs(DisplayModeRuntime.RefreshHz(r) - hz) < Mathf.Abs(DisplayModeRuntime.RefreshHz(_resolutions[best]) - hz))
+                    best = i;
+            }
+            if (best >= 0)
+                return best;
+        }
+        // 구버전 저장값(인덱스)은 현재 해상도와 크기가 같을 때만 신뢰
+        int legacy = PlayerPrefs.GetInt(K_RES, -1);
+        if (legacy >= 0 && legacy < _resolutions.Length && _resolutions[legacy].width == Screen.width && _resolutions[legacy].height == Screen.height)
+            return legacy;
+        return Mathf.Clamp(fallback, 0, _resolutions.Length - 1);
+    }
+
+    void SaveResolutionPrefs(int idx)
+    {
+        if (_resolutions == null || _resolutions.Length == 0)
+            return;
+        Resolution r = _resolutions[Mathf.Clamp(idx, 0, _resolutions.Length - 1)];
+        bool fs = fullscreenToggle != null ? fullscreenToggle.isOn : Screen.fullScreen;
+        DisplayModeRuntime.Save(r.width, r.height, DisplayModeRuntime.RefreshHz(r), fs);
     }
 
     void OnVSyncToggled(bool v)
@@ -533,11 +568,12 @@ public class OptionsManagerAdvanced : MonoBehaviour
 
     void ApplyRuntimeAvailabilityState()
     {
-        var hasMixer = audioMixer != null;
+        // 반복 13: 음악/효과음/보이스 볼륨은 믹서 노출 파라미터가 아니라 AudioOptionsRuntime.Scale*(소스별) + TimelineAudioRouter(타임라인)로
+        // 항상 적용된다 → 믹서 미할당이어도 행을 비활성(반투명)으로 두지 않는다.
         SetRowAvailability(masterSlider, true);
-        SetRowAvailability(musicSlider, hasMixer);
-        SetRowAvailability(sfxSlider, hasMixer);
-        SetRowAvailability(voiceSlider, hasMixer);
+        SetRowAvailability(musicSlider, true);
+        SetRowAvailability(sfxSlider, true);
+        SetRowAvailability(voiceSlider, true);
         SetRowAvailability(cameraShakeSlider, true);
     }
 
@@ -561,44 +597,69 @@ public class OptionsManagerAdvanced : MonoBehaviour
         canvasGroup.interactable = true;
     }
 
-    void StartRebind(Button b)
+    // 반복 13: 씬/프리팹의 키 버튼(Button_Key_*)을 실제 입력(ChuonInput, Input System 인터랙티브 리바인딩)에 연결.
+    //  Attack → 기본공격, Jump → 회피(점프 없음), MoveForward/MoveBack/MoveLeft/MoveRight → 이동 파트, 그 외 이름은 ChuonAction 이름과 일치하면 연결.
+    static bool TryMapKeybindButton(Button b, out ChuonAction action, out int bindingIndex)
     {
-        if (_waitingForKey) return;
-        _currentRebindButton = b;
-        _waitingForKey = true;
-        enabled = true;
-        var label = b.GetComponentInChildren<Text>();
-        if (label != null) label.text = "Press any key...";
+        action = ChuonAction.AttackLight;
+        bindingIndex = 0;
+        if (b == null)
+            return false;
+        string id = b.gameObject.name.Replace("Button_", string.Empty).Replace("Key_", string.Empty);
+        switch (id)
+        {
+            case "Attack": action = ChuonAction.AttackLight; return true;
+            case "Jump": action = ChuonAction.Dodge; return true;
+            case "MoveForward": action = ChuonAction.Move; bindingIndex = ChuonInput.MoveUpIndex; return true;
+            case "MoveBack": action = ChuonAction.Move; bindingIndex = ChuonInput.MoveDownIndex; return true;
+            case "MoveLeft": action = ChuonAction.Move; bindingIndex = ChuonInput.MoveLeftIndex; return true;
+            case "MoveRight": action = ChuonAction.Move; bindingIndex = ChuonInput.MoveRightIndex; return true;
+        }
+        return Enum.TryParse(id, out action) && ChuonInput.IsRebindable(action);
     }
 
-    void FinishRebind(Button b, KeyCode kc)
+    void RefreshKeybindLabel(Button b)
+    {
+        var label = b != null ? b.GetComponentInChildren<Text>() : null;
+        if (label == null)
+            return;
+        if (TryMapKeybindButton(b, out ChuonAction action, out int index))
+            label.text = InputGlyphs.BindingLabel(ChuonInput.KeyboardAction(action), index, ChuonInputScheme.KeyboardMouse);
+    }
+
+    void StartRebind(Button b)
+    {
+        if (_waitingForKey || ChuonInputRebinding.IsRebinding) return;
+        if (!TryMapKeybindButton(b, out ChuonAction action, out int index))
+            return;
+
+        _currentRebindButton = b;
+        _waitingForKey = true;
+        var label = b.GetComponentInChildren<Text>();
+        if (label != null) label.text = "Press any key...";
+        bool started = ChuonInputRebinding.Start(action, false, index, result => FinishRebind(b));
+        if (!started)
+            FinishRebind(b);
+    }
+
+    void FinishRebind(Button b)
     {
         _waitingForKey = false;
-        var label = b.GetComponentInChildren<Text>();
-        if (label != null) label.text = kc.ToString();
-        var keyName = GetPrefKeyForButton(b);
-        PlayerPrefs.SetString(keyName, kc.ToString());
-        PlayerPrefs.Save();
-        _keybinds[keyName] = kc;
+        RefreshKeybindLabel(b);
+        foreach (var other in keybindButtons)
+            RefreshKeybindLabel(other); // 충돌 교체로 다른 키가 바뀌었을 수 있다
         _currentRebindButton = null;
         enabled = false;
     }
 
     void Update()
     {
-        if (!_waitingForKey || _currentRebindButton == null)
+        // 리바인드 입력은 ChuonInputRebinding(Input System) 이 처리한다. 대기 상태가 아니면 꺼 둔다.
+        if (!_waitingForKey || _currentRebindButton == null || !ChuonInputRebinding.IsRebinding)
         {
+            if (_waitingForKey && !ChuonInputRebinding.IsRebinding && _currentRebindButton != null)
+                FinishRebind(_currentRebindButton);
             enabled = false;
-            return;
-        }
-
-        foreach (KeyCode kc in Enum.GetValues(typeof(KeyCode)))
-        {
-            if (Input.GetKeyDown(kc))
-            {
-                FinishRebind(_currentRebindButton, kc);
-                break;
-            }
         }
     }
 

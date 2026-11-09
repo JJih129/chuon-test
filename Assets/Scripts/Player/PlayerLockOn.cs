@@ -369,17 +369,17 @@ public class PlayerLockOn : MonoBehaviour, ILockOnController
 
     bool IsLockInputDown()
     {
-        return Input.GetKeyDown(toggleKey) || Input.GetKeyDown(toggleKeyAlt);
+        return ChuonInput.PressedOr(ChuonAction.LockOn, toggleKey, toggleKeyAlt); // 패드 R3
     }
 
     bool IsLockInputHeld()
     {
-        return Input.GetKey(toggleKey) || Input.GetKey(toggleKeyAlt);
+        return ChuonInput.HeldOr(ChuonAction.LockOn, toggleKey, toggleKeyAlt);
     }
 
     bool IsLockInputUp()
     {
-        return Input.GetKeyUp(toggleKey) || Input.GetKeyUp(toggleKeyAlt);
+        return ChuonInput.ReleasedOr(ChuonAction.LockOn, toggleKey, toggleKeyAlt);
     }
 
     public void GiveCameraControlToTimeline(bool give)

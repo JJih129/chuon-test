@@ -831,7 +831,11 @@ public class PlayerUltimateController : MonoBehaviour
         if (activateAction != null && activateAction.action != null && activateAction.action.WasPressedThisFrame())
             return true;
 
-        if (useLegacyHotkey && WasKeyPressedThisFrame(legacyHotkey))
+        // 리바인드하지 않았으면 기존 R 키 경로 그대로, 패드 = LT / L2 (ChuonInput)
+        if (ChuonInput.Pressed(ChuonAction.Ultimate))
+            return true;
+
+        if (useLegacyHotkey && !ChuonInput.KeyboardOverridden(ChuonAction.Ultimate) && WasKeyPressedThisFrame(legacyHotkey))
             return true;
 
         return false;

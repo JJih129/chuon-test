@@ -377,6 +377,26 @@ public static class MobPrefabBuilder
         return info;
     }
 
+    // 밀치기 판정용: 왼손(방패 팔) 속도 피크의 전방 성분, 시작→피크 전방 이동량, 피크 순간 손 높이(루트 기준).
+    static void MeasureShove(GameObject animated, Animator animator, AnimationClip clip, out float forwardness, out float reach, out float height, out float impact)
+    {
+        ImpactInfo ii = MeasureImpact(animated, animator, clip, HumanBodyBones.LeftHand);
+        forwardness = ii.forwardness;
+        impact = ii.time;
+        reach = 0f;
+        height = 0f;
+        Transform h = animator.GetBoneTransform(HumanBodyBones.LeftHand);
+        if (clip == null || h == null)
+            return;
+        Transform root = animated.transform;
+        clip.SampleAnimation(animated, 0f);
+        Vector3 start = root.InverseTransformPoint(h.position);
+        clip.SampleAnimation(animated, Mathf.Min(clip.length, ii.time));
+        Vector3 peak = root.InverseTransformPoint(h.position);
+        reach = peak.z - start.z;
+        height = peak.y;
+    }
+
     // ================================================================ body fitting
     sealed class BodyRay
     {
@@ -689,7 +709,7 @@ public static class MobPrefabBuilder
         else
         {
             oneShots["ParryRecoil"] = FindClip("GhostSamurai_DefenseL_Rebound_Inplace");
-            oneShots["Bash"] = FindClip("GhostSamurai_DefenseL_Parry01_Inplace");
+            oneShots["Bash"] = null; // 아래에서 왼손(방패 팔) 전방 밀치기 클립 자동 선택
             oneShots["Baton"] = FindClip("GhostSamurai_APose_Attack01_1_ALL_Inplace");
             oneShots["ShieldHit"] = FindClip("GhostSamurai_DefenseL_Hit01_Inplace");
             oneShots["GuardBroken"] = FindClip("GhostSamurai_DefenseL_Broken_Inplace");
@@ -718,6 +738,33 @@ public static class MobPrefabBuilder
             }
             oneShots["Thrust"] = thrustClip;
             Log($"{label}: thrust clip = {(thrustClip != null ? thrustClip.name : "none")}");
+        }
+        else
+        {
+            // 방패 밀치기: 반복 12 까지 쓰던 DefenseL_Parry01 은 왼손이 머리 위(1.41m > 머리 1.32m)로 올라가며 뒤로 빠진다 (fwd -0.68) → '들어 올리기'로 읽힘.
+            // 왼손이 가슴 높이에서 앞으로 0.3m 이상 뻗는 두 손 찌르기 계열을 우선순위대로 검사 (반복 13 측정: Attack05 fwd 0.99 / +0.45m / y 0.93m).
+            string[] bashCandidates =
+            {
+                "GhostSamurai_APose_Attack05_Inplace", "GhostSamurai_APose_SPAttack05_Inplace",
+                "GhostSamurai_APose_Attack03_4_Inplace", "GhostSamurai_APose_Attack02_5_Inplace"
+            };
+            AnimationClip bash = null;
+            foreach (string cand in bashCandidates)
+            {
+                AnimationClip c = FindClip(cand);
+                if (c == null) continue;
+                MeasureShove(body, animator, c, out float shoveFwd, out float reach, out float height, out float impact);
+                Log($"  bash candidate {cand}: fwd={shoveFwd:F2} reach={reach:F2}m handY={height:F2}m impact={impact:F2}s len={c.length:F2}");
+                if (shoveFwd >= 0.85f && reach >= 0.3f && height <= 1.2f)
+                {
+                    bash = c;
+                    break;
+                }
+            }
+            if (bash == null)
+                bash = FindClip("GhostSamurai_DefenseL_Parry01_Inplace");
+            oneShots["Bash"] = bash;
+            Log($"{label}: bash clip = {(bash != null ? bash.name : "none")}");
         }
         foreach (string key in enforcer ? new[] { "Bash", "Baton" } : new[] { "Atk1", "Atk2", "Atk3" })
         {
@@ -813,6 +860,9 @@ public static class MobPrefabBuilder
             Set(so, "blockClang", AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + "/sword-clashhit-393837.mp3"));
             Set(so, "guardBreakSfx", AssetDatabase.LoadAssetAtPath<AudioClip>(SfxRoot + "/Parry.wav"));
             SetImpact(so, "shieldBash.clipImpactTime", impacts, "Bash");
+            // 새 밀치기 클립은 자체 준비 동작이 있다 → 절차적 코일은 보조로만 (13° → 8°, 0.24 → 0.16m). 큐(주황 Heavy 0.62s)는 그대로.
+            SetF(so, "bashCoilLeanDeg", 8f);
+            SetF(so, "bashCoilPullBack", 0.16f);
             SetImpact(so, "batonStrike.clipImpactTime", impacts, "Baton");
         }
         so.ApplyModifiedPropertiesWithoutUndo();
@@ -981,6 +1031,8 @@ public static class MobPrefabBuilder
             health = root.AddComponent<EnemyHealth>();
         health.maxHP = drone.maxHP;
         health.currentHP = drone.maxHP;
+        // 피격 이펙트는 DroneController.hitVFX 하나만 (EnemyHealth 미러가 같은 이펙트를 또 뿌려 이중 타격감 → 로비 드론과 동일하게 비움)
+        health.hitEffectPrefab = null;
 
         Transform lockPivot = root.transform.Find("LockPivot");
         if (lockPivot == null)

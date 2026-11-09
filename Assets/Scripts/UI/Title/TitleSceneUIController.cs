@@ -44,17 +44,26 @@ public class TitleSceneUIController : MonoBehaviour
 
     void Update()
     {
-        if (!Input.GetKeyDown(KeyCode.Escape))
+        // 리바인드 중 ESC 는 리바인드 취소 (설정창을 닫지 않는다)
+        if (ChuonInputRebinding.IsRebinding)
+            return;
+
+        // ESC 또는 패드 B / Circle = 뒤로
+        if (!Input.GetKeyDown(KeyCode.Escape) && !ChuonInput.PadBackPressed())
             return;
 
         if (_settingsOverlay != null && _settingsOverlay.IsVisible)
         {
             _settingsOverlay.Hide();
+            ChuonInputRuntime.SelectForGamepad(_optionsButton != null ? _optionsButton.gameObject : null);
             return;
         }
 
         if (_creditsOverlay != null && _creditsOverlay.IsVisible)
+        {
             _creditsOverlay.Hide();
+            ChuonInputRuntime.SelectForGamepad(_creditsButton != null ? _creditsButton.gameObject : null);
+        }
     }
 
     public void OnClick_StartGame()

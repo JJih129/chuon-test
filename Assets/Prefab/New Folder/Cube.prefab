@@ -148,7 +148,7 @@ MonoBehaviour:
   hitFireDelay: 0.18
   interruptTelegraphOnHit: 1
   cancelPostShotStrafeOnHit: 1
-  useAttackTokens: 0
+  useAttackTokens: 1
   tokenRetryDelay: 0.3
   mirrorEnemyHealth: 1
   debugLogs: 0

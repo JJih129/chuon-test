@@ -303,9 +303,10 @@ public class PlayerCombatController : MonoBehaviour
         }
 
         // 1) 입력 버퍼링
-        if (Input.GetMouseButtonDown(0))
+        // 키보드·마우스 = 기존 좌/우클릭 그대로, 패드 = RB / RT (리바인드 반영, ChuonInput)
+        if (ChuonInput.PressedOr(ChuonAction.AttackLight, KeyCode.Mouse0))
             inputCommandBuffer?.RecordAttackLightPress();
-        if (Input.GetMouseButtonDown(1))
+        if (ChuonInput.PressedOr(ChuonAction.AttackHeavy, KeyCode.Mouse1))
             inputCommandBuffer?.RecordAttackHeavyPress();
 
         TryConsumeAttackCommand(
@@ -1532,8 +1533,9 @@ public class PlayerCombatController : MonoBehaviour
     private void DriveBaseLocomotion()
     {
         // 간단한 블렌드 트리 제어 (PlayerMoveController와 별개로 애니메이션만 동기화)
-        float h = Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
+        Vector2 moveRaw = ChuonInput.ReadMove("Horizontal", "Vertical");
+        float h = moveRaw.x;
+        float v = moveRaw.y;
         float mag01 = Mathf.Clamp01(new Vector2(h, v).magnitude);
 
         if (inAttack && lockMovementWhileAttacking) mag01 = 0f;

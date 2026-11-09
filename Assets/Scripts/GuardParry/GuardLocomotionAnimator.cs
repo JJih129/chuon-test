@@ -96,8 +96,9 @@ public class GuardLocomotionAnimator : MonoBehaviour
 
         if (useLegacyInputFallback && spd < minSpeedToUseFallback)
         {
-            float ix = Input.GetAxisRaw(axisX);
-            float iy = Input.GetAxisRaw(axisY);
+            Vector2 moveRaw = ChuonInput.ReadMove(axisX, axisY);
+            float ix = moveRaw.x;
+            float iy = moveRaw.y;
             Vector2 iv = new Vector2(ix, iy);
             if (iv.sqrMagnitude > deadZone * deadZone)
             {
@@ -180,7 +181,7 @@ public class GuardLocomotionAnimator : MonoBehaviour
         if (!useLegacyInputFallback)
             return true;
 
-        Vector2 input = new Vector2(Input.GetAxisRaw(axisX), Input.GetAxisRaw(axisY));
+        Vector2 input = ChuonInput.ReadMove(axisX, axisY);
         return input.sqrMagnitude > deadZone * deadZone;
     }
 }
