@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__unityMCP",
+      "mcp__context7",
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(wc:*)",
+      "Bash(diff:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "mcp__unityMCP__create_script|mcp__unityMCP__script_apply_edits|mcp__unityMCP__apply_text_edits|mcp__unityMCP__delete_script",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[chuon gate] .cs changed - check Unity console for compile errors (read_console).'"
+          }
+        ]
+      }
+    ]
+  }
+}
