@@ -13,11 +13,12 @@ public sealed class FacilityCombatRules : MonoBehaviour
 {
     [Header("Ultimate")]
     [SerializeField] bool ultimateOncePerFight = true;
-    [SerializeField] float gaugePerHit = 3f;
+    [Tooltip("반복 10: 3 → 2.5 (약한 플레이어가 궁극기 한 방으로 이기던 문제)")]
+    [SerializeField] float gaugePerHit = 2.5f;
     [SerializeField] float gaugePerParry = 6f;
     [SerializeField] float gaugePerPerfectDodge = 6f;
     [Tooltip("궁극기 총 피해 = 보스 최대 HP 의 이 비율 (처형 보너스 별도)")]
-    [SerializeField, Range(0f, 1f)] float ultimateDamagePercentOfMaxHP = 0.3f;
+    [SerializeField, Range(0f, 1f)] float ultimateDamagePercentOfMaxHP = 0.25f; // 반복 10: 0.3 → 0.25 (0.4 봇이 궁극기로 이기던 문제)
 
     [Header("Elevator / Respawn")]
     [SerializeField] bool refillAmpoulesOnLowerFloor = true;
@@ -36,6 +37,8 @@ public sealed class FacilityCombatRules : MonoBehaviour
     [SerializeField] bool specialPatterns = true;
     [SerializeField] bool reactivePatterns = true;
     [SerializeField] bool damageCracks = true;
+    [Tooltip("반복 10: 보스전 보스 공격력 배율 (봇 0.4 대부분 패배 / 0.6 위협 / 0.9 승리 기준으로 조정)")]
+    [SerializeField, Range(0.5f, 2f)] float bossDamageScale = 1.2f;
 
     public static FacilityCombatRules Active { get; private set; }
     public int LowerFloorRefills { get; private set; }
@@ -125,6 +128,7 @@ public sealed class FacilityCombatRules : MonoBehaviour
         boss.EnableSpecialPatterns = specialPatterns;
         boss.EnablePlanReactiveBias = reactivePatterns;
         boss.EnableThirdHitParryStagger = thirdHitParryStagger;
+        boss.ScaleOutgoingDamage(bossDamageScale);
 
         BossBreakController breakController = boss.GetComponentInChildren<BossBreakController>(true) ?? boss.GetComponentInParent<BossBreakController>();
         if (breakController != null)

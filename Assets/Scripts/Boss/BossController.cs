@@ -71,6 +71,17 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
 
     [Header("Damage")]
     [SerializeField, Range(0.1f, 2f)] private float outgoingDamageMultiplier = 0.5f;
+    float _outgoingDamageBase = -1f;
+
+    /// <summary>씬 규칙(FacilityCombatRules)용: 직렬화 값 기준으로 보스 공격력 배율을 한 번 적용 (중복 적용 안 됨).</summary>
+    public void ScaleOutgoingDamage(float scale)
+    {
+        if (_outgoingDamageBase < 0f)
+            _outgoingDamageBase = outgoingDamageMultiplier;
+        outgoingDamageMultiplier = Mathf.Clamp(_outgoingDamageBase * Mathf.Max(0f, scale), 0.05f, 4f);
+    }
+
+    public float QaOutgoingDamageMultiplier => outgoingDamageMultiplier;
 
     [Tooltip("플레이어 행동 기반 패턴 제어용 트래커(선택)")]
     public PlayerTracker playerTracker;
@@ -685,6 +696,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
     {
         AssignDefaultPreAttackPoseClipIfNeeded();
         _bossReferences = GetComponent<BossReferences>();
+        TypeDArmorRig.EnsureInstalled(this); // 반복 10: Type-D 장갑/코어/재질 (같은 모델일 때만)
         if (bossAnimator == null && _bossReferences != null && _bossReferences.MainAnimator != null)
             bossAnimator = _bossReferences.MainAnimator;
         if (attackHitbox == null && _bossReferences != null && _bossReferences.AttackHitbox != null)
@@ -2012,7 +2024,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
             patternVisuals.StartVisualCue(telegraphType, resolvedDuration);
 
         if (!TryPlayTintedOpenerHandTelegraph(timingTelegraphType, resolvedDuration)) // StringHitCues.cs, 기본 off
-            PlayHandPatternTelegraph(resolvedDuration);
+            PlayHandPatternTelegraph(resolvedDuration, timingTelegraphType);
 
         if (useHudCue)
             OnAttackTelegraph?.Invoke(telegraphType, resolvedDuration, _attackTimingTelegraphLabel);
@@ -2027,6 +2039,22 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
             handPatternTelegraph = GetComponentInChildren<BossPatternHandTelegraph>(true);
         if (handPatternTelegraph != null)
             handPatternTelegraph.Play(duration);
+    }
+
+    // 반복 10: 오프너 타이밍 핑도 텔레그래프 색 언어대로 (기존 기본값은 항상 금색이라 회피 전용이 패링 가능처럼 보였다)
+    void PlayHandPatternTelegraph(float duration, BossAttackTelegraphType telegraphType)
+    {
+        if (duration <= 0.01f)
+            return;
+
+        if (handPatternTelegraph == null)
+            handPatternTelegraph = GetComponentInChildren<BossPatternHandTelegraph>(true);
+        if (handPatternTelegraph == null)
+            return;
+
+        BossTelegraphVfxPresenter presenter = ResolveTelegraphVfxPresenter();
+        Color tint = presenter != null ? presenter.GetCueColor(telegraphType) : FallbackPerHitCueColor(telegraphType);
+        handPatternTelegraph.Play(duration, tint, 1f);
     }
 
     BossTelegraphVfxPresenter ResolveTelegraphVfxPresenter()

@@ -1724,7 +1724,8 @@ public class PlayerHUD : MonoBehaviour
         if (dangerTelegraphCameraShake != null)
             dangerTelegraphCameraShake.Shake(dangerTelegraphShakeAmplitude, dangerTelegraphShakeDuration);
 
-        if (dangerTelegraphAudioSource == null)
+        // 반복 10: 보스 텔레그래프가 타입별 큐 효과음을 내면 HUD 합성음은 생략 (같은 순간 이중 재생 방지)
+        if (dangerTelegraphAudioSource == null || BossTelegraphVfxPresenter.CueSfxActive)
             return;
 
         AudioClip clip = dangerTelegraphClip != null ? dangerTelegraphClip : _runtimeDangerTelegraphTone;

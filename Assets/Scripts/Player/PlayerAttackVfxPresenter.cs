@@ -174,6 +174,18 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     [Tooltip("Maximum sample count kept by the player sword trail ring buffer.")]
     [SerializeField, Range(2, 128)] int swordMotionTrailMaxSamples = 36;
 
+    [Header("Swing Plane (iteration 10)")]
+    [Tooltip("Orient the spawned slash arc to the real swing plane (blade axis x tip velocity during the hit window) instead of per-attack fixed euler offsets.")]
+    [SerializeField] bool orientSlashToSwingPlane = true;
+    [Tooltip("Slash spawn waits until the blade tip has travelled this far inside the hit window (m), so the swing direction is measured, not guessed.")]
+    [SerializeField, Min(0.01f)] float slashSwingMinTipTravel = 0.14f;
+    [Tooltip("Upper bound for that wait (s).")]
+    [SerializeField, Range(0f, 0.2f)] float slashSwingMaxDelay = 0.07f;
+    [Tooltip("Arc radius = blade length x this (arc centred on the hilt).")]
+    [SerializeField, Range(0.5f, 2f)] float slashArcRadiusScale = 1.08f;
+    [Tooltip("Sign of the prefab sweep (Slash_C sweeps local -X to +X after the unified Y180 offset). Flip only if a new prefab sweeps the other way.")]
+    [SerializeField] bool flipSlashSweepSense;
+
     [Header("프로시저럴 트레일")]
     [SerializeField] Color trailStartColor = new Color(1f, 0.32f, 0.28f, 0.95f);
     [SerializeField] Color trailEndColor = new Color(0.85f, 0.08f, 0.08f, 0f);
@@ -239,6 +251,35 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     int _bladePoseWriteIndex;
     int _bladePoseSampleCount;
 
+    // 스윙 평면 측정용: 실제 칼날(TrailBase/TrailTip) 위치 기록 (LateUpdate, 애니메이션 이후)
+    const int SwingHistoryLength = 8;
+    readonly Vector3[] _swingBase = new Vector3[SwingHistoryLength];
+    readonly Vector3[] _swingTip = new Vector3[SwingHistoryLength];
+    int _swingWrite;
+    int _swingCount;
+
+    struct PendingSlash
+    {
+        public bool Active;
+        public GameObject Prefab;
+        public AttackVfxEntry Entry;
+        public float Lifetime;
+        public bool Heavy;
+        public float StartTime;
+        public Vector3 StartTip;
+        public bool HasStartTip;
+    }
+
+    PendingSlash _pendingSlash;
+
+    /// <summary>QA: last spawned slash (swing normal, attack forward, tip velocity) for orientation checks.</summary>
+    public Vector3 QaLastSwingNormal { get; private set; }
+    public Vector3 QaLastSwingVelocity { get; private set; }
+    public Vector3 QaLastSlashForward { get; private set; }
+    public Vector3 QaLastSlashRight { get; private set; }
+    public int QaSlashSpawnCount { get; private set; }
+    public float QaLastStrikeWeight { get; private set; }
+
     public void Initialize(PlayerReferences references, PlayerCombatController controller)
     {
         if (references != null)
@@ -285,6 +326,10 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     {
         if (!Application.isPlaying)
             return;
+
+        RecordSwingSample();
+        if (_pendingSlash.Active)
+            TrySpawnPendingSlash(force: false);
 
         if (!TryCaptureBladePose(out BladePoseSample pose))
             return;
@@ -346,12 +391,16 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     {
         _currentAttackData = null;
         _currentComboDepth = 0;
+        _pendingSlash.Active = false; // 공격이 끊겼으면 아직 안 나간 검기는 버린다
         StopSwordMotionTrail();
         DisableProceduralTrail();
     }
 
     public void StopAttackWindow()
     {
+        // 히트 윈도우가 측정 대기보다 짧았으면 지금까지의 칼날 움직임으로 바로 낸다
+        if (_pendingSlash.Active)
+            TrySpawnPendingSlash(force: true);
         StopSwordMotionTrail();
         DisableProceduralTrail();
     }
@@ -565,6 +614,26 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             return;
 
         float lifetime = entry.fallbackLifetime > 0.01f ? entry.fallbackLifetime : defaultFallbackLifetime;
+
+        // 스윙 평면 정렬: 히트 윈도우 안에서 칼끝이 실제로 움직인 방향을 잰 뒤(LateUpdate) 낸다
+        if (orientSlashToSwingPlane && !entry.parentRangeVfxToHitbox && HasSwingPoints())
+        {
+            if (_pendingSlash.Active)
+                TrySpawnPendingSlash(force: true);
+            _pendingSlash = new PendingSlash
+            {
+                Active = true,
+                Prefab = rangePrefab,
+                Entry = entry,
+                Lifetime = lifetime,
+                Heavy = IsHeavyAttackVfx(attackData, input),
+                StartTime = Time.time,
+                HasStartTip = TryGetCurrentSwingPoints(out _, out Vector3 startTip),
+                StartTip = startTip
+            };
+            return;
+        }
+
         bool useDetachedSlashAnchor = IsConfiguredSlashSpawnAnchor(rangeAnchor) && !entry.parentRangeVfxToHitbox;
         Transform parent = entry.parentRangeVfxToHitbox && hitbox != null ? hitbox.transform : useDetachedSlashAnchor ? null : rangeAnchor;
         Quaternion anchorRotation = ResolveRangeVfxRotation(rangeAnchor, hitbox);
@@ -864,8 +933,132 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             false,
             false);
         swordMotionTrail.gameObject.layer = gameObject.layer;
+        float weight = ResolveStrikeWeight(_currentAttackData, _currentComboDepth, _currentInput);
+        QaLastStrikeWeight = weight;
+        swordMotionTrail.SetStrikeWeight(weight);
         swordMotionTrail.StartTrail();
         return true;
+    }
+
+    // 공격 무게 0(약 오프너) ~ 1(강 피니셔): 리본 폭·밝기·잔상 길이에 쓴다
+    static float ResolveStrikeWeight(AttackData attackData, int comboDepth, AttackInput input)
+    {
+        bool heavy = IsHeavyAttackVfx(attackData, input);
+        float w = heavy ? 0.72f : 0.28f;
+        if (comboDepth >= (heavy ? 3 : 4))
+            w += 0.22f; // 피니셔
+        else if (comboDepth >= 2)
+            w += 0.08f;
+        if (attackData != null && attackData.attackDamageMultiplier > 1.15f)
+            w += 0.06f;
+        return Mathf.Clamp01(w);
+    }
+
+    // ───────── 스윙 평면 (반복 10) ─────────
+    bool HasSwingPoints()
+    {
+        if (swordMotionTrailPoints == null || !swordMotionTrailPoints.HasValidPoints)
+            TryResolveSwordMotionTrailAtRuntime();
+        return swordMotionTrailPoints != null && swordMotionTrailPoints.HasValidPoints;
+    }
+
+    bool TryGetCurrentSwingPoints(out Vector3 basePosition, out Vector3 tipPosition)
+    {
+        basePosition = tipPosition = Vector3.zero;
+        if (swordMotionTrailPoints == null || !swordMotionTrailPoints.HasValidPoints)
+            return false;
+        basePosition = swordMotionTrailPoints.TrailBase.position;
+        tipPosition = swordMotionTrailPoints.TrailTip.position;
+        return true;
+    }
+
+    void RecordSwingSample()
+    {
+        if (!TryGetCurrentSwingPoints(out Vector3 b, out Vector3 t))
+            return;
+        _swingBase[_swingWrite] = b;
+        _swingTip[_swingWrite] = t;
+        _swingWrite = (_swingWrite + 1) % SwingHistoryLength;
+        _swingCount = Mathf.Min(_swingCount + 1, SwingHistoryLength);
+    }
+
+    void TrySpawnPendingSlash(bool force)
+    {
+        if (!_pendingSlash.Active)
+            return;
+
+        if (!TryGetCurrentSwingPoints(out Vector3 basePos, out Vector3 tipPos))
+        {
+            _pendingSlash.Active = false;
+            return;
+        }
+
+        float travelled = _pendingSlash.HasStartTip ? Vector3.Distance(tipPos, _pendingSlash.StartTip) : 0f;
+        bool timedOut = Time.time - _pendingSlash.StartTime >= slashSwingMaxDelay;
+        if (!force && travelled < slashSwingMinTipTravel && !timedOut)
+            return;
+
+        PendingSlash pending = _pendingSlash;
+        _pendingSlash.Active = false;
+
+        Vector3 blade = tipPos - basePos;
+        float bladeLength = blade.magnitude;
+        if (bladeLength < 0.05f)
+            return;
+
+        // 칼끝 속도: 최근 2프레임 (없으면 윈도우 시작 이후 이동)
+        Vector3 velocity = Vector3.zero;
+        if (_swingCount >= 3)
+        {
+            int newest = (_swingWrite - 1 + SwingHistoryLength) % SwingHistoryLength;
+            int older = (_swingWrite - 3 + SwingHistoryLength) % SwingHistoryLength;
+            velocity = _swingTip[newest] - _swingTip[older];
+        }
+        if (velocity.sqrMagnitude < 0.0004f && pending.HasStartTip)
+            velocity = tipPos - pending.StartTip;
+
+        Vector3 attackForward = ResolveBaseAttackForward(null);
+        Vector3 normal = Vector3.Cross(blade, velocity);
+        if (normal.sqrMagnitude < 1e-6f)
+            normal = Vector3.Cross(blade, Vector3.Cross(Vector3.up, attackForward)); // 거의 정지: 수평 가정
+        if (normal.sqrMagnitude < 1e-6f)
+            normal = Vector3.up;
+        normal.Normalize();
+        if (flipSlashSweepSense)
+            normal = -normal;
+
+        // 호의 중앙 = 공격 방향을 스윙 평면에 투영 (없으면 현재 칼날 방향)
+        Vector3 forward = Vector3.ProjectOnPlane(attackForward, normal);
+        if (forward.sqrMagnitude < 0.09f)
+            forward = Vector3.ProjectOnPlane(blade, normal);
+        if (forward.sqrMagnitude < 1e-6f)
+            forward = attackForward;
+        forward.Normalize();
+
+        Quaternion planeRotation = Quaternion.LookRotation(forward, normal);
+        Quaternion rotation = ApplyUnifiedSlashRotation(planeRotation);
+
+        QaLastSwingNormal = normal;
+        QaLastSwingVelocity = velocity;
+        QaLastSlashForward = forward;
+        QaLastSlashRight = planeRotation * Vector3.right;
+        QaSlashSpawnCount++;
+
+        // 호 중심 = 손잡이, 반지름 = 칼날 길이 → 검기가 칼날이 지나간 자리에 겹친다
+        Vector3 multiplier = pending.Entry.localScaleMultiplier == Vector3.zero ? Vector3.one : pending.Entry.localScaleMultiplier;
+        float radius = bladeLength * slashArcRadiusScale * (pending.Heavy ? 1.08f : 1f);
+        Vector3 scale = ApplyUnifiedSlashScale(multiplier * radius);
+
+        GameObject spawned = TransientVfxPool.Spawn(pending.Prefab, basePos, rotation, null, pending.Lifetime);
+        if (spawned == null)
+            return;
+
+        ConfigureOneShotParticleVfx(spawned, pending.Heavy);
+        spawned.transform.SetPositionAndRotation(basePos, rotation);
+        spawned.transform.localScale = scale;
+
+        if (debugLog)
+            Debug.Log($"[PlayerAttackVfxPresenter] swing slash n={normal} v={velocity} fwd={forward} r={radius:F2}", this);
     }
 
     bool _triedRuntimeSwordTrailResolve;
@@ -890,6 +1083,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
         if (existing != null && existing.HasValidPoints)
         {
             swordMotionTrailPoints = existing;
+            EnsureTrailPointsOrientedFromGrip(existing);
             return;
         }
 
@@ -911,12 +1105,33 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
             tipPoint.SetParent(sword, false);
         }
 
-        basePoint.localPosition = ResolveSwordBladePoint(bounds, false);
-        tipPoint.localPosition = ResolveSwordBladePoint(bounds, true);
+        // 손잡이(그립) 기준으로 칼끝을 정한다: 메시 bounds 의 max 가 항상 칼끝은 아니다 (반대면 손잡이 페이드가 뒤집힘)
+        Transform grip = GetSwordGripReference();
+        if (PlayerWeaponVisualUtility.TryGetBladeWorldPose(sword, grip, out Vector3 worldBase, out Vector3 worldTip, out _))
+        {
+            basePoint.position = worldBase;
+            tipPoint.position = worldTip;
+        }
+        else
+        {
+            basePoint.localPosition = ResolveSwordBladePoint(bounds, false);
+            tipPoint.localPosition = ResolveSwordBladePoint(bounds, true);
+        }
 
         SwordTrailPoints points = existing != null ? existing : sword.gameObject.AddComponent<SwordTrailPoints>();
         points.SetPoints(basePoint, tipPoint);
         swordMotionTrailPoints = points;
+    }
+
+    void EnsureTrailPointsOrientedFromGrip(SwordTrailPoints points)
+    {
+        Transform grip = GetSwordGripReference();
+        if (points == null || !points.HasValidPoints || grip == null)
+            return;
+        float baseDist = (points.TrailBase.position - grip.position).sqrMagnitude;
+        float tipDist = (points.TrailTip.position - grip.position).sqrMagnitude;
+        if (baseDist > tipDist)
+            points.SetPoints(points.TrailTip, points.TrailBase);
     }
 
     static Transform FindChildByNameRecursive(Transform root, string childName)

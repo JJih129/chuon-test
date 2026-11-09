@@ -188,6 +188,27 @@ public class TutorialHintUIBridge : MonoBehaviour
     // 옵션 메뉴의 자막 크기/배경 설정을 가이드 대사 패널에 반영
     float _baseSpeakerFontSize = -1f;
     float _baseContentFontSize = -1f;
+    const string SubtitleBackgroundName = "SubtitleBackground";
+    [SerializeField] private Color subtitleBackgroundColor = new Color(0f, 0f, 0f, 0.58f);
+    Image _subtitleBackground;
+
+    void OnEnable()
+    {
+        OptionsManagerAdvanced.SubtitleSizeChangedGlobal += HandleSubtitleSizeChanged;
+        OptionsManagerAdvanced.SubtitleBackgroundChangedGlobal += HandleSubtitleBackgroundChanged;
+    }
+
+    void OnDisable()
+    {
+        OptionsManagerAdvanced.SubtitleSizeChangedGlobal -= HandleSubtitleSizeChanged;
+        OptionsManagerAdvanced.SubtitleBackgroundChangedGlobal -= HandleSubtitleBackgroundChanged;
+    }
+
+    void HandleSubtitleSizeChanged(float _) => ApplySubtitleOptions();
+    void HandleSubtitleBackgroundChanged(bool _) => ApplySubtitleOptions();
+
+    /// <summary>QA: 자막 배경 상자 (표시 여부/크기 확인용).</summary>
+    public Image SubtitleBackground => _subtitleBackground;
 
     void ApplySubtitleOptions()
     {
@@ -206,11 +227,50 @@ public class TutorialHintUIBridge : MonoBehaviour
             contentText.fontSize = _baseContentFontSize * scale;
         }
 
-        if (dialogueGroup != null)
+        // 텍스트 영역도 크기에 맞춰 늘린다 (큰 자막이 상자 밖으로 넘치지 않게)
+        // 화자 줄은 위로만 커지게 (본문과 겹치지 않게), 본문은 위쪽 정렬 그대로 아래로 늘어난다
+        float speakerHeight = 28f * Mathf.Max(1f, scale);
+        if (speakerText != null && _runtimeHudRoot != null && speakerText.transform.parent == dialogueGroup.transform)
         {
-            Image background = dialogueGroup.GetComponent<Image>();
-            if (background != null)
-                background.enabled = OptionsManagerAdvanced.CurrentSubtitleBackground;
+            Vector2 sd = speakerText.rectTransform.sizeDelta;
+            speakerText.rectTransform.sizeDelta = new Vector2(sd.x, speakerHeight);
+            speakerText.rectTransform.anchoredPosition = new Vector2(0f, -8f + (speakerHeight - 28f));
+        }
+
+        bool showBackground = OptionsManagerAdvanced.CurrentSubtitleBackground;
+        if (_subtitleBackground == null && dialogueGroup != null)
+        {
+            Transform bg = dialogueGroup.transform.Find(SubtitleBackgroundName);
+            _subtitleBackground = bg != null ? bg.GetComponent<Image>() : dialogueGroup.GetComponent<Image>();
+        }
+        if (_subtitleBackground != null)
+        {
+            _subtitleBackground.enabled = showBackground && _guideTextVisible;
+            if (contentText != null && _subtitleBackground.transform.parent == dialogueGroup.transform)
+            {
+                // 상자 = 실제 대사 크기 + 여백 (가로 520~패널 폭)
+                float maxWidth = contentText.rectTransform.sizeDelta.x;
+                Vector2 pref = contentText.GetPreferredValues(contentText.text, maxWidth - 80f, 0f);
+                // 여러 줄 큰 자막은 위로 밀어 올린다 (하단 HP 게이지와 겹치지 않게: 본문 맨 아래 ≥ 패널 바닥 + 64)
+                const float minTextBottom = 64f;
+                const float contentBaseY = 20f;
+                float contentHeight = contentText.rectTransform.sizeDelta.y;
+                float shift = Mathf.Max(0f, minTextBottom + pref.y - (contentBaseY + contentHeight));
+                contentText.rectTransform.anchoredPosition = new Vector2(contentText.rectTransform.anchoredPosition.x, contentBaseY + shift);
+                if (speakerText != null && speakerText.transform.parent == dialogueGroup.transform)
+                    speakerText.rectTransform.anchoredPosition = new Vector2(0f, -8f + (speakerHeight - 28f) + shift);
+
+                float contentTop = contentBaseY + shift + contentHeight;
+                float bottom = Mathf.Max(0f, contentTop - pref.y - 18f);
+                float panelHeight = ((RectTransform)dialogueGroup.transform).sizeDelta.y;
+                float top = panelHeight - 8f + 6f + shift; // 화자 줄 위 (위로 커지는 만큼 포함)
+                top += speakerHeight - 28f;
+                float width = Mathf.Clamp(pref.x + 96f, 520f, maxWidth);
+                RectTransform r = _subtitleBackground.rectTransform;
+                r.sizeDelta = new Vector2(width, Mathf.Max(60f, top - bottom));
+                r.anchoredPosition = new Vector2(0f, bottom);
+                r.SetAsFirstSibling();
+            }
         }
     }
 
@@ -455,6 +515,14 @@ public class TutorialHintUIBridge : MonoBehaviour
         panelGroup.alpha = 0f;
 
         dialogueGroup = panelGroup;
+        // 반복 10: 자막 배경 상자 (옵션 '자막 배경'이 실제로 켜고 끄는 대상). 텍스트 크기에 맞춰 ApplySubtitleOptions 가 크기를 잡는다.
+        GameObject bgObject = new GameObject(SubtitleBackgroundName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        RectTransform bgRect = bgObject.GetComponent<RectTransform>();
+        bgRect.SetParent(panelGroup.transform, false);
+        ConfigureRect(bgRect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 6f), new Vector2(760f, 150f));
+        _subtitleBackground = bgObject.GetComponent<Image>();
+        _subtitleBackground.color = subtitleBackgroundColor;
+        _subtitleBackground.raycastTarget = false;
         speakerText = EnsureText(panelGroup.transform, "Speaker");
         ApplyTextStyle(speakerText, 24f, FontStyles.Bold, speakerColor, TextAlignmentOptions.Bottom);
         ConfigureRect(

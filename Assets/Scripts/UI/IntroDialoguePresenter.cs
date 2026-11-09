@@ -302,9 +302,10 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
         root.SetParent(canvas.transform, false);
         root.anchorMin = anchor;
         root.anchorMax = anchor;
-        root.pivot = new Vector2(0.5f, 0.5f);
+        // 반복 10: 아래쪽 기준으로 위로만 커지게 (큰 자막이 하단 HP 게이지를 덮지 않게). 크기 1 에서는 기존 위치와 같다.
+        root.pivot = new Vector2(0.5f, 0f);
         root.sizeDelta = size;
-        root.anchoredPosition = Vector2.zero;
+        root.anchoredPosition = new Vector2(0f, -size.y * 0.5f);
         _root = root;
 
         GameObject backgroundObject = new GameObject("Background", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));

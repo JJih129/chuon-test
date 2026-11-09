@@ -228,9 +228,9 @@ public sealed class BossSwordTrailRibbon : MonoBehaviour
                 localBounds.Encapsulate(_vertices[vertexIndex + 1]);
             }
 
-            float t = _sampleCount <= 1 ? 0f : (float)i / (_sampleCount - 1);
-            _uv[vertexIndex] = new Vector2(0f, t);
-            _uv[vertexIndex + 1] = new Vector2(1f, t);
+            // v = 나이 (0 = 현재 칼날, 1 = 수명 끝) — ChuOn/BladeTrail(_SwapUV) 과 그라디언트 텍스처 모두 같은 의미
+            _uv[vertexIndex] = new Vector2(0f, age01);
+            _uv[vertexIndex + 1] = new Vector2(1f, age01);
 
             Color color = Color.Lerp(startColor, endColor, age01);
             _colors[vertexIndex] = color;

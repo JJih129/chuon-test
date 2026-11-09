@@ -1,35 +1,57 @@
 using UnityEngine;
 
+// 보스 큐 '타이밍 핑' (반복 10 재구현)
+// 기존: 손 피벗 위에 항상-위 노란 링 쿼드가 공지 시간 내내 회전 (원시 도형처럼 보이고, 타입과 무관하게 금색).
+// 현재: 정직한 큐 순간에 헬멧(바이저) 앞에서 0.2초 동안 선명한 별빛 섬광 (ChuOn/TelegraphFlare, HDR → 블룸).
+//       색은 텔레그래프 색 언어(패링 가능 금/주황, 회피 전용 빨강, 가드 불가 자홍, 강공 호박)를 그대로 쓴다.
+//       '얼마나 남았나'는 헬멧/무기 발광 램프와 바닥 데칼 채움이 보여준다 (BossTelegraphVfxPresenter / BossGroundTelegraph).
 [DisallowMultipleComponent]
 public sealed class BossPatternHandTelegraph : MonoBehaviour
 {
     const string PivotName = "PatternPivot";
     const float PivotLookupCooldown = 2f;
+    const string MaterialResourcePath = "VFX/ChuonTelegraphFlare";
     float _nextPivotLookupAt;
-    const string MaterialPath = "Assets/Eric VFX Studio/Resource/Materials/DungeonRingGuid.mat";
-    const string TexturePath = "Assets/Eric VFX Studio/Resource/Textures/DungeonRingGuid.png";
-    const string MaterialResourcePath = "Boss/DungeonRingGuid";
-    const string TextureResourcePath = "Boss/DungeonRingGuid";
-    const string OverlayShaderName = "ChuOn/AlwaysOnTopTransparent";
 
     [SerializeField] Transform patternPivot;
     [SerializeField] Material telegraphMaterial;
+    [Tooltip("섬광 크기 (m, 보스 스케일과 무관한 월드 크기)")]
     [SerializeField, Min(0.05f)] float baseScale = 1.45f;
     [SerializeField, Min(0f)] float verticalOffset = 0.03f;
+    [Tooltip("헬멧에서 카메라 쪽으로 당기는 거리 (머리에 가려지지 않게)")]
     [SerializeField, Min(0f)] float cameraPullForward = 0.58f;
     [SerializeField, Min(0f)] float pulseAmount = 0.26f;
     [SerializeField, Min(0f)] float pulseSpeed = 12f;
     [SerializeField, Min(0f)] float rotateSpeed = 185f;
     [SerializeField] Color fallbackColor = new Color(1f, 0.96f, 0.02f, 1f);
+    [Header("Flash (iteration 10)")]
+    [SerializeField, Range(0.08f, 0.6f)] float flashDuration = 0.22f;
+    [SerializeField, Range(0.2f, 3f)] float flashWorldSize = 0.9f;
+    [SerializeField, Range(0.5f, 6f)] float flashHdrIntensity = 3.2f;
+
+    static readonly int ColorId = Shader.PropertyToID("_Color");
+    static readonly int ProgressId = Shader.PropertyToID("_Progress");
+    static readonly int RotationId = Shader.PropertyToID("_Rotation");
+
+    static Mesh s_quad;
 
     GameObject _quad;
     Transform _quadTransform;
     Renderer _renderer;
     Material _runtimeMaterial;
+    MaterialPropertyBlock _block;
     Camera _mainCamera;
+    Transform _headAnchor;
+    float _startTime;
     float _hideAt;
     float _rotation;
     float _scaleMultiplier = 1f;
+    Color _color;
+
+    /// <summary>QA: 마지막 섬광 시각/색.</summary>
+    public float LastFlashTime { get; private set; } = -1f;
+    public Color LastFlashColor => _color;
+    public int FlashCount { get; private set; }
 
     void Awake()
     {
@@ -57,25 +79,29 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
             return;
         }
 
-        if (patternPivot == null)
-            ResolvePivot();
-        if (patternPivot == null)
+        Transform anchor = ResolveAnchor();
+        if (anchor == null)
             return;
 
-        if (_mainCamera == null)
+        if (_mainCamera == null || !_mainCamera.isActiveAndEnabled)
             _mainCamera = Camera.main;
 
         Vector3 cameraDirection = _mainCamera != null
-            ? (_mainCamera.transform.position - patternPivot.position).normalized
+            ? (_mainCamera.transform.position - anchor.position).normalized
             : Vector3.back;
-        _quadTransform.position = patternPivot.position + Vector3.up * verticalOffset + cameraDirection * cameraPullForward;
-
-        _rotation += rotateSpeed * Time.deltaTime;
+        _quadTransform.position = anchor.position + Vector3.up * verticalOffset + cameraDirection * cameraPullForward;
         if (_mainCamera != null)
-            _quadTransform.rotation = _mainCamera.transform.rotation * Quaternion.Euler(0f, 0f, _rotation);
+            _quadTransform.rotation = _mainCamera.transform.rotation;
 
-        float pulse = 1f + Mathf.Sin(Time.time * pulseSpeed) * pulseAmount;
-        _quadTransform.localScale = Vector3.one * (baseScale * _scaleMultiplier * Mathf.Max(0.05f, pulse));
+        float progress = Mathf.Clamp01((Time.time - _startTime) / Mathf.Max(0.01f, _hideAt - _startTime));
+        float size = flashWorldSize * _scaleMultiplier * Mathf.Lerp(0.85f, 1.15f, progress);
+        _quadTransform.localScale = new Vector3(size, size, size);
+
+        _block.Clear();
+        _block.SetColor(ColorId, _color);
+        _block.SetFloat(ProgressId, progress);
+        _block.SetFloat(RotationId, _rotation);
+        _renderer.SetPropertyBlock(_block);
     }
 
     public void Play(float duration)
@@ -84,40 +110,28 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
     }
 
     // 다단 후속타용(BossController.StringHitCues): 텔레그래프 색 언어의 색과 작은 크기로 짧게 표시.
-    // Play(duration) 은 항상 기본 색/크기로 되돌리므로 오프너 표시는 그대로다.
     public void Play(float duration, Color tint, float scaleMultiplier)
     {
         if (duration <= 0.01f)
             return;
 
         _scaleMultiplier = Mathf.Max(0.05f, scaleMultiplier);
-
-        if (patternPivot == null)
-            ResolvePivot();
         EnsureQuad();
-        if (_quad == null || patternPivot == null)
-            return;
-
-        ApplyTint(tint);
-        _hideAt = Time.time + duration;
-        _quad.SetActive(true);
-        LateUpdate();
-    }
-
-    void ApplyTint(Color tint)
-    {
-        if (_runtimeMaterial == null)
+        if (_quad == null || ResolveAnchor() == null)
             return;
 
         float max = tint.maxColorComponent;
-        Color ldr = max > 1f ? tint / max : tint; // HDR 팔레트 색을 LDR 로
+        Color ldr = max > 1f ? tint / max : tint;
         ldr.a = 1f;
-        if (_runtimeMaterial.HasProperty("_Color"))
-            _runtimeMaterial.SetColor("_Color", ldr);
-        if (_runtimeMaterial.HasProperty("_BaseColor"))
-            _runtimeMaterial.SetColor("_BaseColor", ldr);
-        if (_runtimeMaterial.HasProperty("_EmissionColor"))
-            _runtimeMaterial.SetColor("_EmissionColor", ldr * 2.8f);
+        _color = ldr * flashHdrIntensity * Mathf.Lerp(0.75f, 1f, Mathf.Clamp01(_scaleMultiplier));
+        _startTime = Time.time;
+        // 섬광은 큐 순간에 짧게 (공지 시간이 더 짧으면 그 안에 끝낸다)
+        _hideAt = Time.time + Mathf.Min(flashDuration, Mathf.Max(0.08f, duration + 0.06f));
+        _rotation = Random.Range(-0.25f, 0.25f);
+        LastFlashTime = Time.time;
+        FlashCount++;
+        _quad.SetActive(true);
+        LateUpdate();
     }
 
     public void Hide()
@@ -127,12 +141,37 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
             _quad.SetActive(false);
     }
 
+    Transform ResolveAnchor()
+    {
+        if (_headAnchor != null)
+            return _headAnchor;
+
+        // Type-D 장갑 리그의 바이저 앵커 → 애니메이터 머리 뼈 → PatternPivot
+        TypeDArmorRig armor = GetComponentInChildren<TypeDArmorRig>(true) ?? GetComponentInParent<TypeDArmorRig>();
+        if (armor != null && armor.VisorAnchor != null)
+            return _headAnchor = armor.VisorAnchor;
+
+        Animator[] animators = GetComponentsInChildren<Animator>(true);
+        for (int i = 0; i < animators.Length; i++)
+        {
+            Animator animator = animators[i];
+            if (animator == null || !animator.isHuman)
+                continue;
+            Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+            if (head != null)
+                return _headAnchor = head;
+        }
+
+        if (patternPivot == null)
+            ResolvePivot();
+        return patternPivot;
+    }
+
     void ResolvePivot()
     {
         if (patternPivot != null)
             return;
 
-        // 피벗 탐색 실패 시 매 Play 마다 전체 씬 스캔하지 않도록 쿨다운
         if (Time.unscaledTime < _nextPivotLookupAt)
             return;
         _nextPivotLookupAt = Time.unscaledTime + PivotLookupCooldown;
@@ -148,25 +187,6 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
                 return;
             }
         }
-
-        Transform best = null;
-        float bestSqrDistance = float.PositiveInfinity;
-        Transform[] sceneTransforms = FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        for (int i = 0; i < sceneTransforms.Length; i++)
-        {
-            Transform candidate = sceneTransforms[i];
-            if (candidate == null || candidate.name != PivotName)
-                continue;
-
-            float sqrDistance = (candidate.position - transform.position).sqrMagnitude;
-            if (sqrDistance >= bestSqrDistance)
-                continue;
-
-            best = candidate;
-            bestSqrDistance = sqrDistance;
-        }
-
-        patternPivot = best;
     }
 
     void EnsureQuad()
@@ -174,75 +194,47 @@ public sealed class BossPatternHandTelegraph : MonoBehaviour
         if (_quad != null)
             return;
 
-        _quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        _quad.name = "BossPatternHandTelegraph_Runtime";
+        _quad = new GameObject("BossCueFlare_Runtime", typeof(MeshFilter), typeof(MeshRenderer));
+        _quad.hideFlags = HideFlags.DontSave;
         _quadTransform = _quad.transform;
         _quadTransform.SetParent(null, false);
-
-        Collider collider = _quad.GetComponent<Collider>();
-        if (collider != null)
-            Destroy(collider);
+        _quad.GetComponent<MeshFilter>().sharedMesh = Quad;
 
         _renderer = _quad.GetComponent<Renderer>();
-        if (_renderer != null)
-        {
-            _renderer.sharedMaterial = CreateRuntimeMaterial(ResolveMaterial());
-            _renderer.sortingOrder = short.MaxValue;
-            _renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _renderer.receiveShadows = false;
-        }
+        _renderer.sharedMaterial = ResolveMaterial();
+        _renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        _renderer.receiveShadows = false;
+        _renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        _renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        _block = new MaterialPropertyBlock();
     }
 
     Material ResolveMaterial()
     {
-        if (telegraphMaterial != null)
+        if (telegraphMaterial != null && telegraphMaterial.shader != null && telegraphMaterial.shader.name == "ChuOn/TelegraphFlare")
             return telegraphMaterial;
 
-        telegraphMaterial = Resources.Load<Material>(MaterialResourcePath);
-        if (telegraphMaterial != null)
-            return telegraphMaterial;
+        Material loaded = Resources.Load<Material>(MaterialResourcePath);
+        if (loaded != null)
+            return loaded;
 
-#if UNITY_EDITOR
-        telegraphMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
-        if (telegraphMaterial != null)
-            return telegraphMaterial;
-#endif
-
-        Shader shader = Shader.Find(OverlayShaderName) ?? Shader.Find("Unlit/Transparent") ?? Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
-        Material material = new Material(shader)
-        {
-            name = "BossPatternHandTelegraph_Fallback",
-            color = fallbackColor,
-            renderQueue = 5000
-        };
-        return material;
+        Shader shader = Shader.Find("ChuOn/TelegraphFlare") ?? Shader.Find("Sprites/Default");
+        _runtimeMaterial = new Material(shader) { name = "BossCueFlare_Fallback", hideFlags = HideFlags.DontSave };
+        return _runtimeMaterial;
     }
 
-    Material CreateRuntimeMaterial(Material source)
+    static Mesh Quad
     {
-        if (_runtimeMaterial != null)
-            return _runtimeMaterial;
-
-        Shader overlayShader = Shader.Find(OverlayShaderName);
-        _runtimeMaterial = overlayShader != null ? new Material(overlayShader) : (source != null ? new Material(source) : ResolveMaterial());
-        _runtimeMaterial.name = "BossPatternHandTelegraph_RuntimeMat";
-        _runtimeMaterial.renderQueue = 5000;
-
-        Texture texture = Resources.Load<Texture>(TextureResourcePath);
-#if UNITY_EDITOR
-        if (texture == null)
-            texture = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture>(TexturePath);
-#endif
-        if (texture != null && _runtimeMaterial.HasProperty("_MainTex"))
-            _runtimeMaterial.SetTexture("_MainTex", texture);
-
-        if (_runtimeMaterial.HasProperty("_Color"))
-            _runtimeMaterial.SetColor("_Color", fallbackColor);
-        if (_runtimeMaterial.HasProperty("_BaseColor"))
-            _runtimeMaterial.SetColor("_BaseColor", fallbackColor);
-        if (_runtimeMaterial.HasProperty("_EmissionColor"))
-            _runtimeMaterial.SetColor("_EmissionColor", fallbackColor * 2.8f);
-
-        return _runtimeMaterial;
+        get
+        {
+            if (s_quad != null)
+                return s_quad;
+            s_quad = new Mesh { name = "_CueFlareQuad", hideFlags = HideFlags.DontSave };
+            s_quad.vertices = new[] { new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, -0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(0.5f, 0.5f, 0f) };
+            s_quad.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f) };
+            s_quad.triangles = new[] { 0, 2, 1, 1, 2, 3 };
+            s_quad.RecalculateBounds();
+            return s_quad;
+        }
     }
 }

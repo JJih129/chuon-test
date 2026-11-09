@@ -1,9 +1,16 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
+// 보스 바닥 텔레그래프 (반복 10 재구현)
+// 기존: Sprites/Default 큐브 + 평면 원판 (원시 도형처럼 보임).
+// 현재: 바닥에 붙인 평면 메시 + ChuOn/TelegraphGround 셰이더 (소프트 엣지, HDR 테두리, 진행 방향 쉐브론,
+//       채움이 피격 순간에 끝에 닿는 '정직한' 진행 표시). 원형은 같은 셰이더의 원형 모드(충격파/도약 그림자).
+// 색 언어: 패링 가능 = 금/주황, 회피 전용 = 빨강, 가드·패링 불가 = 자홍, 일반(가드) = 청색. 색각 보정 팔레트 지원.
 [DisallowMultipleComponent]
 public sealed class BossGroundTelegraph : MonoBehaviour
 {
+    const string MaterialResourcePath = "VFX/ChuonTelegraphGround";
+
     [Header("Visual")]
     [SerializeField] private Color parryColor = new Color(1.00f, 0.66f, 0.08f, 0.26f);
     [SerializeField] private Color guardColor = new Color(0.22f, 0.78f, 1.00f, 0.24f);
@@ -15,6 +22,21 @@ public sealed class BossGroundTelegraph : MonoBehaviour
     [SerializeField, Min(0f)] private float dangerExtraPadding = 0.2f;
     [SerializeField, Min(0f)] private float yOffset = 0.03f;
     [SerializeField, Min(1f / 120f)] private float transformRefreshInterval = 1f / 20f;
+    [Tooltip("HDR 배율 (블룸이 테두리/파면을 잡도록)")]
+    [SerializeField, Min(0.5f)] private float hdrIntensity = 2.4f;
+    [Tooltip("마지막 몇 초 동안 테두리가 '임박' 상태로 밝아진다")]
+    [SerializeField, Min(0.05f)] private float urgencyWindow = 0.4f;
+    [SerializeField] private Material groundMaterial;
+
+    static readonly int ColorId = Shader.PropertyToID("_Color");
+    static readonly int FillId = Shader.PropertyToID("_Fill");
+    static readonly int ShapeId = Shader.PropertyToID("_Shape");
+    static readonly int AspectId = Shader.PropertyToID("_Aspect");
+    static readonly int UrgencyId = Shader.PropertyToID("_Urgency");
+    static readonly int OpacityId = Shader.PropertyToID("_Opacity");
+    static readonly int ShadowId = Shader.PropertyToID("_Shadow");
+
+    static Mesh s_quadMesh;
 
     Transform _visualTransform;
     MeshRenderer _visualRenderer;
@@ -23,8 +45,11 @@ public sealed class BossGroundTelegraph : MonoBehaviour
     Collider _trackedCollider;
     Transform _ownerRoot;
     bool _active;
+    float _showTime;
     float _hideAtTime;
     float _nextTransformRefreshAt;
+    float _rectAspect = 1f;
+    Color _rectColor;
     AttackTelegraphType _currentTelegraphType = AttackTelegraphType.Auto;
 
     void Awake()
@@ -49,6 +74,8 @@ public sealed class BossGroundTelegraph : MonoBehaviour
 
         if (Time.time >= _nextTransformRefreshAt)
             UpdateVisualTransform();
+
+        UpdateRectAnimation();
     }
 
     void OnDisable()
@@ -61,8 +88,10 @@ public sealed class BossGroundTelegraph : MonoBehaviour
     {
         if (_runtimeMaterial != null)
             Destroy(_runtimeMaterial);
-        if (_circleMaterial != null)
-            Destroy(_circleMaterial);
+        if (_visualTransform != null)
+            Destroy(_visualTransform.gameObject);
+        if (_circleRoot != null)
+            Destroy(_circleRoot.gameObject);
     }
 
     // ==================== 원형 텔레그래프 (충격파 / 도약 그림자) ====================
@@ -73,10 +102,7 @@ public sealed class BossGroundTelegraph : MonoBehaviour
     [SerializeField] private Color shadowFillColor = new Color(0.02f, 0.02f, 0.03f, 0.62f);
 
     Transform _circleRoot;
-    MeshRenderer _circleRimRenderer;
-    MeshRenderer _circleFillRenderer;
-    MeshRenderer _circleShadowRenderer;
-    Material _circleMaterial;
+    MeshRenderer _circleRenderer;
     MaterialPropertyBlock _circleBlock;
     bool _circleActive;
     float _circleStartTime;
@@ -89,8 +115,6 @@ public sealed class BossGroundTelegraph : MonoBehaviour
     bool _circleShadow;
     bool _circleLocked;
     const float CircleFollowSharpness = 9f;
-    static Mesh s_discMesh;
-    static Mesh s_ringMesh;
 
     public bool IsCircleActive => _circleActive;
     public Vector3 CircleCenter => _circleCenter;
@@ -108,10 +132,8 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         _circleFollow = follow;
         _circleShadow = shadowStyle;
         _circleLocked = follow == null;
-        Color c = ResolveColor(telegraphType);
-        _circleColor = new Color(c.r, c.g, c.b, 1f);
+        _circleColor = ResolveHdrColor(telegraphType);
         _circleRoot.gameObject.SetActive(true);
-        _circleShadowRenderer.gameObject.SetActive(shadowStyle);
         enabled = true;
         UpdateCircle();
     }
@@ -139,6 +161,7 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         if (_circleRoot == null)
             return;
 
+        // 피격 후 0.12초 동안 테두리가 밝게 터지며 사라진다
         if (Time.time >= _circleEndTime + 0.12f)
         {
             HideCircle();
@@ -155,32 +178,23 @@ public sealed class BossGroundTelegraph : MonoBehaviour
 
         float duration = Mathf.Max(0.01f, _circleEndTime - _circleStartTime);
         float progress = Mathf.Clamp01((Time.time - _circleStartTime) / duration);
-        _circleRoot.SetPositionAndRotation(_circleCenter, Quaternion.identity);
-
-        _circleRimRenderer.transform.localScale = new Vector3(_circleRadius, 1f, _circleRadius);
-        float fillScale = Mathf.Max(0.02f, _circleRadius * progress);
-        _circleFillRenderer.transform.localScale = new Vector3(fillScale, 1f, fillScale);
-
-        // 마지막 0.4초: 테두리가 빠르게 깜빡이며 밝아진다 (임박)
         float remaining = _circleEndTime - Time.time;
-        float urgent = remaining < 0.4f ? 0.5f + 0.5f * Mathf.Abs(Mathf.Sin(Time.time * 26f)) : 0f;
-        SetCircleColor(_circleRimRenderer, _circleColor, Mathf.Lerp(0.55f, 0.95f, Mathf.Max(progress * 0.6f, urgent)));
-        SetCircleColor(_circleFillRenderer, _circleColor, Mathf.Lerp(0.14f, 0.30f, progress));
-        if (_circleShadow)
-        {
-            float shadowScale = _circleRadius * Mathf.Lerp(0.55f, 0.8f, progress);
-            _circleShadowRenderer.transform.localScale = new Vector3(shadowScale, 1f, shadowScale);
-            SetCircleColor(_circleShadowRenderer, shadowFillColor, Mathf.Lerp(shadowFillColor.a * 0.5f, shadowFillColor.a, progress));
-        }
-    }
+        float urgency = remaining < urgencyWindow ? 1f - Mathf.Clamp01(remaining / urgencyWindow) : 0f;
+        float after = Mathf.Clamp01((Time.time - _circleEndTime) / 0.12f);
 
-    void SetCircleColor(MeshRenderer target, Color color, float alpha)
-    {
-        color.a = Mathf.Clamp01(alpha);
+        float diameter = _circleRadius * 2f;
+        _circleRoot.SetPositionAndRotation(_circleCenter, Quaternion.identity);
+        _circleRoot.localScale = new Vector3(diameter, 1f, diameter);
+
         _circleBlock.Clear();
-        _circleBlock.SetColor("_BaseColor", color);
-        _circleBlock.SetColor("_Color", color);
-        target.SetPropertyBlock(_circleBlock);
+        _circleBlock.SetColor(ColorId, _circleColor * (1f + urgency * 0.6f + after * 1.5f));
+        _circleBlock.SetFloat(FillId, progress);
+        _circleBlock.SetFloat(ShapeId, 1f);
+        _circleBlock.SetFloat(AspectId, 1f);
+        _circleBlock.SetFloat(UrgencyId, Mathf.Max(urgency, after));
+        _circleBlock.SetFloat(OpacityId, Mathf.Clamp01(Mathf.Min(1f, (Time.time - _circleStartTime) / 0.08f)) * (1f - after));
+        _circleBlock.SetFloat(ShadowId, _circleShadow ? 1f : 0f);
+        _circleRenderer.SetPropertyBlock(_circleBlock);
     }
 
     void EnsureCircleVisual()
@@ -188,73 +202,15 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         if (_circleRoot != null)
             return;
 
-        if (s_discMesh == null) s_discMesh = BuildAnnulus(0f, 1f, 64, "_TelegraphDisc");
-        if (s_ringMesh == null) s_ringMesh = BuildAnnulus(circleRimInner, 1f, 96, "_TelegraphRing");
-
-        var root = new GameObject("GroundTelegraphCircle");
-        root.hideFlags = HideFlags.HideAndDontSave;
-        _circleRoot = root.transform;
-        _circleRoot.SetParent(transform, false);
-
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader != null)
-        {
-            _circleMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
-            _circleMaterial.renderQueue = (int)RenderQueue.Transparent + 1;
-        }
-
-        _circleShadowRenderer = NewCirclePart("Shadow", s_discMesh, 0.000f);
-        _circleFillRenderer = NewCirclePart("Fill", s_discMesh, 0.004f);
-        _circleRimRenderer = NewCirclePart("Rim", s_ringMesh, 0.008f);
+        var go = new GameObject("GroundTelegraphCircle", typeof(MeshFilter), typeof(MeshRenderer));
+        go.hideFlags = HideFlags.DontSave;
+        _circleRoot = go.transform;
+        _circleRoot.SetParent(null, false);
+        go.GetComponent<MeshFilter>().sharedMesh = QuadMesh;
+        _circleRenderer = go.GetComponent<MeshRenderer>();
+        ConfigureRenderer(_circleRenderer);
         _circleBlock = new MaterialPropertyBlock();
-        root.SetActive(false);
-    }
-
-    MeshRenderer NewCirclePart(string partName, Mesh mesh, float lift)
-    {
-        var go = new GameObject(partName, typeof(MeshFilter), typeof(MeshRenderer));
-        go.hideFlags = HideFlags.HideAndDontSave;
-        go.transform.SetParent(_circleRoot, false);
-        go.transform.localPosition = new Vector3(0f, lift, 0f);
-        go.GetComponent<MeshFilter>().sharedMesh = mesh;
-        var r = go.GetComponent<MeshRenderer>();
-        r.sharedMaterial = _circleMaterial;
-        r.shadowCastingMode = ShadowCastingMode.Off;
-        r.receiveShadows = false;
-        r.lightProbeUsage = LightProbeUsage.Off;
-        r.reflectionProbeUsage = ReflectionProbeUsage.Off;
-        return r;
-    }
-
-    static Mesh BuildAnnulus(float inner, float outer, int segments, string meshName)
-    {
-        var mesh = new Mesh { name = meshName, hideFlags = HideFlags.HideAndDontSave };
-        var verts = new Vector3[(segments + 1) * 2];
-        var uvs = new Vector2[verts.Length];
-        var tris = new int[segments * 6];
-        for (int i = 0; i <= segments; i++)
-        {
-            float a = i / (float)segments * Mathf.PI * 2f;
-            Vector3 d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
-            verts[i * 2] = d * inner;
-            verts[i * 2 + 1] = d * outer;
-            uvs[i * 2] = new Vector2(i / (float)segments, 0f);
-            uvs[i * 2 + 1] = new Vector2(i / (float)segments, 1f);
-        }
-        for (int i = 0; i < segments; i++)
-        {
-            int v = i * 2;
-            int t = i * 6;
-            tris[t] = v; tris[t + 1] = v + 3; tris[t + 2] = v + 1;
-            tris[t + 3] = v; tris[t + 4] = v + 2; tris[t + 5] = v + 3;
-        }
-        mesh.vertices = verts;
-        mesh.uv = uvs;
-        mesh.triangles = tris;
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-        return mesh;
+        go.SetActive(false);
     }
 
     public void ShowCue(Collider trackedCollider, AttackTelegraphType telegraphType, float duration, Transform ownerRoot = null)
@@ -265,13 +221,15 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         EnsureVisual();
         _trackedCollider = trackedCollider;
         _ownerRoot = ownerRoot != null ? ownerRoot : trackedCollider.transform.root;
+        _showTime = Time.time;
         _hideAtTime = Time.time + Mathf.Max(0.06f, duration);
         _active = true;
         _nextTransformRefreshAt = 0f;
         _currentTelegraphType = telegraphType;
+        _rectColor = ResolveHdrColor(_currentTelegraphType);
 
-        SetVisualColor(ResolveColor(_currentTelegraphType));
         UpdateVisualTransform();
+        UpdateRectAnimation();
         _visualTransform.gameObject.SetActive(true);
         enabled = true;
     }
@@ -295,58 +253,83 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         if (_visualTransform != null)
             return;
 
-        GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        quad.name = "GroundTelegraphVisual";
-        quad.hideFlags = HideFlags.HideAndDontSave;
-        quad.transform.SetParent(transform, false);
-
-        Collider quadCollider = quad.GetComponent<Collider>();
-        if (quadCollider != null)
-            Destroy(quadCollider);
-
-        _visualTransform = quad.transform;
-        _visualRenderer = quad.GetComponent<MeshRenderer>();
-        _visualTransform.localRotation = Quaternion.identity;
-
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader == null)
-            shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null)
-            shader = Shader.Find("Unlit/Color");
-
-        if (shader != null)
-        {
-            _runtimeMaterial = new Material(shader)
-            {
-                hideFlags = HideFlags.HideAndDontSave
-            };
-            _runtimeMaterial.renderQueue = (int)RenderQueue.Transparent;
-            if (_runtimeMaterial.HasProperty("_Surface"))
-                _runtimeMaterial.SetFloat("_Surface", 1f);
-            if (_runtimeMaterial.HasProperty("_Blend"))
-                _runtimeMaterial.SetFloat("_Blend", 0f);
-            if (_runtimeMaterial.HasProperty("_Cull"))
-                _runtimeMaterial.SetFloat("_Cull", 0f);
-            if (_runtimeMaterial.HasProperty("_ZWrite"))
-                _runtimeMaterial.SetFloat("_ZWrite", 0f);
-            _visualRenderer.sharedMaterial = _runtimeMaterial;
-        }
-
-        _visualRenderer.shadowCastingMode = ShadowCastingMode.Off;
-        _visualRenderer.receiveShadows = false;
-        _visualRenderer.lightProbeUsage = LightProbeUsage.Off;
-        _visualRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        var go = new GameObject("GroundTelegraphVisual", typeof(MeshFilter), typeof(MeshRenderer));
+        go.hideFlags = HideFlags.DontSave;
+        go.transform.SetParent(null, false);
+        go.GetComponent<MeshFilter>().sharedMesh = QuadMesh;
+        _visualTransform = go.transform;
+        _visualRenderer = go.GetComponent<MeshRenderer>();
+        ConfigureRenderer(_visualRenderer);
         _propertyBlock = new MaterialPropertyBlock();
+        go.SetActive(false);
     }
 
-    void SetVisualColor(Color color)
+    void ConfigureRenderer(MeshRenderer target)
+    {
+        target.sharedMaterial = ResolveMaterial();
+        target.shadowCastingMode = ShadowCastingMode.Off;
+        target.receiveShadows = false;
+        target.lightProbeUsage = LightProbeUsage.Off;
+        target.reflectionProbeUsage = ReflectionProbeUsage.Off;
+        target.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+    }
+
+    Material ResolveMaterial()
+    {
+        if (groundMaterial != null)
+            return groundMaterial;
+        if (_runtimeMaterial != null)
+            return _runtimeMaterial;
+
+        Material source = Resources.Load<Material>(MaterialResourcePath);
+        if (source != null)
+            return groundMaterial = source;
+
+        // 폴백 (셰이더가 빌드에 없을 때만)
+        Shader shader = Shader.Find("ChuOn/TelegraphGround") ?? Shader.Find("Sprites/Default");
+        _runtimeMaterial = new Material(shader) { hideFlags = HideFlags.DontSave, renderQueue = (int)RenderQueue.Transparent };
+        return _runtimeMaterial;
+    }
+
+    // 1x1 평면 (XZ), uv.y = +Z 방향 (보스 쪽 0 → 먼 끝 1)
+    static Mesh QuadMesh
+    {
+        get
+        {
+            if (s_quadMesh != null)
+                return s_quadMesh;
+            s_quadMesh = new Mesh { name = "_TelegraphGroundQuad", hideFlags = HideFlags.DontSave };
+            s_quadMesh.vertices = new[]
+            {
+                new Vector3(-0.5f, 0f, -0.5f), new Vector3(0.5f, 0f, -0.5f),
+                new Vector3(-0.5f, 0f, 0.5f), new Vector3(0.5f, 0f, 0.5f)
+            };
+            s_quadMesh.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f) };
+            s_quadMesh.normals = new[] { Vector3.up, Vector3.up, Vector3.up, Vector3.up };
+            s_quadMesh.triangles = new[] { 0, 2, 1, 1, 2, 3 };
+            s_quadMesh.RecalculateBounds();
+            return s_quadMesh;
+        }
+    }
+
+    void UpdateRectAnimation()
     {
         if (_visualRenderer == null)
             return;
 
+        float duration = Mathf.Max(0.01f, _hideAtTime - _showTime);
+        float progress = Mathf.Clamp01((Time.time - _showTime) / duration);
+        float remaining = _hideAtTime - Time.time;
+        float urgency = remaining < urgencyWindow ? 1f - Mathf.Clamp01(remaining / urgencyWindow) : 0f;
+
         _propertyBlock.Clear();
-        _propertyBlock.SetColor("_BaseColor", color);
-        _propertyBlock.SetColor("_Color", color);
+        _propertyBlock.SetColor(ColorId, _rectColor * (1f + urgency * 0.5f));
+        _propertyBlock.SetFloat(FillId, progress);
+        _propertyBlock.SetFloat(ShapeId, 0f);
+        _propertyBlock.SetFloat(AspectId, _rectAspect);
+        _propertyBlock.SetFloat(UrgencyId, urgency);
+        _propertyBlock.SetFloat(OpacityId, Mathf.Clamp01((Time.time - _showTime) / 0.08f));
+        _propertyBlock.SetFloat(ShadowId, 0f);
         _visualRenderer.SetPropertyBlock(_propertyBlock);
     }
 
@@ -364,12 +347,13 @@ public sealed class BossGroundTelegraph : MonoBehaviour
 
         size.x = Mathf.Max(minimumWidth, size.x + padding);
         size.y = Mathf.Max(minimumLength, size.y + padding);
+        _rectAspect = size.y / Mathf.Max(0.05f, size.x);
 
         float groundY = _ownerRoot != null ? _ownerRoot.position.y + yOffset : center.y + yOffset;
         _visualTransform.SetPositionAndRotation(
             new Vector3(center.x, groundY, center.z),
             Quaternion.Euler(0f, ResolveYaw(), 0f));
-        _visualTransform.localScale = new Vector3(size.x, 0.03f, size.y);
+        _visualTransform.localScale = new Vector3(size.x, 1f, size.y);
         _nextTransformRefreshAt = Time.time + Mathf.Max(1f / 60f, transformRefreshInterval);
     }
 
@@ -381,15 +365,13 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         if (sourceCollider == null)
             return false;
 
+        // 발자국은 보스 기준 축(요)으로 잰다 (월드 AABB 는 비스듬한 보스에서 커진다)
+        Quaternion inv = Quaternion.Inverse(Quaternion.Euler(0f, ResolveYaw(), 0f));
+
         switch (sourceCollider)
         {
             case BoxCollider boxCollider:
-                return TryResolveBoundsFootprint(
-                    boxCollider.transform,
-                    boxCollider.center,
-                    boxCollider.size * 0.5f,
-                    out center,
-                    out size);
+                return TryResolveBoundsFootprint(boxCollider.transform, boxCollider.center, boxCollider.size * 0.5f, inv, out center, out size);
 
             case SphereCollider sphereCollider:
             {
@@ -417,25 +399,21 @@ public sealed class BossGroundTelegraph : MonoBehaviour
                 float halfSegment = Mathf.Max(0f, (height * 0.5f) - radius);
                 Vector3 worldCenter = capsuleCollider.transform.TransformPoint(capsuleCollider.center);
                 Vector3 axisDir = capsuleCollider.transform.TransformDirection(GetAxisVector(axis)).normalized;
-                Vector3 pointA = worldCenter + axisDir * halfSegment;
-                Vector3 pointB = worldCenter - axisDir * halfSegment;
+                Vector3 a = inv * (worldCenter + axisDir * halfSegment);
+                Vector3 b = inv * (worldCenter - axisDir * halfSegment);
 
-                float minX = Mathf.Min(pointA.x, pointB.x) - radius;
-                float maxX = Mathf.Max(pointA.x, pointB.x) + radius;
-                float minZ = Mathf.Min(pointA.z, pointB.z) - radius;
-                float maxZ = Mathf.Max(pointA.z, pointB.z) + radius;
-                center = new Vector3((minX + maxX) * 0.5f, worldCenter.y, (minZ + maxZ) * 0.5f);
+                float minX = Mathf.Min(a.x, b.x) - radius;
+                float maxX = Mathf.Max(a.x, b.x) + radius;
+                float minZ = Mathf.Min(a.z, b.z) - radius;
+                float maxZ = Mathf.Max(a.z, b.z) + radius;
+                Vector3 localCenter = new Vector3((minX + maxX) * 0.5f, (a.y + b.y) * 0.5f, (minZ + maxZ) * 0.5f);
+                center = Quaternion.Inverse(inv) * localCenter;
                 size = new Vector2(maxX - minX, maxZ - minZ);
                 return true;
             }
 
             case MeshCollider meshCollider when meshCollider.sharedMesh != null:
-                return TryResolveBoundsFootprint(
-                    meshCollider.transform,
-                    meshCollider.sharedMesh.bounds.center,
-                    meshCollider.sharedMesh.bounds.extents,
-                    out center,
-                    out size);
+                return TryResolveBoundsFootprint(meshCollider.transform, meshCollider.sharedMesh.bounds.center, meshCollider.sharedMesh.bounds.extents, inv, out center, out size);
 
             default:
             {
@@ -447,7 +425,7 @@ public sealed class BossGroundTelegraph : MonoBehaviour
         }
     }
 
-    bool TryResolveBoundsFootprint(Transform targetTransform, Vector3 localCenter, Vector3 localExtents, out Vector3 center, out Vector2 size)
+    static bool TryResolveBoundsFootprint(Transform targetTransform, Vector3 localCenter, Vector3 localExtents, Quaternion toFrame, out Vector3 center, out Vector2 size)
     {
         center = Vector3.zero;
         size = Vector2.zero;
@@ -464,12 +442,12 @@ public sealed class BossGroundTelegraph : MonoBehaviour
                 (i & 1) == 0 ? -localExtents.x : localExtents.x,
                 (i & 2) == 0 ? -localExtents.y : localExtents.y,
                 (i & 4) == 0 ? -localExtents.z : localExtents.z);
-            Vector3 worldCorner = targetTransform.TransformPoint(localCenter + localCorner);
-            min = Vector3.Min(min, worldCorner);
-            max = Vector3.Max(max, worldCorner);
+            Vector3 corner = toFrame * targetTransform.TransformPoint(localCenter + localCorner);
+            min = Vector3.Min(min, corner);
+            max = Vector3.Max(max, corner);
         }
 
-        center = (min + max) * 0.5f;
+        center = Quaternion.Inverse(toFrame) * ((min + max) * 0.5f);
         size = new Vector2(max.x - min.x, max.z - min.z);
         return true;
     }
@@ -481,6 +459,15 @@ public sealed class BossGroundTelegraph : MonoBehaviour
 
         Vector3 euler = _ownerRoot.rotation.eulerAngles;
         return euler.y;
+    }
+
+    Color ResolveHdrColor(AttackTelegraphType telegraphType)
+    {
+        Color c = BossTelegraphVfxPresenter.UseColorblindSafePalette
+            ? ResolveColorblindColor(telegraphType)
+            : ResolveColor(telegraphType);
+        c.a = 1f;
+        return c * hdrIntensity;
     }
 
     Color ResolveColor(AttackTelegraphType telegraphType)
@@ -497,6 +484,22 @@ public sealed class BossGroundTelegraph : MonoBehaviour
             case AttackTelegraphType.Auto:
             default:
                 return dodgeColor;
+        }
+    }
+
+    // BossTelegraphVfxPresenter 의 Okabe-Ito 팔레트와 동일
+    static Color ResolveColorblindColor(AttackTelegraphType telegraphType)
+    {
+        switch (telegraphType)
+        {
+            case AttackTelegraphType.Parry:
+                return new Color(0.94f, 0.89f, 0.26f);
+            case AttackTelegraphType.Guard:
+                return new Color(0.34f, 0.71f, 0.91f);
+            case AttackTelegraphType.Danger:
+                return new Color(0.8f, 0.47f, 0.65f);
+            default:
+                return new Color(0.84f, 0.37f, 0f);
         }
     }
 

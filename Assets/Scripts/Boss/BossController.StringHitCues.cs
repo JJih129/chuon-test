@@ -201,7 +201,7 @@ public partial class BossController
 
         float flash = Mathf.Min(perHitCueFlashDuration, Mathf.Max(0.06f, secondsToHit + 0.04f));
         BossTelegraphVfxPresenter presenter = ResolveTelegraphVfxPresenter();
-        bool handled = presenter != null && presenter.PlayCue(telegraphType, flash, flags);
+        bool handled = presenter != null && presenter.PlayCue(telegraphType, flash, flags, true);
         if (!handled && patternVisuals != null)
         {
             AttackTelegraphType legacyType = ConvertAttackTimingTelegraph(telegraphType);

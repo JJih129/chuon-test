@@ -22346,9 +22346,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ultimateOncePerFight: 1
-  gaugePerHit: 3
+  gaugePerHit: 2.5
   gaugePerParry: 6
   gaugePerPerfectDodge: 6
+  ultimateDamagePercentOfMaxHP: 0.25
   refillAmpoulesOnLowerFloor: 1
   elevatorUltimateGain: 30
   rapidDodgeIFrameDecay: 1
@@ -22361,6 +22362,7 @@ MonoBehaviour:
   specialPatterns: 1
   reactivePatterns: 1
   damageCracks: 1
+  bossDamageScale: 1.2
 --- !u!4 &717341303
 Transform:
   m_ObjectHideFlags: 0
@@ -28797,6 +28799,12 @@ MonoBehaviour:
   trailMaterial: {fileID: 0}
   trailTint: {r: 1, g: 1, b: 1, a: 1}
   applyTintPropertyBlock: 1
+  bladeRibbonMode: 1
+  maxSubdivisions: 8
+  subdivisionSpacing: 0.045
+  preRollSeconds: 0.04
+  ribbonMinTipMove: 0.003
+  preferChuonBladeMaterial: 1
 --- !u!23 &952646347
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -31258,6 +31266,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   debugLog: 0
+  baseDamagePercentOfMaxHP: 0
 --- !u!114 &1023266516
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -56417,6 +56426,8 @@ MonoBehaviour:
   leapClipImpactTime: 1.08
   leapLockLeadTime: 0.45
   leapRecovery: 1.1
+  leapFarSustainDistance: 6
+  leapFarSustainTime: 2
   enablePlanReactiveBias: 0
   healReactionWindow: 2.6
   healReactionCooldown: 14
@@ -74004,6 +74015,9 @@ MonoBehaviour:
   pulseSpeed: 9
   rotateSpeed: 120
   fallbackColor: {r: 1, g: 0.94, b: 0.02, a: 0.96}
+  flashDuration: 0.22
+  flashWorldSize: 0.9
+  flashHdrIntensity: 3.2
 --- !u!4 &5885422599327991292
 Transform:
   m_ObjectHideFlags: 0

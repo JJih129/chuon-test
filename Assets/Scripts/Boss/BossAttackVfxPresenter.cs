@@ -357,8 +357,14 @@ public sealed class BossAttackVfxPresenter : MonoBehaviour
 
         // Prefer a soft additive glow (fades toward the hilt) over the flat Sprites/Default fan,
         // which rendered as a solid cyan triangle under HDR + bloom.
-        Material glowTemplate = Resources.Load<Material>("VFX/BossProjectileWarningLine");
-        if (glowTemplate != null)
+        // 반복 10: 플레이어와 같은 칼날 리본 셰이더 (Type-D 팔레트: 차가운 백색 코어 + 시안 가장자리)
+        Material bladeTrail = Resources.Load<Material>("VFX/ChuonBossBladeTrail");
+        Material glowTemplate = bladeTrail == null ? Resources.Load<Material>("VFX/BossProjectileWarningLine") : null;
+        if (bladeTrail != null)
+        {
+            _proceduralTrailMaterial = new Material(bladeTrail);
+        }
+        else if (glowTemplate != null)
         {
             _proceduralTrailMaterial = new Material(glowTemplate);
             Texture2D gradient = CreateTrailGradientTexture();

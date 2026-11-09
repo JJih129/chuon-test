@@ -132,6 +132,19 @@ public sealed class BossDamageCracks : MonoBehaviour
             _targets.Add(r);
             _originalMaterials.Add(r.sharedMaterials);
         }
+
+        // 반복 10: Type-D 장갑판에도 균열 (코어/바이저 발광 파츠 제외). 오버레이는 마지막 서브메시(장갑 본체)에 그려진다.
+        foreach (MeshRenderer r in GetComponentsInChildren<MeshRenderer>(true))
+        {
+            string n = r.name;
+            if (!n.StartsWith("TypeD_") || n.Contains("Core") || n.Contains("Visor"))
+                continue;
+            MeshFilter mf = r.GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null)
+                continue;
+            _targets.Add(r);
+            _originalMaterials.Add(r.sharedMaterials);
+        }
     }
 
     void ApplyOverlay()

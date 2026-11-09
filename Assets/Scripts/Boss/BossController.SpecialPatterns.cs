@@ -55,6 +55,9 @@ public partial class BossController
     [Tooltip("착지 몇 초 전에 그림자를 고정할지 (정직한 큐: 고정 이후엔 낙하 지점이 바뀌지 않음)")]
     [SerializeField, Min(0.1f)] private float leapLockLeadTime = 0.45f;
     [SerializeField, Min(0f)] private float leapRecovery = 1.1f;
+    [Tooltip("반복 10: 플레이어가 이 거리 밖에 이 시간 이상 머물면 도약 내려찍기를 확정으로 쓴다 (원거리 견제)")]
+    [SerializeField, Min(0f)] private float leapFarSustainDistance = 6f;
+    [SerializeField, Min(0f)] private float leapFarSustainTime = 2f;
 
     [Header("Reactive Conditions (기획 반응형)")]
     [SerializeField] private bool enablePlanReactiveBias = false;
@@ -80,6 +83,8 @@ public partial class BossController
     public int QaHealReactions { get; private set; }
     public int QaDodgeSpamReactions { get; private set; }
     public int QaBackOffReactions { get; private set; }
+    /// <summary>QA: '멀리 2초 이상' 규칙으로 나간 도약 수.</summary>
+    public int QaFarLeaps { get; private set; }
     public BossSpecialPatternKind ActiveSpecialPattern { get; private set; }
 
     float _lastSpecialAt = float.NegativeInfinity;
@@ -93,6 +98,23 @@ public partial class BossController
     float _dodgeSpamReadyAt;
     float _backOffSince = float.NegativeInfinity;
     float _backOffReadyAt;
+    float _farSince = float.NegativeInfinity;
+
+    // 원거리 유지 감시 (특수 패턴 탐색 때마다 갱신)
+    void TickFarObservation(float distance)
+    {
+        if (distance >= leapFarSustainDistance && !float.IsInfinity(distance))
+        {
+            if (float.IsNegativeInfinity(_farSince))
+                _farSince = Time.time;
+        }
+        else
+        {
+            _farSince = float.NegativeInfinity;
+        }
+    }
+
+    bool IsFarSustainActive => !float.IsNegativeInfinity(_farSince) && Time.time - _farSince >= leapFarSustainTime;
     bool _reactiveSubscribed;
     AttackPattern _shockwavePatternStub;
     AttackPattern _leapPatternStub;
@@ -211,7 +233,8 @@ public partial class BossController
         if (_preChosenSpecial != BossSpecialPatternKind.None)
             return true;
         TickReactiveObservation();
-        bool urgent = _qaRequestedSpecial != BossSpecialPatternKind.None || IsHealReactionActive;
+        TickFarObservation(distance);
+        bool urgent = _qaRequestedSpecial != BossSpecialPatternKind.None || IsHealReactionActive || IsFarSustainActive;
         if (onlyUrgent && !urgent)
             return false;
         if (!urgent && (Time.time < _nextSpecialProbeAt || !CanRequestAttackSelection()))
@@ -244,7 +267,7 @@ public partial class BossController
 
     bool CanStartLeap(float distance, bool reactive)
     {
-        float min = reactive ? 1.5f : leapMinStartDistance;
+        float min = reactive ? 0f : leapMinStartDistance; // 회복 응징은 근접에서도 (그림자가 플레이어를 추적)
         return Time.time >= _leapReadyAt && distance >= min && distance <= leapMaxStartDistance && HasAnimatorState(leapStateName);
     }
 
@@ -288,6 +311,16 @@ public partial class BossController
         {
             QaHealReactions++;
             _healReactionReadyAt = Time.time + healReactionCooldown;
+            kind = BossSpecialPatternKind.ShadowLeapSlam;
+            return true;
+        }
+
+        // 반복 10: 플레이어가 6 m 밖에서 2초 이상 버티면 도약 (가까이 붙어 싸우는 상대에게는 회복 응징으로만 나온다)
+        TickFarObservation(distance);
+        if (IsFarSustainActive && CanStartLeap(distance, false))
+        {
+            QaFarLeaps++;
+            _farSince = float.NegativeInfinity;
             kind = BossSpecialPatternKind.ShadowLeapSlam;
             return true;
         }
