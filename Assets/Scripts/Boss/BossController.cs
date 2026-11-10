@@ -1329,6 +1329,10 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
         if (currentState != BossState.Attack)
             HideGroundTelegraph();
 
+        // 반복 17 QA: 비활성 보스(상층 단계에서 씬 언로드 → MainSceneArrivalController.OnDisable)에 코루틴 시작 오류 방지 — 상태만 기록
+        if (!gameObject.activeInHierarchy)
+            return;
+
         switch (currentState)
         {
             case BossState.IntroIdle:

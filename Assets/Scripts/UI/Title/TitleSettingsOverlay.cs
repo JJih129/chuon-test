@@ -90,13 +90,13 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
     static readonly Color ControlColor = new Color(0.09f, 0.125f, 0.18f, 0.985f);
     static readonly Color ControlHighlightColor = new Color(0.145f, 0.205f, 0.275f, 0.985f);
     static readonly Color TextColor = new Color(0.96f, 0.98f, 1f, 0.98f);
-    static readonly Color MutedTextColor = new Color(0.71f, 0.82f, 0.90f, 0.96f);
-    static readonly Color CyanLineColor = new Color(0.18f, 0.90f, 0.98f, 0.78f);
+    static readonly Color MutedTextColor = new Color(0.80f, 0.82f, 0.86f, 0.96f);
+    static readonly Color AccentLineColor = new Color(0.878f, 0.188f, 0.227f, 0.78f); // 반복 16: 시안 → 츠카사 레드
     static readonly Color AmberColor = new Color(1f, 0.78f, 0.36f, 0.98f);
     static readonly Color TabIdleColor = new Color(0.08f, 0.10f, 0.14f, 0.98f);
     static readonly Color TabActiveColor = new Color(0.25f, 0.18f, 0.07f, 0.98f);
     static readonly Color SliderTrackColor = new Color(0.09f, 0.11f, 0.15f, 1f);
-    static readonly Color SliderFillColor = new Color(0.22f, 0.88f, 0.97f, 0.96f);
+    static readonly Color SliderFillColor = new Color(0.878f, 0.188f, 0.227f, 0.96f);
     // 츠카사 HUD 톤 (콤보 칩 / 난이도 강조)
     static readonly Color TsukasaRedColor = new Color(0.878f, 0.188f, 0.227f, 1f);
     static readonly Color TsukasaWhiteColor = new Color(0.93f, 0.94f, 0.95f, 0.98f);
@@ -262,10 +262,10 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         SetRect(_frameRect, new Vector2(0.012f, 0.02f), new Vector2(0.988f, 0.98f));
         _frameRect.gameObject.AddComponent<Image>().color = FrameColor;
 
-        AddLine("FrameTop", _frameRect, new Vector2(0f, 0.995f), new Vector2(1f, 1f), CyanLineColor);
-        AddLine("FrameBottom", _frameRect, new Vector2(0f, 0f), new Vector2(1f, 0.005f), new Color(CyanLineColor.r, CyanLineColor.g, CyanLineColor.b, 0.52f));
-        AddLine("FrameLeft", _frameRect, new Vector2(0f, 0f), new Vector2(0.0022f, 1f), CyanLineColor);
-        AddLine("FrameRight", _frameRect, new Vector2(0.9978f, 0f), new Vector2(1f, 1f), CyanLineColor);
+        AddLine("FrameTop", _frameRect, new Vector2(0f, 0.995f), new Vector2(1f, 1f), AccentLineColor);
+        AddLine("FrameBottom", _frameRect, new Vector2(0f, 0f), new Vector2(1f, 0.005f), new Color(AccentLineColor.r, AccentLineColor.g, AccentLineColor.b, 0.52f));
+        AddLine("FrameLeft", _frameRect, new Vector2(0f, 0f), new Vector2(0.0022f, 1f), AccentLineColor);
+        AddLine("FrameRight", _frameRect, new Vector2(0.9978f, 0f), new Vector2(1f, 1f), AccentLineColor);
 
         RectTransform topBar = CreateRect("TopBar", _frameRect);
         SetRect(topBar, new Vector2(0f, 0.90f), new Vector2(1f, 1f));
@@ -275,8 +275,8 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         RectTransform leftRail = CreateRect("LeftRail", _frameRect);
         SetRect(leftRail, new Vector2(0.018f, 0.04f), new Vector2(0.255f, 0.90f));
         leftRail.gameObject.AddComponent<Image>().color = RailColor;
-        AddLine("RailTop", leftRail, new Vector2(0.05f, 0.94f), new Vector2(0.95f, 0.95f), CyanLineColor);
-        AddLine("RailBottom", leftRail, new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.06f), new Color(CyanLineColor.r, CyanLineColor.g, CyanLineColor.b, 0.45f));
+        AddLine("RailTop", leftRail, new Vector2(0.05f, 0.94f), new Vector2(0.95f, 0.95f), AccentLineColor);
+        AddLine("RailBottom", leftRail, new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.06f), new Color(AccentLineColor.r, AccentLineColor.g, AccentLineColor.b, 0.45f));
         AddLine("RailGlow", leftRail, new Vector2(0.05f, 0.89f), new Vector2(0.33f, 0.90f), AmberColor);
 
         CreateText("RailTitle", leftRail, "설정", 32, FontStyle.Bold, TextAnchor.UpperLeft, TextColor, new Vector2(0.08f, 0.80f), new Vector2(0.92f, 0.94f));
@@ -296,9 +296,9 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         RectTransform contentFrame = CreateRect("ContentFrame", _frameRect);
         SetRect(contentFrame, new Vector2(0.275f, 0.04f), new Vector2(0.985f, 0.88f));
         contentFrame.gameObject.AddComponent<Image>().color = PanelColor;
-        AddLine("ContentTop", contentFrame, new Vector2(0.015f, 0.985f), new Vector2(0.985f, 0.99f), CyanLineColor);
+        AddLine("ContentTop", contentFrame, new Vector2(0.015f, 0.985f), new Vector2(0.985f, 0.99f), AccentLineColor);
         AddLine("ContentAccent", contentFrame, new Vector2(0.015f, 0.985f), new Vector2(0.18f, 0.99f), AmberColor);
-        AddLine("ContentBottom", contentFrame, new Vector2(0.015f, 0.01f), new Vector2(0.985f, 0.015f), new Color(CyanLineColor.r, CyanLineColor.g, CyanLineColor.b, 0.35f));
+        AddLine("ContentBottom", contentFrame, new Vector2(0.015f, 0.01f), new Vector2(0.985f, 0.015f), new Color(AccentLineColor.r, AccentLineColor.g, AccentLineColor.b, 0.35f));
 
         _contentRoot = CreateRect("ContentRoot", contentFrame);
         SetRect(_contentRoot, new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f));
@@ -314,6 +314,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         hiddenRoot.anchoredPosition = new Vector2(-10000f, -10000f);
 
         _settingsInstance = Instantiate(settingsPrefab, hiddenRoot, false);
+        ChuonUiFonts.Apply(_settingsInstance); // 반복 16 (E8): 프리팹의 Arial Text → Noto Sans KR
         _optionsManager = _settingsInstance.GetComponentInChildren<OptionsManagerAdvanced>(true);
         if (_optionsManager == null)
         {
@@ -672,9 +673,9 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         RectTransform header = CreateRect("Header", content);
         FitHeight(header, 118f);
         header.gameObject.AddComponent<Image>().color = SoftPanelColor;
-        AddLine("HeaderTop", header, new Vector2(0.01f, 0.97f), new Vector2(0.99f, 0.99f), CyanLineColor);
+        AddLine("HeaderTop", header, new Vector2(0.01f, 0.97f), new Vector2(0.99f, 0.99f), AccentLineColor);
         AddLine("HeaderAccent", header, new Vector2(0.01f, 0.97f), new Vector2(0.22f, 0.99f), AmberColor);
-        CreateText("Title", header, title, 24, FontStyle.Bold, TextAnchor.UpperLeft, CyanLineColor, new Vector2(0.03f, 0.56f), new Vector2(0.97f, 0.88f));
+        CreateText("Title", header, title, 24, FontStyle.Bold, TextAnchor.UpperLeft, AccentLineColor, new Vector2(0.03f, 0.56f), new Vector2(0.97f, 0.88f));
         CreateText("Description", header, description, 13, FontStyle.Normal, TextAnchor.UpperLeft, MutedTextColor, new Vector2(0.03f, 0.16f), new Vector2(0.97f, 0.50f));
 
         _tabViews[tab] = view;
@@ -836,7 +837,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         RectTransform section = CreateRect("Section_" + title.Replace(" ", "_"), parent);
         FitHeight(section, 72f);
         section.gameObject.AddComponent<Image>().color = SoftPanelColor;
-        AddLine("SectionLine", section, new Vector2(0.015f, 0.90f), new Vector2(0.985f, 0.94f), new Color(CyanLineColor.r, CyanLineColor.g, CyanLineColor.b, 0.55f));
+        AddLine("SectionLine", section, new Vector2(0.015f, 0.90f), new Vector2(0.985f, 0.94f), new Color(AccentLineColor.r, AccentLineColor.g, AccentLineColor.b, 0.55f));
         AddLine("SectionAccent", section, new Vector2(0.015f, 0.90f), new Vector2(0.22f, 0.94f), AmberColor);
         CreateText("Title", section, title, 15, FontStyle.Bold, TextAnchor.UpperLeft, AmberColor, new Vector2(0.03f, 0.44f), new Vector2(0.97f, 0.84f));
         CreateText("Description", section, description, 12, FontStyle.Normal, TextAnchor.LowerLeft, MutedTextColor, new Vector2(0.03f, 0.10f), new Vector2(0.97f, 0.42f));
@@ -860,7 +861,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         RectTransform row = CreateRect("Row_" + label.Replace(" ", "_"), parent);
         FitHeight(row, 84f);
         row.gameObject.AddComponent<Image>().color = rowIndex % 2 == 0 ? RowEvenColor : RowOddColor;
-        AddLine("RowAccent", row, new Vector2(0.01f, 0.08f), new Vector2(0.013f, 0.92f), rowIndex % 2 == 0 ? CyanLineColor : AmberColor);
+        AddLine("RowAccent", row, new Vector2(0.01f, 0.08f), new Vector2(0.013f, 0.92f), rowIndex % 2 == 0 ? AccentLineColor : AmberColor);
 
         CreateText("Label", row, label, 16, FontStyle.Bold, TextAnchor.MiddleLeft, TextColor, new Vector2(0.03f, 0.16f), new Vector2(0.30f, 0.84f));
 
@@ -1397,7 +1398,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         button.targetGraphic = image;
 
         AddLine("ButtonAccentTop", rect, new Vector2(0.06f, 0.94f), new Vector2(0.94f, 0.98f), AmberColor);
-        AddLine("ButtonAccentBottom", rect, new Vector2(0.06f, 0.02f), new Vector2(0.94f, 0.06f), new Color(CyanLineColor.r, CyanLineColor.g, CyanLineColor.b, 0.45f));
+        AddLine("ButtonAccentBottom", rect, new Vector2(0.06f, 0.02f), new Vector2(0.94f, 0.06f), new Color(AccentLineColor.r, AccentLineColor.g, AccentLineColor.b, 0.45f));
         CreateText("Label", rect, label, fontSize, FontStyle.Bold, TextAnchor.MiddleCenter, TextColor, new Vector2(0f, 0f), new Vector2(1f, 1f));
         return button;
     }

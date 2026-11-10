@@ -44,43 +44,49 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
     [SerializeField] private PlayerReferences playerReferences;
     [SerializeField] private CharacterController characterController;
 
+    // 반복 17: 잔상 2~4개, 0.35s(언스케일) 페이드, 그래파이트/세라믹 + TSUKASA 레드 림.
+    // 이전 기본값(7장/0.24s/EaseOut, 저FPS 시 1장·렌더러 1개만 굽기)은 잔상이 거의 안 보였음.
     [Header("Burst")]
-    [SerializeField, Min(1)] private int imageCount = 7;
+    [SerializeField, Min(1)] private int imageCount = 2;
     [SerializeField, Min(0f)] private float spawnIntervalRealtime = 0.05f;
-    [SerializeField, Min(0.01f)] private float imageLifetimeRealtime = 0.24f;
+    [SerializeField, Min(0.01f)] private float imageLifetimeRealtime = 0.35f;
     [SerializeField] private bool useRealtime = true;
-    [SerializeField, Min(0f)] private float minReplayIntervalRealtime = 0.24f;
-    [SerializeField, Min(1)] private int maxConcurrentSnapshots = 8;
+    [SerializeField, Min(0f)] private float minReplayIntervalRealtime = 0.2f;
+    [SerializeField, Min(1)] private int maxConcurrentSnapshots = 4;
     [SerializeField] private bool adaptiveBurstCount = true;
-    [SerializeField, Min(1)] private int minAdaptiveImageCount = 3;
+    [SerializeField, Min(1)] private int minAdaptiveImageCount = 2;
     [SerializeField, Min(15f)] private float adaptiveFpsThreshold = 60f;
-    [SerializeField, Min(10f)] private float criticalAdaptiveFpsThreshold = 45f;
-    [SerializeField, Min(10f)] private float suspendBelowFpsThreshold = 30f;
-    [SerializeField, Min(1)] private int criticalAdaptiveImageCount = 1;
-    [SerializeField, Min(1)] private int criticalMaxSkinnedRenderers = 1;
-    [SerializeField, Min(1)] private int maxNormalSkinnedRenderers = 2;
-    [SerializeField, Min(1)] private int maxSkinnedBakesPerBurst = 6;
+    [SerializeField, Min(10f)] private float criticalAdaptiveFpsThreshold = 30f;
+    [SerializeField, Min(10f)] private float suspendBelowFpsThreshold = 15f;
+    [SerializeField, Min(1)] private int criticalAdaptiveImageCount = 2;
+    [SerializeField, Min(1)] private int criticalMaxSkinnedRenderers = 4;
+    [SerializeField, Min(1)] private int maxNormalSkinnedRenderers = 6;
+    [SerializeField, Min(1)] private int maxSkinnedBakesPerBurst = 12;
     [SerializeField, Min(0)] private int maxNormalStaticRenderers = 1;
     [SerializeField, Min(0)] private int maxAdaptiveStaticRenderers = 0;
     [SerializeField] private bool skipStaticSnapshotsWhenCritical = true;
-    [SerializeField, Range(0.35f, 1f)] private float criticalLifetimeScale = 0.55f;
-    [SerializeField, Range(1f, 2f)] private float criticalSpawnIntervalScale = 1.6f;
+    [SerializeField, Range(0.35f, 1f)] private float criticalLifetimeScale = 0.85f;
+    [SerializeField, Range(1f, 2f)] private float criticalSpawnIntervalScale = 1.3f;
 
     [Header("Look")]
+    [Tooltip("Chuon/DodgeGhost 머티리얼. 비우면 Resources/ChuonDodgeGhostMat → Shader.Find 순으로 찾고, 없으면 원본 머티리얼 틴트 방식으로 폴백.")]
+    [SerializeField] private Material ghostMaterial;
     [SerializeField] private Color afterImageTint = new Color(0.55f, 1f, 1f, 0.5f);
     [SerializeField, Range(0.5f, 2f)] private float colorBlend = 0.8f;
-    [SerializeField, Range(1f, 1.2f)] private float startScaleMultiplier = 1.01f;
-    [SerializeField, Range(1f, 1.3f)] private float endScaleMultiplier = 1.08f;
-    [SerializeField] private EaseTypes fadeEase = EaseTypes.EaseOutCubic;
+    [SerializeField, Range(1f, 1.2f)] private float startScaleMultiplier = 1f;
+    [SerializeField, Range(1f, 1.3f)] private float endScaleMultiplier = 1.03f;
+    [SerializeField] private EaseTypes fadeEase = EaseTypes.EaseInQuad;
 
     [Header("Trail")]
     [SerializeField] private bool arrangeAlongMovement = true;
-    [SerializeField, Min(0f)] private float trailLength = 2f;
-    [SerializeField, Range(0.05f, 1f)] private float tailAlphaMultiplier = 0.16f;
+    [SerializeField, Min(0f)] private float trailLength = 1.1f;
+    [SerializeField, Range(0.05f, 1f)] private float tailAlphaMultiplier = 0.5f;
     [SerializeField] private AnimationCurve trailDistribution = null;
-    [SerializeField, Min(0.005f)] private float continuousTrailSpawnIntervalRealtime = 0.055f;
+    [SerializeField, Min(0.005f)] private float continuousTrailSpawnIntervalRealtime = 0.06f;
     [SerializeField, Min(0f)] private float continuousTrailFallbackDurationRealtime = 0.35f;
     [SerializeField, Min(0f)] private float continuousTrailMinPlanarSpeed = 0.1f;
+    [Tooltip("연속 잔상끼리 최소 간격(m). 슬로모 중 같은 자리에 겹쳐 찍히는 것을 막는다.")]
+    [SerializeField, Min(0f)] private float continuousTrailMinSpacing = 0.3f;
 
     [Header("Render")]
     [SerializeField] private bool includeInactiveRenderers = false;
@@ -91,9 +97,24 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
     [SerializeField, Min(1)] private int maxPooledSnapshotRoots = 8;
 
     [Header("Recovery")]
-    [SerializeField, Min(10f)] private float recoveryTrimFpsThreshold = 50f;
-    [SerializeField, Min(1)] private int recoveryMaxSnapshots = 2;
-    [SerializeField, Range(0.2f, 1f)] private float recoveryLifetimeScale = 0.55f;
+    [SerializeField, Min(10f)] private float recoveryTrimFpsThreshold = 22f;
+    [SerializeField, Min(1)] private int recoveryMaxSnapshots = 3;
+    [SerializeField, Range(0.2f, 1f)] private float recoveryLifetimeScale = 0.8f;
+
+    const string GhostMaterialResource = "ChuonDodgeGhostMat";
+    const string GhostShaderName = "Chuon/DodgeGhost";
+    static readonly int FadeId = Shader.PropertyToID("_Fade");
+    static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    static readonly int ColorId = Shader.PropertyToID("_Color");
+    static Material s_ghostMaterialAsset;
+    static bool s_ghostMaterialAssetSearched;
+
+    Material _resolvedGhostMaterial;
+    Material _ownedGhostMaterial;
+    bool _ghostMaterialResolved;
+    readonly Dictionary<int, Material[]> _ghostMaterialArrays = new();
+    Vector3 _lastSpawnPivot;
+    bool _hasLastSpawnPivot;
 
     Transform _cachedVisualRoot;
     float _lastPlayRealtime = float.NegativeInfinity;
@@ -140,6 +161,10 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
         ClearRuntimeMaterialCache();
         ClearPooledMeshes();
         ClearSnapshotRootPool();
+        _ghostMaterialArrays.Clear();
+        if (_ownedGhostMaterial != null)
+            Destroy(_ownedGhostMaterial);
+        _ownedGhostMaterial = null;
     }
 
     void LateUpdate()
@@ -254,7 +279,8 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
         float smoothedFps = 1f / Mathf.Max(0.0001f, _smoothedRealtimeDelta);
         if (!force && adaptiveBurstCount && smoothedFps < suspendBelowFpsThreshold)
             return;
-        if (!force && _activeSnapshots.Count >= Mathf.Max(1, maxConcurrentSnapshots / 2))
+        // 상한에 닿으면 가장 오래된 잔상을 뚝 끊지 않고, 새 잔상을 건너뛴다.
+        if (!force && _activeSnapshots.Count >= Mathf.Max(1, maxConcurrentSnapshots))
             return;
 
         Transform visualRoot = GetVisualRoot();
@@ -263,6 +289,14 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
 
         if (!force && !ShouldEmitContinuousTrail())
             return;
+
+        if (!force && _hasLastSpawnPivot && continuousTrailMinSpacing > 0f)
+        {
+            Vector3 moved = visualRoot.position - _lastSpawnPivot;
+            moved.y = 0f;
+            if (moved.sqrMagnitude < continuousTrailMinSpacing * continuousTrailMinSpacing)
+                return;
+        }
 
         bool criticalMode = adaptiveBurstCount && smoothedFps < criticalAdaptiveFpsThreshold;
         SpawnSnapshot(visualRoot, 0, 1, smoothedFps, criticalMode);
@@ -362,9 +396,15 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
 
         PooledSnapshotRoot pooledRoot = AcquireSnapshotRoot();
         GameObject snapshotRoot = pooledRoot.Root;
-        snapshotRoot.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
-        snapshotRoot.transform.localScale = Vector3.one;
+        // 반복 17 버그 수정: 루트를 월드 원점(0,0,0)에 두고 1.01→1.08 로 스케일하던 탓에
+        // 잔상이 "월드 위치 × 8%" 만큼 원점 반대쪽으로 날아갔다 (로비 y=40 → 0.24s 동안 약 3m 상승 = '하늘로 솟구침').
+        // 피벗을 캐릭터 발밑에 두어 스케일이 제자리에서 일어나게 한다.
+        Vector3 pivot = visualRoot.position;
+        snapshotRoot.transform.SetPositionAndRotation(pivot, Quaternion.identity);
+        snapshotRoot.transform.localScale = Vector3.one * startScaleMultiplier;
         snapshotRoot.SetActive(true);
+        _lastSpawnPivot = pivot;
+        _hasLastSpawnPivot = true;
 
         List<Mesh> spawnedMeshes = AcquireMeshList();
         List<MaterialState> materialStates = AcquireMaterialStateList();
@@ -438,6 +478,10 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
             _skinnedRenderers.Add(skinned[i]);
         }
 
+        // 렌더러 상한이 있을 때 몸통 등 큰 파츠부터 굽도록 정점 수 내림차순 정렬
+        // (이전엔 계층 순서 첫 1~2개만 구워져 머리카락 조각 같은 잔상만 남았다)
+        _skinnedRenderers.Sort(CompareByVertexCountDescending);
+
         MeshRenderer[] meshes = visualRoot.GetComponentsInChildren<MeshRenderer>(includeInactiveRenderers);
         for (int i = 0; i < meshes.Length; i++)
         {
@@ -455,6 +499,9 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
         }
     }
 
+    static readonly System.Comparison<SkinnedMeshRenderer> CompareByVertexCountDescending =
+        (a, b) => (b.sharedMesh != null ? b.sharedMesh.vertexCount : 0).CompareTo(a.sharedMesh != null ? a.sharedMesh.vertexCount : 0);
+
     void CreateSkinnedSnapshot(
         SkinnedMeshRenderer source,
         PooledSnapshotRoot pooledRoot,
@@ -469,12 +516,14 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
 
         Mesh bakedMesh = AcquireBakedMesh();
         bakedMesh.Clear(false);
-        source.BakeMesh(bakedMesh, true);
+        // useScale=false: 정점은 렌더러 로컬(무스케일) → 노드에 lossyScale 을 한 번만 적용.
+        // (이전엔 true + lossyScale 이라 스케일 1.05 파츠가 1.1배로 이중 적용됨. 성장 배율은 루트가 담당)
+        source.BakeMesh(bakedMesh, false);
         spawnedMeshes.Add(bakedMesh);
 
         PooledSnapshotNode node = AcquireSnapshotNode(pooledRoot, usedNodeCount++, SnapshotNodeName);
         node.Transform.SetPositionAndRotation(source.transform.position, source.transform.rotation);
-        node.Transform.localScale = Vector3.Scale(source.transform.lossyScale, Vector3.one * startScaleMultiplier);
+        node.Transform.localScale = source.transform.lossyScale;
 
         MeshFilter filter = node.Filter;
         filter.sharedMesh = bakedMesh;
@@ -499,7 +548,7 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
 
         PooledSnapshotNode node = AcquireSnapshotNode(pooledRoot, usedNodeCount++, SnapshotNodeName);
         node.Transform.SetPositionAndRotation(source.transform.position, source.transform.rotation);
-        node.Transform.localScale = Vector3.Scale(source.transform.lossyScale, Vector3.one * startScaleMultiplier);
+        node.Transform.localScale = source.transform.lossyScale;
 
         MeshFilter filter = node.Filter;
         filter.sharedMesh = sourceFilter.sharedMesh;
@@ -672,6 +721,21 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
 
         Material[] sourceMaterials = sourceRenderer != null ? sourceRenderer.sharedMaterials : null;
         int materialCount = sourceMaterials != null && sourceMaterials.Length > 0 ? sourceMaterials.Length : 1;
+
+        // 전용 잔상 셰이더(공유 머티리얼 1개, 서브메시 수만큼 같은 머티리얼 배열). 페이드는 MPB 의 _Fade.
+        Material ghost = ResolveGhostMaterial();
+        if (ghost != null)
+        {
+            RuntimeMaterialSet ghostSet = new RuntimeMaterialSet
+            {
+                Materials = GetGhostMaterialArray(ghost, materialCount),
+                BaseColor = Color.white
+            };
+            if (sourceRenderer != null)
+                _runtimeMaterialSets[sourceRenderer] = ghostSet;
+            return ghostSet;
+        }
+
         Material[] runtimeMaterials = new Material[materialCount];
 
         Color baseColor = afterImageTint;
@@ -705,6 +769,47 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
             _runtimeMaterialSets[sourceRenderer] = materialSet;
 
         return materialSet;
+    }
+
+    Material ResolveGhostMaterial()
+    {
+        if (_ghostMaterialResolved)
+            return _resolvedGhostMaterial;
+
+        _ghostMaterialResolved = true;
+        if (ghostMaterial != null)
+            return _resolvedGhostMaterial = ghostMaterial;
+
+        if (!s_ghostMaterialAssetSearched)
+        {
+            s_ghostMaterialAssetSearched = true;
+            s_ghostMaterialAsset = Resources.Load<Material>(GhostMaterialResource);
+        }
+
+        if (s_ghostMaterialAsset != null)
+            return _resolvedGhostMaterial = s_ghostMaterialAsset;
+
+        Shader shader = Shader.Find(GhostShaderName);
+        if (shader != null && shader.isSupported)
+        {
+            _ownedGhostMaterial = new Material(shader) { name = "ChuonDodgeGhost (runtime)" };
+            return _resolvedGhostMaterial = _ownedGhostMaterial;
+        }
+
+        return _resolvedGhostMaterial = null;
+    }
+
+    Material[] GetGhostMaterialArray(Material ghost, int count)
+    {
+        count = Mathf.Max(1, count);
+        if (_ghostMaterialArrays.TryGetValue(count, out Material[] cached))
+            return cached;
+
+        Material[] array = new Material[count];
+        for (int i = 0; i < count; i++)
+            array[i] = ghost;
+        _ghostMaterialArrays[count] = array;
+        return array;
     }
 
     void ClearRuntimeMaterialCache()
@@ -765,8 +870,9 @@ public class PerfectDodgeAfterImageEffect : MonoBehaviour
             return;
 
         block.Clear();
-        block.SetColor("_BaseColor", color);
-        block.SetColor("_Color", color);
+        block.SetColor(BaseColorId, color);
+        block.SetColor(ColorId, color);
+        block.SetFloat(FadeId, color.a);
         renderer.SetPropertyBlock(block);
     }
 

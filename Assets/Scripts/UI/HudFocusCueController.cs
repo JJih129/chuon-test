@@ -11,7 +11,7 @@ public sealed class HudFocusCueController : MonoBehaviour
 
     [SerializeField, Range(0f, 1f)] private float dimAlpha = 0.58f;
     [SerializeField] private Color dimColor = new Color(0f, 0f, 0f, 0.58f);
-    [SerializeField] private Color focusColor = new Color(0.15f, 0.92f, 1f, 0.95f);
+    [SerializeField] private Color focusColor = new Color(0.94f, 0.95f, 0.97f, 0.95f); // 반복 16: 시안 → 세라믹 화이트
     [SerializeField, Min(0f)] private float padding = 18f;
     [SerializeField, Min(0f)] private float borderThickness = 5f;
     [SerializeField, Min(0.01f)] private float pulseSpeed = 4.8f;

@@ -237,9 +237,11 @@ public class PerfectDodgeController : MonoBehaviour
         if (autoAfterImage && afterImageEffect)
         {
             afterImageEffect.Play();
+            // RemainingDodgeTime 은 스케일드 시간인데 잔상 트레일은 언스케일드로 돈다.
+            // 정지/슬로모 동안 실제로 옆걸음이 진행되므로 그 구간만큼 늘려 준다 (간격·상한은 잔상 쪽이 제어).
             float trailDuration = dodgeController != null
-                ? Mathf.Max(0.12f, dodgeController.RemainingDodgeTime)
-                : 0.18f;
+                ? Mathf.Max(0.12f, dodgeController.RemainingDodgeTime) + Mathf.Max(0f, initialFreezeDuration) + slowDuration * 0.5f
+                : 0.35f;
             afterImageEffect.StartContinuousTrail(trailDuration);
         }
 

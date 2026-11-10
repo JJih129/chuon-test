@@ -1028,7 +1028,7 @@ public class MainSceneArrivalController : MonoBehaviour
         rect.offsetMax = offsetMax;
 
         Text text = textObject.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.font = RuntimeBuiltInFontUtility.GetDefaultFont(); // 반복 16 (E8): Noto Sans KR Medium
         text.fontSize = fontSize;
         text.fontStyle = style;
         text.alignment = anchor;

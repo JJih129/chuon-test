@@ -13,10 +13,10 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
 
     static readonly Color OverlayColor = new Color(0.01f, 0.02f, 0.05f, 0.92f);
     static readonly Color FrameColor = new Color(0.04f, 0.06f, 0.11f, 0.97f);
-    static readonly Color FrameLineColor = new Color(0.18f, 0.92f, 1f, 0.80f);
+    static readonly Color FrameLineColor = new Color(0.878f, 0.188f, 0.227f, 0.80f); // 반복 16: 시안 → 츠카사 레드
     static readonly Color AccentColor = new Color(1f, 0.74f, 0.34f, 0.98f);
     static readonly Color TextColor = new Color(0.95f, 0.98f, 1f, 0.98f);
-    static readonly Color MutedTextColor = new Color(0.72f, 0.84f, 0.92f, 0.94f);
+    static readonly Color MutedTextColor = new Color(0.80f, 0.82f, 0.86f, 0.94f);
     static readonly Color CardColor = new Color(0.06f, 0.10f, 0.16f, 0.95f);
 
     CanvasGroup _canvasGroup;
@@ -373,7 +373,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         {
             Text placeholder = CreateText("Placeholder", card, 16, FontStyle.Bold, TextAnchor.MiddleCenter);
             placeholder.text = "\uC0AC\uC9C4";
-            placeholder.color = new Color(0.38f, 0.78f, 0.92f, 0.88f);
+            placeholder.color = new Color(0.80f, 0.82f, 0.86f, 0.88f);
             placeholder.rectTransform.anchorMin = new Vector2(0.06f, 0.16f);
             placeholder.rectTransform.anchorMax = new Vector2(0.94f, 0.90f);
             placeholder.rectTransform.offsetMin = Vector2.zero;

@@ -56,6 +56,9 @@ public sealed class UltimateCinematicController : MonoBehaviour
     [SerializeField] private float slashStormMediumHeight = 1.6f;
     [SerializeField] private float slashStormMediumLookHeight = 1.15f;
 
+    // 반복 17: 나이트브링어 피니시 — UltimatePhaseSeveringBeats 가 타임라인을 인트로 포즈에 붙잡고 카메라/플레이어를 직접 연출.
+    // 어둠 비트에서 대상이 림 라이트를 받아야 하므로 인트로 동안 대상을 숨기지 않는다 (Play 에서 HideTargetForIntroIfNeeded 생략).
+
     [Header("Storyboard Frame Offsets")]
     [SerializeField] private Vector3 playerStartOffset = new Vector3(0f, 0f, -2.4f);
     [SerializeField] private Vector3 playerStrikeOffset = new Vector3(0f, 0f, -0.45f);
@@ -272,7 +275,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         BuildStoryboardFrame();
         DisableTimelineRootMotion();
         RefreshCinematicFrameAnchors();
-        HideTargetForIntroIfNeeded();
+        // 반복 17: 대상은 숨기지 않는다 (어둠 비트의 림 라이트 대상). HideTargetForIntroIfNeeded 는 이전 경로용으로 남김.
         enemyCinematicState?.EnterCinematicState(_boundTarget);
         hitProcessor.BeginSequence(_boundTarget, data);
         vfxPresenter.BeginSequence(data, targetBinder, null);
@@ -371,7 +374,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
     public void OnDrawSlashRelease()
     {
-        if (_data == null)
+        if (_data == null || NbSuppressStorm)
             return;
 
         Vector3 lookTarget = GetTargetLookPoint();
@@ -388,6 +391,8 @@ public sealed class UltimateCinematicController : MonoBehaviour
     public void OnSlashStormStart()
     {
         RefreshCinematicFrameAnchors();
+        if (NbSuppressStorm)
+            return;
         PrepositionPlayerForStormFinish();
         RefreshTargetAnchor();
         StartSlashStormCameraOrbit();
@@ -397,11 +402,15 @@ public sealed class UltimateCinematicController : MonoBehaviour
     {
         RestoreTargetIntroVisibility();
         RefreshCinematicFrameAnchors();
+        if (NbSuppressStorm)
+            return;
         slashStormVfx?.BeginStorm(_data, targetBinder);
     }
 
     public void OnHidePlayerForStorm()
     {
+        if (NbSuppressStorm)
+            return;
         SetPlayerPresentationState(false, true);
     }
 
@@ -429,7 +438,8 @@ public sealed class UltimateCinematicController : MonoBehaviour
         Vector3 walkDirection = endPosition - startPosition;
         if (walkDirection.sqrMagnitude <= 0.0001f)
             walkDirection = targetBinder.HasCinematicFrame ? targetBinder.CinematicFrame.Forward : targetBinder.PlayerRoot.forward;
-        slashStormVfx?.PlayDrawRelease(startPosition, startPosition + walkDirection.normalized * 2f);
+        if (!NbSuppressStorm)
+            slashStormVfx?.PlayDrawRelease(startPosition, startPosition + walkDirection.normalized * 2f);
         vfxPresenter?.PlayWalkout(startPosition, walkDirection);
         PlayFinalExplosionOnce();
         _walkoutRoutine = StartCoroutine(CoWalkoutAndFinish(startPosition, endPosition, Mathf.Max(0.01f, _data.Timings.walkoutDuration)));
@@ -1347,6 +1357,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
         if (_beats != null)
             _beats.End();
+        NbReleaseCamera();
 
         if (_walkoutRoutine != null)
         {
@@ -1419,6 +1430,131 @@ public sealed class UltimateCinematicController : MonoBehaviour
 
     }
 
+    // ------------------------------------------------------------------ 반복 17: 나이트브링어 피니시 지원 (UltimatePhaseSeveringBeats 전용)
+    // 해방 때 타임라인을 워크아웃 직전으로 넘기면 지나친 슬래시 스톰 신호가 몰아서 발사될 수 있으므로, 비트가 도는 동안은
+    // 플레이어 숨김·스톰 VFX·스톰 마무리 위치 이동·드로우 릴리스 이동을 무시한다 (피해/폭발/워크아웃 신호는 그대로).
+    bool NbSuppressStorm => _beats != null && _beats.IsActive;
+
+    struct NbLensCache
+    {
+        public CinemachineCamera Camera;
+        public LensSettings Lens;
+    }
+
+    readonly System.Collections.Generic.List<NbLensCache> _nbLens = new System.Collections.Generic.List<NbLensCache>(6);
+    bool _nbCamActive;
+    Vector3 _nbCamPos;
+    Vector3 _nbCamLook;
+    float _nbFov = 40f;
+    float _nbDutch;
+
+    public Transform NbPlayerRoot => targetBinder != null ? targetBinder.PlayerRoot : bindings != null ? bindings.PlayerRoot : null;
+    public Transform NbTargetRoot => _boundTarget != null && _boundTarget.TargetRoot != null ? _boundTarget.TargetRoot : bindings != null ? bindings.TargetRoot : null;
+    public Vector3 NbTargetCenter => GetTargetLookPoint();
+    public Vector3 NbFinishPoint => ComputeStormFinishPosition();
+    public Transform NbSwordFocus => _owner != null ? _owner.GetUltimateSwordFocusTransform() : null;
+
+    public Vector3 NbForward
+    {
+        get
+        {
+            Vector3 forward = targetBinder != null && targetBinder.HasCinematicFrame
+                ? targetBinder.CinematicFrame.Forward
+                : GetTargetLookPoint() - (NbPlayerRoot != null ? NbPlayerRoot.position : transform.position);
+            forward.y = 0f;
+            return forward.sqrMagnitude > 0.0001f ? forward.normalized : Vector3.forward;
+        }
+    }
+
+    public void NbPlacePlayer(Vector3 position, Vector3 lookTarget)
+    {
+        targetBinder?.SnapPlayerTo(position, lookTarget);
+    }
+
+    /// <summary>워크아웃이 추온을 다시 옮기지 않도록 마지막 베기 착지점을 마무리 위치로 기록.</summary>
+    public void NbMarkFinish(Vector3 position)
+    {
+        _stormFinishPosition = position;
+        _stormFinishPrepositioned = true;
+    }
+
+    /// <summary>모든 샷 앵커(01~05)와 시퀀스 카메라 렌즈를 덮어쓴다 → 타임라인이 어느 vcam 을 잡든 이 구도. cut=true 면 하드 컷.</summary>
+    public void NbSetCamera(Vector3 position, Vector3 lookAt, float fov, float dutch, bool cut)
+    {
+        if (!_nbCamActive)
+        {
+            _nbLens.Clear();
+            var cameras = cameraSession != null ? cameraSession.SequenceCameras : null;
+            if (cameras != null)
+            {
+                for (int i = 0; i < cameras.Length; i++)
+                {
+                    if (cameras[i] is CinemachineCamera cm && cm != null)
+                        _nbLens.Add(new NbLensCache { Camera = cm, Lens = cm.Lens });
+                }
+            }
+        }
+
+        _nbCamActive = true;
+        _nbCamPos = position;
+        _nbCamLook = lookAt;
+        _nbFov = fov;
+        _nbDutch = dutch;
+        ApplyNbCamera(cut);
+    }
+
+    public void NbReleaseCamera()
+    {
+        if (!_nbCamActive)
+            return;
+        _nbCamActive = false;
+        for (int i = 0; i < _nbLens.Count; i++)
+        {
+            if (_nbLens[i].Camera != null)
+                _nbLens[i].Camera.Lens = _nbLens[i].Lens;
+        }
+        _nbLens.Clear();
+        RefreshCinematicFrameAnchors();
+    }
+
+    void LateUpdate()
+    {
+        // 신호가 앵커를 다시 잡아도 브레인 갱신 전에 덮어쓴다
+        if (_nbCamActive)
+            ApplyNbCamera(false);
+    }
+
+    void ApplyNbCamera(bool cut)
+    {
+        if (bindings == null)
+            return;
+        SetNbAnchor(bindings.Shot01Pos, bindings.Shot01LookAt);
+        SetNbAnchor(bindings.Shot02Pos, bindings.Shot02LookAt);
+        SetNbAnchor(bindings.Shot03Pos, bindings.Shot03LookAt);
+        SetNbAnchor(bindings.Shot04Pos, bindings.Shot04LookAt);
+        SetNbAnchor(bindings.Shot05Pos, bindings.Shot05LookAt);
+        for (int i = 0; i < _nbLens.Count; i++)
+        {
+            CinemachineCamera cm = _nbLens[i].Camera;
+            if (cm == null)
+                continue;
+            LensSettings lens = cm.Lens;
+            lens.FieldOfView = _nbFov;
+            lens.Dutch = _nbDutch;
+            cm.Lens = lens;
+            if (cut)
+                cm.PreviousStateIsValid = false;
+        }
+    }
+
+    void SetNbAnchor(Transform pos, Transform look)
+    {
+        if (pos != null)
+            pos.position = _nbCamPos;
+        if (look != null)
+            look.position = _nbCamLook;
+    }
+
     float BeatPlaybackSpeed => _beats != null ? _beats.PlaybackSpeed : 1f;
 
     /// <summary>QA/외부: 진행 중인 궁극기 연출 건너뛰기.</summary>
@@ -1446,7 +1582,7 @@ public sealed class UltimateCinematicController : MonoBehaviour
         if (focus == null && bindings != null)
             focus = bindings.PlayerRoot;
         Transform impact = bindings != null ? (bindings.TargetCenter != null ? bindings.TargetCenter : bindings.TargetRoot) : null;
-        _beats.Begin(playableDirector, _owner, focus, impact, _beatKeepSubjects);
+        _beats.Begin(playableDirector, _owner, focus, impact, _beatKeepSubjects, this);
     }
 
     UltimateCinematicHudFrame EnsureHudFrame()

@@ -92,7 +92,7 @@ public sealed class QaCombatBot : MonoBehaviour
     public int VentEvades { get; private set; }
 
     Transform _nodeTarget, _skipNode;
-    float _nodeTargetSince, _skipNodeUntil;
+    float _nodeTargetSince, _skipNodeUntil, _nodeTargetDist;
 
     Transform ResolveOverhaulNodeTarget()
     {
@@ -102,6 +102,14 @@ public sealed class QaCombatBot : MonoBehaviour
         // 같은 노드에 8 s 이상 못 닿으면(막힘) 다른 노드로 바꾼다
         if (_nodeTarget != null && (_nodeTarget.GetComponent<BossPowerNode>()?.IsDead ?? true))
             _nodeTarget = null;
+        // 반복 17: 방어하느라 늦게 가는 것은 '막힘'이 아니다 — 8 s 동안 1 m 이상 가까워졌으면 같은 노드를 유지
+        // (예전에는 시간만 보고 바꿔서 18 m 떨어진 노드 사이를 왕복하다 봉쇄 단계를 못 넘었다)
+        if (_nodeTarget != null && Time.time - _nodeTargetSince > 8f && (_nodeTarget.position - _player.position).sqrMagnitude > 9f
+            && Vector3.Distance(_nodeTarget.position, _player.position) < _nodeTargetDist - 1f)
+        {
+            _nodeTargetSince = Time.time;
+            _nodeTargetDist = Vector3.Distance(_nodeTarget.position, _player.position);
+        }
         if (_nodeTarget != null && Time.time - _nodeTargetSince > 8f && (_nodeTarget.position - _player.position).sqrMagnitude > 9f)
         {
             _skipNode = _nodeTarget;
@@ -124,6 +132,7 @@ public sealed class QaCombatBot : MonoBehaviour
         {
             _nodeTarget = best;
             _nodeTargetSince = Time.time;
+            _nodeTargetDist = Mathf.Sqrt(bestD);
             Note("node target " + best.position.ToString("F1"));
         }
         return best;
@@ -896,6 +905,13 @@ public sealed class QaCombatBot : MonoBehaviour
         }
 
         float dist = Vector3.Distance(_player.position, target.position);
+        // 반복 17: 전원 노드는 바닥 위 1.25 m 콘솔 — 3D 거리로는 콜라이더에 붙어도 사거리 밖이라 공격을 안 하고 맴돌았다
+        if (target == _nodeTarget)
+        {
+            Vector3 flat = target.position - _player.position;
+            flat.y = 0f;
+            dist = flat.magnitude;
+        }
         bool defensePending = _scheduled.Count > 0;
         bool inHit = _combat != null && _combat.IsInHit;
 

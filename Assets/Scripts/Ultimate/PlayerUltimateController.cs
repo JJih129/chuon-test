@@ -325,6 +325,8 @@ public class PlayerUltimateController : MonoBehaviour
     {
         if (prewarmPresentationClones && !_presentationPrewarmRunning)
             StartCoroutine(Co_PrewarmPresentationClones());
+        // 반복 17: 나이트브링어 피니시 정령/절단선 재질 예열 (첫 발동 히치 방지)
+        StartCoroutine(UltimatePhaseSeveringBeats.CoPrewarmAssets());
     }
 
     // 로딩 직후 몇 프레임 뒤: 비활성 사본 생성 → 1프레임 동안 원본과 같은 자세로 렌더(GPU 리소스/Awake 소진) → 풀로 복귀.
@@ -382,6 +384,9 @@ public class PlayerUltimateController : MonoBehaviour
     {
         if (prewarmPresentationClones && isActiveAndEnabled && !_presentationPrewarmRunning)
             StartCoroutine(Co_PrewarmPresentationClones());
+        // 반복 17: 하층 도착 암전 중 (보스 아레나 카메라 기준) 한 번 더 예열
+        if (isActiveAndEnabled)
+            StartCoroutine(UltimatePhaseSeveringBeats.CoPrewarmAssets());
     }
 
     void Update()

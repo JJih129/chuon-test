@@ -98,6 +98,8 @@ public sealed class ExecutionPromptHUD : MonoBehaviour
     {
         if (s_font != null)
             return s_font;
+        if (ChuonUiFonts.Tmp != null) // 반복 16 (E8): Noto Sans KR Medium
+            return s_font = ChuonUiFonts.Tmp;
         TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
         for (int i = 0; i < texts.Length; i++)
         {

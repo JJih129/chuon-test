@@ -1,5 +1,5 @@
 // 처형 연출 카메라 옵션 (PlayerPrefs). 옵션 화면 연결은 OptionsManagerAdvanced 쪽 1~3줄 훅 (iterX/hook.patch 참고).
-//  - opt_exec_cam      (1 = 켬, 기본) : 끄면 처형 때 기존 카메라 (보스는 ExecutionCameraShot, 잡몹은 게임플레이 카메라 그대로)
+//  - opt_exec_cam      (1 = 켬, 기본) : 끄면 처형 때 게임플레이 카메라 그대로 (처형 카메라는 ExecutionCamChoreographer 하나뿐)
 //  - opt_reduce_motion (0 = 끔, 기본) : 켜면 궤도·휩·더치·FOV 펀치·흔들림·추가 슬로모 없이 고정 투샷 1개
 // 흔들림은 CameraShake.GlobalStrength(옵션 '카메라 흔들림'), 흑백/섬광은 ActionColourDirector 가 접근성 슬라이더로 제한한다.
 using UnityEngine;

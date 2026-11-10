@@ -12,7 +12,7 @@ public class TitleSceneReturnBannerController : MonoBehaviour
     [SerializeField] private Vector2 panelSize = new Vector2(420f, 82f);
     [SerializeField] private Vector2 panelAnchoredPosition = new Vector2(0f, -108f);
     [SerializeField] private Color panelColor = new Color(0.03f, 0.08f, 0.12f, 0.82f);
-    [SerializeField] private Color accentColor = new Color(0.52f, 0.96f, 1f, 0.95f);
+    [SerializeField] private Color accentColor = new Color(0.878f, 0.188f, 0.227f, 0.95f); // 반복 16: 시안 → 츠카사 레드
     [SerializeField] private Color textColor = new Color(0.92f, 0.98f, 1f, 0.98f);
 
     [Header("Timing")]

@@ -7,10 +7,10 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public sealed class IntroDialoguePresenter : MonoBehaviour
 {
-    // 화자별 이름 색 (EGO 시안 / 추온 흰색 / 시스템·Type-D 레드 / 츠카사 레드)
-    static readonly Color EgoColor = new Color(0f, 0.85f, 1f, 1f);
-    static readonly Color ChuOnColor = new Color(0.96f, 0.96f, 1f, 1f);
-    static readonly Color HostileColor = new Color(1f, 0.28f, 0.22f, 1f);
+    // 화자별 이름 색 (반복 16 E7: EGO 시안 → 스틸 화이트 / 추온 세라믹 화이트 / 시스템·Type-D·츠카사 텍스트용 레드). 공용 팔레트 = ChuonUiPalette
+    static readonly Color EgoColor = ChuonUiPalette.EgoSteel;
+    static readonly Color ChuOnColor = ChuonUiPalette.CeramicWhite;
+    static readonly Color HostileColor = ChuonUiPalette.TsukasaRedText;
 
     /// <summary>현재 대사/bark 가 화면에 떠 있는가 (bark 중복 방지용).</summary>
     public static bool AnyVisible { get; private set; }
@@ -22,7 +22,7 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
 
     [SerializeField] Vector2 anchor = new Vector2(0.5f, 0.18f);
     [SerializeField] Vector2 size = new Vector2(920f, 112f);
-    [SerializeField] Color speakerColor = new Color(0f, 0.85f, 1f, 1f);
+    [SerializeField] Color speakerColor = new Color(0.68f, 0.79f, 0.90f, 1f);
     [SerializeField] Color textColor = Color.white;
     [SerializeField, Min(0f)] float typingSpeed = 0.018f;
     [SerializeField] Color backgroundColor = new Color(0f, 0f, 0f, 0.55f);
@@ -34,9 +34,10 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
     // 반복 16 (플레이어 리뷰 #6): 조작 중 오버레이 줄(전투 bark, 리빌 뒤 남은 인트로 대사)은 화면 하단 중앙(캐릭터 하체·보스와 겹침)
     // 대신 오른쪽 아래 '통신 패널' 안전 영역에 작게 띄운다. 블로킹 대사(CoShow)와 연출 자막(cinematicHost)은 기존 하단 중앙 그대로.
     enum Layout : byte { None, Standard, Comms }
-    const int CommsSpeakerFontSize = 17;
-    const int CommsContentFontSize = 22;
-    static readonly Vector2 CommsSize = new Vector2(600f, 74f);
+    // 반복 16 (가독성): 17/22 → 20/24, 패널 600x74 → 640x84 (1080p 기준)
+    const int CommsSpeakerFontSize = 20;
+    const int CommsContentFontSize = 24;
+    static readonly Vector2 CommsSize = new Vector2(640f, 84f);
     static readonly Vector2 CommsMargin = new Vector2(48f, 44f);
     static readonly Color CommsBackground = new Color(0.035f, 0.035f, 0.045f, 0.7f);
     static readonly Color CommsAccent = new Color(1f, 0.16f, 0.12f, 0.95f);
@@ -435,7 +436,7 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
         rect.offsetMax = Vector2.zero;
 
         Text text = textObject.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.font = RuntimeBuiltInFontUtility.GetDefaultFont(); // 반복 16 (E8): Arial+OS 대체 → Noto Sans KR Medium
         text.fontSize = fontSize;
         text.fontStyle = style;
         text.alignment = alignment;

@@ -46,13 +46,13 @@ public class MainSceneObjectivePanelController : MonoBehaviour
 
     [Header("Colors")]
     [SerializeField] private Color panelColor = new Color(0.03f, 0.07f, 0.10f, 0.84f);
-    [SerializeField] private Color phaseOneColor = new Color(0.24f, 0.84f, 1f, 0.96f);
+    [SerializeField] private Color phaseOneColor = new Color(0.94f, 0.95f, 0.97f, 0.96f); // 반복 16: 시안 → 세라믹 화이트
     [SerializeField] private Color phaseTwoColor = new Color(1f, 0.74f, 0.30f, 0.98f);
     [SerializeField] private Color phaseThreeColor = new Color(1f, 0.34f, 0.34f, 0.98f);
     [SerializeField] private Color breakColor = new Color(0.86f, 1f, 0.42f, 0.98f);
     [SerializeField] private Color finishColor = new Color(0.92f, 0.48f, 1f, 0.98f);
     [SerializeField] private Color clearColor = new Color(0.74f, 1f, 0.84f, 0.98f);
-    [SerializeField] private Color bodyTextColor = new Color(0.90f, 0.97f, 1f, 0.96f);
+    [SerializeField] private Color bodyTextColor = new Color(0.94f, 0.95f, 0.97f, 0.96f);
     [SerializeField] private Color pendingNodeColor = new Color(0.26f, 0.34f, 0.42f, 0.58f);
     [SerializeField] private Color pendingLinkColor = new Color(0.18f, 0.26f, 0.34f, 0.24f);
 

@@ -98,6 +98,26 @@ public static class ScreenCut
         };
     }
 
+    /// <summary>
+    /// 궁극기 나이트브링어 피니시 (반복 17): 걸린 절단선이 동시에 터진 정지 프레임을 대상 몸통을 지나는 한 줄 대각선으로 가른다
+    /// → 짧은 정적 → 두 조각 (약 0.77 s). 효과음은 비트 구동기(UltimatePhaseSeveringBeats)가 폭발과 함께 낸다.
+    /// </summary>
+    public static ScreenCutPattern NightbringerPattern(Vector2 impact)
+    {
+        return new ScreenCutPattern
+        {
+            Count = 1,
+            A = new ScreenCutLine { Through = impact + new Vector2(0f, 0.02f), AngleDeg = -33f, Start = 0f, Duration = 0.085f, Slide = 0.11f, Push = 0.03f, RotationDeg = 0.8f },
+            Hold = 0.18f,
+            SplitDuration = 0.5f,
+            Dim = 0.18f,
+            SpeedLines = 0.5f,
+            Streak = 1f,
+            GapFlash = 1f,
+            Sfx = false
+        };
+    }
+
     public static ScreenCutPattern TransitionPattern(Vector2 through)
     {
         return new ScreenCutPattern

@@ -444,7 +444,22 @@ public sealed class QaCommandLine : MonoBehaviour
         }
         CameraMetricsSampler.Begin(_scene + (SoulsCameraRig.Active != null ? " (souls rig)" : " (legacy cam)"));
 
-        yield return new WaitForSecondsRealtime(Mathf.Max(1f, _duration));
+        // 보스 처치 후 엔딩 연출(첫 프레임 히치 측정용)까지 본 뒤 조기 종료 — 고정 duration 대기 시간 절약
+        float waitEnd = Time.realtimeSinceStartup + Mathf.Max(1f, _duration);
+        float bossDeadSeenAt = -1f;
+        while (Time.realtimeSinceStartup < waitEnd)
+        {
+            if (bot != null && !_tutorialRun && bot.BossDeadAt >= 0f && bossDeadSeenAt < 0f)
+                bossDeadSeenAt = Time.realtimeSinceStartup;
+            bool endingDone = CinematicDirector.LastFinishedId == "ending_tsukasa" && CinematicDirector.LastFinishedAt >= bossDeadSeenAt;
+            if (bossDeadSeenAt > 0f && !CinematicDirector.IsPlaying
+                && ((endingDone && Time.realtimeSinceStartup - CinematicDirector.LastFinishedAt > 3f) || Time.realtimeSinceStartup - bossDeadSeenAt > 60f))
+            {
+                Debug.Log($"[QA] early end: boss dead {Time.realtimeSinceStartup - bossDeadSeenAt:F0}s ago, ending done={endingDone}");
+                break;
+            }
+            yield return null;
+        }
 
         Debug.Log("[QA] frame report:\n" + QaFrameSampler.Report());
         if (CameraMetricsSampler.Instance != null)

@@ -322,8 +322,9 @@ public sealed class ExecutionDirector : MonoBehaviour
         bool absorb = kind != ExecutionKind.Takedown && kind != ExecutionKind.Mob;
         if (absorb)
             ActionColourDirector.BeginAbsorb(this, focus, kind == ExecutionKind.BossFinal ? 0.6f : 0.35f, _keep);
-        if (bossKind)
-            ExecutionCameraShot.Begin(this, kind, player, victim, focus, tm.duration);
+        // 처형 전용 카메라 연출 (모든 처형 종류, 단일 시스템). 옵션 끔/컷신 중이면 false → 게임플레이 카메라 유지.
+        // 타격 순간은 Struck 이벤트로, 종료/중단은 Stop(this) 로 넘긴다. 복귀는 SoulsCameraRig 0.35 s 블렌드.
+        ExecutionCamChoreographer.Play(this, kind, player, victim, focus, tm.strike, tm.duration, tm.slowScale, tm.slowRealtime);
 
         switch (kind)
         {
@@ -345,22 +346,19 @@ public sealed class ExecutionDirector : MonoBehaviour
                 struck = true;
                 Strike(kind, tm, oh, brain, victim, focus, assets);
             }
-            if (bossKind && oh.Boss == null)
+            if (bossKind ? oh.Boss == null : brain == null)
                 break;
             t += Time.deltaTime;
             yield return null;
         }
-        if (!struck)
+        if (!struck && (bossKind ? oh != null && oh.Boss != null : brain != null))
             Strike(kind, tm, oh, brain, victim, focus, assets);
 
         if (absorb)
             ActionColourDirector.EndAbsorb(this, kind == ExecutionKind.BossFinal ? 0.25f : 0.45f);
-        if (bossKind)
-        {
-            ExecutionCameraShot.End(this);
-            if (oh != null)
-                oh.EndExecution(kind, this);
-        }
+        ExecutionCamChoreographer.Stop(this);
+        if (bossKind && oh != null)
+            oh.EndExecution(kind, this);
         CrossFadePlayer("Locomotion", 0.2f);
         Finished?.Invoke(kind, victim);
         Cleanup();
@@ -473,6 +471,7 @@ public sealed class ExecutionDirector : MonoBehaviour
 
     void Cleanup()
     {
+        ExecutionCamChoreographer.Stop(this);
         if (_slowRequested)
         {
             GameTimeScale.Release(this);

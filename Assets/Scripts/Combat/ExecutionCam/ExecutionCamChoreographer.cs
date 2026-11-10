@@ -1,10 +1,10 @@
 // 처형 전용 카메라 연출기. "카메라는 플레이어를 놀라게 하지 않는다"(Docs/CameraDesign_Soulslike.md)는 게임플레이 규칙이고,
 // 처형 1.2~3.8 s 동안만 짧은 샷 리스트(스냅 줌 → 저각 궤도 돌리 → 타격 슬로모 푸시 인 → 임팩트 프레임 → 등 뒤 복귀)를 재생한다.
 //
-// 연결 (ExecutionDirector 2~3줄, iterX/hook.patch):
-//   bool choreo = ExecutionCamChoreographer.Play(this, kind, player, victim, focus, tm.strike, tm.duration, tm.slowScale, tm.slowRealtime);
-//   if (bossKind && !choreo) ExecutionCameraShot.Begin(...);     // 옵션 끔 / 연출 중이면 기존 카메라
-//   Cleanup(): ExecutionCamChoreographer.Stop(this);
+// 연결 (ExecutionDirector.Co_Run / Cleanup):
+//   ExecutionCamChoreographer.Play(this, kind, player, victim, focus, tm.strike, tm.duration, tm.slowScale, tm.slowRealtime);
+//   종료·Cleanup(): ExecutionCamChoreographer.Stop(this);
+// 중단: 대상/플레이어 소실, 플레이어 사망, 컷신 시작, 디렉터 종료, 안전 시간 초과 → 즉시 vcam 끔(리그 블렌드 복귀).
 // 타격 순간은 ExecutionDirector.Struck 이벤트로 받는다 (추가 훅 없음).
 //
 // 시간: 카메라는 실시간(unscaled) 기준. 타격 전 구간 = 예상 타격 시각, 타격 후 구간 = 남은 게임 시간 + 슬로모로 늘어난 실시간.
@@ -24,6 +24,7 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
     static ExecutionCamChoreographer s_instance;
     static readonly int[] s_lastVariant = { -1, -1, -1, -1, -1, -1 };
     static int s_playCount;
+    static float s_sideFirst = 1f;
     static bool s_blendHookInstalled;
     static CinemachineCore.GetBlendOverrideDelegate s_prevBlendOverride;
 
@@ -54,7 +55,12 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
     float _postElapsed;
     float _postDuration;
     bool _impacted;
-    int _freezeFrames;
+    float _freezeUntil;       // 히트스톱(카메라 정지) 끝 시각, unscaled
+    float _deadline;          // 안전 시간 초과 (디렉터가 Stop 을 못 불러도 빠져나온다), 일시정지 제외 실시간
+    float _alive;
+    Vector3 _impactOffset;    // 초점 Transform → 타격점 오프셋 (잡몹은 초점이 발 위치라 가슴 높이로 올린다)
+    Transform _attackerRoot;
+    PlayerHealth _health;
     float _impactAt;
     float _joltAmp;
     float _joltStart;
@@ -73,8 +79,9 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
         PlayCount = 0;
         LastSummary = "none";
         QaForceVariant = -1;
-        s_blendHookInstalled = false;
-        s_prevBlendOverride = null;
+        s_sideFirst = 1f;
+        // s_blendHookInstalled / s_prevBlendOverride 는 리셋하지 않는다: 도메인 리로드 없이 플레이하면 CinemachineCore 델리게이트가
+        // 남아 있어 다시 설치하면 자기 자신을 이전 훅으로 물고 무한 재귀가 된다 (도메인 리로드 시엔 둘 다 함께 초기화됨).
     }
 
     // ======================================================================= 정적 API
@@ -172,7 +179,7 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
         _victim = victim;
         _focus = focus != null ? focus : victim;
         _impacted = false;
-        _freezeFrames = 0;
+        _freezeUntil = 0f;
         _preElapsed = 0f;
         _postElapsed = 0f;
         _joltAmp = 0f;
@@ -185,6 +192,14 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
         _postDuration = PredictPostRealtime(entry, strike, duration, slowScale, slowRealtime, _calm);
 
         ExecCamContext ctx = BuildContext(lib, type, attacker, victim, _focus, main != null ? main.aspect : 16f / 9f);
+        _impactOffset = ctx.impactPoint - _focus.position;
+        PlayerReferences refs = attacker.GetComponentInParent<PlayerReferences>();
+        _attackerRoot = refs != null && refs.PlayerRoot != null ? refs.PlayerRoot : attacker;
+        _health = _attackerRoot.GetComponentInChildren<PlayerHealth>();
+        if (_health == null)
+            _health = attacker.GetComponentInChildren<PlayerHealth>();
+        _deadline = _preDuration + _postDuration + 2.5f;
+        _alive = 0f;
 
         // 시작 화면 = 지금 메인 카메라 (움직임 줄이기의 진입 블렌드 기준)
         Transform mt = main.transform;
@@ -258,6 +273,7 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
             bigVictim = boss,
             collisionMask = SoulsCameraRig.ActiveProfile != null ? SoulsCameraRig.ActiveProfile.collisionMask : lib.collisionMask
         };
+        ctx.axis = ctx.Forward;   // 리그 공간 축 고정
         ctx.ApplyProfile(SoulsCameraRig.ActiveProfile);
         return ctx;
     }
@@ -300,7 +316,9 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
         }
         int bestScore = int.MaxValue;
         float bestSide = 1f;
-        int start = s_playCount % n;
+        // 무작위 시작점 + 무작위 좌우: 같은 점수면 먼저 본 쪽이 이긴다
+        int start = Random.Range(0, n);
+        s_sideFirst = Random.value < 0.5f ? 1f : -1f;
         for (int r = 0; r < n; r++)
         {
             int i = (start + r) % n;
@@ -323,8 +341,8 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
 
     static float PickSide(ExecutionCamLibrary lib, ExecCamVariant v, ExecCamContext ctx, out int score)
     {
-        // 기본은 오른쪽(게임플레이 숄더 쪽), 홀수 회차는 왼쪽 먼저 — 같은 점수면 번갈아
-        float first = (s_playCount & 1) == 0 ? 1f : -1f;
+        // 매 처형마다 무작위로 정한 쪽을 먼저 (같은 점수면 그쪽)
+        float first = s_sideFirst;
         ctx.side = first;
         int a = ExecCamTimeline.ScoreVariant(lib, v, ctx);
         if (a == 0)
@@ -359,11 +377,13 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
         _preElapsed = Mathf.Max(_preElapsed, _preDuration);
         if (_calm)
             return;
-        _freezeFrames = Mathf.Max(0, _entry.impactFreezeFrames);
-        _joltAmp = _entry.impactJolt * CameraShake.GlobalStrength;
+        // 히트스톱: '프레임' 값은 60 fps 기준 길이로 환산 (고주사율에서도 체감 동일, unscaled)
+        float shake = Mathf.Clamp01(CameraShake.GlobalStrength);
+        _freezeUntil = Time.unscaledTime + Mathf.Max(0, _entry.impactFreezeFrames) / 60f;
+        _joltAmp = _entry.impactJolt * shake;
         _joltStart = Time.unscaledTime;
-        _fovKick = _entry.impactFovKick;
-        if (_entry.impactBwPulse > 0f && _victim != null)
+        _fovKick = _entry.impactFovKick * Mathf.Lerp(0.35f, 1f, shake);   // 흔들림 줄이기 → 펀치 인도 약하게
+        if (_entry.impactBwPulse > 0f && _victim != null && AccessibilityOptionsRuntime.FlashIntensity > 0.01f)
         {
             // 흑백 임팩트 프레임 (흡수/펄스가 없는 종류만; 세기는 ActionColourDirector 가 섬광 슬라이더로 제한)
             ActionColourDirector.PulseAt(_focusSmoothed, _entry.impactBwPulse, 0.09f, new[] { _attacker, _victim });
@@ -379,7 +399,12 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
     {
         if (_owner == null)
             return;
-        if (_victim == null || _attacker == null)
+        // 중단: 대상/플레이어 소실, 플레이어 사망, 컷신 시작, 디렉터가 더 이상 처형 중이 아님, 안전 시간 초과
+        if (_victim == null || _attacker == null || _attackerRoot == null
+            || (_health != null && _health.IsDead)
+            || CinematicDirector.IsPlaying
+            || (_owner is ExecutionDirector && !ExecutionDirector.IsExecuting)
+            || _alive > _deadline)
         {
             EndInternal();
             return;
@@ -387,18 +412,18 @@ public sealed class ExecutionCamChoreographer : MonoBehaviour
         // 일시정지 중에는 진행하지 않는다
         bool paused = Time.timeScale <= 0f;
         float dt = paused ? 0f : Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+        _alive += dt;
 
         UpdateRamp();
 
         if (_focus != null)
-            _focusSmoothed = Vector3.SmoothDamp(_focusSmoothed, _focus.position, ref _focusVelocity, 0.06f, Mathf.Infinity, Mathf.Max(0.0001f, dt));
+            _focusSmoothed = Vector3.SmoothDamp(_focusSmoothed, _focus.position + _impactOffset, ref _focusVelocity, 0.06f, Mathf.Infinity, Mathf.Max(0.0001f, dt));
         _timeline.UpdateImpactPoint(_focusSmoothed);
+        _timeline.UpdateAttackerFeet(_attackerRoot.position);
 
-        // 임팩트 프레임: 1~2 프레임 카메라 정지
-        if (_freezeFrames > 0)
+        // 임팩트 프레임(히트스톱): 짧게 카메라 정지 + FOV 펀치 유지
+        if (_impacted && Time.unscaledTime < _freezeUntil)
         {
-            if (!paused)
-                _freezeFrames--;
             ApplyToVcam(_out, Vector3.zero, _fovKick);
             return;
         }

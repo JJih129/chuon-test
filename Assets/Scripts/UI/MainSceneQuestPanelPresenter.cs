@@ -22,7 +22,7 @@ public class MainSceneQuestPanelPresenter : MonoBehaviour
     const float NodeFillNormalizedHeight = 0.046f;
 
     [SerializeField, Range(0f, 1f)] float frameAlpha = 0.68f;
-    [SerializeField] Color doneNodeColor = new Color(0.24f, 0.84f, 1f, 0.60f);
+    [SerializeField] Color doneNodeColor = new Color(0.94f, 0.95f, 0.97f, 0.60f); // 반복 16: 시안 → 세라믹 화이트
     [SerializeField] Color currentNodeColor = new Color(1f, 0.76f, 0.28f, 1f);
     [SerializeField, Range(0.05f, 0.4f)] float finishPressureThreshold = 0.18f;
 

@@ -680,6 +680,7 @@ public class PauseMenuView : MonoBehaviour
                 return;
 
             settingsContentInstance.name = settingsContentPrefab.name;
+            ChuonUiFonts.Apply(settingsContentInstance); // 반복 16 (E8): 프리팹의 Arial Text → Noto Sans KR
             PrepareSettingsVisualRoot();
             BindSettingsButtons(settingsContentVisualRoot != null ? settingsContentVisualRoot.gameObject : settingsContentInstance);
             settingsOverlayStyler = null;

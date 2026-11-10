@@ -78,6 +78,8 @@ public sealed class BossOverhaulHUD : MonoBehaviour
     {
         if (s_font != null)
             return s_font;
+        if (ChuonUiFonts.Tmp != null) // 반복 16 (E8): Noto Sans KR Medium (씬 Noto SDF 는 가변 글꼴 Thin)
+            return s_font = ChuonUiFonts.Tmp;
         foreach (TMP_Text t in FindObjectsOfType<TMP_Text>(true))
             if (t != null && t.font != null && t.font.name.Contains("NotoSansKR"))
                 return s_font = t.font;
@@ -146,7 +148,7 @@ public sealed class BossOverhaulHUD : MonoBehaviour
             string want = doubled ? "균형 x" +_overhaul.BalanceMultiplier.ToString("0.#") : "균형";
             if (_balanceLabel.text != want)
                 _balanceLabel.text = want;
-            _balanceLabel.color = doubled || (_overhaul.Break != null && _overhaul.Break.IsInBreak) ? Red : new Color(0.96f, 0.95f, 0.93f, 0.8f);
+            _balanceLabel.color = doubled || (_overhaul.Break != null && _overhaul.Break.IsInBreak) ? ChuonUiPalette.TsukasaRedText : new Color(0.96f, 0.95f, 0.93f, 0.92f); // 반복 16: 텍스트용 레드 (대비 ≥ 4.5:1)
         }
 
         if ((_frame++ & 15) == 0)
@@ -224,7 +226,7 @@ public sealed class BossOverhaulHUD : MonoBehaviour
         TMP_FontAsset font = ResolveFont();
         if (font != null)
             _balanceLabel.font = font;
-        _balanceLabel.fontSize = 16f;
+        _balanceLabel.fontSize = 20f; // 반복 16 (E9): 16 → 20 (1080p 기준)
         _balanceLabel.fontStyle = FontStyles.Bold;
         _balanceLabel.characterSpacing = 3f;
         _balanceLabel.alignment = TextAlignmentOptions.MidlineRight;
@@ -235,7 +237,7 @@ public sealed class BossOverhaulHUD : MonoBehaviour
         r.anchorMin = src.anchorMin;
         r.anchorMax = src.anchorMin;
         r.pivot = new Vector2(1f, 0.5f);
-        r.sizeDelta = new Vector2(120f, 24f);
+        r.sizeDelta = new Vector2(150f, 28f);
         Vector2 left = src.anchoredPosition - new Vector2(src.rect.width * src.pivot.x, 0f);
         r.anchoredPosition = left + new Vector2(-10f, 0f);
     }

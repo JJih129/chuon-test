@@ -18,6 +18,7 @@ public struct ExecCamContext
     public bool victimSurvives;     // 복귀 시 락온 구도
     public bool bigVictim;
     public LayerMask collisionMask;
+    public Vector3 axis;            // 시작 시 고정한 A→V 수평 축 (공격자가 움직여도 리그 공간이 돌지 않게). 0 이면 발 위치로 계산
 
     // 게임플레이 복귀 구도 (SoulsCameraProfile 값)
     public float gpPivotHeight;
@@ -33,6 +34,8 @@ public struct ExecCamContext
     {
         get
         {
+            if (axis.sqrMagnitude > 0.5f)
+                return axis;
             Vector3 f = victimFeet - attackerFeet;
             f.y = 0f;
             return f.sqrMagnitude > 0.0001f ? f.normalized : Vector3.forward;
@@ -122,12 +125,16 @@ public sealed class ExecCamTimeline
         _shotStart = initial;
         _allowedDistance = -1f;
         _allowedVelocity = 0f;
+        _rescue = 0f;
         FallbackCount = 0;
         SafeShotCount = 0;
     }
 
     /// <summary>피격 지점(코어 뼈)이 움직이면 갱신.</summary>
     public void UpdateImpactPoint(Vector3 p) => _ctx.impactPoint = p;
+
+    /// <summary>공격자 발 위치(루트 모션) 갱신. 축(axis)은 고정이라 리그 공간은 돌지 않는다.</summary>
+    public void UpdateAttackerFeet(Vector3 p) => _ctx.attackerFeet = p;
 
     public ExecCamOutput Evaluate(ExecCamPhase phase, float t01, float dt)
     {
@@ -193,7 +200,10 @@ public sealed class ExecCamTimeline
         bool cut = shot.mode == ExecCamMode.Orbit && shot.entry == ExecCamEntry.Cut;
         _cutThisFrame = cut;
         if (cut)
+        {
             _allowedDistance = -1f;  // 컷이면 충돌 거리 즉시 재설정
+            _rescue = -1f;           // 화면 이탈 보정도 즉시 재계산
+        }
         _shotAzOffset = 0f;
         _shotAzSign = 1f;
         _shotFit = 1f;
@@ -470,9 +480,51 @@ public sealed class ExecCamTimeline
         return q;
     }
 
+    // 플레이어 화면 이탈 방지: 필요한 최소 보정 단계(0..1)를 찾고, 단계는 부드럽게 따라간다(올릴 땐 빠르게, 내릴 땐 천천히).
+    // 보정 = 카메라를 시선선 뒤로 빼고, 시선점을 플레이어 가슴 쪽으로 당기고, FOV 를 조금 넓힌다. 이후 구체 캐스트가 벽을 처리.
+    const int RescueSteps = 8;
+    float _rescue;
+
+    ExecCamOutput RescuePose(ExecCamOutput o, float r)
+    {
+        if (r <= 0.0001f)
+            return o;
+        Vector3 off = o.position - o.look;
+        float d = Mathf.Max(0.5f, off.magnitude);
+        Vector3 dir = off.sqrMagnitude > 0.0001f ? off.normalized : -(o.rotation * Vector3.forward);
+        ExecCamOutput c = o;
+        c.look = Vector3.Lerp(o.look, _ctx.AttackerChest, 0.55f * r);
+        c.position = c.look + dir * d * (1f + 0.9f * r);
+        c.fov = Mathf.Min(_lib != null ? _lib.maxFov : 60f, o.fov + 10f * r);
+        c.dutch = o.dutch * (1f - r);
+        c.rotation = LookRot(c.look - c.position);
+        return c;
+    }
+
+    ExecCamOutput KeepAttackerInView(ExecCamOutput o, float dt)
+    {
+        const float margin = 0.04f;
+        float need = 1f;
+        for (int i = 0; i <= RescueSteps; i++)
+        {
+            float r = i / (float)RescueSteps;
+            if (Visible(RescuePose(o, r), _ctx.AttackerChest, margin))
+            {
+                need = r;
+                break;
+            }
+        }
+        if (dt <= 0f || _rescue < 0f)
+            _rescue = Mathf.Max(_rescue, need);
+        else
+            _rescue = Mathf.MoveTowards(_rescue, need, (need > _rescue ? 12f : 1.5f) * dt);
+        return ApplyStaticRules(RescuePose(o, _rescue));
+    }
+
     ExecCamOutput Constrain(ExecCamOutput o, float dt)
     {
         o = ApplyStaticRules(o);
+        o = KeepAttackerInView(o, dt);
 
         // 지오메트리 관통 금지: 시선점 → 카메라 구체 캐스트로 당김 (당길 땐 0.04 s, 풀 땐 0.3 s)
         Vector3 off = o.position - o.look;
@@ -594,8 +646,8 @@ public sealed class ExecCamTimeline
         float margin = _lib != null ? _lib.frameMargin : 0.08f;
         if (!Visible(p, p.look, 0f))
             return false;
-        if (!shot.keepBoth)
-            return Visible(p, shot.lookImpact ? _ctx.impactPoint : _ctx.VictimChest, margin);
+        if (!shot.keepBoth)   // 인서트도 플레이어(가슴)는 화면 안에 남긴다
+            return Visible(p, shot.lookImpact ? _ctx.impactPoint : _ctx.VictimChest, margin) && Visible(p, _ctx.AttackerChest, 0f);
         return Visible(p, _ctx.AttackerHead, margin) && Visible(p, _ctx.AttackerChest, margin)
             && Visible(p, _ctx.VictimChest, margin) && Visible(p, _ctx.VictimHead, margin * 0.5f);
     }

@@ -28,6 +28,21 @@ public static class GameplaySceneCache
     static float _nextBossHealthResolveAt;
     static float _nextBossControllerResolveAt;
 
+    // Enter Play Mode Options (domain reload off): the static retry timestamps survive between Play sessions while
+    // Time.unscaledTime restarts at 0, so every Resolve* returned null until the old timestamp was reached again
+    // (e.g. cinematic attach targets missing in the editor). Reset on each Play start.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics()
+    {
+        _mainCamera = null; _mainCameraTransform = null; _mainCameraShake = null;
+        _playerReferences = null; _playerLockOn = null; _lockOnCameraManager = null; _canvas = null;
+        _playerUltimateController = null; _bossBreakController = null; _bossUiController = null;
+        _bossHealth = null; _bossController = null;
+        _nextMainCameraResolveAt = _nextPlayerReferencesResolveAt = _nextPlayerLockOnResolveAt = 0f;
+        _nextLockOnCameraManagerResolveAt = _nextCanvasResolveAt = _nextPlayerUltimateResolveAt = 0f;
+        _nextBossBreakResolveAt = _nextBossUiResolveAt = _nextBossHealthResolveAt = _nextBossControllerResolveAt = 0f;
+    }
+
     public static Camera ResolveMainCamera()
     {
         Camera taggedMainCamera = Camera.main;
