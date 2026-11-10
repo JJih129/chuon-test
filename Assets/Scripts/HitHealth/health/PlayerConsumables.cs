@@ -27,6 +27,9 @@ public class PlayerConsumables : MonoBehaviour
     public int MaxAmpoule => maxAmpoule;
     public int CurrentAmpoule => currentAmpoule;
     public bool IsHealing => _healRoutine != null;
+    /// <summary>회복 동작 중이고 아직 회복이 적용되기 전 (이 구간에 공격·회피·피격이면 취소).</summary>
+    public bool IsHealPending => _healRoutine != null && !_healAppliedThisMotion;
+    bool _healAppliedThisMotion;
     /// <summary>현재 회복 동작 진행도 0..1 (동작 중이 아니면 0).</summary>
     public float HealMotionProgress { get; private set; }
 
@@ -120,6 +123,7 @@ public class PlayerConsumables : MonoBehaviour
     IEnumerator Co_HealMotion()
     {
         _interrupted = false;
+        _healAppliedThisMotion = false;
         HealMotionProgress = 0f;
         if (lockMovementDuringHeal && _moveLocker != null)
             _moveLocker.Lock(MoveLockReason, 0f, true, null);
@@ -142,6 +146,7 @@ public class PlayerConsumables : MonoBehaviour
             if (!applied && t >= applyAt)
             {
                 applied = true;
+                _healAppliedThisMotion = true;
                 ApplyHeal();
                 // 회복 이후 남은 동작은 회수 동작: 이동 잠금만 먼저 풀어 준다 (리스크는 회복 전 구간)
                 ReleaseMoveLock();

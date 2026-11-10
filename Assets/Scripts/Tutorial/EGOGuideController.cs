@@ -14,6 +14,29 @@ public class EGOGuideController : MonoBehaviour
     readonly Queue<TutorialGuideLine> _urgentQueue = new Queue<TutorialGuideLine>();
     Coroutine _playRoutine;
     string _lastPlayedKey = string.Empty;
+    float _lineShownAt;
+    float _lineEndAt;
+
+    /// <summary>대사를 재생 중이거나 대기열이 남아 있으면 true.</summary>
+    public bool IsSpeaking => _playRoutine != null;
+
+    /// <summary>
+    /// 반복 14A (튜토리얼 페이싱): 지금 보이는 대사를 최소 minShown 초 보여 준 뒤 끊는다 (빠른 플레이어에게 대사가 한 단계씩 뒤처지지 않게).
+    /// 재생 중인 대사가 없으면 아무것도 안 한다.
+    /// </summary>
+    public void Preempt(float minShown)
+    {
+        if (_playRoutine == null)
+            return;
+        _lineEndAt = Mathf.Min(_lineEndAt, _lineShownAt + Mathf.Max(0f, minShown));
+    }
+
+    /// <summary>아직 시작하지 않은 일반 대사를 버린다 (긴급 대사는 유지).</summary>
+    public void ClearPending()
+    {
+        _queue.Clear();
+    }
+
 
     public void ConfigureRuntime(TutorialHintUIBridge bridge)
     {
@@ -82,7 +105,10 @@ public class EGOGuideController : MonoBehaviour
                 voiceSource.PlayOneShot(line.clip, AudioOptionsRuntime.ScaleVoice(1f)); // 보이스 볼륨 옵션
 
             hintUIBridge?.ShowGuideText(line.text, line.speaker);
-            yield return new WaitForSeconds(Mathf.Max(0.2f, line.duration > 0f ? line.duration : defaultLineDuration));
+            _lineShownAt = Time.time;
+            _lineEndAt = _lineShownAt + Mathf.Max(0.2f, line.duration > 0f ? line.duration : defaultLineDuration);
+            while (Time.time < _lineEndAt) // Preempt 가 _lineEndAt 을 당길 수 있다
+                yield return null;
         }
 
         hintUIBridge?.HideGuideText();

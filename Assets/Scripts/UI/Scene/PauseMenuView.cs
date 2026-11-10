@@ -70,14 +70,29 @@ public class PauseMenuView : MonoBehaviour
             settingsPanel.SetActive(false);
     }
 
+    // 반복 14A: 닫힘 애니메이션(0.25 s) 중에 다시 일시정지하면 지연 콜백이 새 메뉴를 끄고 시간을 풀던 경쟁 → 다시 열 때 취소
+    Tween _hideCall;
+
     public void ShowMenu()
     {
         if (menuRoot == null || backgroundGroup == null || menuContainer == null)
             return;
 
+        if (_hideCall != null && _hideCall.IsActive())
+        {
+            _hideCall.Kill();
+            backgroundGroup.DOKill();
+            if (dimOverlayGroup != null) dimOverlayGroup.DOKill();
+            menuContainer.DOKill();
+            CanvasGroup containerGroup = menuContainer.GetComponent<CanvasGroup>();
+            if (containerGroup != null) containerGroup.DOKill();
+        }
+        _hideCall = null;
+
         EnsureDimOverlay();
         EnsureRuntimeInput();
         BindMenuButtons();
+        EnsurePadNavigation();
 
         if (unifiedSettingsOverlay != null)
             unifiedSettingsOverlay.Hide();
@@ -287,6 +302,43 @@ public class PauseMenuView : MonoBehaviour
         menuButtonsBound = resumeBound || restartBound || settingsBound || titleBound || quitBound;
     }
 
+    // 반복 14A: 메뉴 버튼이 프리팹에서 내비게이션 None + 상위 CanvasGroup interactable=false 라 패드 ↑↓/A 가 전혀 동작하지 않았다
+    // (마우스는 InvokeButtonUnderPointer 로 직접 처리). 패드용으로만 열어 준다: 위→아래 명시 내비게이션(순환) + interactable,
+    // blocksRaycasts 는 그대로 두어 마우스 클릭이 EventSystem 으로 두 번 들어가지 않게 한다.
+    void EnsurePadNavigation()
+    {
+        if (menuContainer == null)
+            return;
+
+        foreach (CanvasGroup group in menuContainer.GetComponentsInParent<CanvasGroup>(true))
+        {
+            if (group == null || group == dimOverlayGroup)
+                continue;
+            group.interactable = true;
+            if (menuRoot != null && group.gameObject == menuRoot)
+                break;
+        }
+
+        Button[] buttons = menuContainer.GetComponentsInChildren<Button>(true);
+        if (buttons == null || buttons.Length == 0)
+            return;
+        System.Array.Sort(buttons, CompareButtonTopToBottom);
+        var list = new System.Collections.Generic.List<Button>(buttons.Length);
+        foreach (Button b in buttons)
+            if (b != null && b.interactable)
+                list.Add(b);
+        for (int i = 0; i < list.Count; i++)
+        {
+            Navigation nav = list[i].navigation;
+            nav.mode = Navigation.Mode.Explicit;
+            nav.selectOnUp = list[(i - 1 + list.Count) % list.Count];
+            nav.selectOnDown = list[(i + 1) % list.Count];
+            nav.selectOnLeft = null;
+            nav.selectOnRight = null;
+            list[i].navigation = nav;
+        }
+    }
+
     static void BindButton(Button button, UnityEngine.Events.UnityAction action)
     {
         if (button == null || action == null)
@@ -367,8 +419,10 @@ public class PauseMenuView : MonoBehaviour
         if (menuCanvasGroup != null)
             menuCanvasGroup.DOFade(0f, 0.2f).SetUpdate(true);
 
-        DOVirtual.DelayedCall(0.25f, () =>
+        _hideCall?.Kill();
+        _hideCall = DOVirtual.DelayedCall(0.25f, () =>
         {
+            _hideCall = null;
             menuRoot.SetActive(false);
             onComplete?.Invoke();
         }).SetUpdate(true);

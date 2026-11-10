@@ -309,14 +309,19 @@ public class PlayerCombatController : MonoBehaviour
         if (ChuonInput.PressedOr(ChuonAction.AttackHeavy, KeyCode.Mouse1))
             inputCommandBuffer?.RecordAttackHeavyPress();
 
-        TryConsumeAttackCommand(
-            PlayerInputCommandBuffer.CommandType.AttackLight,
-            AttackInput.Light,
-            ref _lastConsumedLightAttackCommandSequence);
-        TryConsumeAttackCommand(
-            PlayerInputCommandBuffer.CommandType.AttackHeavy,
-            AttackInput.Heavy,
-            ref _lastConsumedHeavyAttackCommandSequence);
+        // 반복 14A: 회복 동작(적용 전) 중에는 공격 입력을 소비하지 않는다.
+        // 회복 직전에 눌러 둔(버퍼된) 공격이 회복 시작 직후 나가서 회복을 취소하고 앰플만 날리던 문제 (QA 봇 0.9 패배 원인).
+        if (!IsHealPendingMotion())
+        {
+            TryConsumeAttackCommand(
+                PlayerInputCommandBuffer.CommandType.AttackLight,
+                AttackInput.Light,
+                ref _lastConsumedLightAttackCommandSequence);
+            TryConsumeAttackCommand(
+                PlayerInputCommandBuffer.CommandType.AttackHeavy,
+                AttackInput.Heavy,
+                ref _lastConsumedHeavyAttackCommandSequence);
+        }
 
         // PlayerMoveController owns the locomotion speed parameter in normal gameplay.
         // Keep this fallback only for scenes where the move controller is absent.
@@ -1596,6 +1601,21 @@ public class PlayerCombatController : MonoBehaviour
     {
         inputQueue.Clear();
         hasQueuedComboInput = false;
+    }
+
+    PlayerConsumables _healConsumables;
+    int _nextHealConsumablesResolveFrame;
+
+    private bool IsHealPendingMotion()
+    {
+        if (_healConsumables == null && Time.frameCount >= _nextHealConsumablesResolveFrame)
+        {
+            _nextHealConsumablesResolveFrame = Time.frameCount + 30; // 런타임에 붙는 경우(튜토리얼) 대비 재조회
+            _healConsumables = GetComponent<PlayerConsumables>();
+            if (_healConsumables == null)
+                _healConsumables = GetComponentInParent<PlayerConsumables>();
+        }
+        return _healConsumables != null && _healConsumables.IsHealPending;
     }
 
     private bool IsInputBlocked()

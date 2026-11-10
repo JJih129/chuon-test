@@ -839,6 +839,7 @@ public sealed class QaCombatBot : MonoBehaviour
     string _tutStep;
     float _tutStepAt, _nextTutActionAt;
     bool _tutGuardHeld;
+    float _lastUltDiagAt;
 
     /// <summary>Per-step taught action, like a player following the prompt. Returns true when it used the frame.</summary>
     bool TutorialStepActions()
@@ -880,6 +881,24 @@ public sealed class QaCombatBot : MonoBehaviour
             return true;
         }
 
+        if (id == "ultimate" && _ultimate != null && _ultimate.IsGaugeReady && !_ultimate.IsCinematic)
+        {
+            // 사람처럼: 게이지가 차 있으면 공격을 멈추고 궁극기 (공격 중엔 "Player is attacking" 으로 거부된다)
+            PlayerMoveController.QaMoveInputOverride = null;
+            if (Time.unscaledTime >= _nextTutActionAt)
+            {
+                _nextTutActionAt = Time.unscaledTime + 0.3f;
+                if (_ultimate.TryActivate()) { _ultimates++; Note("tutorial ultimate activate"); }
+                else if (Time.unscaledTime - _lastUltDiagAt > 2f)
+                {
+                    _lastUltDiagAt = Time.unscaledTime;
+                    _ultimate.CanActivate(out string why);
+                    Note("tutorial ultimate blocked: " + why);
+                }
+            }
+            RunScheduledDefense(); // 막히는 동안에도 큐에는 반응
+            return true;
+        }
         if (Time.unscaledTime < _nextTutActionAt)
             return false;
         switch (id)
@@ -915,6 +934,13 @@ public sealed class QaCombatBot : MonoBehaviour
                 break;
             case "ultimate":
                 if (_ultimate != null && _ultimate.IsGaugeReady && !_ultimate.IsCinematic && _ultimate.TryActivate()) { _ultimates++; Note("tutorial ultimate activate"); }
+                else if (Time.unscaledTime - _tutStepAt > 2f && Time.unscaledTime - _lastUltDiagAt > 3f)
+                {
+                    _lastUltDiagAt = Time.unscaledTime;
+                    string why = "no controller";
+                    if (_ultimate != null) _ultimate.CanActivate(out why);
+                    Note($"tutorial ultimate blocked: ctrl={(_ultimate != null)} gauge={(_ultimate != null ? _ultimate.Gauge : -1f):F0} cine={(_ultimate != null && _ultimate.IsCinematic)} reason={why}");
+                }
                 _nextTutActionAt = Time.unscaledTime + 0.5f;
                 break;
             case "exit":

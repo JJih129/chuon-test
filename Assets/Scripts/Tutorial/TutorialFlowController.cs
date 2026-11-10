@@ -12,6 +12,8 @@ public class TutorialFlowController : MonoBehaviour
     [SerializeField] private TutorialStepDefinition[] steps;
     [SerializeField] private TrainingDummyController[] managedDummies;
     [SerializeField] private bool debugLogs;
+    [Tooltip("반복 14A: 단계가 바뀔 때 이전 단계 대사를 최소 이 시간(초)만 보여 주고 끊는다 (빠른 플레이어에게 대사가 뒤처지지 않게). 0 = 끄기")]
+    [SerializeField, Min(0f)] private float staleLineMinShown = 1.1f;
 
     readonly Dictionary<TutorialConditionChecker, bool> _checkerStates = new Dictionary<TutorialConditionChecker, bool>();
     readonly List<TutorialConditionChecker> _activeCheckers = new List<TutorialConditionChecker>();
@@ -135,6 +137,8 @@ public class TutorialFlowController : MonoBehaviour
         {
             hintUIBridge?.HideComboGuide();
         }
+        if (staleLineMinShown > 0f)
+            egoGuideController?.Preempt(staleLineMinShown); // 이전 단계 대사가 새 소개를 막지 않게
         egoGuideController?.QueueGuideLines(step.introLines, true, false);
 
         if (step.requiredCheckers != null)
@@ -219,6 +223,12 @@ public class TutorialFlowController : MonoBehaviour
         ApplyActivation(step.activateOnComplete, true);
 
         hintUIBridge?.ShowStepCompleted(string.IsNullOrWhiteSpace(step.hintLine1) ? step.stepId : step.hintLine1);
+        if (staleLineMinShown > 0f && step.holdAdvanceForLines <= 0f && egoGuideController != null)
+        {
+            // 이미 해낸 단계의 남은 소개 대사는 버리고 성공 대사로 (보이는 대사는 최소 시간 보장)
+            egoGuideController.ClearPending();
+            egoGuideController.Preempt(staleLineMinShown);
+        }
         egoGuideController?.QueueGuideLines(step.successLines, false, false);
         CurrentStepProgressText = "\uc644\ub8cc";
         StepProgressUpdated?.Invoke(step, CurrentStepProgressText);
@@ -237,12 +247,16 @@ public class TutorialFlowController : MonoBehaviour
         if (steps == null || nextStepIndex >= steps.Length)
             return;
 
-        _autoAdvanceRoutine = StartCoroutine(CoAdvanceAfterDelay(step.autoAdvanceDelay));
+        _autoAdvanceRoutine = StartCoroutine(CoAdvanceAfterDelay(step.autoAdvanceDelay, step.holdAdvanceForLines));
     }
 
-    IEnumerator CoAdvanceAfterDelay(float delay)
+    IEnumerator CoAdvanceAfterDelay(float delay, float holdForLines)
     {
         yield return new WaitForSeconds(Mathf.Max(0f, delay));
+        // 오프닝·리빌처럼 끊으면 안 되는 대사: 끝날 때까지(최대 holdForLines 초) 다음 단계를 미룬다
+        float holdUntil = Time.unscaledTime + Mathf.Max(0f, holdForLines - delay);
+        while (holdForLines > 0f && egoGuideController != null && egoGuideController.IsSpeaking && Time.unscaledTime < holdUntil)
+            yield return null;
         _autoAdvanceRoutine = null;
         BeginStep(CurrentStepIndex + 1);
     }

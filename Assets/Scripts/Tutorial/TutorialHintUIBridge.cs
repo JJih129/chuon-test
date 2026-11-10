@@ -476,6 +476,16 @@ public class TutorialHintUIBridge : MonoBehaviour
             _legacyComboGuidePanel.SetActive(false);
     }
 
+    /// <summary>반복 14A: 대사/목표 텍스트가 쓰는 TMP 폰트들 (튜토리얼 VR 부팅 중 글리프 예열용). 런타임 HUD 를 먼저 만든다.</summary>
+    public void CollectGuideFonts(System.Collections.Generic.List<TMP_FontAsset> fonts)
+    {
+        EnsureRuntimeHud();
+        void Add(TMP_Text t) { if (t != null && t.font != null && !fonts.Contains(t.font)) fonts.Add(t.font); }
+        Add(contentText);
+        Add(speakerText);
+        if (_preferredFontAsset != null && !fonts.Contains(_preferredFontAsset)) fonts.Add(_preferredFontAsset);
+    }
+
     void EnsureRuntimeHud()
     {
         if (_runtimeHudRoot != null)

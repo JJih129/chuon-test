@@ -70,6 +70,11 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
     [Header("Soft failure")]
     [SerializeField, Range(0.05f, 0.6f)] float resyncHealthRatio = 0.25f;
     [SerializeField, Range(0.1f, 0.6f)] float lessonMobHpFloor = 0.25f;
+    [Tooltip("반복 14A: 콤보 레슨 경비 체력 하한 (강공 한 방에 하한을 뚫고 쓰러지지 않도록 일반 하한보다 높게)")]
+    [SerializeField, Range(0.1f, 0.8f)] float comboHpFloor = 0.45f;
+    [Tooltip("반복 14A: 콤보 레슨 경비가 맞을 때마다 다음 공격을 미루는 시간 (연타 중 반격 없음)")]
+    [SerializeField, Min(0f)] float comboHitAttackDelay = 1.4f;
+    int _comboHitsSeen = -1;
 
     // ---------------------------------------------------------------- runtime
     TutorialFlowController _flow;
@@ -263,6 +268,10 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
             return;
         PlacePlayer(playerStart);
         VrTransitionOverlay.Play("TSUKASA HQ  //  INFILTRATION ROUTE", "VR SIMULATION  //  가상현실 부팅", 0.8f);
+        // 반복 14A: VR 부팅 동안 Level_Facility 와 같은 예열(VFX 풀 + 궁극기/퍼펙트 회피 코드 JIT + 타임라인 그래프)
+        // → 튜토리얼 첫 궁극기·첫 퍼펙트 회피 슬로우 히치(98~110 ms) 제거
+        CombatVfxPrewarmer.EnsureAndPrewarm(gameObject);
+        PrewarmDialogueGlyphs();
         int resume = s_resumeStep;
         s_resumeStep = -1;
         if (resume > 0)
@@ -274,6 +283,63 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         {
             _flow.StartFlow();
         }
+    }
+
+    // 반복 14A: 튜토리얼 대사·목표 문구의 글자를 VR 부팅 동안 TMP 아틀라스에 미리 넣는다.
+    // (페이싱 수정으로 성공 대사가 실제로 표시되면서 단계 전환 때 처음 보는 글자 래스터화 + 아틀라스 업로드 26~81 ms 히치가 생김)
+    // 4096² 동적 아틀라스는 글자를 추가할 때마다 텍스처 전체 업로드(~60 ms)라, 씬 첫 프레임(로딩 프레임)에 폰트당 한 번에 넣는다.
+    void PrewarmDialogueGlyphs()
+    {
+        var fonts = new List<TMPro.TMP_FontAsset>(4);
+        if (_hint != null)
+            _hint.CollectGuideFonts(fonts);
+        if (fonts.Count == 0)
+            return;
+
+        var text = new System.Text.StringBuilder(4096);
+        var prefixes = new HashSet<string> { "tut.open" };
+        foreach (Line l in DefaultLines)
+        {
+            text.Append(Glyphs(l.text)).Append(l.speaker);
+            int dot = l.key.LastIndexOf('.');
+            if (dot > 0) prefixes.Add(l.key.Substring(0, dot));
+        }
+        foreach (string prefix in prefixes)
+            foreach (TutorialGuideLine g in Lines(prefix, EGOGuideMessageType.Briefing))
+                text.Append(g.text).Append(g.speaker);
+        if (_steps != null)
+            foreach (TutorialStepDefinition st in _steps)
+                text.Append(st.hintLine1).Append(st.hintLine2);
+        text.Append("0123456789/ ·완료");
+
+        var unique = new HashSet<char>();
+        var chars = new System.Text.StringBuilder(512);
+        foreach (char c in text.ToString())
+            if (!char.IsControl(c) && unique.Add(c))
+                chars.Append(c);
+        string all = chars.ToString();
+
+        float start = Time.realtimeSinceStartup;
+        int added = 0;
+        foreach (TMPro.TMP_FontAsset font in fonts)
+        {
+            if (font == null || font.atlasPopulationMode != TMPro.AtlasPopulationMode.Dynamic)
+                continue;
+            var missing = new System.Text.StringBuilder();
+            foreach (char c in all)
+                if (!font.HasCharacter(c, false, false)) missing.Append(c);
+            if (missing.Length == 0)
+                continue;
+            font.TryAddCharacters(missing.ToString(), out string notFound);
+            added += missing.Length - (notFound != null ? notFound.Length : 0);
+            if (!string.IsNullOrEmpty(notFound) && font.fallbackFontAssetTable != null)
+                foreach (TMPro.TMP_FontAsset fb in font.fallbackFontAssetTable)
+                    if (fb != null && fb.atlasPopulationMode == TMPro.AtlasPopulationMode.Dynamic && !string.IsNullOrEmpty(notFound))
+                        fb.TryAddCharacters(notFound, out notFound);
+        }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log($"[Infiltration] dialogue glyph prewarm: {all.Length} chars, {added} added to {fonts.Count} font(s), {(Time.realtimeSinceStartup - start) * 1000f:F0} ms (load frame)");
+#endif
     }
 
     void OnDestroy()
@@ -311,6 +377,32 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
             EnemyHealth h = b.GetComponent<EnemyHealth>();
             if (h != null && h.CurrentHP > 0 && h.CurrentHP < h.MaxHP * lessonMobHpFloor)
                 h.Heal(Mathf.CeilToInt(h.MaxHP * (lessonMobHpFloor + 0.15f)) - h.CurrentHP);
+        }
+
+        // 반복 14A: 궁극기 레슨 대상(집행관)은 궁극기를 쓰기 전엔 쓰러지지 않는다 (평타로 먼저 잡혀 재생성되던 문제)
+        if (CurrentStepId == "ultimate" && !_ultFired && _enforcer != null && !_enforcer.IsDead)
+        {
+            EnemyHealth h = _enforcer.GetComponent<EnemyHealth>();
+            if (h != null && h.CurrentHP > 0 && h.CurrentHP < h.MaxHP * comboHpFloor)
+                h.Heal(Mathf.CeilToInt(h.MaxHP * (comboHpFloor + 0.15f)) - h.CurrentHP);
+        }
+
+        // 반복 14A: 콤보 레슨 경비는 약공 3 · 강공 1 이 다 들어갈 때까지 쓰러지지 않고(체력 하한),
+        // 맞는 동안엔 반격하지 않는다(연타 중 피격 → 재동기화 방지). 조건을 채우면 하한 해제 → 처치로 완료.
+        if (CurrentStepId == "combo" && _android1 != null && !_android1.IsDead && _comboChecker != null)
+        {
+            int hits = _android1.HitsReceived;
+            if (hits != _comboHitsSeen)
+            {
+                _comboHitsSeen = hits;
+                _android1.DelayNextAttack(comboHitAttackDelay);
+            }
+            if (!_comboChecker.HitsSatisfied)
+            {
+                EnemyHealth h = _android1.GetComponent<EnemyHealth>();
+                if (h != null && h.CurrentHP > 0 && h.CurrentHP < h.MaxHP * comboHpFloor)
+                    h.Heal(Mathf.CeilToInt(h.MaxHP * (comboHpFloor + 0.15f)) - h.CurrentHP);
+            }
         }
 
         // 터렛은 플레이어가 사계(射界)에 들어올 때 깨어난다 (멀리서 기습 사격 없음 → 엄폐 배치를 먼저 읽을 시간)
@@ -402,6 +494,10 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         opening.AddRange(steps[0].introLines);
         steps[0].introLines = opening.ToArray();
         steps[2].autoAdvanceDelay = 0.2f;
+        // 반복 14A 페이싱: 나머지 단계는 완료 시 남은 소개 대사를 끊고(최소 1.1 s 표시) 바로 진행.
+        // 오프닝 브리핑(VR 부팅)과 본사 리빌 대사만 끝까지 듣게 짧게 기다린다.
+        steps[0].holdAdvanceForLines = 7f;
+        steps[1].holdAdvanceForLines = 3.5f;
         _steps = steps.ToArray();
         return _steps;
     }
@@ -558,15 +654,18 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
                 if (_android2 == null || _android2.IsDead)
                     _android2 = SpawnMob(androidPrefab, boothSpawn, false, true, null);
                 _hpFloor.Add(_android2);
+                SetLessonThrust(_android2, false); // 반복 14A: 가드 레슨 = 막을 수 있는 공격만 (찌르기 연속 피격 → 재동기화 방지)
                 SetGoal(_android2.transform, true);
                 break;
             case "parry":
                 if (_android2 == null || _android2.IsDead)
                     _android2 = SpawnMob(androidPrefab, boothSpawn, false, true, null);
                 _hpFloor.Add(_android2);
+                SetLessonThrust(_android2, false);
                 SetGoal(_android2.transform, true);
                 break;
             case "clear":
+                SetLessonThrust(_android2, true);
                 _hpFloor.Clear();
                 foreach (EnemyBrain b in _spawned)
                     if (b != null && !b.IsDead && b is not SentryTurretBrain) _clearChecker.Observe(b);
@@ -712,6 +811,12 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
             brain.ReceiveAlert(_player.transform.position);
     }
 
+    static void SetLessonThrust(EnemyBrain b, bool enabled)
+    {
+        if (b is SecurityAndroidBrain android)
+            android.ThrustDisabled = !enabled;
+    }
+
     static void PowerDown(EnemyBrain b)
     {
         if (b == null || b.IsDead) return;
@@ -760,6 +865,7 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
             case "parry":
                 _android2 = SpawnMob(androidPrefab, boothSpawn, false, true, null);
                 _hpFloor.Add(_android2);
+                SetLessonThrust(_android2, false);
                 SetGoal(_android2.transform, true);
                 break;
             case "red":

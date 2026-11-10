@@ -85,13 +85,15 @@ public sealed class ChuonInputRuntime : MonoBehaviour
             _nextUpgradeCheckAt = now + 1f;
             UpgradeLegacyInputModule(EventSystem.current);
         }
-
-        if (ChuonInput.IsGamepadScheme)
-            EnsureGamepadSelection();
     }
 
     void LateUpdate()
     {
+        // 반복 14A: 자동 선택은 LateUpdate 에서 (EventSystem 이 이번 프레임 입력을 처리한 뒤).
+        // 선택이 없던 화면의 첫 패드 입력은 "포커스 표시"만 한다 — 같은 입력의 ↓/A 가 곧바로 한 칸 옮기거나
+        // 시작 버튼을 눌러 게임을 시작하지 않는다 (타이틀 첫 ↓ 가 시작을 건너뛰던 문제).
+        if (ChuonInput.IsGamepadScheme)
+            EnsureGamepadSelection();
         UpdateFocusFrame();
     }
 
@@ -250,7 +252,8 @@ public sealed class ChuonInputRuntime : MonoBehaviour
             CanvasGroup g = s_groups[i];
             if (g == null || !g.enabled)
                 continue;
-            if (g.alpha <= 0.01f || !g.interactable || !g.blocksRaycasts)
+            // 반복 14A: blocksRaycasts 는 보지 않는다 (마우스 전용 차단 — 일시정지 메뉴는 레이캐스트를 막고 직접 클릭 처리)
+            if (g.alpha <= 0.01f || !g.interactable)
             {
                 s_groups.Clear();
                 return false;

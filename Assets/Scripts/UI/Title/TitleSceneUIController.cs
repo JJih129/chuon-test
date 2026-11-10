@@ -106,6 +106,8 @@ public class TitleSceneUIController : MonoBehaviour
             _settingsOverlay.Hide();
 
         _creditsOverlay.Show(_creditsData);
+        // 반복 14A: 패드 포커스가 오버레이 뒤 크레딧 버튼에 남아 A 가 크레딧을 다시 여는 문제 → 닫기 버튼으로
+        ChuonInputRuntime.SelectForGamepad(_creditsOverlay.CloseButton != null ? _creditsOverlay.CloseButton.gameObject : null);
     }
 
     public void OnClick_QuitGame()

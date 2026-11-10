@@ -230,6 +230,12 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
     /// <summary>true 면 시야/청각으로 플레이어를 알아채지 않는다 (피격·동료 경보는 그대로). 연출 중 대기 등.</summary>
     public bool PerceptionSuppressed { get; set; }
 
+    /// <summary>다음 공격 시작을 최소 seconds 뒤로 미룬다 (진행 중인 공격은 그대로). 튜토리얼 레슨 몹의 "맞는 동안 반격 없음" 용.</summary>
+    public void DelayNextAttack(float seconds)
+    {
+        _nextAttackAllowedAt = Mathf.Max(_nextAttackAllowedAt, Time.time + Mathf.Max(0f, seconds));
+    }
+
     protected void RaiseCueIssued(EnemyCueType type, float lead) => CueIssued?.Invoke(this, type, lead);
     protected float Now => Time.time;
     protected bool AgentReady => _agentReady;

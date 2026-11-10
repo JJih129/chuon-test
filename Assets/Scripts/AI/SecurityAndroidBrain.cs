@@ -55,6 +55,9 @@ public sealed class SecurityAndroidBrain : EnemyBrain
             _thrustRolled = false;
     }
 
+    /// <summary>반복 14A: true 면 찌르기(회피 전용)를 쓰지 않는다 — 튜토리얼 가드·패링 레슨용 (막을 수 있는 연타만).</summary>
+    public bool ThrustDisabled { get; set; }
+
     protected override EnemyStrike[] ChooseAttack(float distance)
     {
         if (!_thrustRolled)
@@ -63,7 +66,7 @@ public sealed class SecurityAndroidBrain : EnemyBrain
             _preferThrust = Random.value < thrustChance;
         }
 
-        if (_preferThrust && distance >= thrustMinDistance && distance <= thrustMaxDistance)
+        if (_preferThrust && !ThrustDisabled && distance >= thrustMinDistance && distance <= thrustMaxDistance)
             return _thrustSeq;
 
         if (_stringSeq != null && _stringSeq.Length > 0 && distance <= _stringSeq[0].range + 0.5f)

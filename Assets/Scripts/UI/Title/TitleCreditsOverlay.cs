@@ -37,6 +37,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
     UnityAction _quitAction;
 
     public bool IsVisible => _isVisible;
+    public Button CloseButton => _closeButton;
 
     public void Initialize(Transform parent)
     {
