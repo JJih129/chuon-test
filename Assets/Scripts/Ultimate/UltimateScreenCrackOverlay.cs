@@ -82,6 +82,25 @@ public sealed class UltimateScreenCrackOverlay : MonoBehaviour
         _overlayRoot.localRotation = Quaternion.identity;
     }
 
+    /// <summary>반복 14S: 화면 베기 전에 남은 균열/방사 버스트를 duration(실시간 s) 안에 현재 밝기에서 0 으로 걷어 낸다.</summary>
+    public void FadeOutAll(float duration)
+    {
+        if (_instances == null)
+            return;
+
+        for (int i = 0; i < _instances.Length; i++)
+        {
+            CrackInstance instance = _instances[i];
+            if (!instance.active)
+                continue;
+            float normalized = Mathf.Clamp01(instance.elapsed / Mathf.Max(0.0001f, instance.lifetime));
+            instance.startAlpha *= 1f - normalized;
+            instance.elapsed = 0f;
+            instance.lifetime = Mathf.Max(0.02f, duration);
+            _instances[i] = instance;
+        }
+    }
+
     public void ClearImmediate()
     {
         if (_instances == null)

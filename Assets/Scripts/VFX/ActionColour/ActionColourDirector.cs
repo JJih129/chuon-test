@@ -1,6 +1,6 @@
 // 추온 액션 컬러 디렉터 (반복 11)
 // 흑백 '흡수' 연출 + 포스트 이벤트(패리 색수차/비네트, 브레이크 채도 딥, 저체력 붉은 비네트, 퍼펙트 회피 쿨 틴트)
-// 와 화면 갈라짐(ScreenShatter) 타이밍을 실시간(unscaled) 기준으로 굴려 ActionColourState 에 써 넣는다.
+// 와 화면 베기(ScreenCut, 반복 14S) 타이밍을 실시간(unscaled) 기준으로 굴려 ActionColourState 에 써 넣는다.
 // 모든 세기는 접근성 '화면 번쩍임' 슬라이더(AccessibilityOptionsRuntime.FlashIntensity)로 제한된다.
 //
 // 사용:
@@ -54,14 +54,28 @@ public sealed class ActionColourDirector : MonoBehaviour
     float _lowHpCurrent;
     float _heartPhase;
 
-    // ------------------------------------------------------------------ 화면 갈라짐
-    bool _shatterActive;
-    float _shatterStart;
-    float _shatterCrackDuration;
-    float _shatterBurstDuration;
-    Vector2 _shatterImpact;
-    bool _shatterBurstNotified;
-    System.Action _shatterOnBurst;
+    // ------------------------------------------------------------------ 화면 베기 (반복 14S)
+    static readonly Color CutCoreColor = new Color(1f, 0.985f, 0.97f, 1f);
+    static readonly Color CutCalmCoreColor = new Color(0.8f, 0.81f, 0.83f, 1f);
+    static readonly Color CutRedColor = new Color(0.9f, 0.07f, 0.09f, 1f);   // 츠카사 레드
+    static readonly Color CutGapColor = new Color(0.022f, 0.022f, 0.026f, 1f);   // 그래파이트 (선형)
+    const float CutFlashFrames = 0.034f;   // 분리 순간 반전/흰 빛, 끝 스냅 — 60 fps 기준 2 프레임
+    const float CutCalmSoft = 0.45f;
+
+    bool _cutActive;
+    float _cutStart;
+    float _cutPace = 1f;          // calm 모드에선 느리게 (선·분리 모두)
+    float _cutCalm;
+    ScreenCutPattern _cut;
+    bool _cutSplitStarted;
+    bool _cutSkipped;
+    float _cutSplitStartReal;
+    float _cutSplitDurReal;
+    int _cutSfxFired;             // 비트 i = 선 i 슬래시, 비트 7 = 납도 클릭
+    System.Action _cutOnSplit;    // 라이브 화면으로 스냅되는 순간 (끝/건너뛰기/중단) 한 번
+    AudioClip _cutSlashClip;
+    AudioClip _cutClickClip;
+    bool _cutAudioLoaded;
 
     // ------------------------------------------------------------------ 씬 참조
     PlayerHealth _playerHealth;
@@ -142,7 +156,7 @@ public sealed class ActionColourDirector : MonoBehaviour
         if (s_instance == null)
             return;
         s_instance._bw = default;
-        s_instance.StopShatterInternal();
+        s_instance.StopCutInternal();
     }
 
     /// <summary>퍼펙트 패리: 짧은 흑백 + 색수차 + 비네트 펄스.</summary>
@@ -206,54 +220,77 @@ public sealed class ActionColourDirector : MonoBehaviour
         if (d == null)
             return;
         d.MarkDefaultSubjects();
-        ScreenShatterAssets.Load();
+        d.LoadCutAudio();
         d._prewarmFrames = 3;
         ActionColourState.SetPrewarm(true);
-        ActionColourState.RequestShatterCapture();
+        ActionColourState.RequestCutCapture();
     }
 
-    // ------------------------------------------------------------------ 화면 갈라짐 (ScreenShatter 가 호출)
+    // ------------------------------------------------------------------ 화면 베기 (ScreenCut 이 호출)
 
-    internal static void StartShatter(Vector2 impactViewport, float crackDuration, float burstDuration, System.Action onBurst)
+    internal static void StartCut(in ScreenCutPattern pattern, System.Action onSplit)
     {
         ActionColourDirector d = Ensure();
-        if (d == null)
-            return;
-        if (ScreenShatterAssets.Load() == null)
+        if (d == null || pattern.Count <= 0)
         {
-            onBurst?.Invoke();
+            onSplit?.Invoke();
             return;
         }
-        d._shatterActive = true;
-        d._shatterStart = Time.unscaledTime;
-        d._shatterCrackDuration = Mathf.Max(0.01f, crackDuration);
-        d._shatterBurstDuration = Mathf.Max(0.05f, burstDuration);
-        d._shatterImpact = impactViewport;
-        d._shatterBurstNotified = false;
-        d._shatterOnBurst = onBurst;
-        ActionColourState.RequestShatterCapture();
-        d.WriteShatter(0f, 0f);
-        LastEvent = "shatter";
+        if (d._cutActive)
+            d.StopCutInternal();   // 이전 베기의 분리 콜백은 그대로 한 번 발사
+
+        float flash = AccessibilityOptionsRuntime.FlashIntensity;
+        d._cut = pattern;
+        d._cut.Count = Mathf.Min(pattern.Count, ActionColourState.CutMaxLines);
+        d._cutCalm = 1f - Mathf.Clamp01(flash / 0.25f);
+        d._cutPace = Mathf.Lerp(1f, 1.5f, d._cutCalm);
+        d._cutActive = true;
+        d._cutStart = Time.unscaledTime;
+        d._cutSplitStarted = false;
+        d._cutSkipped = false;
+        d._cutSfxFired = 0;
+        d._cutOnSplit = onSplit;
+        d.LoadCutAudio();
+        ActionColourState.RequestCutCapture();
+        ActionColourState.SetCutActive(true);
+        d.WriteCut(0f, 0f, flash);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        if (s_qaCutOffsets != null)
+        {
+            for (int k = 0; k < s_qaCutOffsets.Length; k++)
+                s_qaCaptures.Add((d._cutStart + s_qaCutOffsets[k], s_qaCutPrefix + "_" + k.ToString("00") + ".png"));
+            s_qaCutOffsets = null;
+        }
+#endif
+        LastEvent = "cut";
         PulseCount++;
     }
 
-    internal static void SkipShatter()
+    internal static void SkipCut()
     {
-        if (s_instance == null || !s_instance._shatterActive)
+        ActionColourDirector d = s_instance;
+        if (d == null || !d._cutActive)
             return;
-        // 남은 시간을 아주 짧게 (튕겨 나가는 첫 프레임 몇 장만)
         float now = Time.unscaledTime;
-        float elapsed = now - s_instance._shatterStart;
-        float total = s_instance._shatterCrackDuration + s_instance._shatterBurstDuration;
-        if (elapsed < total)
+        d._cutSkipped = true;
+        d._cutSfxFired = ~0;   // 건너뛰면 남은 효과음은 생략
+        if (!d._cutSplitStarted)
         {
-            s_instance._shatterCrackDuration = Mathf.Min(s_instance._shatterCrackDuration, elapsed);
-            s_instance._shatterBurstDuration = Mathf.Max(0.12f, Mathf.Min(0.18f, total - elapsed));
-            s_instance._shatterStart = now - s_instance._shatterCrackDuration;
+            // 선은 즉시 완성 → 바로 짧게 갈라진다
+            d._cutStart = now - d._cut.SplitAt * d._cutPace;
+            return;
+        }
+        // 분리 중: 현재 진행에서 남은 부분을 0.15 s 안에
+        float s = Mathf.Clamp01((now - d._cutSplitStartReal) / d._cutSplitDurReal);
+        float dur = 0.15f / Mathf.Max(0.05f, 1f - s);
+        if (dur < d._cutSplitDurReal)
+        {
+            d._cutSplitDurReal = dur;
+            d._cutSplitStartReal = now - s * dur;
         }
     }
 
-    internal static bool ShatterPlaying => s_instance != null && s_instance._shatterActive;
+    internal static bool CutPlaying => s_instance != null && s_instance._cutActive;
 
     // ================================================================== 수명
 
@@ -288,7 +325,7 @@ public sealed class ActionColourDirector : MonoBehaviour
         LobbyManager.LowerFloorReached -= HandleLowerFloorReached;
         Unsubscribe();
         ActionColourState.ClearColour();
-        ActionColourState.SetShatter(default, false);
+        ActionColourState.SetCutActive(false);
         ActionColourState.SetPrewarm(false);
     }
 
@@ -301,7 +338,7 @@ public sealed class ActionColourDirector : MonoBehaviour
     void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         _bw = default;
-        StopShatterInternal();
+        StopCutInternal();
         _lowHpTarget = 0f;
         _lowHpCurrent = 0f;
         _markedRoots.Clear();
@@ -551,9 +588,9 @@ public sealed class ActionColourDirector : MonoBehaviour
 
         ActionColourState.SetColour(s, true);
 
-        // ---- 화면 갈라짐 ----
-        if (_shatterActive)
-            TickShatter(now, flash);
+        // ---- 화면 베기 ----
+        if (_cutActive)
+            TickCut(now, flash);
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         for (int i = s_qaCaptures.Count - 1; i >= 0; i--)
@@ -584,6 +621,31 @@ public sealed class ActionColourDirector : MonoBehaviour
     {
         Ensure();
         s_qaNextFrame.Add(action);
+    }
+
+    static float[] s_qaCutOffsets;
+    static string s_qaCutPrefix;
+
+    /// <summary>QA: 다음 화면 베기가 시작되면 시작 기준 offsets(실시간 s)마다 캡처 (prefix_00.png …).</summary>
+    public static void QaArmCutCaptures(string prefix, float[] offsets)
+    {
+        Ensure();
+        s_qaCutPrefix = prefix;
+        s_qaCutOffsets = offsets;
+    }
+
+    /// <summary>QA(오프라인 렌더): 패턴을 실시간 t 초 시점으로 평가해 ActionColourState.Cut 에 쓴다.</summary>
+    public static void QaEvaluateCut(in ScreenCutPattern pattern, float t, float flash, float aspect)
+    {
+        float calm = 1f - Mathf.Clamp01(flash / 0.25f);
+        float pace = Mathf.Lerp(1f, 1.5f, calm);
+        float te = t / pace;
+        bool split = te >= pattern.SplitAt;
+        float splitDur = Mathf.Max(0.05f, pattern.SplitDuration * pace);
+        float s = split ? Mathf.Clamp01((t - pattern.SplitAt * pace) / splitDur) : 0f;
+        ActionColourState.CutData c = ActionColourState.Cut;
+        EvaluateCut(pattern, te, s, split, splitDur, calm, flash, aspect, c);
+        c.Count = Mathf.Min(pattern.Count, ActionColourState.CutMaxLines);
     }
 
     /// <summary>QA: 저체력 비네트/심장 박동 강제 (ratio 1 = 해제).</summary>
@@ -709,59 +771,173 @@ public sealed class ActionColourDirector : MonoBehaviour
             _heartbeat.Play();
     }
 
-    // ------------------------------------------------------------------ 화면 갈라짐
+    // ------------------------------------------------------------------ 화면 베기
 
-    void TickShatter(float now, float flash)
+    void LoadCutAudio()
     {
-        float t = now - _shatterStart;
-        float crack = Mathf.Clamp01(t / _shatterCrackDuration);
-        float burst = Mathf.Clamp01((t - _shatterCrackDuration) / _shatterBurstDuration);
+        if (_cutAudioLoaded)
+            return;
+        _cutAudioLoaded = true;
+        _cutSlashClip = Resources.Load<AudioClip>("Audio/SFX_ScreenCut_Slash_GEN");
+        _cutClickClip = Resources.Load<AudioClip>("Audio/SFX_ScreenCut_Sheathe_GEN");
+    }
 
-        if (!_shatterBurstNotified && t >= _shatterCrackDuration)
+    void TickCut(float now, float flash)
+    {
+        float te = (now - _cutStart) / _cutPace;   // 패턴 시간
+        float splitAt = _cut.SplitAt;
+
+        if (_cut.Sfx && _cutSfxFired != ~0)
         {
-            _shatterBurstNotified = true;
-            System.Action cb = _shatterOnBurst;
-            _shatterOnBurst = null;
-            cb?.Invoke();
+            for (int i = 0; i < _cut.Count; i++)
+            {
+                int bit = 1 << i;
+                if ((_cutSfxFired & bit) == 0 && te >= _cut.Get(i).Start)
+                {
+                    _cutSfxFired |= bit;
+                    OneShotAudio.Play2D(_cutSlashClip, 0.62f, 1f + 0.06f * i);
+                }
+            }
+            // 납도 '딸깍' — 갈라지기 직전, 정적 속에서
+            if ((_cutSfxFired & 0x80) == 0 && te >= splitAt - 0.05f)
+            {
+                _cutSfxFired |= 0x80;
+                OneShotAudio.Play2D(_cutClickClip, 0.8f, 1f);
+            }
         }
 
-        if (burst >= 1f)
+        if (!_cutSplitStarted && te >= splitAt)
         {
-            StopShatterInternal();
+            _cutSplitStarted = true;
+            _cutSplitStartReal = now;
+            _cutSplitDurReal = _cutSkipped ? 0.16f : Mathf.Max(0.05f, _cut.SplitDuration * _cutPace);
+        }
+
+        float s = _cutSplitStarted ? Mathf.Clamp01((now - _cutSplitStartReal) / _cutSplitDurReal) : 0f;
+        if (s >= 1f)
+        {
+            StopCutInternal();
             return;
         }
-
-        WriteShatter(crack, burst, flash);
+        WriteCut(te, s, flash);
     }
 
-    void WriteShatter(float crack, float burst, float flash = 1f)
+    void WriteCut(float te, float s, float flash)
     {
-        // 접근성 대체: 번쩍임 0 근처에서는 파편 비산(급격한 고대비 움직임) 대신
-        // 낮은 대비의 정지 균열 → 정지 프레임에서 라이브 화면으로 크로스페이드.
-        float calm = 1f - Mathf.Clamp01(flash / 0.25f);
-        float fade = burst * burst * (3f - 2f * burst);
-        var snap = new ActionColourState.ShatterSnapshot
-        {
-            Impact = _shatterImpact,
-            Crack = crack * crack * (3f - 2f * crack),
-            Burst = burst * (1f - calm),
-            Alpha = Mathf.Lerp(1f, 1f - fade, calm),
-            ChromaticAberration = 0.006f * flash,
-            CrackColor = Color.Lerp(new Color(0.86f, 0.93f, 1f, Mathf.Lerp(0.5f, 0.9f, flash)), new Color(0.62f, 0.63f, 0.66f, 0.45f), calm)
-        };
-        ActionColourState.SetShatter(snap, true);
+        float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : 16f / 9f;
+        EvaluateCut(_cut, te, s, _cutSplitStarted, _cutSplitDurReal, _cutCalm, flash, aspect, ActionColourState.Cut);
     }
 
-    void StopShatterInternal()
+    /// <summary>패턴 시간 te·분리 진행 s 에서 셰이더 상수를 계산한다 (할당 없음).</summary>
+    static void EvaluateCut(in ScreenCutPattern cut, float te, float s, bool split, float splitDur, float calm, float flash, float aspect, ActionColourState.CutData c)
     {
-        if (_shatterActive && !_shatterBurstNotified)
+        float move = 1f - calm;
+
+        // 분리 이동: 빠르게 벌어진 뒤 천천히 흘러간다
+        float e = 1f - (1f - s) * (1f - s) * (1f - s);
+        float drift = (e + 0.3f * s) * move;
+
+        c.Count = cut.Count;
+        c.Calm = calm;
+        for (int i = 0; i < ActionColourState.CutMaxLines; i++)
         {
-            System.Action cb = _shatterOnBurst;
-            _shatterOnBurst = null;
-            _shatterBurstNotified = true;
-            cb?.Invoke();
+            if (i >= cut.Count)
+            {
+                c.Lines[i] = new Vector4(0f, 0f, 1f, 0f);
+                c.Spans[i] = Vector4.zero;
+                c.Moves[i] = Vector4.zero;
+                continue;
+            }
+            ScreenCutLine l = cut.Get(i);
+            Vector2 p = new Vector2((l.Through.x * 2f - 1f) * aspect, l.Through.y * 2f - 1f);
+            float rad = l.AngleDeg * Mathf.Deg2Rad;
+            Vector2 d = new Vector2(Mathf.Cos(rad), Mathf.Sin(rad));
+            ClipToScreen(p, d, aspect, out float tA, out float tB);
+
+            float k = Mathf.Clamp01((te - l.Start) / Mathf.Max(0.01f, l.Duration));
+            float prog = tB > tA ? 1f - (1f - k) * (1f - k) * (1f - k) : 0f;   // 날카로운 ease-out
+            float doneAt = l.Start + l.Duration;
+            float lineFlash = k <= 0f ? 0f : te < doneAt ? 1f : Mathf.Exp(-(te - doneAt) / 0.07f);
+
+            c.Lines[i] = new Vector4(p.x, p.y, d.x, d.y);
+            c.Spans[i] = new Vector4(tA, tB, prog, lineFlash * flash);
+            c.Moves[i] = new Vector4(l.Slide * drift, l.Push * drift, l.RotationDeg * Mathf.Deg2Rad * drift, 0f);
         }
-        _shatterActive = false;
-        ActionColourState.SetShatter(default, false);
+
+        // 정지 프레임: 선을 긋는 동안 살짝 어둡게 → 정적(hold) 동안 더 어둡고 채도가 빠져 선만 빛난다
+        float dimIn = Mathf.Clamp01(te / 0.06f);
+        float hold = Mathf.Clamp01((te - cut.LinesEnd) / Mathf.Max(0.01f, cut.Hold));
+        hold = hold * hold * (3f - 2f * hold);
+        float dim = (cut.Dim * dimIn + 0.14f * hold) * Mathf.Lerp(0.5f, 1f, flash);
+        float desat = 0.55f * hold;
+
+        // 분리: 조각은 끝까지 불투명 (라이브 화면과 겹친 잔상 없음) → 끝나는 프레임에 라이브로 하드 컷 스냅.
+        // 분리 순간 2 프레임 반전 + 틈 흰 빛 (번쩍임 슬라이더 비례, 0 이면 없음).
+        // calm(번쩍임 0 근처)만 베인 선에서 번지는 크로스페이드 (조각이 움직이지 않으므로 잔상 없음).
+        float splitT = split ? s * splitDur : 0f;
+        float overall = 1f;
+        if (calm > 0.5f)
+        {
+            float fade = Mathf.Clamp01((s - 0.75f) / 0.25f);
+            overall = 1f - fade * fade * (3f - 2f * fade);
+        }
+        float invert = split && splitT < CutFlashFrames ? 0.85f * flash : 0f;
+        float gapWhite = split ? cut.GapFlash * flash * (splitT < CutFlashFrames ? 1f : Mathf.Exp(-(splitT - CutFlashFrames) / 0.035f)) : 0f;
+        // 화면 공간 베기 선은 반전 프레임 동안 사라진다 (조각 절단면 발광이 이어받음). calm 은 천천히.
+        float lineFade = calm > 0.5f ? Mathf.Clamp01(s / 0.4f) : Mathf.Clamp01(splitT / (CutFlashFrames * 1.5f));
+        float rest = 1f - s;
+
+        c.State = new Vector4(split ? Mathf.Max(s, 1e-4f) : 0f, overall, gapWhite, dim);
+        float front = split ? Mathf.Lerp(-CutCalmSoft, 1.7f, Mathf.SmoothStep(0f, 1f, s)) : -CutCalmSoft;
+        c.Fx = new Vector4(split ? 1f - lineFade * lineFade * (3f - 2f * lineFade) : 1f, cut.SpeedLines * flash, front, cut.Streak * flash);
+        c.Fx2 = new Vector4(split ? Mathf.Pow(rest, 1.5f) * Mathf.Lerp(0.35f, 1f, flash) * move : 0f,
+            invert, CutCalmSoft, desat);
+        c.Core = Color.Lerp(CutCoreColor, CutCalmCoreColor, calm);
+        Color edge = CutRedColor;
+        edge.a = Mathf.Lerp(0.9f, 0.35f, calm);
+        c.Edge = edge;
+        c.Gap = CutGapColor;
+    }
+
+    /// <summary>무한 직선 p + t·d 를 화면 사각형(±aspect, ±1)에 자른 파라미터 구간.</summary>
+    static void ClipToScreen(Vector2 p, Vector2 d, float aspect, out float tA, out float tB)
+    {
+        float tMin = -1e4f, tMax = 1e4f;
+        ClipAxis(p.x, d.x, aspect, ref tMin, ref tMax);
+        ClipAxis(p.y, d.y, 1f, ref tMin, ref tMax);
+        if (tMin > tMax)
+        {
+            tA = tB = 0f;
+            return;
+        }
+        tA = tMin;
+        tB = tMax;
+    }
+
+    static void ClipAxis(float p, float d, float half, ref float tMin, ref float tMax)
+    {
+        if (Mathf.Abs(d) < 1e-5f)
+        {
+            if (Mathf.Abs(p) > half)
+                tMin = 1e4f;   // 화면 밖 평행선
+            return;
+        }
+        float t1 = (-half - p) / d;
+        float t2 = (half - p) / d;
+        tMin = Mathf.Max(tMin, Mathf.Min(t1, t2));
+        tMax = Mathf.Min(tMax, Mathf.Max(t1, t2));
+    }
+
+    void StopCutInternal()
+    {
+        if (_cutActive && _cutOnSplit != null)
+        {
+            System.Action cb = _cutOnSplit;
+            _cutOnSplit = null;
+            cb.Invoke();
+        }
+        _cutActive = false;
+        _cutSplitStarted = false;
+        ActionColourState.SetCutActive(false);
     }
 }

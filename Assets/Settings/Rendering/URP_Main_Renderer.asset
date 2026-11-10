@@ -74,5 +74,4 @@ MonoBehaviour:
   m_Active: 1
   colourShader: {fileID: 4800000, guid: bcc65b34c6ae6ab4cbf0651c8018c5f6, type: 3}
   maskShader: {fileID: 4800000, guid: 251d916b5e625b84ca9fc2dadc185a1b, type: 3}
-  shatterShader: {fileID: 4800000, guid: a813d96c54193254192ce1ffeca24f29, type: 3}
-  shatterMesh: {fileID: 1887729927274155973, guid: a2e4475bd319e704cbae7d898cbada9e, type: 3}
+  cutShader: {fileID: 4800000, guid: f4429da60327f524cbbbb77e5426ff8b, type: 3}

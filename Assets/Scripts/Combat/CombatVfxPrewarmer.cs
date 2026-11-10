@@ -188,6 +188,7 @@ public sealed class CombatVfxPrewarmer : MonoBehaviour
         "UltimateCinematicHudFrame", "UltimateSlashBurstSpawner", "UltimateSwordCoreChargeFx", "UltimateScreenCrackOverlay",
         "UltimateEnemyCinematicState", "UltimateTargetBinder", "UltimateSequencePlayer", "UltimateHitProcessor",
         "SlashSequenceClip", "SlashSequenceBehaviour", "ScreenFXSignalHooks", "TimeScaleController",
+        "ScreenCut", "ActionColourDirector",
         "ActionColourDirector", "ScreenShatter", "PhaseCoreHUD", "MusicDirector",
         // 반복 14A: 튜토리얼 첫 퍼펙트 회피 슬로우(110 ms) / 튜토리얼 궁극기 런타임 구성 경로
         "PerfectDodgeController", "PerfectDodgeAfterImageEffect", "TutorialRuntimeBootstrap", "InfMobUltimateTarget", "UltimateTargetSimple"
