@@ -69,6 +69,7 @@ public sealed class TypeDOverhaul : MonoBehaviour
     [SerializeField] float overloadDamageMultiplier = 1.2f;
     [SerializeField] float overloadBalanceMultiplier = 1.5f;
     [SerializeField] float overloadDuration = 5f;
+    [SerializeField, Range(0.3f, 1f)] float lockdownBossDamageScale = 0.7f; // 반복 18: 봉쇄(노드 단계) 중 보스 공격력 배율
     [SerializeField] float blinkWindow = 2.2f;
     [SerializeField] float blinkDamageMultiplier = 1.5f;
     [SerializeField] float strongParryBalance = 35f;
@@ -326,12 +327,16 @@ public sealed class TypeDOverhaul : MonoBehaviour
             // 임계 폭주 생존 보상: 확정 처형 창 (overdriveBreakSeconds 동안 브레이크 유지)
         }
 
-        // 봉쇄 중 보스는 코어를 지키며 공세를 늦춘다 (노드를 부술 틈): 4.5 s 마다 2.4 s 공격 선택 보류
+        // 봉쇄 중 보스는 코어를 지키며 공세를 늦춘다 (노드를 부술 틈): 4.0 s 마다 3.3 s 공격 선택 보류 (iter18: 2.4 → 3.3)
         if (_stage == Stage.Lockdown && Time.time >= _nextLockdownThrottleAt && !Boss.IsAttackStateActive)
         {
-            _nextLockdownThrottleAt = Time.time + 4.5f;
-            Boss.ThrottleAttacksForOverhaul(2.4f);
+            _nextLockdownThrottleAt = Time.time + 4.0f;
+            Boss.ThrottleAttacksForOverhaul(3.3f);
         }
+        // 반복 18: 봉쇄 중 보스 근접 공격력 축소 — 기믹은 "노드를 부숴라"로 읽혀야 한다 (QA: 0.9 패배 대부분이 봉쇄 중 연속기 사망)
+        float dmgScale = _stage == Stage.Lockdown ? lockdownBossDamageScale : 1f;
+        if (!Mathf.Approximately(Boss.OverhaulDamageScale, dmgScale))
+            Boss.SetOverhaulDamageScale(dmgScale);
 
         TickLights();
         DownLoopWatchdog();

@@ -240,6 +240,7 @@ public sealed class CinematicDirector : MonoBehaviour
         bool pausedByMenu = false;
         // 반복 14C: 연출을 발동한 상호작용 키(F 등)를 계속 누르고 있으면 건너뛰기로 새지 않게, 한 번 뗀 뒤의 새 입력만 센다.
         bool needRelease = SkipHeld();
+        float tailFade = 0f; // 반복 18: 마지막으로 본 (끝 평가 전) 페이드 알파
 
         while (true)
         {
@@ -310,6 +311,11 @@ public sealed class CinematicDirector : MonoBehaviour
 
             if (director.time >= duration - 0.0001d || (elapsed > 0.1f && director.state != PlayState.Playing))
                 break;
+            // 반복 18: 끝 페이드 클립이 타임라인 끝에 딱 맞으면, 끝을 지나는 평가 프레임에서 클립 가중치가 0 이 돼 페이드가 0 으로 풀린
+            // 화면(복귀 전 엉뚱한 구도)이 한 프레임 이상 보였다 → 거의 덮인 상태로 끝 1.5 프레임 안에 들어오면 여기서 끊고 덮개를 잡는다.
+            tailFade = overlay.FadeAlpha;
+            if (tailFade >= 0.8f && duration - director.time <= Math.Max(0.05d, Time.unscaledDeltaTime * 1.5d))
+                break;
             if (elapsed > guard)
             {
                 Debug.LogWarning($"[Cinematic] '{id}' exceeded {guard:F1}s realtime guard; forcing end", seq);
@@ -330,7 +336,7 @@ public sealed class CinematicDirector : MonoBehaviour
 
         director.Stop();
         seq.End();
-        EndGameplayLock();
+        EndGameplayLock(false); // 반복 18: HUD 는 복귀 페이드가 다 걷힌 뒤에 켠다 (어두운 복귀 화면 위에 HUD 만 먼저 뜨던 문제)
 
         // 복귀: 남은 검정/레터박스를 카메라 리그 블렌드(0.35 s)와 같이 걷는다.
         float fadeFrom = overlay.FadeAlpha;
@@ -338,21 +344,38 @@ public sealed class CinematicDirector : MonoBehaviour
         float boxFrom = overlay.Letterbox;
         float ret = Mathf.Max(0.01f, seq.ReturnFadeSeconds);
         float t = 0f;
+        // 반복 18: 덮개(거의 검정)로 끝나는 연출 — 리그 복귀를 컷으로 요청해 덮개가 걷히기 전에 이미 복귀 포즈에 있게 한다.
+        //   자연 종료면 끝 평가 프레임이 페이드를 0 으로 풀었을 수 있으므로 직전 프레임 값(tailFade)도 본다.
+        bool coverEnd = fadeFrom >= 0.8f || (!skipped && tailFade >= 0.8f);
+        if (coverEnd && fadeFrom < 1f)
+        {
+            fadeFrom = 1f;
+            overlay.SetFade(fadeColor, 1f);
+        }
+        float stoppedAt = Time.unscaledTime;
+        SoulsCameraRig rig = coverEnd ? SoulsCameraRig.Active : null;
+        if (rig != null && seq.HoldEndCoverSeconds <= 0f)
+            rig.RequestCutOnNextReturn();
         Finish(seq, skipped); // 게임플레이 쪽 후속 처리는 복귀 페이드와 동시에 시작해도 된다
         if (seq.HoldEndCoverSeconds > 0f && (fadeFrom > 0f || boxFrom > 0f))
         {
             // 반복 16: 씬 전환으로 끝나는 연출 — 덮개를 유지(호출자는 바로 이어서 씬을 로드). 로드가 안 되면 안전하게 걷는다.
+            RestoreHud();
             StartCoroutine(CoReleaseHeldCover(overlay, seq.HoldEndCoverSeconds, ret));
             yield break;
         }
-        if (fadeFrom >= 0.98f)
+        if (coverEnd)
         {
-            // 반복 17 (E3): 검정으로 끝나는 연출(레벨 밖 무대 — 오프닝·엘리베이터)은 카메라 리그 복귀 블렌드가 무대 → 플레이어 사이를
-            // 지나가는 중간 프레임(로비 천장·조명을 올려다보는 흰 화면)이 걷히는 검정 사이로 보였다 → 블렌드(0.35 s)가 끝날 때까지 검정 유지 후 걷는다.
+            // 반복 17 (E3) / 18: 검정으로 끝나는 연출(레벨 밖 무대 — 오프닝·엘리베이터)은 복귀 중간 프레임이 걷히는 덮개 사이로 보였다
+            // → 완전 검정으로 올려 두고, 리그가 복귀 포즈에 안착(컷 + 렌더 2프레임)할 때까지 유지한 뒤 걷는다.
+            fadeFrom = 1f;
             float held = 0f;
-            float holdFor = ret + 0.05f;
-            while (held < holdFor && !IsPlaying)
+            float holdMax = ret + 0.5f;
+            int settledFrames = 0;
+            while (held < holdMax && !IsPlaying)
             {
+                if (rig != null ? (rig.IsSettledAfterReturn(stoppedAt) && ++settledFrames >= 2) : held >= ret + 0.05f)
+                    break;
                 held += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
                 overlay.SetFade(fadeColor, fadeFrom);
                 yield return null;
@@ -370,6 +393,7 @@ public sealed class CinematicDirector : MonoBehaviour
         {
             overlay.SetFade(Color.black, 0f);
             overlay.SetLetterbox(0f);
+            RestoreHud(); // 다음 연출이 이미 시작됐다면 그쪽 BeginGameplayLock 이 복원·재숨김을 맡는다
         }
     }
 
@@ -516,8 +540,7 @@ public sealed class CinematicDirector : MonoBehaviour
             }
         }
 
-        _hudGroups.Clear();
-        _hudAlphas.Clear();
+        RestoreHud(); // 반복 18: 앞 연출의 복귀 페이드 중(HUD 보류 중)에 시작하면 원래 알파부터 되돌려 놓는다
         string[] hud = seq.HudObjectNames;
         if (hud != null)
         {
@@ -544,7 +567,7 @@ public sealed class CinematicDirector : MonoBehaviour
         }
     }
 
-    void EndGameplayLock()
+    void EndGameplayLock(bool restoreHud = true)
     {
         if (_blockedInput && _blocker != null && !(_blocker is UnityEngine.Object o && o == null))
             _blocker.BlockAll(false);
@@ -565,6 +588,12 @@ public sealed class CinematicDirector : MonoBehaviour
             _pausedBoss.SetExternalIntroPaused(false);
         _pausedBoss = null;
 
+        if (restoreHud)
+            RestoreHud();
+    }
+
+    void RestoreHud()
+    {
         for (int i = 0; i < _hudGroups.Count; i++)
             if (_hudGroups[i] != null)
                 _hudGroups[i].alpha = _hudAlphas[i];

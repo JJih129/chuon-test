@@ -570,7 +570,7 @@ public partial class BossController
         if (receiver == null)
             return;
 
-        float damage = Mathf.Max(0f, baseDamage * Mathf.Max(0f, outgoingDamageMultiplier) * Tuning.ResolveDifficultyDamageMultiplier());
+        float damage = Mathf.Max(0f, baseDamage * Mathf.Max(0f, outgoingDamageMultiplier * _overhaulDamageScale) * Tuning.ResolveDifficultyDamageMultiplier());
         receiver.ReceiveHit(new HitPayload
         {
             damage = damage,

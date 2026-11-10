@@ -370,6 +370,11 @@ public partial class BossController
 
     public void ThrottleAttacksForOverhaul(float seconds) => BlockAttackSelectionFor(seconds);
 
+    // 반복 18: 단계별(봉쇄 등) 보스 공격력 배율 — 씬 규칙의 ScaleOutgoingDamage 와 곱으로 적용된다.
+    float _overhaulDamageScale = 1f;
+    public float OverhaulDamageScale => _overhaulDamageScale;
+    public void SetOverhaulDamageScale(float scale) => _overhaulDamageScale = Mathf.Clamp(scale, 0.1f, 2f);
+
     /// <summary>블링크 반격: 빈틈(피해 배수) + 공격 선택 차단.</summary>
     public void OpenOverhaulPunishWindow(string source, float duration, float damageMultiplier, float blockAttacksFor)
     {
@@ -709,7 +714,7 @@ public partial class BossController
         int before = health != null ? health.CurrentHP : 0;
         Vector3 dir = playerTarget.position - transform.position;
         dir.y = 0f;
-        float damage = Mathf.Max(0f, baseDamage * Mathf.Max(0f, outgoingDamageMultiplier) * Tuning.ResolveDifficultyDamageMultiplier());
+        float damage = Mathf.Max(0f, baseDamage * Mathf.Max(0f, outgoingDamageMultiplier * _overhaulDamageScale) * Tuning.ResolveDifficultyDamageMultiplier());
         if (heavyLaunch)
             PlayerOverhaulReactions.MarkNextHitLaunch(source);
         receiver.ReceiveHit(new HitPayload

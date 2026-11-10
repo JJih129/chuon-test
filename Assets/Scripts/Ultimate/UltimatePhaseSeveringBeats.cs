@@ -482,8 +482,10 @@ public sealed class UltimatePhaseSeveringBeats : MonoBehaviour
         _clickPlayed = false;
         Transform sword = _ctl != null ? _ctl.NbSwordFocus : null;
         Vector3 hilt = sword != null ? sword.position : _finish + Vector3.up * 0.95f + _R * 0.22f;
-        Vector3 pos = hilt + _R * 0.62f + _F * 0.32f + Vector3.up * 0.1f;
-        SetShot(pos, hilt, 24f, 6f, 0.08f, 1.4f, 0f, 0f);
+        // 반복 18: 0.7 m · FOV 24 는 너무 붙어 로우폴리 각이 보였다 → ~1.8 m · FOV 32 (숙인 머리·손·칼집이 함께 들어오는 미디엄 샷, 스크린샷으로 조정)
+        Vector3 look = hilt + Vector3.up * 0.12f;
+        Vector3 pos = hilt + _R * 1.5f + _F * 1.0f + Vector3.up * 0.4f;
+        SetShot(pos, look, 32f, 6f, 0.08f, 1.4f, 0f, 0f);
 
         // 칼이 들어가는 빛줄기: 칼집 방향에서 손잡이 쪽으로 줄어든다
         if (_glint != null)

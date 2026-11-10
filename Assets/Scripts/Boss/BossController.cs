@@ -3677,7 +3677,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
 
         if (attackHitbox != null)
         {
-            float resolvedDamage = Mathf.Max(0f, pattern.damageAmount * Mathf.Max(0f, outgoingDamageMultiplier) * Tuning.ResolvePhaseDamageMultiplier(pattern) * Tuning.ResolveDifficultyDamageMultiplier());
+            float resolvedDamage = Mathf.Max(0f, pattern.damageAmount * Mathf.Max(0f, outgoingDamageMultiplier * _overhaulDamageScale) * Tuning.ResolvePhaseDamageMultiplier(pattern) * Tuning.ResolveDifficultyDamageMultiplier());
             attackHitbox.canPerfectDodge = canPerfectDodge;
             attackHitbox.Configure(resolvedDamage, canParry, canGuard, isUnblockable, causesGuardBreak, transform);
         }
@@ -3720,7 +3720,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
 
         if (pattern.ResolveFiresSwordWaveProjectile())
         {
-            float projectileDamage = Mathf.Max(0f, pattern.damageAmount * Mathf.Max(0f, outgoingDamageMultiplier) * Tuning.ResolvePhaseDamageMultiplier(pattern) * Tuning.ResolveDifficultyDamageMultiplier());
+            float projectileDamage = Mathf.Max(0f, pattern.damageAmount * Mathf.Max(0f, outgoingDamageMultiplier * _overhaulDamageScale) * Tuning.ResolvePhaseDamageMultiplier(pattern) * Tuning.ResolveDifficultyDamageMultiplier());
             StartCoroutine(Co_FireSwordWaveProjectile(pattern, projectileDamage, canParry, canPerfectDodge, canGuard, isUnblockable, causesGuardBreak));
         }
 

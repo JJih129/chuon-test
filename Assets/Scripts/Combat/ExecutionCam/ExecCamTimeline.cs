@@ -344,7 +344,7 @@ public sealed class ExecCamTimeline
             case ExecCamMode.ReturnToGameplay:
             {
                 ExecCamOutput target = GameplayPose();
-                return _shotStart.valid ? Blend(_shotStart, target, e) : target;
+                return _shotStart.valid ? ArcBlendAroundAttacker(_shotStart, target, e) : target;
             }
             default:
                 if (_shotSafe)
@@ -433,6 +433,27 @@ public sealed class ExecCamTimeline
             dutch = Mathf.LerpUnclamped(a.dutch, b.dutch, w),
             valid = true
         };
+    }
+
+    /// <summary>
+    /// 반복 18: 게임플레이 복귀 경로를 플레이어 축을 도는 호로 보간 (직선 보간이 어깨·칼 바로 옆을 지나 한 프레임 칼날 안으로 들어가던 문제).
+    /// 반경은 양 끝 중 작은 쪽 이상, 칼 리치(≈1.3 m) 이상을 유지한다.
+    /// </summary>
+    ExecCamOutput ArcBlendAroundAttacker(ExecCamOutput a, ExecCamOutput b, float w)
+    {
+        ExecCamOutput o = Blend(a, b, w);
+        Vector3 axis = _ctx.attackerFeet;
+        Vector3 da = a.position - axis, db = b.position - axis;
+        da.y = 0f; db.y = 0f;
+        float ra = da.magnitude, rb = db.magnitude;
+        if (ra < 0.05f || rb < 0.05f)
+            return o;
+        float yaw = Mathf.LerpAngle(Mathf.Atan2(da.x, da.z) * Mathf.Rad2Deg, Mathf.Atan2(db.x, db.z) * Mathf.Rad2Deg, w) * Mathf.Deg2Rad;
+        float lin = Mathf.Lerp(ra, rb, w);
+        float r = lin + Mathf.Max(0f, 1.3f - lin) * Mathf.Sin(Mathf.PI * Mathf.Clamp01(w)); // 끝점은 그대로, 중간만 바깥으로
+        o.position = new Vector3(axis.x + Mathf.Sin(yaw) * r, o.position.y, axis.z + Mathf.Cos(yaw) * r);
+        o.rotation = LookRot(o.look - o.position);
+        return o;
     }
 
     static Quaternion LookRot(Vector3 d) => d.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(d, Vector3.up) : Quaternion.identity;

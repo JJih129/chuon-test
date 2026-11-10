@@ -740,6 +740,17 @@ public sealed class SoulsCameraRig : MonoBehaviour
     Quaternion _returnFromRotation;
     float _returnFromFov;
     bool _explicitSnapPending;
+    float _cutReturnRequestedAt = -10f;
+
+    /// <summary>
+    /// 반복 18: 다음 연출 → 게임플레이 복귀를 블렌드 없이 컷으로 (검정 덮개 뒤에서 끝나는 연출 — 레벨 밖 무대).
+    /// 블렌드가 무대 → 플레이어 사이 허공을 지나며 어둡고 엉뚱한 화면이 덮개 사이로 보이던 문제. 1 s 안에 복귀하지 않으면 무효.
+    /// </summary>
+    public void RequestCutOnNextReturn() => _cutReturnRequestedAt = Time.unscaledTime;
+
+    /// <summary>반복 18: since(unscaled) 이후 게임플레이로 복귀했고 (내부·브레인) 블렌드가 끝났다 → 화면이 복귀 포즈.</summary>
+    public bool IsSettledAfterReturn(float since)
+        => CinemachineCore.IsLive(vcam) && LastBecameLiveAt >= since && !IsBlendingFromCinematic && (_brain == null || !_brain.IsBlending);
 
     // 연출 중 매 프레임: 복귀 시 쓸 포즈를 플레이어 등 뒤(락온이면 플레이어→타깃 축)로 맞춰 둔다.
     void PrepareReturnPose(bool locked, Transform target)
@@ -772,7 +783,11 @@ public sealed class SoulsCameraRig : MonoBehaviour
         _explicitSnapPending = false;
 
         // vcam 은 연출 중 화면을 따라가고 있었으므로 그 포즈에서 게임플레이 포즈로 내부 블렌드
-        _returnBlendActive = profile.cinematicBlendTime > 0f;
+        bool cut = Time.unscaledTime - _cutReturnRequestedAt <= 1f && Time.unscaledTime >= _cutReturnRequestedAt;
+        _cutReturnRequestedAt = -10f;
+        _returnBlendActive = profile.cinematicBlendTime > 0f && !cut;
+        if (cut && _brain != null)
+            _brain.ActiveBlend = null; // 브레인 쪽 연출 캠 → vcam 블렌드도 컷
         _returnBlendStartAt = Time.unscaledTime;
         _returnFromPosition = vcam.transform.position;
         _returnFromRotation = vcam.transform.rotation;

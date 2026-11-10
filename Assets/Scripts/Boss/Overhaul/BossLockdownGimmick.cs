@@ -11,14 +11,14 @@ using UnityEngine;
 public sealed class BossLockdownGimmick : MonoBehaviour
 {
     [SerializeField, Min(1)] int nodeCount = 3;
-    [SerializeField, Min(1)] int nodeIntegrity = 4;
+    [SerializeField, Min(1)] int nodeIntegrity = 3;
     [SerializeField] float nodeHeight = 1.25f;
     [SerializeField, Min(0)] int shutterCount = 6;
     [SerializeField] float shutterWidth = 5.2f;
     [SerializeField] float shutterHeight = 6.5f;
     [SerializeField] float shutterDropTime = 1.4f;
     [SerializeField] bool spawnTurret = true;
-    [SerializeField] bool spawnDrone = true;
+    [SerializeField] bool spawnDrone = false; // iter18: 봉쇄는 "노드를 부숴라" — 드론까지 겹치면 과부하
 
     TypeDOverhaul _overhaul;
     bool _active;
