@@ -248,6 +248,7 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         {
             gameObject.AddComponent<TutorialExitInteractableBridge>().ConfigureRuntime(_flow, _ego, _hint, zoneExit, exitInteractable);
             exitInteractable.BeforeSceneLoad += HandleExit;
+            exitInteractable.BeforeSceneLoadRoutine = ExitCinematicRoutine;
         }
 
         if (_playerHealth != null)
@@ -281,6 +282,9 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         }
         else
         {
+            // 반복 14: VR 부팅 연출(6.5 s, 기존 밴드 와이프와 동시). 미설치면 기존 그대로.
+            if (CinematicDirector.Has(BootCinematicId))
+                CinematicDirector.Play(BootCinematicId);
             _flow.StartFlow();
         }
     }
@@ -352,7 +356,10 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
             _flow.StepCompleted -= HandleStepCompleted;
         }
         if (exitInteractable != null)
+        {
             exitInteractable.BeforeSceneLoad -= HandleExit;
+            exitInteractable.BeforeSceneLoadRoutine = null;
+        }
         if (_playerHealth != null)
         {
             _playerHealth.OnHealthChanged -= HandleHealthChanged;
@@ -1142,7 +1149,29 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
     void HandleExit(SceneLoadInteractable interactable, object invoker)
     {
         StepLog.Add($"{Time.realtimeSinceStartup:F1}s EXIT -> {interactable.sceneName}");
+        // 반복 14: VR 종료 연출이 설치돼 있으면 오버레이는 연출이 끝난 뒤(ExitCinematicRoutine) 이어 받는다.
+        if (!CinematicDirector.Has(ExitCinematicId))
+            PlayExitOverlay();
+    }
+
+    const string BootCinematicId = "tut_vr_boot";
+    const string ExitCinematicId = "tut_vr_exit";
+
+    static void PlayExitOverlay() =>
         VrTransitionOverlay.Play("SIMULATION TERMINATED", "VR LINK RELEASED  //  현실 복귀", 0.45f);
+
+    // 반복 14: SceneLoadInteractable 가 씬 로드 전에 기다린다. 미설치면 null → 기존처럼 즉시 로드.
+    IEnumerator ExitCinematicRoutine(SceneLoadInteractable interactable, object invoker)
+    {
+        if (!CinematicDirector.Has(ExitCinematicId))
+            return null;
+        return CoExitCinematic();
+    }
+
+    IEnumerator CoExitCinematic()
+    {
+        yield return CinematicDirector.PlayRoutine(ExitCinematicId);
+        PlayExitOverlay();
     }
 
     static Canvas ResolveCanvas(TutorialManager legacy)

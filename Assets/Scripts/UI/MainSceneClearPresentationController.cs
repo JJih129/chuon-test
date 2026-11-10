@@ -167,10 +167,19 @@ public class MainSceneClearPresentationController : MonoBehaviour
                 yield return new WaitForSecondsRealtime(tsukasaEndingDelay);
 
             bool endingDone = false;
-            TsukasaEndingPresenter.Play(() => endingDone = true);
-            float guardUntil = Time.realtimeSinceStartup + 20f;
+            // 반복 14: 엔딩 연출(ending_tsukasa, 24 s)이 설치돼 있으면 그것을, 없으면(또는 다른 연출 재생 중이면) 기존 오버레이.
+            bool usedCinematic = CinematicDirector.Has("ending_tsukasa")
+                && CinematicDirector.Play("ending_tsukasa", () => endingDone = true);
+            if (!usedCinematic && !endingDone)
+                TsukasaEndingPresenter.Play(() => endingDone = true);
+            // 가드 30 s (연출 24 s + 여유). 일시정지 중에는 타임라인도 멈추므로 가드도 늘린다.
+            float guardUntil = Time.realtimeSinceStartup + 30f;
             while (!endingDone && Time.realtimeSinceStartup < guardUntil)
+            {
+                if (GameTimeScale.IsPaused)
+                    guardUntil += Time.unscaledDeltaTime;
                 yield return null;
+            }
         }
 
         PlayOverlay();

@@ -215,7 +215,7 @@ public sealed class MusicDirector : MonoBehaviour
         float duckTarget = 0f;
         if (_ultimate != null && _ultimate.IsCinematic)
             duckTarget = UltimateDuckDb;
-        else if (TsukasaEndingPresenter.IsPlaying || IntroDialoguePresenter.AnyVisible)
+        else if (TsukasaEndingPresenter.IsPlaying || IntroDialoguePresenter.AnyVisible || CinematicDirector.IsPlaying)
             duckTarget = DialogueDuckDb;
         float rate = duckTarget < _duckDb ? 40f : 10f; // 빠르게 내려가고 천천히 복귀
         _duckDb = Mathf.MoveTowards(_duckDb, duckTarget, dt * rate);

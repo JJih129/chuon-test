@@ -351,7 +351,9 @@ ShaderVariantCollection:
         passType: 0
       - keywords: FOG_EXP _SURFACE_TYPE_TRANSPARENT
         passType: 0
-      - keywords: 
+      - keywords: FOG_EXP2
+        passType: 0
+      - keywords:
         passType: 13
   - first: {fileID: 4800000, guid: 68e6db2ebdc24f95958faec2be5558d6, type: 3}
     second:
@@ -368,3 +370,8 @@ ShaderVariantCollection:
       variants:
       - keywords: FOG_EXP
         passType: 0
+  - first: {fileID: 4800000, guid: 5e40611a3bdbf63439e13db1bb7b91da, type: 3}
+    second:
+      variants:
+      - keywords:
+        passType: 13

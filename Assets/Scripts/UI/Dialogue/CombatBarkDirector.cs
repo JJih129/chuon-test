@@ -421,8 +421,8 @@ public sealed class CombatBarkDirector : MonoBehaviour
             return true;
         if (Time.timeScale <= 0.001f)
             return true; // 일시정지 메뉴
-        if (TsukasaEndingPresenter.IsPlaying)
-            return true;
+        if (TsukasaEndingPresenter.IsPlaying || CinematicDirector.IsPlaying)
+            return true; // 반복 14: 연출 재생 중 bark 금지
         if (_ultimate != null && _ultimate.IsCinematic)
             return true;
 

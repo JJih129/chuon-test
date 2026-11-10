@@ -88,7 +88,7 @@ public sealed class LobbyMobEncounter : MonoBehaviour
         if (_teachAwake || Time.time < _nextWakeCheckAt)
             return;
         _nextWakeCheckAt = Time.time + 0.2f;
-        if (LevelFacilityObservationBeat.IsPlaying)
+        if (LevelFacilityObservationBeat.IsPlaying || CinematicDirector.IsPlaying)
             return;
         GameObject player = GameObject.FindWithTag("Player");
         if (player == null || Vector3.Dot(player.transform.position - teachWakeGate.position, teachWakeGate.forward) <= 0f)

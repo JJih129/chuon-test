@@ -53,6 +53,10 @@ public class OptionsManagerAdvanced : MonoBehaviour
     public Slider flashIntensitySlider;
     [Tooltip("궁극기/패링 흑백 흡수(채도 제거) 사용. 비어 있으면 자막 배경 행을 복제해 만든다.")]
     public Toggle bwAbsorbToggle;
+    [Tooltip("연출 레터박스(2.35:1) 표시 (CinematicSettings). 비어 있으면 자막 배경 행을 복제해 만든다.")]
+    public Toggle cinematicLetterboxToggle;
+    [Tooltip("재도전 시 이미 본 연출 생략 (CinematicSettings). 비어 있으면 자막 배경 행을 복제해 만든다.")]
+    public Toggle cinematicSkipSeenToggle;
 
     [Header("▶ 카메라 (비어 있으면 런타임 생성, CameraOptionsRuntime 에 저장/즉시 적용)")]
     public Slider lookSensitivityMouseSlider;
@@ -206,6 +210,8 @@ public class OptionsManagerAdvanced : MonoBehaviour
         if (subtitleBackgroundToggle != null) { subtitleBackgroundToggle.onValueChanged.RemoveAllListeners(); subtitleBackgroundToggle.onValueChanged.AddListener(v => { PlayerPrefs.SetInt(K_SUB_BG, v?1:0); OnSubtitleBgToggled?.Invoke(v); SubtitleBackgroundChangedGlobal?.Invoke(v); }); subtitleBackgroundToggle.isOn = PlayerPrefs.GetInt(K_SUB_BG, 1) == 1; }
         if (flashIntensitySlider != null) { flashIntensitySlider.onValueChanged.RemoveAllListeners(); flashIntensitySlider.onValueChanged.AddListener(AccessibilityOptionsRuntime.SetFlashIntensity); flashIntensitySlider.value = AccessibilityOptionsRuntime.FlashIntensity; }
         if (bwAbsorbToggle != null) { bwAbsorbToggle.onValueChanged.RemoveAllListeners(); bwAbsorbToggle.onValueChanged.AddListener(AccessibilityOptionsRuntime.SetBwAbsorbEnabled); bwAbsorbToggle.isOn = AccessibilityOptionsRuntime.BwAbsorbEnabled; }
+        if (cinematicLetterboxToggle != null) { cinematicLetterboxToggle.onValueChanged.RemoveAllListeners(); cinematicLetterboxToggle.onValueChanged.AddListener(CinematicSettings.SetLetterboxEnabled); cinematicLetterboxToggle.isOn = CinematicSettings.LetterboxEnabled; }
+        if (cinematicSkipSeenToggle != null) { cinematicSkipSeenToggle.onValueChanged.RemoveAllListeners(); cinematicSkipSeenToggle.onValueChanged.AddListener(CinematicSettings.SetSkipSeenOnRetry); cinematicSkipSeenToggle.isOn = CinematicSettings.SkipSeenOnRetry; }
         if (cameraShakeSlider != null) { cameraShakeSlider.onValueChanged.RemoveAllListeners(); cameraShakeSlider.onValueChanged.AddListener(v => { PlayerPrefs.SetFloat(K_CAM_SHAKE, v); OnCameraShakeStrengthChanged?.Invoke(v); }); cameraShakeSlider.value = PlayerPrefs.GetFloat(K_CAM_SHAKE, 1f); }
         BindCameraOptionControls();
 
@@ -416,6 +422,10 @@ public class OptionsManagerAdvanced : MonoBehaviour
         Toggle toggleTemplate = subtitleBackgroundToggle != null ? subtitleBackgroundToggle : fullscreenToggle;
         if (bwAbsorbToggle == null)
             bwAbsorbToggle = CreateGeneratedToggleRow(toggleTemplate, "BwAbsorb_Row", "B&W Absorb Effect", "Toggle_BwAbsorb") ?? CreateHiddenToggle("Toggle_BwAbsorb");
+        if (cinematicLetterboxToggle == null)
+            cinematicLetterboxToggle = CreateGeneratedToggleRow(toggleTemplate, "CineLetterbox_Row", "Cinematic Letterbox", "Toggle_CineLetterbox") ?? CreateHiddenToggle("Toggle_CineLetterbox");
+        if (cinematicSkipSeenToggle == null)
+            cinematicSkipSeenToggle = CreateGeneratedToggleRow(toggleTemplate, "CineSkipSeen_Row", "Skip Seen Cinematics On Retry", "Toggle_CineSkipSeen") ?? CreateHiddenToggle("Toggle_CineSkipSeen");
         if (lookSensitivityMouseSlider == null)
             lookSensitivityMouseSlider = CreateGeneratedSliderRow(sliderTemplate, "LookSensMouse_Row", "Mouse Sensitivity", "Slider_LookSensMouse") ?? CreateHiddenSlider("Slider_LookSensMouse");
         if (lookSensitivityPadSlider == null)

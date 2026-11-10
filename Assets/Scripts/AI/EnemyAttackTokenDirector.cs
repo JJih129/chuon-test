@@ -66,6 +66,8 @@ public static class EnemyAttackTokenDirector
     /// <summary>토큰 요청. 이미 보유 중이면 만료 시각만 연장하고 true.</summary>
     public static bool TryAcquire(Transform target, Object owner, EnemyTokenKind kind, float holdSeconds)
     {
+        if (CinematicDirector.IsPlaying)
+            return false; // 반복 14: 연출 재생 중에는 공격 토큰을 주지 않는다
         if (target == null || owner == null)
             return true; // 대상이 없으면 제한하지 않는다
         Board board = GetBoard(target, true);

@@ -354,9 +354,17 @@ public class LobbyManager : MonoBehaviour
     {
         if (_fromTutorialTransition)
         {
-            // \ub300\uc0ac \uc2a4\ud06c\ub9bd\ud2b8: \ud29c\ud1a0\ub9ac\uc5bc(\uac00\uc0c1\ud604\uc2e4 \ud6c8\ub828) \ub2e4\uc74c \ub0a0, \uce20\uce74\uc0ac \ubcf8\uc0ac \ub85c\ube44 \uce68\ud22c
-            yield return StartCoroutine(PlayKeyed("lobby.fromtut.0", "EGO", "\uc2dc\ubbac\ub808\uc774\uc158\uc740 \ub05d\ub0ac\uc5b4, \ucd94\uc628. \uc5ec\uae30\uc11c\ubd80\ud134 \uc2e4\uc804\uc774\uc57c.", 2.1f));
-            yield return StartCoroutine(PlayKeyed("lobby.fromtut.1", "ChuOn", "\uc54c\uaca0\uc5b4. \ubc14\ub85c \ud22c\uc785\ud55c\ub2e4.", 1.7f));
+            // \ubc18\ubcf5 14: \uc624\ud504\ub2dd \uc5f0\ucd9c\uc774 \uc124\uce58\ub3fc \uc788\uc73c\uba74 \uc7ac\uc0dd\ud558\uace0 lobby.fromtut 2\uc904\uc740 \uc0dd\ub7b5(\ub0b4\uc6a9 \uc911\ubcf5). \uc5c6\uc73c\uba74 \uae30\uc874 2\uc904.
+            if (CinematicDirector.Has("opening"))
+            {
+                yield return CinematicDirector.PlayRoutine("opening");
+            }
+            else
+            {
+                // \ub300\uc0ac \uc2a4\ud06c\ub9bd\ud2b8: \ud29c\ud1a0\ub9ac\uc5bc(\uac00\uc0c1\ud604\uc2e4 \ud6c8\ub828) \ub2e4\uc74c \ub0a0, \uce20\uce74\uc0ac \ubcf8\uc0ac \ub85c\ube44 \uce68\ud22c
+                yield return StartCoroutine(PlayKeyed("lobby.fromtut.0", "EGO", "\uc2dc\ubbac\ub808\uc774\uc158\uc740 \ub05d\ub0ac\uc5b4, \ucd94\uc628. \uc5ec\uae30\uc11c\ubd80\ud134 \uc2e4\uc804\uc774\uc57c.", 2.1f));
+                yield return StartCoroutine(PlayKeyed("lobby.fromtut.1", "ChuOn", "\uc54c\uaca0\uc5b4. \ubc14\ub85c \ud22c\uc785\ud55c\ub2e4.", 1.7f));
+            }
         }
 
         if (_handedOffToLowerFloor)
@@ -376,10 +384,18 @@ public class LobbyManager : MonoBehaviour
             alertOverlay.DOFade(AccessibilityOptionsRuntime.ScaleFlash(0.3f), 0.5f).SetLoops(6, LoopType.Yoyo);
         }
 
-        yield return StartCoroutine(PlayKeyed("lobby.alarm.0", "System", "\uce68\uc785\uc790 \uac10\uc9c0. \ubc29\uc5b4 \ud504\ub85c\ud1a0\ucf5c\uc744 \uac00\ub3d9\ud569\ub2c8\ub2e4.", 3f));
-        yield return StartCoroutine(PlayOptional("lobby.alarm.1", 2f));
-        yield return StartCoroutine(PlayKeyed("lobby.drones.0", "EGO", "\ud504\ub860\ud2b8 \ub370\uc2a4\ud06c \ub4a4\uc5d0\uc11c \ub4dc\ub860\uc774 \ub098\uc628\ub2e4. \uba3c\uc800 \uc815\ub9ac\ud558\uc790.", 2.5f));
-        yield return StartCoroutine(PlayKeyed("lobby.drones.1", "ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
+        // \ubc18\ubcf5 14: \uacbd\ubcf4\u00b7\ub4dc\ub860 \ub9ac\ube4c \uc5f0\ucd9c\uc774 \uc124\uce58\ub3fc \uc788\uc73c\uba74 \uac19\uc740 \ud0a4(lobby.alarm/drones)\ub97c \uc5f0\ucd9c \uc790\ub9c9\uc73c\ub85c \ud45c\uc2dc\ud558\ubbc0\ub85c \uae30\uc874 4\uc904\uc740 \uac74\ub108\ub6f4\ub2e4.
+        if (CinematicDirector.Has("lobby_alarm") && !CinematicDirector.IsCombatActive())
+        {
+            yield return CinematicDirector.PlayRoutine("lobby_alarm");
+        }
+        else
+        {
+            yield return StartCoroutine(PlayKeyed("lobby.alarm.0", "System", "\uce68\uc785\uc790 \uac10\uc9c0. \ubc29\uc5b4 \ud504\ub85c\ud1a0\ucf5c\uc744 \uac00\ub3d9\ud569\ub2c8\ub2e4.", 3f));
+            yield return StartCoroutine(PlayOptional("lobby.alarm.1", 2f));
+            yield return StartCoroutine(PlayKeyed("lobby.drones.0", "EGO", "\ud504\ub860\ud2b8 \ub370\uc2a4\ud06c \ub4a4\uc5d0\uc11c \ub4dc\ub860\uc774 \ub098\uc628\ub2e4. \uba3c\uc800 \uc815\ub9ac\ud558\uc790.", 2.5f));
+            yield return StartCoroutine(PlayKeyed("lobby.drones.1", "ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
+        }
 
         if (_handedOffToLowerFloor)
             yield break;
@@ -1601,6 +1617,22 @@ public class LobbyManager : MonoBehaviour
         }
 
         HideUpperFloorPresentation();
+
+        // 반복 14: 엘리베이터 하강 연출 (검정에서 시작·끝). 같은 씬 검정(정렬 32000)이 연출 오버레이(870)를 덮으므로
+        // 연출 오버레이를 먼저 검정으로 채운 뒤 같은 씬 검정을 걷고, 끝나면 다시 덮는다. 미설치면 기존 흐름 그대로.
+        if (CinematicDirector.Has("elevator_descent"))
+        {
+            CinematicOverlay cineOverlay = CinematicOverlay.Ensure();
+            cineOverlay.SetFade(Color.black, 1f);
+            if (fade != null)
+                fade.alpha = 0f;
+            yield return CinematicDirector.PlayRoutine("elevator_descent");
+            if (fade != null)
+                fade.alpha = 1f;
+            if (!CinematicDirector.IsPlaying)
+                cineOverlay.SetFade(Color.black, 0f); // 재도전 생략(즉시 끝) 경로에서도 남은 검정을 비운다
+        }
+
         _handedOffToLowerFloor = true;
         DisableUpperFloorDrones();
 
