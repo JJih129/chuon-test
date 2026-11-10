@@ -84,6 +84,120 @@ public sealed class QaCombatBot : MonoBehaviour
     }
 
     public string Log => _log.ToString();
+
+    // ---- 반복 16: Type-D 개편 (봉쇄 노드 / 배기 회피 / 임계 폭주 엄폐) ----
+    float _evadeDecidedFor = -1f;
+    bool _evadeChoice;
+    public int CoverRuns { get; private set; }
+    public int VentEvades { get; private set; }
+
+    Transform _nodeTarget, _skipNode;
+    float _nodeTargetSince, _skipNodeUntil;
+
+    Transform ResolveOverhaulNodeTarget()
+    {
+        TypeDOverhaul oh = TypeDOverhaul.Active;
+        if (oh == null || oh.Lockdown == null || !oh.Lockdown.IsActive || _player == null)
+            return null;
+        // 같은 노드에 8 s 이상 못 닿으면(막힘) 다른 노드로 바꾼다
+        if (_nodeTarget != null && (_nodeTarget.GetComponent<BossPowerNode>()?.IsDead ?? true))
+            _nodeTarget = null;
+        if (_nodeTarget != null && Time.time - _nodeTargetSince > 8f && (_nodeTarget.position - _player.position).sqrMagnitude > 9f)
+        {
+            _skipNode = _nodeTarget;
+            _skipNodeUntil = Time.time + 8f;
+            _nodeTarget = null;
+            Note("node target switch (stuck)");
+        }
+        if (_nodeTarget != null)
+            return _nodeTarget;
+        Transform best = null;
+        float bestD = float.PositiveInfinity;
+        foreach (BossPowerNode n in oh.Lockdown.Nodes)
+        {
+            if (n == null || n.IsDead || (n.transform == _skipNode && Time.time < _skipNodeUntil && oh.Lockdown.NodesAlive > 1))
+                continue;
+            float d = (n.transform.position - _player.position).sqrMagnitude;
+            if (d < bestD) { bestD = d; best = n.transform; }
+        }
+        if (best != null)
+        {
+            _nodeTarget = best;
+            _nodeTargetSince = Time.time;
+            Note("node target " + best.position.ToString("F1"));
+        }
+        return best;
+    }
+
+    // 사람처럼: 큐를 본 뒤 한 번 결정 (defenseSkill 확률로 올바른 대응). true = 이번 프레임 이동/공격을 대신함.
+    bool OverhaulEvade()
+    {
+        TypeDOverhaul oh = TypeDOverhaul.Active;
+        if (oh == null || _boss == null || _player == null)
+            return false;
+        bool desperation = oh.IsDesperationActive && oh.Lockdown != null && oh.Lockdown.CoverRaised;
+        bool vent = _boss.ActiveSpecialPattern == BossSpecialPatternKind.HeatVent && !oh.IsVentExposed;
+        if (!desperation && !vent)
+            return false;
+        float key = desperation ? oh.QaLastPhaseChangeAt : _boss.QaVents;
+        if (_evadeDecidedFor != key)
+        {
+            _evadeDecidedFor = key;
+            _evadeChoice = _rng.NextDouble() < defenseSkill;
+            if (_evadeChoice) { if (desperation) CoverRuns++; else VentEvades++; }
+            Note((desperation ? "desperation" : "vent") + " evade=" + _evadeChoice);
+            if (desperation) Capture("desperation");
+        }
+        if (!_evadeChoice)
+            return false;
+        Vector3 goal;
+        if (desperation)
+        {
+            if (!oh.Lockdown.TryGetCoverSpot(_player.position, _boss.transform.position, out goal))
+                return false;
+        }
+        else
+        {
+            Vector3 away = _player.position - _boss.transform.position;
+            away.y = 0f;
+            if (away.magnitude > oh.VentRadius + 1.2f)
+            {
+                PlayerMoveController.QaMoveInputOverride = null;
+                return true;
+            }
+            goal = _boss.transform.position + (away.sqrMagnitude > 0.01f ? away.normalized : -_boss.transform.forward) * (oh.VentRadius + 2f);
+        }
+        Vector3 to = goal - _player.position;
+        to.y = 0f;
+        Camera cam = Camera.main;
+        if (to.magnitude < 0.35f || cam == null)
+        {
+            PlayerMoveController.QaMoveInputOverride = null;
+            return true;
+        }
+        Vector3 f = cam.transform.forward; f.y = 0f; f.Normalize();
+        Vector3 r = cam.transform.right; r.y = 0f; r.Normalize();
+        to.Normalize();
+        PlayerMoveController.QaMoveInputOverride = new Vector2(Vector3.Dot(to, r), Vector3.Dot(to, f));
+        return true;
+    }
+
+    public static string OverhaulReport()
+    {
+        TypeDOverhaul oh = TypeDOverhaul.Active;
+        string s = $"exec front={ExecutionDirector.QaBossFront} back={ExecutionDirector.QaBossBack} final={ExecutionDirector.QaBossFinal} mob={ExecutionDirector.QaMob} takedown={ExecutionDirector.QaTakedowns} nodes={BossPowerNode.QaDestroyed}";
+        if (oh != null)
+        {
+            BossImpactStagger im = oh.Impact;
+            s += $" stage={oh.CurrentStage} lockdowns={oh.QaLockdowns} overloads={oh.QaOverloads} purges={oh.QaPurges} strongParry={oh.QaStrongParries} blinks={oh.QaBlinks} finalBreaks={oh.QaFinalBreaks} delayed={oh.QaDelayedAttacks}" +
+                 $" grabs={oh.Boss.QaGrabs} vents={oh.Boss.QaVents} desp={oh.Boss.QaDesperations} visor={oh.Parts.VisorBroken} blade={oh.Parts.BladeBroken}" +
+                 $" flinch={im.QaFlinches} stagger={im.QaStaggers} knock={im.QaKnockbacks} down={im.QaDowns} wall={im.QaWallSplats}";
+        }
+        PlayerOverhaulReactions pr = PlayerOverhaulReactions.Instance;
+        if (pr != null)
+            s += $" launches={pr.QaLaunches} guardPush={pr.QaGuardPushes}";
+        return s + "\ncue " + OverhaulCueLedger.Report();
+    }
     public int AttackCount => _attacks;
 
     /// <summary>Clears Temp/qa/bot_log.txt (call before a new session).</summary>
@@ -222,7 +336,8 @@ public sealed class QaCombatBot : MonoBehaviour
     public float MobFightStart { get; private set; } = -1f;
     public float MobFightEnd { get; private set; } = -1f;
 
-    static bool IsMobTargetable(EnemyBrain b) => b != null && !b.IsDead && b.isActiveAndEnabled;
+    // 반복 16: 봉쇄 프로토콜 터렛·드론(OH_Lockdown_*)은 벽 높이라 칼이 닿지 않는다 → 노드를 부수면 같이 꺼지므로 표적에서 뺀다
+    static bool IsMobTargetable(EnemyBrain b) => b != null && !b.IsDead && b.isActiveAndEnabled && !b.name.StartsWith("OH_Lockdown_");
 
     void UpdateMobTarget()
     {
@@ -485,6 +600,8 @@ public sealed class QaCombatBot : MonoBehaviour
                 continue;
             if (_hookedDrones.Add(d))
                 d.AttackTelegraphed += HandleDroneTelegraph;
+            if (d.transform.root.name.StartsWith("OH_Lockdown_"))
+                continue; // 반복 16: 봉쇄 드론은 노드를 끊으면 같이 꺼진다 (사격엔 반응만)
             float sqr = (d.transform.position - _player.position).sqrMagnitude;
             if (sqr < bestSqr) { bestSqr = sqr; best = d; }
         }
@@ -674,8 +791,12 @@ public sealed class QaCombatBot : MonoBehaviour
             target = _drone.transform;
         else if (_boss != null && !(followLobbyRoute && UpperFloorActive()))
             target = _boss.transform;
+        // 반복 16: 봉쇄 프로토콜 중엔 전원 노드가 표적 (보스는 보호막)
+        Transform nodeTarget = ResolveOverhaulNodeTarget();
+        if (nodeTarget != null && _mob == null)
+            target = nodeTarget;
         bool mobTarget = _mob != null && target == _mob.transform;
-        bool nonBossTarget = _drone != null || mobTarget;
+        bool nonBossTarget = _drone != null || mobTarget || nodeTarget != null && target == nodeTarget;
 
         if (_playerHealth != null && !_playerHealth.IsDead)
         {
@@ -790,13 +911,16 @@ public sealed class QaCombatBot : MonoBehaviour
             _nextHealAt = Time.time + 1.5f;
         }
 
-        float range = mobTarget ? mobAttackRange : attackRange;
+        float range = mobTarget ? mobAttackRange : nodeTarget != null && target == nodeTarget ? 1.7f : attackRange;
+        if (!nonBossTarget && OverhaulEvade())
+            return;
         UpdateApproach(target, dist, defensePending, range);
         // Human-like: hold attacks while a boss string is running (unless it opened a punish window).
         bool bossBusy = !nonBossTarget && _boss != null && !inBreak && !_boss.IsPunishWindowActive && !string.IsNullOrEmpty(_boss.CurrentPatternName);
         bool mobOpen = mobTarget && (_mob.InRiposteWindow || _mob.State == EnemyBrainState.Recover);
         bool mobBusy = mobTarget && (_mob.PendingHitAt > 0f || MeleeMobAboutToSwing());
-        bool threatened = _drone == null && !mobOpen && (bossBusy || mobBusy || Time.time - _lastThreatTime < holdAttackAfterThreat);
+        bool nodeTargeted = nodeTarget != null && target == nodeTarget; // 반복 16: 노드는 보스 위협 직후에도 친다 (방어 예약만 기다림)
+        bool threatened = _drone == null && !mobOpen && !nodeTargeted && (bossBusy || mobBusy || Time.time - _lastThreatTime < holdAttackAfterThreat);
         if (dist <= range && !defensePending && !threatened && Time.time >= _nextAttackAt)
         {
             _nextAttackAt = Time.time + attackInterval;
@@ -897,6 +1021,39 @@ public sealed class QaCombatBot : MonoBehaviour
                 }
             }
             RunScheduledDefense(); // 막히는 동안에도 큐에는 반응
+            return true;
+        }
+        // 반복 16: 잠입 암살 레슨 — 경계 전 경비의 등 뒤로 돌아가 공격 입력 (프롬프트가 '암살'일 때만)
+        if (id == "takedown" && d.TakedownTarget != null && !d.TakedownTarget.IsDead && d.TakedownTarget.CanBeAmbushed)
+        {
+            Transform m = d.TakedownTarget.transform;
+            Vector3 behind = m.position - m.forward * 1.3f;
+            Vector3 to = behind - _player.position;
+            to.y = 0f;
+            Camera cam = Camera.main;
+            if (ExecutionDirector.TryGetPrompt(_player, out ExecutionKind pk, out _) && pk == ExecutionKind.Takedown)
+            {
+                PlayerMoveController.QaMoveInputOverride = null;
+                if (Time.unscaledTime >= _nextTutActionAt)
+                {
+                    _input.RecordAttackLightPress(); _attacks++;
+                    _nextTutActionAt = Time.unscaledTime + 0.6f;
+                    Note("tutorial takedown press");
+                    Capture("takedown");
+                }
+            }
+            else if (cam != null && to.sqrMagnitude > 0.04f)
+            {
+                // 측면으로 크게 돌아 들어간다 (정면 시야 콘을 피함)
+                Vector3 side = Vector3.Cross(Vector3.up, m.forward);
+                Vector3 toMob = m.position - _player.position; toMob.y = 0f;
+                bool inFront = Vector3.Dot(m.forward, -toMob.normalized) > 0.2f;
+                Vector3 goal = inFront ? m.position + side * (Vector3.Dot(side, -toMob) >= 0f ? 2.6f : -2.6f) : behind;
+                Vector3 dir = goal - _player.position; dir.y = 0f; dir.Normalize();
+                Vector3 f = cam.transform.forward; f.y = 0f; f.Normalize();
+                Vector3 r = cam.transform.right; r.y = 0f; r.Normalize();
+                PlayerMoveController.QaMoveInputOverride = new Vector2(Vector3.Dot(dir, r), Vector3.Dot(dir, f)) * 0.6f;
+            }
             return true;
         }
         if (Time.unscaledTime < _nextTutActionAt)

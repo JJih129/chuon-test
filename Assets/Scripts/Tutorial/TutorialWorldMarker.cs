@@ -1,6 +1,11 @@
 using UnityEngine;
-using UnityEngine.Rendering;
 
+/// <summary>
+/// 튜토리얼/로비 목표 표식. 반복 16 (플레이어 리뷰 #1): 불투명 Unlit 원판 + 기둥 + 뚜껑(거대한 노란 원판으로 읽힘)을
+/// ObjectiveBeaconVisual(얇은 앰버 홀로그램 링 + 가는 빛기둥 + 쉐브론, 거리·각도 페이드, 연출 중 숨김)로 교체했다.
+/// 공개 API(ConfigureRuntime / SetMarkerColor / SetVisible)와 직렬화 필드는 그대로 — 호출부 변경 없음.
+/// 예전 레이아웃 값은 크기 힌트로만 쓴다: 링 반경 = ringScale.x / 2 (0.35~0.7 m), 기둥 높이 = 뚜껑 높이 + 1 m (1.8~2.6 m).
+/// </summary>
 [DisallowMultipleComponent]
 public class TutorialWorldMarker : MonoBehaviour
 {
@@ -18,15 +23,7 @@ public class TutorialWorldMarker : MonoBehaviour
     [Header("Style")]
     [SerializeField] private Color markerColor = new Color(0.18f, 0.85f, 1f, 0.9f);
 
-    Transform _ringRoot;
-    Transform _beamRoot;
-    Transform _capRoot;
-    Renderer _ringRenderer;
-    Renderer _beamRenderer;
-    Renderer _capRenderer;
-    MaterialPropertyBlock _propertyBlock;
-
-    static Material s_markerMaterial;
+    ObjectiveBeaconVisual _visual;
 
     void Awake()
     {
@@ -74,55 +71,26 @@ public class TutorialWorldMarker : MonoBehaviour
         gameObject.SetActive(visible);
     }
 
-    void EnsureBuilt()
-    {
-        if (_ringRoot == null)
-            _ringRoot = EnsurePrimitive("Ring", PrimitiveType.Cylinder, out _ringRenderer);
-        if (_beamRoot == null)
-            _beamRoot = EnsurePrimitive("Beam", PrimitiveType.Cube, out _beamRenderer);
-        if (_capRoot == null)
-            _capRoot = EnsurePrimitive("Cap", PrimitiveType.Cube, out _capRenderer);
-    }
-
     void EnsureState()
     {
-        _propertyBlock ??= new MaterialPropertyBlock();
-        EnsureBuilt();
-    }
-
-    Transform EnsurePrimitive(string objectName, PrimitiveType primitiveType, out Renderer renderer)
-    {
-        Transform existing = transform.Find(objectName);
-        if (existing != null)
+        if (_visual == null)
         {
-            renderer = existing.GetComponent<Renderer>();
-            ConfigureRenderer(renderer);
-            return existing;
+            _visual = GetComponent<ObjectiveBeaconVisual>();
+            if (_visual == null)
+                _visual = gameObject.AddComponent<ObjectiveBeaconVisual>();
         }
 
-        GameObject primitive = GameObject.CreatePrimitive(primitiveType);
-        primitive.name = objectName;
-        primitive.layer = gameObject.layer;
-        primitive.transform.SetParent(transform, false);
-
-        Collider primitiveCollider = primitive.GetComponent<Collider>();
-        if (primitiveCollider != null)
-            Destroy(primitiveCollider);
-
-        renderer = primitive.GetComponent<Renderer>();
-        ConfigureRenderer(renderer);
-        return primitive.transform;
+        // 씬/프리팹에 저장된 예전 원판·기둥·뚜껑 자식이 있으면 그리지 않는다
+        HideLegacyPart("Ring");
+        HideLegacyPart("Beam");
+        HideLegacyPart("Cap");
     }
 
-    void ConfigureRenderer(Renderer renderer)
+    void HideLegacyPart(string partName)
     {
-        if (renderer == null)
-            return;
-
-        renderer.sharedMaterial = GetMarkerMaterial();
-        renderer.shadowCastingMode = ShadowCastingMode.Off;
-        renderer.receiveShadows = false;
-        renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        Transform legacy = transform.Find(partName);
+        if (legacy != null && legacy.TryGetComponent(out Renderer r) && r.enabled)
+            r.enabled = false;
     }
 
     void Reattach()
@@ -142,59 +110,15 @@ public class TutorialWorldMarker : MonoBehaviour
         transform.localRotation = Quaternion.identity;
         transform.localScale = Vector3.one;
 
-        if (_ringRoot != null)
-        {
-            _ringRoot.localPosition = Vector3.zero;
-            _ringRoot.localRotation = Quaternion.identity;
-            _ringRoot.localScale = ringScale;
-        }
-
-        if (_beamRoot != null)
-        {
-            _beamRoot.localPosition = beamLocalPosition;
-            _beamRoot.localRotation = Quaternion.identity;
-            _beamRoot.localScale = beamScale;
-        }
-
-        if (_capRoot != null)
-        {
-            _capRoot.localPosition = capLocalPosition;
-            _capRoot.localRotation = Quaternion.Euler(0f, 45f, 0f);
-            _capRoot.localScale = capScale;
-        }
+        float radius = Mathf.Clamp(ringScale.x * 0.5f, 0.35f, 0.7f);
+        float height = Mathf.Clamp(capLocalPosition.y + 1f, 1.8f, 2.6f);
+        if (_visual != null)
+            _visual.Configure(markerColor, radius, height);
     }
 
     void ApplyColor(Color color)
     {
-        ApplyRendererColor(_ringRenderer, color);
-        ApplyRendererColor(_beamRenderer, color);
-        ApplyRendererColor(_capRenderer, color);
-    }
-
-    void ApplyRendererColor(Renderer renderer, Color color)
-    {
-        if (renderer == null)
-            return;
-
-        _propertyBlock.Clear();
-        _propertyBlock.SetColor("_Color", color);
-        _propertyBlock.SetColor("_BaseColor", color);
-        renderer.SetPropertyBlock(_propertyBlock);
-    }
-
-    static Material GetMarkerMaterial()
-    {
-        if (s_markerMaterial != null)
-            return s_markerMaterial;
-
-        Shader shader = Shader.Find("Unlit/Color");
-        if (shader == null)
-            shader = Shader.Find("Sprites/Default");
-
-        s_markerMaterial = new Material(shader)
-        {
-            hideFlags = HideFlags.HideAndDontSave
-        };
-        return s_markerMaterial;
+        if (_visual != null)
+            _visual.SetColor(color);
     }
 }

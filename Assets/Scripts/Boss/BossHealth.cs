@@ -53,6 +53,23 @@ public class BossHealth : MonoBehaviour, IHealth, IUltimateTarget
 
     public event Action OnStagger;
 
+    /// <summary>반복 16(Type-D 개편): HP 바닥. 피해(궁극기 포함)는 이 값 아래로 내려가지 않는다. Kill() 은 무시. 0 = 기존 동작.</summary>
+    public int HpFloor { get; set; }
+    /// <summary>피해가 HP 바닥에 막혔을 때 (막힌 양). 봉쇄 보호막·최종 처형 진입에 쓴다.</summary>
+    public event Action<int> OnFloorReached;
+
+    int ClampToFloor(int prev, int damage)
+    {
+        int floor = Mathf.Clamp(HpFloor, 0, MaxHP);
+        int next = Mathf.Clamp(prev - damage, 0, MaxHP);
+        if (floor > 0 && next < floor)
+        {
+            next = Mathf.Min(prev, floor);
+            OnFloorReached?.Invoke(damage - (prev - next));
+        }
+        return next;
+    }
+
     // 내부 상태
     float _invincibleRemain;
     BossBreakController _breakController;
@@ -158,7 +175,10 @@ public class BossHealth : MonoBehaviour, IHealth, IUltimateTarget
         if (isInvincible && hitType != HitType.Force) return;
 
         int prev = CurrentHP;
-        CurrentHP = Mathf.Clamp(CurrentHP - damage, 0, MaxHP);
+        CurrentHP = ClampToFloor(prev, damage);
+        damage = prev - CurrentHP;
+        if (damage <= 0)
+            return;
 
         OnHPChanged?.Invoke(CurrentHP, MaxHP);
         OnHealthChanged?.Invoke(CurrentHP, MaxHP);
@@ -235,7 +255,10 @@ public class BossHealth : MonoBehaviour, IHealth, IUltimateTarget
             return;
 
         int prev = CurrentHP;
-        CurrentHP = Mathf.Clamp(CurrentHP - fixedDamage, 0, MaxHP);
+        CurrentHP = ClampToFloor(prev, fixedDamage);
+        fixedDamage = prev - CurrentHP;
+        if (fixedDamage <= 0)
+            return;
 
         OnHPChanged?.Invoke(CurrentHP, MaxHP);
         OnHealthChanged?.Invoke(CurrentHP, MaxHP);

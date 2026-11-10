@@ -50,6 +50,10 @@ public sealed class MusicDirector : MonoBehaviour
     public static bool IsDucked => s_instance != null && s_instance._duckDb < -0.5f;
     public static float BossLayerLevel => s_instance != null ? s_instance._layerLevel : 0f;
 
+    static float s_bossLayerOverride = -1f;
+    /// <summary>반복 16(Type-D 개편): 보스전 강도 레이어 목표를 직접 지정 (봉쇄 0.6, 임계 폭주 1 등). 음수 = 페이즈 기본값.</summary>
+    public static void SetBossLayerOverride(float level) => s_bossLayerOverride = level < 0f ? -1f : Mathf.Clamp01(level);
+
     AudioSource _deckA;
     AudioSource _deckB;
     AudioSource _layer;
@@ -200,7 +204,9 @@ public sealed class MusicDirector : MonoBehaviour
         }
 
         // 보스 2페이즈 레이어
-        _layerLevel = Mathf.MoveTowards(_layerLevel, _layerTarget, dt / 2.2f);
+        bool bossMusic = _state == MusicState.BossPhase1 || _state == MusicState.BossPhase2;
+        float layerGoal = bossMusic && s_bossLayerOverride >= 0f ? s_bossLayerOverride : _layerTarget;
+        _layerLevel = Mathf.MoveTowards(_layerLevel, layerGoal, dt / 2.2f);
         if (_layer.isPlaying)
         {
             _layer.volume = Curve(_layerLevel) * BossLayerGain * musicVol;

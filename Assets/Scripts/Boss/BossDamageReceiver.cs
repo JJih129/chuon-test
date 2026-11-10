@@ -41,6 +41,11 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
             bossController = GetComponentInParent<BossController>();
     }
 
+    /// <summary>반복 16(Type-D 개편): 해석된 피해를 바꾼다 (실명 측면 ×1.5, 과부하 ×1.3 등). null = 그대로.</summary>
+    public static System.Func<BossDamageReceiver, HitPayload, ResolvedHitResult, ResolvedHitResult> HitFilter;
+    /// <summary>반복 16: 적용 직후 (깎인 HP). 충격 누적·부위 파괴·균형 배율이 구독한다.</summary>
+    public static event System.Action<BossDamageReceiver, HitPayload, ResolvedHitResult, int> HitApplied;
+
     public void ReceiveHit(HitPayload payload)
     {
         if (bossHealth == null)
@@ -58,10 +63,16 @@ public class BossDamageReceiver : MonoBehaviour, IDamageReceiver
         if (bossBreakController == null)
             bossBreakController = GetComponentInParent<BossBreakController>();
 
+        if (HitFilter != null)
+            resolvedHit = HitFilter(this, payload, resolvedHit);
+
+        int hpBefore = bossHealth.CurrentHP;
         BossResolvedHitApplier.Apply(
             bossHealth,
             bossBreakController,
             resolvedHit,
             payload);
+
+        HitApplied?.Invoke(this, payload, resolvedHit, hpBefore - bossHealth.CurrentHP);
     }
 }

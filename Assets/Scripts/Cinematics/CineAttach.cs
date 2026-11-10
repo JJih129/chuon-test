@@ -42,8 +42,11 @@ public sealed class CineAttach : MonoBehaviour
     [SerializeField] string faceAnchorName;
     [Tooltip("0 보다 크면 시작 시 뒤쪽(-Z)으로 이 거리만큼 벽이 없는 요를 고른다 (엔딩 홀로그램처럼 대상 뒤에 무대를 세우는 리그). 반복 14C.")]
     [SerializeField] float clearBehind;
+    [Tooltip("시작 시 아래로 레이캐스트해 바닥에 붙인다 — 앵커가 상호작용 패널 높이(예: 2.5 m)에 있을 때 샷이 문 위 허공을 비추지 않게. 반복 16.")]
+    [SerializeField] bool groundToFloor;
 
     Transform _resolved;
+    float _groundDrop; // 반복 16: groundToFloor 로 내린 높이 (follow 중에도 유지)
     Transform _face;
     float _clearYaw; // 반복 15: clearBehind 로 고른 요 보정 (follow 중에도 유지)
 
@@ -53,6 +56,7 @@ public sealed class CineAttach : MonoBehaviour
 
     public void SetClearBehind(float metres) => clearBehind = Mathf.Max(0f, metres);
     public void SetFollow(bool value) => follow = value;
+    public void SetGroundToFloor(bool value) => groundToFloor = value;
 
     public void ConfigureFacing(Target face, string anchor = null)
     {
@@ -74,6 +78,7 @@ public sealed class CineAttach : MonoBehaviour
     public bool Begin(Transform player, Transform boss)
     {
         _clearYaw = 0f;
+        _groundDrop = 0f;
         _resolved = ResolveTarget(target, anchorName, player, boss);
         _face = faceTarget != Target.None ? ResolveTarget(faceTarget, faceAnchorName, player, boss) : null;
         if (_resolved == null && target == Target.Boss && player != null && !follow)
@@ -97,6 +102,8 @@ public sealed class CineAttach : MonoBehaviour
         if (!gameObject.activeSelf && disableIfMissing)
             gameObject.SetActive(true);
         Snap();
+        if (groundToFloor)
+            ResolveGround(player, boss);
         if (clearBehind > 0f)
             ResolveClearBehind(player, boss);
         return true;
@@ -138,6 +145,26 @@ public sealed class CineAttach : MonoBehaviour
         }
         _clearYaw = bestYaw;
         transform.rotation = Quaternion.Euler(0f, bestYaw, 0f) * baseRot;
+    }
+
+    // 아래 6 m 안 가장 가까운 바닥(트리거·플레이어·보스 제외)까지 내린다. 시작 시 1회.
+    void ResolveGround(Transform player, Transform boss)
+    {
+        Vector3 origin = transform.position + Vector3.up * 0.3f;
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 6.3f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        float best = -1f;
+        for (int h = 0; h < hits.Length; h++)
+        {
+            Transform ht = hits[h].transform;
+            if ((player != null && ht.IsChildOf(player)) || (boss != null && ht.IsChildOf(boss)))
+                continue;
+            float d = hits[h].distance - 0.3f;
+            if (best < 0f || d < best)
+                best = d;
+        }
+        _groundDrop = best > 0.05f ? best : 0f;
+        if (_groundDrop > 0f)
+            transform.position += Vector3.down * _groundDrop;
     }
 
     public void Tick()
@@ -247,6 +274,6 @@ public sealed class CineAttach : MonoBehaviour
         rot *= Quaternion.Euler(0f, yawOffset, 0f);
         if (_clearYaw != 0f)
             rot = Quaternion.Euler(0f, _clearYaw, 0f) * rot;
-        transform.SetPositionAndRotation(_resolved.position + rot * localOffset, rot);
+        transform.SetPositionAndRotation(_resolved.position + rot * localOffset + Vector3.down * _groundDrop, rot);
     }
 }

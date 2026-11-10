@@ -707,11 +707,11 @@ public class BossBreakController : MonoBehaviour
             return;
 
         if (_runtimeHologramMaterial.HasProperty(HologramColorId))
-            _runtimeHologramMaterial.SetColor(HologramColorId, breakHologramColor);
+            _runtimeHologramMaterial.SetColor(HologramColorId, TsukasaHologramColor.Resolve(breakHologramColor));
 
         if (_runtimeHologramMaterial.HasProperty(TextureTintColorId))
         {
-            Color tint = breakHologramColor;
+            Color tint = TsukasaHologramColor.Resolve(breakHologramColor);
             tint.a *= 0.75f;
             _runtimeHologramMaterial.SetColor(TextureTintColorId, tint);
         }

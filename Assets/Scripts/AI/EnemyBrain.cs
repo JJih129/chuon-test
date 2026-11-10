@@ -346,6 +346,59 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
         }
     }
 
+    // ---------------------------------------------------------------- execution (반복 16)
+    bool _executionHeld;
+    float _dieSpeedOverride = -1f;
+
+    /// <summary>경직(리포스트 창) 중이면 처형 가능. 방어구·포탑·드론은 하위 클래스가 막는다.</summary>
+    public virtual bool CanBeExecuted => !_dead && !_executionHeld && InRiposteWindow;
+    /// <summary>경계 전(발견 전)이면 등 뒤 잠입 암살 가능.</summary>
+    public virtual bool CanBeAmbushed => !_dead && !_executionHeld && !_alerted && _state != EnemyBrainState.Attack;
+    public bool IsExecutionHeld => _executionHeld;
+
+    /// <summary>처형 시작: AI·이동·토큰을 멈추고 지정 상태(없으면 경직)를 재생한다. 끝은 FinishExecuted.</summary>
+    public void BeginExecuted(string victimState)
+    {
+        if (_dead)
+            return;
+        _executionHeld = true;
+        AbortSequence();
+        ReleaseTokens();
+        StopMoving();
+        _staggerUntil = float.PositiveInfinity;
+        _riposteWindow = false;
+        int hash = string.IsNullOrEmpty(victimState) ? 0 : Animator.StringToHash(BaseLayerPrefix + victimState);
+        if (hash != 0 && animator != null && animator.HasState(0, hash))
+            PlayAction(hash, 1f);
+        else
+            PlayAction(_staggerHash, 1f);
+        SetState(EnemyBrainState.Stagger);
+    }
+
+    /// <summary>처형 마무리: 즉사 (경보 전파는 propagateAlert 일 때만). 처형 상태 애니메이션은 이어서 재생되게 사망 모션을 생략할 수 있다.</summary>
+    public void FinishExecuted(Transform killer, bool keepVictimPose)
+    {
+        if (_dead)
+            return;
+        _executionHeld = false;
+        if (keepVictimPose)
+            _dieSpeedOverride = 0f;
+        if (health != null)
+            health.TakeDamage(Mathf.Max(1, health.CurrentHP + 999), HitType.Force, transform.position + Vector3.up);
+        if (!_dead)
+            Die();
+        CombatRewardUtility.TryGrantBasicAttackGauge(killer);
+    }
+
+    /// <summary>처형이 중간에 취소됨: 경직을 짧게 남기고 AI 재개.</summary>
+    public void CancelExecuted()
+    {
+        if (!_executionHeld)
+            return;
+        _executionHeld = false;
+        _staggerUntil = Time.time + 0.4f;
+    }
+
     protected virtual void Update()
     {
         float dt = Time.deltaTime;
@@ -358,6 +411,9 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
             TickDeath(now);
             return;
         }
+
+        if (_executionHeld)
+            return;
 
         if (target == null || _cachedTargetFor != target)
             ResolveTarget();
@@ -1144,7 +1200,9 @@ public abstract class EnemyBrain : MonoBehaviour, IDamageReceiver, IParryReact, 
         if (hpPresenter != null)
             hpPresenter.Detach();
         SetGlow(0f);
-        PlayAction(_dieHash, 1f);
+        if (_dieSpeedOverride < 0f)
+            PlayAction(_dieHash, 1f);
+        _dieSpeedOverride = -1f;
         SetState(EnemyBrainState.Dead);
         OnDied();
         Died?.Invoke(this);

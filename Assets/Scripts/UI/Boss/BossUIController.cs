@@ -520,7 +520,9 @@ public class BossUIController : MonoBehaviour
         RectTransform rect = label.rectTransform;
         rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(520f, 34f);
+        // 반복 16 (E9): 이름이 작고(24, Thin 글꼴) 장면 위에서 묻혔다 → 최소 30 px, Noto Sans KR Medium, 어두운 언더레이
+        float nameSize = Mathf.Max(bossNameFontSize, MinBossNameFontSize);
+        rect.sizeDelta = new Vector2(640f, nameSize + 14f);
         rect.anchoredPosition = bossNameAnchoredPosition;
         rect.localScale = Vector3.one;
 
@@ -528,9 +530,10 @@ public class BossUIController : MonoBehaviour
         if (font != null)
             label.font = font;
         label.text = bossDisplayName;
-        label.fontSize = bossNameFontSize;
+        label.fontSize = nameSize;
         label.fontStyle = FontStyles.Bold;
-        label.characterSpacing = 6f;
+        label.characterSpacing = 4f;
+        ApplyNameUnderlay(label);
         label.alignment = TextAlignmentOptions.Center;
         label.enableWordWrapping = false;
         label.overflowMode = TextOverflowModes.Overflow;
@@ -538,8 +541,39 @@ public class BossUIController : MonoBehaviour
         label.raycastTarget = false;
     }
 
+    const float MinBossNameFontSize = 30f;
+    Material _nameMaterial;
+
+    /// <summary>밝은 배경(조명·홀로그램) 위에서도 읽히게 부드러운 그래파이트 언더레이 (머티리얼 인스턴스 1개).</summary>
+    void ApplyNameUnderlay(TextMeshProUGUI label)
+    {
+        if (label == null || label.font == null || label.font.material == null)
+            return;
+        if (_nameMaterial == null || _nameMaterial.mainTexture != label.font.material.mainTexture)
+        {
+            _nameMaterial = new Material(label.font.material) { name = "BossName_Underlay" };
+            _nameMaterial.EnableKeyword("UNDERLAY_ON");
+            _nameMaterial.SetColor("_UnderlayColor", new Color(0.02f, 0.02f, 0.025f, 0.85f));
+            _nameMaterial.SetFloat("_UnderlayOffsetX", 0.4f);
+            _nameMaterial.SetFloat("_UnderlayOffsetY", -0.4f);
+            _nameMaterial.SetFloat("_UnderlayDilate", 0.35f);
+            _nameMaterial.SetFloat("_UnderlaySoftness", 0.45f);
+        }
+        label.fontSharedMaterial = _nameMaterial;
+    }
+
+    void OnDestroy()
+    {
+        if (_nameMaterial != null)
+            Destroy(_nameMaterial);
+    }
+
     static TMP_FontAsset ResolveKoreanFont()
     {
+        // 반복 16 (E8): 씬의 Noto SDF(가변 글꼴 Thin) 대신 공용 Noto Sans KR Medium
+        TMP_FontAsset shared = ChuonUiFonts.Tmp;
+        if (shared != null)
+            return shared;
         TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
         for (int i = 0; i < texts.Length; i++)
         {

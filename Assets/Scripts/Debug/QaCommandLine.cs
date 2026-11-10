@@ -451,6 +451,7 @@ public sealed class QaCommandLine : MonoBehaviour
             Debug.Log("[QA] camera report:\n" + CameraMetricsSampler.Instance.Report());
         if (bot != null)
             Debug.Log("[QA] bot: " + bot.Summary);
+        Debug.Log("[QA] overhaul: " + QaCombatBot.OverhaulReport()); // 반복 16
         Debug.Log(QaCinematicWatch.Report());
         Debug.Log(QaErrorShaderWatch.Report());
 

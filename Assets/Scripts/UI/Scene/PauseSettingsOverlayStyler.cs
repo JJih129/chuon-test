@@ -2474,7 +2474,7 @@ public class PauseSettingsOverlayStyler : MonoBehaviour
 
     Font GetBuiltinFont()
     {
-        return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        return RuntimeBuiltInFontUtility.GetDefaultFont();
     }
 
     void StretchFull(RectTransform rect)

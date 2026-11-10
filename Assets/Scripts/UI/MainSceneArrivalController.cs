@@ -1833,7 +1833,7 @@ public class MainSceneArrivalController : MonoBehaviour
         if (_runtimeBossHologramMaterial == null)
             return;
 
-        Color hologramColor = bossIntroHologramColor;
+        Color hologramColor = TsukasaHologramColor.Resolve(bossIntroHologramColor); // 반복 16: 시안 금지
         hologramColor.a = Mathf.Clamp01(alpha);
 
         if (_runtimeBossHologramMaterial.HasProperty(HologramColorId))

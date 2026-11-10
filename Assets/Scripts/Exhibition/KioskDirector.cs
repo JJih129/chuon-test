@@ -488,8 +488,8 @@ public sealed class KioskDirector : MonoBehaviour
     /// <summary>체크포인트 재시작 플래그 정리 (다음 방문객이 중간부터 시작하지 않게). 해당 파일에 공개 API 가 생기면 교체.</summary>
     static void ClearCheckpointStatics()
     {
-        SetStatic(typeof(LobbyManager), "s_skipToLowerFloorOnNextLoad", false);
-        SetStatic(typeof(InfiltrationTutorialDirector), "s_resumeStep", -1);
+        LobbyManager.ClearCheckpointState();
+        InfiltrationTutorialDirector.ClearCheckpointState();
     }
 
     static void SetStatic(Type type, string field, object value)

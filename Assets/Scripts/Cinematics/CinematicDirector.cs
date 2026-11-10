@@ -339,6 +339,12 @@ public sealed class CinematicDirector : MonoBehaviour
         float ret = Mathf.Max(0.01f, seq.ReturnFadeSeconds);
         float t = 0f;
         Finish(seq, skipped); // 게임플레이 쪽 후속 처리는 복귀 페이드와 동시에 시작해도 된다
+        if (seq.HoldEndCoverSeconds > 0f && (fadeFrom > 0f || boxFrom > 0f))
+        {
+            // 반복 16: 씬 전환으로 끝나는 연출 — 덮개를 유지(호출자는 바로 이어서 씬을 로드). 로드가 안 되면 안전하게 걷는다.
+            StartCoroutine(CoReleaseHeldCover(overlay, seq.HoldEndCoverSeconds, ret));
+            yield break;
+        }
         while (t < ret && (fadeFrom > 0f || boxFrom > 0f))
         {
             t += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
@@ -391,6 +397,40 @@ public sealed class CinematicDirector : MonoBehaviour
     }
 
     static float Smooth(float x) => x * x * (3f - 2f * x);
+
+    IEnumerator CoReleaseHeldCover(CinematicOverlay overlay, float hold, float ret)
+    {
+        float waited = 0f;
+        while (waited < hold)
+        {
+            if (IsPlaying || overlay == null)
+                yield break;
+            waited += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+            yield return null;
+        }
+        if (IsPlaying || overlay == null)
+            yield break;
+        float fadeFrom = overlay.FadeAlpha;
+        Color fadeColor = overlay.FadeColor;
+        float boxFrom = overlay.Letterbox;
+        float t = 0f;
+        while (t < ret)
+        {
+            if (IsPlaying || overlay == null)
+                yield break;
+            t += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+            float k = 1f - Smooth(Mathf.Clamp01(t / ret));
+            overlay.SetFade(fadeColor, fadeFrom * k);
+            overlay.SetLetterbox(boxFrom * k);
+            yield return null;
+        }
+        if (!IsPlaying && overlay != null)
+        {
+            overlay.SetFade(Color.black, 0f);
+            overlay.SetLetterbox(0f);
+            overlay.SetDissolve(Color.black, 0f);
+        }
+    }
 
     // ------------------------------------------------------------------ input
 

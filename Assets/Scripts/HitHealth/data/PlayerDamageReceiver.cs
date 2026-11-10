@@ -91,6 +91,9 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
         ReceiveResolvedHit(BuildLegacyPayload(baseDamage, attacker, hitPoint, unblockable, allowPerfectDodge, allowParry));
     }
 
+    /// <summary>반복 16(Type-D 개편): 해석·적용된 피격 (퍼펙트 회피 포함). hpLost = 실제로 깎인 HP. 띄워짐·가드 밀림·블링크·강패링이 구독한다.</summary>
+    public static event System.Action<PlayerDamageReceiver, HitPayload, ResolvedHitResult, int> AnyHitResolved;
+
     void ReceiveResolvedHit(HitPayload payload)
     {
         if (!health || health.IsDead) return;
@@ -125,6 +128,7 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
                     $"[PerfectDodge] SUCCESS attacker={(payload.attacker ? payload.attacker.name : "null")} hitPoint={payload.hitPoint}",
                     this);
             }
+            AnyHitResolved?.Invoke(this, payload, resolvedHit, 0);
             return;
         }
 
@@ -181,6 +185,8 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
             if (guard != null)
                 guard.EndIncomingHit();
         }
+
+        AnyHitResolved?.Invoke(this, payload, resolvedHit, Mathf.Max(0, hpBefore - health.CurrentHP));
     }
 
     // 같은 공격자의 연속 피격: N타째부터 배율, 연타 총 피해는 최대 HP 비율로 상한.

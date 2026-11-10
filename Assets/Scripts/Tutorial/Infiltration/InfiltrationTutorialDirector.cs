@@ -97,6 +97,9 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
     TutorialPerfectDodgeConditionChecker _pdChecker;
 
     EnemyBrain _android1, _android2, _wallTurret, _platformTurret, _enforcer, _sideTurret;
+    EnemyBrain _takedownTarget; // 반복 16: 잠입 암살 레슨 (경계 전 경비 등 뒤에서 처형)
+    InfMobsDefeatedChecker _takedownChecker;
+    Transform _takedownSpawn;
     readonly List<EnemyBrain> _spawned = new List<EnemyBrain>();
     readonly HashSet<EnemyBrain> _hpFloor = new HashSet<EnemyBrain>();
     bool _resyncing;
@@ -106,6 +109,8 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
     bool _pdAssist;
     float _respawnAt = -1f;
     static int s_resumeStep = -1;
+    /// <summary>키오스크 리셋 등: 튜토리얼 재개 단계 정리 (다음 방문객은 처음부터).</summary>
+    public static void ClearCheckpointState() => s_resumeStep = -1;
 
     // ---------------------------------------------------------------- QA (dev route bot / reports)
     public string CurrentStepId => _flow != null && _flow.CurrentStep != null ? _flow.CurrentStep.stepId : null;
@@ -177,6 +182,10 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         new Line("tut.inf.pd.assist.0", EGO, "판정 보조 켰어. 시뮬레이션이니까\n이번만 봐준다."),
         new Line("tut.inf.pd.success.0", EGO, "그거야. 방금 세상이\n멈춘 것 같았지?"),
         new Line("tut.inf.to_side.intro.0", EGO, "셔터 통로 너머가 측면 출입구.\n로비 바로 앞이야."),
+        new Line("tut.inf.takedown.intro.0", EGO, "저 경비, 아직 우릴 못 봤어.\n등 뒤로 조용히 붙어."),
+        new Line("tut.inf.takedown.intro.1", EGO, "바로 뒤에서 {light}. 소리 없이 끝내는 거야."),
+        new Line("tut.inf.takedown.remind.0", EGO, "정면으로 가면 들켜.\n돌아서 등 뒤로."),
+        new Line("tut.inf.takedown.success.0", EGO, "깔끔해. 경보도 안 울렸어."),
         new Line("tut.inf.enforcer.intro.0", EGO, "방패 집행관. 정면 약공은\n다 막혀. 시간 낭비야."),
         new Line("tut.inf.enforcer.intro.1", EGO, "{heavy} 강공으로 방패를 깨거나\n옆으로 돌아. 뒤 터렛 조준선도 조심."),
         new Line("tut.inf.enforcer.remind.0", EGO, "정면 약공은 튕겨.\n강공으로 깨, 추온."),
@@ -193,6 +202,7 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
     void Awake()
     {
         Active = this;
+        ExecutionDirector.MobFilter = AllowMobExecution; // 반복 16: 레슨 경비를 처형·암살로 건너뛰지 않게
         _flow = GetComponent<TutorialFlowController>();
         _player = GameObject.FindGameObjectWithTag("Player");
         _camera = Camera.main;
@@ -355,6 +365,8 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
     {
         if (Active == this)
             Active = null;
+        if (ExecutionDirector.MobFilter == (Func<EnemyBrain, ExecutionKind, bool>)AllowMobExecution)
+            ExecutionDirector.MobFilter = null;
         if (_flow != null)
         {
             _flow.StepStarted -= HandleStepStarted;
@@ -478,6 +490,8 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         _pdChecker = Add<TutorialPerfectDodgeConditionChecker>(); _pdChecker.ConfigureRuntime(_bridge, 1);
         Remind(_pdChecker, "pd", 10f);
         var toSide = Add<TutorialZoneConditionChecker>(); toSide.ConfigureRuntime(zoneSideYard);
+        _takedownChecker = Add<InfMobsDefeatedChecker>(); _takedownChecker.ConfigureRuntime("암살");
+        Remind(_takedownChecker, "takedown", 12f);
         _guardBreakChecker = Add<InfGuardBreakChecker>(); _guardBreakChecker.ConfigureRuntime(1);
         Remind(_guardBreakChecker, "enforcer", 10f);
         var ult = Add<TutorialUltimateConditionChecker>(); ult.ConfigureRuntime(_bridge, null);
@@ -497,6 +511,7 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         steps.Add(Step("heal", TutorialStepType.Heal, "회복", "{heal} — 앰플 투여", heal));
         steps.Add(Step("pd", TutorialStepType.PerfectDodge, "퍼펙트 회피", "탄이 닿기 직전 {dodge}", _pdChecker));
         steps.Add(Step("to_side", TutorialStepType.Movement, "측면 출입구", "셔터 통로를 지나 본사 측면으로", toSide));
+        steps.Add(Step("takedown", TutorialStepType.Combo, "잠입 암살", "경계 전 경비 등 뒤에서 {light}", _takedownChecker));
         steps.Add(Step("enforcer", TutorialStepType.Combo, "방패 집행관", "{heavy} 강공 또는 측면 공격으로 가드 붕괴", _guardBreakChecker));
         steps.Add(Step("ultimate", TutorialStepType.Ultimate, "궁극기", "{ult} — 위상단절검", ult));
         steps.Add(Step("exit", TutorialStepType.Exit, "시뮬레이션 종료", "로비 문 패널에서 {interact}", exit));
@@ -714,6 +729,18 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
                 if (passageBarrier != null) passageBarrier.Open();
                 SetGoal(zoneSideYard != null ? zoneSideYard.transform : null, false);
                 break;
+            case "takedown":
+                // 측면 마당 한가운데, 집행관 쪽(플레이어 반대)을 보고 서 있는 경계 전 경비
+                if (_takedownTarget == null || _takedownTarget.IsDead)
+                    _takedownTarget = SpawnMob(androidPrefab, ResolveTakedownSpawn(), true, false, null);
+                if (_takedownTarget != null)
+                {
+                    _takedownTarget.PerceptionSuppressed = true;
+                    _takedownChecker.Observe(_takedownTarget);
+                    SetGoal(_takedownTarget.transform, true);
+                }
+                ExecutionDirector.Ensure();
+                break;
             case "enforcer":
                 if (_enforcer == null || _enforcer.IsDead)
                     _enforcer = SpawnMob(enforcerPrefab, enforcerSpawn, false, true, null);
@@ -821,6 +848,39 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         yield return null;
         if (brain != null && brain.isActiveAndEnabled && !brain.IsDead && _player != null)
             brain.ReceiveAlert(_player.transform.position);
+    }
+
+    // 반복 16: 암살 레슨 경비 위치 = 측면 마당 진입점과 집행관 위치 사이 40 %, 집행관 쪽을 본다 (플레이어에게 등을 보임)
+    Transform ResolveTakedownSpawn()
+    {
+        if (_takedownSpawn != null)
+            return _takedownSpawn;
+        Vector3 from = zoneSideYard != null ? zoneSideYard.transform.position : (_player != null ? _player.transform.position : transform.position);
+        Vector3 to = enforcerSpawn != null ? enforcerSpawn.position : from + Vector3.forward * 8f;
+        Vector3 pos = Vector3.Lerp(from, to, 0.4f);
+        if (UnityEngine.AI.NavMesh.SamplePosition(pos, out UnityEngine.AI.NavMeshHit hit, 3f, UnityEngine.AI.NavMesh.AllAreas))
+            pos = hit.position;
+        else
+            pos.y = from.y;
+        Vector3 face = to - from;
+        face.y = 0f;
+        _takedownSpawn = new GameObject("InfTakedownSpawn").transform;
+        _takedownSpawn.SetParent(transform, true);
+        _takedownSpawn.SetPositionAndRotation(pos, face.sqrMagnitude > 0.01f ? Quaternion.LookRotation(face.normalized, Vector3.up) : Quaternion.identity);
+        return _takedownSpawn;
+    }
+
+    public EnemyBrain TakedownTarget => _takedownTarget;
+
+    // 암살은 '잠입 암살' 단계의 경비에게만, 경직 처형은 HP 하한이 걸린 레슨 경비(방어·패링·집행관)와 초반 레슨 단계에서는 막는다.
+    bool AllowMobExecution(EnemyBrain brain, ExecutionKind kind)
+    {
+        string id = CurrentStepId;
+        if (kind == ExecutionKind.Takedown)
+            return id == "takedown" && brain == _takedownTarget;
+        if (_hpFloor.Contains(brain))
+            return false;
+        return id != "lockon" && id != "combo" && id != "guard" && id != "parry";
     }
 
     static void SetLessonThrust(EnemyBrain b, bool enabled)

@@ -75,6 +75,15 @@ public sealed class SoulsCameraRig : MonoBehaviour
     float _dodgeFovAt = -10f;
     float _lastPlayerFade = 1f;
 
+    // 반복 16: 좁은 공간 (튜토리얼 골목에서 카메라가 벽에 눌려 화면 대부분이 검은 벽이던 문제)
+    float _tight;
+    float _shoulderSign = 1f;
+    float _leftClear = 10f;
+    float _rightClear = 10f;
+    float _frontClear = 10f;
+    /// <summary>좁은 공간 가중치 0..1 (QA/지표용).</summary>
+    public float Tightness => _tight;
+
     readonly RaycastHit[] _hits = new RaycastHit[24];
     readonly Collider[] _overlaps = new Collider[16];
     static readonly Dictionary<int, bool> s_characterColliderCache = new Dictionary<int, bool>(256);
@@ -362,7 +371,8 @@ public sealed class SoulsCameraRig : MonoBehaviour
         float w = Mathf.SmoothStep(0f, 1f, _lockWeight);
 
         // ---- pivot (수평/수직 분리 감쇠)
-        Vector3 rawPivot = _player.position + Vector3.up * (profile.pivotHeight + (big ? profile.bigTargetExtraPivot * w : 0f));
+        float narrowLift = profile.narrowPivotLift * _tight * (1f - 0.5f * w);
+        Vector3 rawPivot = _player.position + Vector3.up * (profile.pivotHeight + narrowLift + (big ? profile.bigTargetExtraPivot * w : 0f));
         if ((rawPivot - _lastRawPivot).sqrMagnitude > 25f)
             SnapPivot();
         _lastRawPivot = rawPivot;
@@ -431,6 +441,23 @@ public sealed class SoulsCameraRig : MonoBehaviour
                 if (v.sqrMagnitude > 0.25f)
                     _yaw = Mathf.MoveTowardsAngle(_yaw, PlayerYaw(), profile.autoRecenterSpeed * dt);
             }
+            else if (profile.narrowAutoAlign && dt > 0f && _tight > 0.35f && _frontClear < profile.narrowFacingWall
+                     && now - _lastLookInputAt >= profile.narrowAlignDelay)
+            {
+                // 골목에서 벽을 정면으로 본 채 옆으로 달리는 경우: 이동 방향(트인 쪽)으로만 천천히 돈다.
+                // 뒤로 달려오는 경우(>120°)·이동 방향도 막힌 경우는 돌지 않는다 (플레이어를 놀라게 하지 않기).
+                Vector3 v = _pivotVelocity;
+                v.y = 0f;
+                float minSpeed = profile.narrowAlignMinSpeed;
+                if (v.sqrMagnitude > minSpeed * minSpeed)
+                {
+                    float moveYaw = Mathf.Atan2(v.x, v.z) * Mathf.Rad2Deg;
+                    float delta = Mathf.Abs(Mathf.DeltaAngle(_yaw, moveYaw));
+                    if (delta > 20f && delta < 120f
+                        && ProbeClearance(_pivot, Quaternion.Euler(0f, moveYaw, 0f) * Vector3.forward, 4.5f) >= 4f)
+                        _yaw = Mathf.MoveTowardsAngle(_yaw, moveYaw, profile.narrowAlignSpeed * _tight * dt);
+                }
+            }
         }
 
         _yaw = Mathf.Repeat(_yaw + 180f, 360f) - 180f;
@@ -453,9 +480,12 @@ public sealed class SoulsCameraRig : MonoBehaviour
             float shoulderT = Mathf.InverseLerp(profile.lockShoulderCloseDistance, profile.lockShoulderFarDistance, planarTargetDistance);
             shoulderLock = Mathf.Lerp(profile.lockShoulderClose, profile.lockShoulderFar, shoulderT);
         }
-        float shoulder = Mathf.Lerp(profile.freeShoulderOffset, shoulderLock, w);
         float lockDistance = (profile.lockDistance > 0f ? profile.lockDistance : profile.distance) + (big ? profile.bigTargetExtraDistance : 0f);
-        float distance = Mathf.Lerp(_zoomDistance, lockDistance, w);
+        UpdateNarrowSpace(dt, Mathf.Lerp(_zoomDistance, lockDistance, w));
+        // 좁은 공간: 자유 시점만 숄더를 트인 쪽으로, 거리는 처음부터 가깝게 (락온은 '플레이어 왼쪽·보스 오른쪽' 규칙 유지)
+        float shoulder = Mathf.Lerp(profile.freeShoulderOffset * _shoulderSign, shoulderLock, w);
+        float freeDistance = Mathf.Lerp(_zoomDistance, Mathf.Min(_zoomDistance, profile.narrowDistance), _tight);
+        float distance = Mathf.Lerp(freeDistance, lockDistance, w);
 
         Quaternion yawRot = Quaternion.Euler(0f, _yaw, 0f);
         Vector3 right = yawRot * Vector3.right;
@@ -475,7 +505,7 @@ public sealed class SoulsCameraRig : MonoBehaviour
 
         // view rotation
         float viewYaw = _yaw;
-        float viewPitch = _pitch - profile.freeFramingTilt;
+        float viewPitch = _pitch - profile.freeFramingTilt + profile.narrowPitchAdd * _tight;
         if (locked || w > 0f)
         {
             float lockYaw = _yaw;
@@ -484,6 +514,12 @@ public sealed class SoulsCameraRig : MonoBehaviour
             {
                 Vector3 playerChest = _player.position + Vector3.up * profile.playerChestHeight;
                 Vector3 targetChest = GetTargetChestPoint(target, profile.chestHeightRatio);
+                // 반복 16: 공중 타깃(Type-D 도약)은 시선을 일정 높이까지만 따라 올린다 — 예전엔 가슴점이 그대로 솟아 카메라가 천장을 봤다.
+                Renderer targetRenderer = ResolveTargetRenderer(target.root);
+                float targetBottom = targetRenderer != null ? targetRenderer.bounds.min.y : target.position.y;
+                float rise = targetBottom - _player.position.y;
+                if (rise > profile.lockAirborneLookRise)
+                    targetChest.y -= rise - profile.lockAirborneLookRise;
                 Vector3 lookPoint = Vector3.Lerp(playerChest, targetChest, profile.lockLookTargetBias);
                 Vector3 forward = yawRot * Vector3.forward;
                 float ahead = Mathf.Max(1.5f, Vector3.Dot(lookPoint - _player.position, forward));
@@ -498,6 +534,13 @@ public sealed class SoulsCameraRig : MonoBehaviour
                     float closeT = Mathf.InverseLerp(profile.bigTargetCloseDistance, profile.bigTargetCloseDistance - 1f, planarTargetDistance);
                     desiredViewPitch -= profile.bigTargetClosePitchUp * closeT;
                 }
+                // 올려다보기 상한 + 플레이어 몸 중앙이 화면 아래 가장자리 안에 남도록 (피치 + = 내려다봄)
+                desiredViewPitch = Mathf.Max(desiredViewPitch, -profile.lockMaxLookUp);
+                Vector3 toPlayer = _player.position + Vector3.up * 1.0f - desired;
+                float playerPlanar = new Vector2(toPlayer.x, toPlayer.z).magnitude;
+                float pitchToPlayer = -Mathf.Atan2(toPlayer.y, Mathf.Max(0.5f, playerPlanar)) * Mathf.Rad2Deg;
+                float halfFov = vcam.Lens.FieldOfView * 0.5f;
+                desiredViewPitch = Mathf.Max(desiredViewPitch, pitchToPlayer - halfFov * profile.lockPlayerFrameLimit);
 
                 if (!_lockViewValid)
                 {
@@ -798,6 +841,50 @@ public sealed class SoulsCameraRig : MonoBehaviour
         if (CameraOptionsRuntime.InvertY)
             look.y = -look.y;
         return look;
+    }
+
+    // ------------------------------------------------------------------ narrow space (반복 16)
+
+    /// <summary>
+    /// 좌우/정면 여유(피벗 기준 구체 캐스트 3개)와 뒤쪽 충돌 당김 비율로 '좁음' 가중치를 갱신한다.
+    /// 들어갈 때 0.3 s, 풀릴 때 0.8 s 로 움직여 잡동사니 많은 곳에서 거리/피벗이 떨리지 않게 한다.
+    /// </summary>
+    void UpdateNarrowSpace(float dt, float referenceDistance)
+    {
+        Quaternion yawRot = Quaternion.Euler(0f, _yaw, 0f);
+        Vector3 right = yawRot * Vector3.right;
+        float probe = Mathf.Max(1f, profile.narrowWidthStart);
+        _rightClear = ProbeClearance(_pivot, right, probe);
+        _leftClear = ProbeClearance(_pivot, -right, probe);
+        _frontClear = ProbeClearance(_pivot, yawRot * Vector3.forward, profile.narrowFacingWall + 0.5f);
+
+        float widthT = Mathf.InverseLerp(profile.narrowWidthStart, profile.narrowWidthFull, _rightClear + _leftClear);
+        float pullT = 0f;
+        if (_collisionDistance > 0f && referenceDistance > 0.1f)
+            pullT = Mathf.InverseLerp(profile.narrowPullRatioStart, profile.narrowPullRatioFull, _collisionDistance / referenceDistance);
+        float target = Mathf.Max(widthT, pullT);
+        if (dt > 0f)
+            _tight = Mathf.MoveTowards(_tight, target, dt / (target > _tight ? 0.3f : 0.8f));
+
+        float sign = profile.narrowSideShift && _rightClear < 1.3f && _leftClear > _rightClear + 0.6f ? -1f : 1f;
+        if (dt > 0f)
+            _shoulderSign = Mathf.MoveTowards(_shoulderSign, sign, dt * 2.5f);
+    }
+
+    float ProbeClearance(Vector3 origin, Vector3 dir, float maxDistance)
+    {
+        float clear = maxDistance;
+        int n = Physics.SphereCastNonAlloc(origin, 0.2f, dir, _hits, maxDistance, profile.collisionMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < n; i++)
+        {
+            RaycastHit hit = _hits[i];
+            if (hit.collider == null || hit.distance <= 0f && hit.point == Vector3.zero)
+                continue;
+            if (IsCharacterCollider(hit.collider) || IsThinProp(hit.collider, profile.thinPropMaxSize))
+                continue;
+            clear = Mathf.Min(clear, hit.distance);
+        }
+        return clear;
     }
 
     // ------------------------------------------------------------------ collision

@@ -26,8 +26,13 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private TutorialComboGuideView comboGuideView;
 
     [Header("Runtime Layout")]
-    [SerializeField] private Vector2 dialoguePanelAnchoredPosition = new Vector2(0f, 112f);
-    [SerializeField] private Vector2 dialoguePanelSize = new Vector2(1280f, 180f);
+    // 반복 16 (플레이어 리뷰 E1): 하단 중앙(추온 상반신 위) → 오른쪽 아래 '통신 패널' 문법. 전투 bark 통신 슬롯(오른쪽 아래 44~118 px) 바로 위.
+    [Tooltip("켜면 대사 패널을 오른쪽 아래 통신 패널(오른쪽 정렬)로, 끄면 예전 하단 중앙")]
+    [SerializeField] private bool dialogueCommsLayout = true;
+    [SerializeField] private Vector2 dialoguePanelAnchoredPosition = new Vector2(-48f, 136f);
+    [SerializeField] private Vector2 dialoguePanelSize = new Vector2(760f, 150f);
+    [SerializeField] private Vector2 legacyCenterDialoguePosition = new Vector2(0f, 112f);
+    [SerializeField] private Vector2 legacyCenterDialogueSize = new Vector2(1280f, 180f);
     [SerializeField] private Vector2 objectivePanelAnchoredPosition = new Vector2(-370f, 346f);
     [SerializeField] private Vector2 objectivePanelSize = new Vector2(700f, 220f);
     [SerializeField] private Vector2 comboPanelAnchoredPosition = new Vector2(32f, -160f);
@@ -42,8 +47,9 @@ public class TutorialHintUIBridge : MonoBehaviour
     [SerializeField] private Color timingCuePanelColor = new Color(0.02f, 0.05f, 0.07f, 0.92f);
     [SerializeField] private Color timingCueTextColor = new Color(0.96f, 1f, 1f, 1f);
     [SerializeField] private Color accentColor = new Color(0.22f, 0.86f, 1f, 0.96f);
-    [SerializeField] private Color speakerColor = new Color(0.36f, 0.94f, 1f, 1f);
-    [SerializeField] private Color guideBodyColor = new Color(0.90f, 0.97f, 1f, 0.96f);
+    // 반복 16 (E7): EGO 화자 = 스틸 화이트 (시안 아님, 화자별 색은 ChuonUiPalette.Speaker), 본문 = 세라믹 화이트
+    [SerializeField] private Color speakerColor = new Color(0.68f, 0.79f, 0.90f, 1f);
+    [SerializeField] private Color guideBodyColor = new Color(0.94f, 0.95f, 0.97f, 1f);
     [SerializeField] private Color questTitleColor = new Color(0.96f, 1f, 1f, 1f);
     [SerializeField] private Color questBodyColor = new Color(0.90f, 0.98f, 1f, 0.98f);
     [SerializeField] private Color keyCueGlowColor = new Color(0.22f, 0.92f, 1f, 0.42f);
@@ -177,7 +183,12 @@ public class TutorialHintUIBridge : MonoBehaviour
             dialogueGroup.alpha = string.IsNullOrWhiteSpace(body) ? 0f : 1f;
 
         if (speakerText != null)
-            speakerText.text = string.IsNullOrWhiteSpace(speaker) ? defaultSpeaker : speaker;
+        {
+            string resolvedSpeaker = string.IsNullOrWhiteSpace(speaker) ? defaultSpeaker : speaker;
+            speakerText.text = resolvedSpeaker;
+            if (_runtimeHudRoot != null && dialogueGroup != null && speakerText.transform.parent == dialogueGroup.transform)
+                speakerText.color = ChuonUiPalette.Speaker(resolvedSpeaker, speakerColor);
+        }
 
         if (contentText != null)
             contentText.text = body ?? string.Empty;
@@ -250,7 +261,7 @@ public class TutorialHintUIBridge : MonoBehaviour
             {
                 // 상자 = 실제 대사 크기 + 여백 (가로 520~패널 폭)
                 float maxWidth = contentText.rectTransform.sizeDelta.x;
-                Vector2 pref = contentText.GetPreferredValues(contentText.text, maxWidth - 80f, 0f);
+                Vector2 pref = contentText.GetPreferredValues(contentText.text, maxWidth - (dialogueCommsLayout ? 96f : 80f), 0f);
                 // 여러 줄 큰 자막은 위로 밀어 올린다 (하단 HP 게이지와 겹치지 않게: 본문 맨 아래 ≥ 패널 바닥 + 64)
                 const float minTextBottom = 64f;
                 const float contentBaseY = 20f;
@@ -265,12 +276,14 @@ public class TutorialHintUIBridge : MonoBehaviour
                 float panelHeight = ((RectTransform)dialogueGroup.transform).sizeDelta.y;
                 float top = panelHeight - 8f + 6f + shift; // 화자 줄 위 (위로 커지는 만큼 포함)
                 top += speakerHeight - 28f;
-                float width = Mathf.Clamp(pref.x + 96f, 520f, maxWidth);
+                float width = Mathf.Clamp(pref.x + 96f, dialogueCommsLayout ? 320f : 520f, maxWidth);
                 RectTransform r = _subtitleBackground.rectTransform;
                 r.sizeDelta = new Vector2(width, Mathf.Max(60f, top - bottom));
                 r.anchoredPosition = new Vector2(0f, bottom);
                 r.SetAsFirstSibling();
             }
+            if (_commsAccent != null)
+                _commsAccent.enabled = _subtitleBackground.enabled;
         }
     }
 
@@ -512,16 +525,22 @@ public class TutorialHintUIBridge : MonoBehaviour
         CreateTimingCuePanel();
     }
 
+    Image _commsAccent;
+
     void CreateDialoguePanel()
     {
+        bool comms = dialogueCommsLayout;
+        // 통신 패널: 오른쪽 아래 기준(피벗 (1,0)), 텍스트 오른쪽 정렬, 배경 상자도 오른쪽 끝에 붙어 왼쪽으로 늘어난다.
+        Vector2 anchor = comms ? new Vector2(1f, 0f) : new Vector2(0.5f, 0f);
+        Vector2 panelSize = comms ? dialoguePanelSize : legacyCenterDialogueSize;
         CanvasGroup panelGroup = CreateCanvasGroup(
             "DialoguePanel",
             _runtimeHudRoot,
-            new Vector2(0.5f, 0f),
-            new Vector2(0.5f, 0f),
-            new Vector2(0.5f, 0f),
-            dialoguePanelAnchoredPosition,
-            dialoguePanelSize);
+            anchor,
+            anchor,
+            anchor,
+            comms ? dialoguePanelAnchoredPosition : legacyCenterDialoguePosition,
+            panelSize);
         panelGroup.alpha = 0f;
 
         dialogueGroup = panelGroup;
@@ -529,22 +548,31 @@ public class TutorialHintUIBridge : MonoBehaviour
         GameObject bgObject = new GameObject(SubtitleBackgroundName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
         RectTransform bgRect = bgObject.GetComponent<RectTransform>();
         bgRect.SetParent(panelGroup.transform, false);
-        ConfigureRect(bgRect, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 6f), new Vector2(760f, 150f));
+        ConfigureRect(bgRect, anchor, anchor, anchor, new Vector2(0f, 6f), new Vector2(760f, 150f));
         _subtitleBackground = bgObject.GetComponent<Image>();
-        _subtitleBackground.color = subtitleBackgroundColor;
+        // 통신 패널: 그래파이트 0.72 (본문 대비 확보) + 오른쪽 레드 헤어라인 (보스전 bark 통신 패널과 같은 문법)
+        _subtitleBackground.color = comms ? new Color(0.035f, 0.037f, 0.043f, 0.72f) : subtitleBackgroundColor;
         _subtitleBackground.raycastTarget = false;
+        if (comms)
+        {
+            _commsAccent = CreateImage(bgRect, "CommsAccent", ChuonUiPalette.WithAlpha(ChuonUiPalette.TsukasaRed, 0.95f));
+            ConfigureRect(_commsAccent.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(3f, 0f));
+        }
+
+        float speakerSize = comms ? 22f : 24f;
+        float contentSize = comms ? 27f : 30f;
         speakerText = EnsureText(panelGroup.transform, "Speaker");
-        ApplyTextStyle(speakerText, 24f, FontStyles.Bold, speakerColor, TextAlignmentOptions.Bottom);
+        ApplyTextStyle(speakerText, speakerSize, FontStyles.Bold, speakerColor, comms ? TextAlignmentOptions.BottomRight : TextAlignmentOptions.Bottom);
         ConfigureRect(
             speakerText.rectTransform,
             new Vector2(0.5f, 1f),
             new Vector2(0.5f, 1f),
             new Vector2(0.5f, 1f),
             new Vector2(0f, -8f),
-            new Vector2(dialoguePanelSize.x, 28f));
+            new Vector2(panelSize.x, 28f));
 
         contentText = EnsureText(panelGroup.transform, "Content");
-        ApplyTextStyle(contentText, 30f, FontStyles.Bold, guideBodyColor, TextAlignmentOptions.Top);
+        ApplyTextStyle(contentText, contentSize, comms ? FontStyles.Normal : FontStyles.Bold, guideBodyColor, comms ? TextAlignmentOptions.TopRight : TextAlignmentOptions.Top);
         contentText.enableWordWrapping = true;
         contentText.richText = true;
         ConfigureRect(
@@ -553,7 +581,14 @@ public class TutorialHintUIBridge : MonoBehaviour
             new Vector2(0.5f, 0f),
             new Vector2(0.5f, 0f),
             new Vector2(0f, 20f),
-            new Vector2(dialoguePanelSize.x, 112f));
+            new Vector2(panelSize.x, 112f));
+
+        if (comms)
+        {
+            // 좌우 여백 48 (배경 상자 = 글자 폭 + 96 이 대칭이 되게)
+            speakerText.margin = new Vector4(48f, 0f, 48f, 0f);
+            contentText.margin = new Vector4(48f, 0f, 48f, 0f);
+        }
     }
 
     void CreateObjectivePanel()
@@ -846,6 +881,10 @@ public class TutorialHintUIBridge : MonoBehaviour
 
     TMP_FontAsset ResolvePreferredFontAsset(params TextMeshProUGUI[] candidates)
     {
+        // 반복 16 (E8): 씬 Noto SDF 는 가변 글꼴 기본 인스턴스(Thin)라 가늘다 → 공용 Noto Sans KR Medium
+        TMP_FontAsset shared = ChuonUiFonts.Tmp;
+        if (shared != null)
+            return shared;
         for (int i = 0; i < candidates.Length; i++)
         {
             if (candidates[i] != null && candidates[i].font != null)
@@ -928,6 +967,8 @@ public class TutorialHintUIBridge : MonoBehaviour
         textObject.transform.SetParent(parent, false);
         TextMeshProUGUI text = textObject.GetComponent<TextMeshProUGUI>();
         text.raycastTarget = false;
+        if (_preferredFontAsset == null)
+            _preferredFontAsset = ChuonUiFonts.Tmp;
         if (_preferredFontAsset != null)
             text.font = _preferredFontAsset;
         return text;

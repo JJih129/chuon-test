@@ -150,6 +150,8 @@ public class LobbyManager : MonoBehaviour
 
     static bool s_skipToLowerFloorOnNextLoad;
     public static void RequestSkipToLowerFloorOnNextLoad() => s_skipToLowerFloorOnNextLoad = true;
+    /// <summary>키오스크 리셋 등: 체크포인트 재시작 플래그 정리 (다음 방문객은 처음부터).</summary>
+    public static void ClearCheckpointState() => s_skipToLowerFloorOnNextLoad = false;
     static bool ConsumeSkipToLowerFloor()
     {
         bool value = s_skipToLowerFloorOnNextLoad;

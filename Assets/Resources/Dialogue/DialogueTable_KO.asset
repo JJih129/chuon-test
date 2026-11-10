@@ -896,3 +896,239 @@ MonoBehaviour:
       speaker: EGO
       text: "\uC778\uC0AC\uB294 \uC0DD\uB7B5\uC774\uB798. \uC628\uB2E4!"
       duration: 0
+  - key: oh.lockdown
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "Type-D"
+      text: "\uBD09\uC1C4 \uD504\uB85C\uD1A0\uCF5C \uAC00\uB3D9.\n\uC678\uBD80 \uC804\uC6D0 \uC5F0\uACB0."
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uD328\uD134\uC774 \uBC14\uB010\uB2E4, \uCD94\uC628.\n\uBCBD\uC758 \uC804\uC6D0 \uB178\uB4DC\uBD80\uD130 \uB04A\uC5B4!"
+      duration: 0
+  - key: oh.node
+    cooldown: 10
+    priority: 0
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uD558\uB098 \uB04A\uC5C8\uC5B4. \uACC4\uC18D!"
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uC88B\uC544, \uB2E4\uC74C \uB178\uB4DC."
+      duration: 0
+  - key: oh.nodes_done
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uC804\uC6D0 \uCC28\uB2E8! \uC9C0\uAE08\uC774\uC57C, \uCD94\uC628!"
+      duration: 0
+  - key: oh.overload
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "Type-D"
+      text: "\uC804\uC6D0 \uC190\uC2E4. \uACFC\uBD80\uD558."
+      duration: 0
+  - key: oh.purge
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "Type-D"
+      text: "\uC7A5\uAC11 \uD574\uC81C.\n\uCD9C\uB825 \uC81C\uD55C \uD574\uC81C."
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uD328\uD134\uC774 \uBC14\uB010\uB2E4, \uCD94\uC628.\n\uAECD\uB370\uAE30\uB97C \uBC97\uC5C8\uC73C\uB2C8 \uB354 \uBE68\uB77C\uC9C8 \uAC70\uC57C."
+      duration: 0
+  - key: oh.parts
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uBC14\uC774\uC800\uB791 \uD314 \uCE7C\uB0A0\uC774 \uC57D\uD574\uC84C\uC5B4.\n\uC4F0\uB7EC\uC84C\uC744 \uB54C \uBA38\uB9AC, \uCE7C\uB0A0\uC740 \uBC1B\uC544\uCCD0\uC11C \uBD80\uC234!"
+      duration: 0
+  - key: oh.overheat
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "Type-D"
+      text: "\uB0C9\uAC01 \uC2E4\uD328. \uCF54\uC5B4 \uB178\uCD9C."
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uD328\uD134\uC774 \uBC14\uB010\uB2E4, \uCD94\uC628.\n\uBC30\uAE30\uD560 \uB54C \uBB3C\uB7EC\uB0AC\uB2E4\uAC00, \uB05D\uB098\uBA74 \uBAB0\uC544\uCCD0!"
+      duration: 0
+  - key: oh.desperation
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "Type-D"
+      text: "\uC784\uACC4 \uD3ED\uC8FC. \uBC18\uACBD \uB0B4 \uC804\uBD80 \uC18C\uAC70."
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uC5C4\uD3D0\uBB3C \uB4A4\uB85C! \uC544\uB2C8\uBA74 \uD0C0\uC774\uBC0D \uB9DE\uCDB0\uC11C \uD53C\uD574!"
+      duration: 0
+  - key: oh.overdrive
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uBC84\uD17C\uC5B4! \uB188\uC774 \uBA48\uCDC4\uB2E4, \uB05D\uB0B4!"
+      duration: 0
+  - key: oh.final
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uCF54\uC5B4\uAC00 \uBCF4\uC5EC. \uB9C8\uBB34\uB9AC\uD574, \uCD94\uC628."
+      duration: 0
+  - key: oh.final_exec
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "\uCD94\uC628"
+      text: "\uB05D\uC774\uB2E4."
+      duration: 0
+  - key: oh.execute_ready
+    cooldown: 10
+    priority: 0
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uBB34\uB108\uC84C\uC5B4! \uCC98\uD615\uD574!"
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uC9C0\uAE08! \uB2E4\uAC00\uAC00\uC11C \uBCA0\uC5B4!"
+      duration: 0
+  - key: oh.strong_parry
+    cooldown: 10
+    priority: 0
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uC644\uBCBD\uD574! \uBC00\uB824\uB0AC\uB2E4!"
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uC138 \uBC88 \uC5F0\uC18D! \uC790\uC138\uAC00 \uBB34\uB108\uC84C\uC5B4!"
+      duration: 0
+  - key: oh.blink
+    cooldown: 10
+    priority: 0
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uB4A4\uB97C \uC7A1\uC558\uC5B4!"
+      duration: 0
+    - key: 
+      speaker: "EGO"
+      text: "\uB4F1\uC774 \uBE44\uC5C8\uB2E4, \uCD94\uC628!"
+      duration: 0
+  - key: oh.visor
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uB208\uC744 \uBE8F\uC5C8\uC5B4! \uC606\uC73C\uB85C \uB3CC\uC544\uC11C \uCCD0!"
+      duration: 0
+  - key: oh.blade
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uCE7C\uB0A0\uC774 \uBD80\uB7EC\uC84C\uC5B4. \uADF8 \uC0AC\uC120 \uBCA0\uAE30\uB294 \uC774\uC81C \uC5C6\uC5B4."
+      duration: 0
+  - key: oh.takedown_hint
+    cooldown: 0
+    priority: 1
+    once: 0
+    chance: 1
+    followUpGroup: 
+    followUpDelay: 0.4
+    lines:
+    - key: 
+      speaker: "EGO"
+      text: "\uB208\uCE58 \uBABB \uCC58\uC5B4. \uB4F1 \uB4A4\uB85C \uBD99\uC5B4\uC11C \uC870\uC6A9\uD788 \uB05D\uB0B4."
+      duration: 0

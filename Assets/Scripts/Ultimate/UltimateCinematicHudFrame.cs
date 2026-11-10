@@ -31,7 +31,7 @@ public sealed class UltimateCinematicHudFrame : MonoBehaviour
     int _direction;
     bool _active;
     float _delayUntil;
-    Text _skipHint;
+    RectTransform _skipHint; // 반복 16 (E2): 키 글리프 상자 + 설명 (ChuonKeyHint)
 
     public bool IsActive => _active;
 
@@ -127,7 +127,7 @@ public sealed class UltimateCinematicHudFrame : MonoBehaviour
         if (_bottom != null)
             _bottom.anchorMax = new Vector2(1f, barHeight);
         if (_skipHint != null)
-            _skipHint.color = new Color(1f, 1f, 1f, 0.5f * eased);
+            ChuonKeyHint.SetAlpha(_skipHint, 0.95f * eased);
 
         for (int i = 0; i < _hud.Count; i++)
         {
@@ -222,30 +222,26 @@ public sealed class UltimateCinematicHudFrame : MonoBehaviour
         if (_overlay != null)
             return;
 
-        var root = new GameObject("UltimateLetterboxCanvas", typeof(RectTransform), typeof(Canvas));
+        var root = new GameObject("UltimateLetterboxCanvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
         _overlay = root.GetComponent<Canvas>();
         _overlay.renderMode = RenderMode.ScreenSpaceOverlay;
         _overlay.overrideSorting = true;
         _overlay.sortingOrder = overlaySortingOrder;
+        // 반복 16 (E2): 스케일러가 없어 힌트가 해상도와 무관하게 18 px 고정이었다 → 1920x1080 기준 스케일
+        var scaler = root.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight = 0.5f;
 
         _top = CreateBar(root.transform, "LetterboxTop", new Vector2(0f, 1f), new Vector2(1f, 1f));
         _bottom = CreateBar(root.transform, "LetterboxBottom", new Vector2(0f, 0f), new Vector2(1f, 0f));
 
-        // 건너뛰기 안내 (아래 레터박스 안, 오른쪽)
-        var hintGo = new GameObject("SkipHint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-        hintGo.transform.SetParent(_bottom, false);
-        _skipHint = hintGo.GetComponent<Text>();
-        _skipHint.font = RuntimeBuiltInFontUtility.GetDefaultFont();
-        _skipHint.fontSize = 18;
-        _skipHint.alignment = TextAnchor.MiddleRight;
-        _skipHint.raycastTarget = false;
-        _skipHint.text = "F / Space  건너뛰기";
-        _skipHint.color = new Color(1f, 1f, 1f, 0f);
-        var hintRect = (RectTransform)hintGo.transform;
-        hintRect.anchorMin = new Vector2(0.6f, 0f);
-        hintRect.anchorMax = new Vector2(1f, 1f);
-        hintRect.offsetMin = new Vector2(0f, 0f);
-        hintRect.offsetMax = new Vector2(-36f, 0f);
+        // 건너뛰기 안내 (아래 레터박스 안, 오른쪽): [F] [Space] 건너뛰기 — 키 상자 + 24 px 설명 (1080p 기준)
+        _skipHint = ChuonKeyHint.Create(_bottom, "SkipHint", ChuonKeyHint.SkipKeys(), "건너뛰기", 24);
+        _skipHint.anchorMin = _skipHint.anchorMax = new Vector2(1f, 0.5f);
+        _skipHint.pivot = new Vector2(1f, 0.5f);
+        _skipHint.anchoredPosition = new Vector2(-40f, 0f);
+        ChuonKeyHint.SetAlpha(_skipHint, 0f);
         root.SetActive(false);
     }
 

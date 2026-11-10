@@ -2,13 +2,9 @@ using UnityEngine;
 
 public static class RuntimeBuiltInFontUtility
 {
-    static Font s_defaultFont;
-
+    // 반복 16 (E8): Arial(LegacyRuntime) 대신 Noto Sans KR Medium (한글을 OS 대체 글꼴에 맡기지 않는다). 없으면 LegacyRuntime.
     public static Font GetDefaultFont()
     {
-        if (s_defaultFont == null)
-            s_defaultFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-
-        return s_defaultFont;
+        return ChuonUiFonts.Legacy;
     }
 }

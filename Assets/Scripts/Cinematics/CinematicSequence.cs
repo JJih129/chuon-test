@@ -60,6 +60,9 @@ public sealed class CinematicSequence : MonoBehaviour
     [SerializeField, Min(0f)] float letterboxRamp = 0.35f;
     [Tooltip("게임플레이 복귀 시 남은 페이드(검정)를 이 시간 동안 걷는다 (카메라 리그 0.35 s 블렌드와 같이).")]
     [SerializeField, Min(0f)] float returnFadeSeconds = 0.35f;
+    [Tooltip("0 보다 크면 끝 화면 덮개(페이드·레터박스)를 이 시간(실시간) 유지한 뒤 걷는다 — 씬 전환으로 끝나는 연출(튜토리얼 종료)이 " +
+             "복귀 페이드 동안 게임플레이 화면을 비추지 않게. 씬이 바뀌면 오버레이와 함께 사라진다. 반복 16.")]
+    [SerializeField, Min(0f)] float holdEndCoverSeconds;
     [Tooltip("재생 중에만 켜는 무대(세트·조명·퍼펫). 비우면 리그 루트 자식 'Stage'.")]
     [SerializeField] GameObject stageRoot;
     [Tooltip("안전 장치: 이 시간(실시간)이 지나면 강제로 끝낸다. 0 = 타임라인 길이 + 2 s")]
@@ -103,6 +106,8 @@ public sealed class CinematicSequence : MonoBehaviour
     public bool UseLetterbox => letterbox;
     public float LetterboxRamp => letterboxRamp;
     public float ReturnFadeSeconds => returnFadeSeconds;
+    public float HoldEndCoverSeconds => holdEndCoverSeconds;
+    public void SetHoldEndCover(float seconds) => holdEndCoverSeconds = Mathf.Max(0f, seconds);
     public string[] HudObjectNames => hudObjectNames;
     public PlayableDirector Director => _director != null ? _director : (_director = GetComponent<PlayableDirector>());
     public double Duration => Director.playableAsset != null ? Director.playableAsset.duration : 0d;

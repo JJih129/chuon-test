@@ -152,6 +152,39 @@ public sealed class SoulsCameraProfile : ScriptableObject
     [Tooltip("카메라가 캐릭터(보스/적) 몸통 캡슐에 이 여유 이내로 들어가면 그 캐릭터 렌더링을 숨긴다 (m).")]
     public float characterHideMargin = 0.15f;
 
+    [Header("좁은 공간 (반복 16)")]
+    [Tooltip("좌우 여유 합(카메라 오른쪽/왼쪽 탐침)이 이 값 미만이면 좁은 공간으로 보기 시작 (m).")]
+    public float narrowWidthStart = 6.0f;
+    [Tooltip("좌우 여유 합이 이 값 이하면 좁음 최대 (m).")]
+    public float narrowWidthFull = 3.2f;
+    [Tooltip("뒤쪽 충돌 당김 비율(당겨진 거리/원래 거리)이 이 값 미만이면 좁음으로 본다.")]
+    [Range(0.2f, 1f)] public float narrowPullRatioStart = 0.8f;
+    [Range(0.1f, 1f)] public float narrowPullRatioFull = 0.4f;
+    [Tooltip("좁은 공간 자유 시점 거리 (m). 벽에 눌린 카메라 대신 처음부터 가깝게.")]
+    public float narrowDistance = 3.0f;
+    [Tooltip("좁은 공간 피벗 추가 높이 (m). 벽보다 바닥·캐릭터가 더 보이게.")]
+    public float narrowPivotLift = 0.2f;
+    [Tooltip("좁은 공간 시선 숙임 추가 (deg).")]
+    public float narrowPitchAdd = 4f;
+    [Tooltip("오른쪽 어깨 쪽이 막히고 왼쪽이 트였으면 숄더 오프셋을 왼쪽으로 옮긴다.")]
+    public bool narrowSideShift = true;
+    [Tooltip("벽을 정면으로 보고(시선 앞 벽 < narrowFacingWall) 뒤가 눌린 채 이동 중이면, 카메라 입력이 없을 때 이동 방향(트인 쪽)으로 천천히 정렬.")]
+    public bool narrowAutoAlign = true;
+    public float narrowFacingWall = 3.2f;
+    public float narrowAlignDelay = 0.7f;
+    [Tooltip("정렬 최대 각속도 (deg/s). 락온 상한 240°/s 보다 훨씬 낮게.")]
+    public float narrowAlignSpeed = 55f;
+    [Tooltip("정렬 시작 최소 이동 속도 (m/s).")]
+    public float narrowAlignMinSpeed = 1.2f;
+
+    [Header("락온 공중 타깃 (반복 16)")]
+    [Tooltip("타깃 몸 바닥이 플레이어 발보다 이 값 이상 높아도 시선은 이만큼만 따라 올린다 (Type-D 도약 시 천장을 비추던 문제, m).")]
+    public float lockAirborneLookRise = 0.9f;
+    [Tooltip("락온 시선이 위로 올라가는 최대 각 (deg, 수평 기준).")]
+    public float lockMaxLookUp = 14f;
+    [Tooltip("플레이어 몸 중앙이 화면 아래 가장자리 안쪽 이 비율(반 FOV 기준) 안에 남도록 피치를 제한.")]
+    [Range(0.5f, 0.95f)] public float lockPlayerFrameLimit = 0.78f;
+
     [Header("전투 피드백")]
     [Tooltip("흔들림 회전 성분 배율 (deg / m). 최소로 유지.")]
     public float shakeRotationScale = 1.2f;

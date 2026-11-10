@@ -88,6 +88,80 @@ public sealed class TypeDArmorRig : MonoBehaviour
         return rig;
     }
 
+    // ---------------------------------------------------------------- 반복 16: 장갑 해제 / 코어 과열 / 바이저 파괴
+    float _overheat;
+    readonly List<GameObject> _purged = new List<GameObject>();
+
+    /// <summary>설치된 파츠 GameObject (이름 = TypeDArmorSet.Part.name). 없으면 null.</summary>
+    public GameObject FindPart(string partName)
+    {
+        string n = "TypeD_" + partName;
+        for (int i = 0; i < _spawned.Count; i++)
+            if (_spawned[i] != null && _spawned[i].name == n)
+                return _spawned[i];
+        return null;
+    }
+
+    /// <summary>페이즈 3 과열: 코어가 백열 + TSUKASA 레드로 치솟는다 (0..1).</summary>
+    public void SetCoreOverheat(float level01) => _overheat = Mathf.Clamp01(level01);
+    public float CoreOverheat => _overheat;
+
+    /// <summary>
+    /// 장갑 판을 뼈에서 떼어 물리로 날린다 (페이즈 2 전환 컷). ignore 콜라이더와는 부딪히지 않는다.
+    /// 반환: 떼어낸 개수. 조각은 lifetime 뒤 사라진다.
+    /// </summary>
+    public int PurgePlates(IList<string> partNames, Vector3 burstOrigin, float impulse, float lifetime, IList<Collider> ignore)
+    {
+        int count = 0;
+        if (partNames == null)
+            return 0;
+        for (int i = 0; i < partNames.Count; i++)
+        {
+            GameObject go = FindPart(partNames[i]);
+            if (go == null || _purged.Contains(go))
+                continue;
+            Transform t = go.transform;
+            for (int b = _blended.Count - 1; b >= 0; b--)
+                if (_blended[b].Part == t)
+                    _blended.RemoveAt(b);
+            t.SetParent(null, true);
+            go.layer = 2; // Ignore Raycast: 카메라·락온 레이에 걸리지 않음
+            MeshFilter mf = go.GetComponent<MeshFilter>();
+            BoxCollider box = go.AddComponent<BoxCollider>();
+            if (mf != null && mf.sharedMesh != null)
+            {
+                Bounds mb = mf.sharedMesh.bounds;
+                box.center = mb.center;
+                box.size = Vector3.Max(mb.size, Vector3.one * 0.06f);
+            }
+            if (ignore != null)
+                for (int c = 0; c < ignore.Count; c++)
+                    if (ignore[c] != null)
+                        Physics.IgnoreCollision(box, ignore[c], true);
+            Rigidbody body = go.AddComponent<Rigidbody>();
+            body.mass = 4f;
+            body.interpolation = RigidbodyInterpolation.Interpolate;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            Vector3 dir = (t.position - burstOrigin);
+            dir.y = Mathf.Max(0.35f, dir.y + 0.6f);
+            body.AddForce(dir.normalized * impulse * Random.Range(0.8f, 1.2f), ForceMode.VelocityChange);
+            body.AddTorque(Random.insideUnitSphere * impulse * 1.6f, ForceMode.VelocityChange);
+            _purged.Add(go);
+            Destroy(go, Mathf.Max(1f, lifetime));
+            count++;
+        }
+        return count;
+    }
+
+    /// <summary>바이저 파괴: 발광 띠를 끄고 숨긴다 (파편은 호출자가 스폰).</summary>
+    public void BreakVisor()
+    {
+        for (int i = 0; i < _visorSlots.Count; i++)
+            if (_visorSlots[i].Renderer != null)
+                _visorSlots[i].Renderer.enabled = false;
+        _visorSlots.Clear();
+    }
+
     public Transform VisorAnchor => _visorAnchor;
     public bool HasVisorGlow => _visorSlots.Count > 0;
     public bool IsInstalled => _installed;
@@ -317,7 +391,15 @@ public sealed class TypeDArmorRig : MonoBehaviour
         CoreLevel = level;
 
         Color core = armorSet.coreColor;
-        Apply(_coreSlots, core, core * 1.4f, level);
+        if (_overheat > 0f)
+        {
+            // 과열: 백열(세라믹 화이트) 중심 + TSUKASA 레드 림, 빠른 맥동
+            float hot = _overheat * (0.8f + 0.2f * Mathf.Sin(t * 7.5f));
+            core = Color.Lerp(core, new Color(1.6f, 0.95f, 0.85f), hot);
+            Apply(_coreSlots, core, Color.Lerp(core * 1.4f, new Color(2.4f, 0.12f, 0.08f), _overheat), level * (1f + 1.4f * _overheat));
+        }
+        else
+            Apply(_coreSlots, core, core * 1.4f, level);
 
         Color accent = Color.Lerp(armorSet.glowColor * (0.8f + 0.2f * pulse + _phaseBoost * 0.3f), _cueColor, _cueAccent);
         Apply(_accentSlots, accent, accent * 1.2f, _deathFade * (1f + _cueAccent * 0.8f));

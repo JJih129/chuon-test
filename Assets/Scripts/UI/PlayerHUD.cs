@@ -2016,7 +2016,7 @@ public class PlayerHUD : MonoBehaviour
 
     static Font ResolveRuntimeFont()
     {
-        return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        return RuntimeBuiltInFontUtility.GetDefaultFont();
     }
 
     static string GetUltimateGaugePercentLabel(int percent)

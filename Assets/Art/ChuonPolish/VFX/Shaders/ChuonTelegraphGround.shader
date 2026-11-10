@@ -66,9 +66,11 @@ Shader "ChuOn/TelegraphGround"
             {
                 float s = _EdgeSoftness;
                 float aspect = max(_Aspect, 0.05);
-                // 가장자리까지 거리 (미터 비율 보정: 길이 방향은 aspect 로 나눔)
+                // 가장자리까지 거리 (폭 단위로 통일: uv.y 1 = 길이 = aspect × 폭 이므로 aspect 를 곱한다).
+                // 반복 16: 예전엔 aspect 로 나눠서 긴 레인(잡몹 돌진·터렛 조준, aspect 8~14)은 edgeDist 가 전부 테두리 폭 안에 들어가
+                // 판 전체가 HDR 테두리로 칠해졌다 (3:24 '포화된 빨간 판'). 보스 사각(aspect ≈ 1~2)은 차이가 작아 안 보였다.
                 float dx = 0.5 - abs(uv.x - 0.5);
-                float dy = min(uv.y, 1.0 - uv.y) / aspect;
+                float dy = min(uv.y, 1.0 - uv.y) * aspect;
                 float edgeDist = min(dx, dy);
                 float inside = smoothstep(0.0, s, edgeDist);
                 float rim = inside * (1.0 - smoothstep(s * 0.6, s * 2.2, edgeDist));

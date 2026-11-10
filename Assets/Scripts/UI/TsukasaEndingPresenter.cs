@@ -97,7 +97,8 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
         Bar(_panel, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(1f, 0f), new Color(1f, 1f, 1f, 0.25f));
         Bar(_panel, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0f), new Color(1f, 1f, 1f, 0.25f));
 
-        Text tag = NewText("Tag", _panel, font, 15, new Color(1f, 1f, 1f, 0.6f), TextAnchor.UpperLeft);
+        // 반복 16: 보조 문구 15 px·흰 60 % → 18 px·흰 80 % (그래파이트 위 대비 ≥ 4.5:1)
+        Text tag = NewText("Tag", _panel, font, 18, ChuonUiPalette.WithAlpha(ChuonUiPalette.MutedWhite, 0.9f), TextAnchor.UpperLeft);
         tag.text = "HOLO-LINK  //  PRIORITY CHANNEL  //  B4 HANGAR";
         Place(tag.rectTransform, new Vector2(0f, 1f), new Vector2(20f, -14f), new Vector2(460f, 22f), new Vector2(0f, 1f));
 
@@ -112,7 +113,7 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
         nameText.fontStyle = FontStyle.Bold;
         nameText.text = "TSUKASA";
         Place(nameText.rectTransform, new Vector2(0f, 0f), new Vector2(24f, 58f), new Vector2(460f, 56f), new Vector2(0f, 0f));
-        Text title = NewText("Title", _panel, font, 16, red, TextAnchor.LowerLeft);
+        Text title = NewText("Title", _panel, font, 18, ChuonUiPalette.TsukasaRedText, TextAnchor.LowerLeft);
         title.text = "TSUKASA CORPORATION  //  FOUNDER";
         Place(title.rectTransform, new Vector2(0f, 0f), new Vector2(26f, 30f), new Vector2(460f, 24f), new Vector2(0f, 0f));
 
@@ -123,7 +124,7 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
         Stretch(subBg.rectTransform);
         _subBg = subBg;
         Bar(sub, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 2f), red);
-        Text speaker = NewText("Speaker", sub, font, 22, red, TextAnchor.UpperLeft);
+        Text speaker = NewText("Speaker", sub, font, 22, ChuonUiPalette.TsukasaRedText, TextAnchor.UpperLeft);
         speaker.fontStyle = FontStyle.Bold;
         speaker.text = DialogueTable.Speaker(CanonLineKey, SpeakerName);
         _speakerText = speaker;
@@ -132,9 +133,11 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
         _lineText.horizontalOverflow = HorizontalWrapMode.Wrap;
         Place(_lineText.rectTransform, new Vector2(0f, 1f), new Vector2(28f, -46f), new Vector2(1224f, 70f), new Vector2(0f, 1f));
 
-        Text hint = NewText("SkipHint", transform, font, 16, new Color(1f, 1f, 1f, 0.55f), TextAnchor.LowerRight);
-        hint.text = "F / Space  건너뛰기";
-        Place(hint.rectTransform, new Vector2(1f, 0f), new Vector2(-36f, 36f), new Vector2(360f, 24f), new Vector2(1f, 0f));
+        // 반복 16 (E2): 16 px 흰 55 % 글자 → 키 글리프 상자 + 24 px 설명
+        RectTransform hint = ChuonKeyHint.Create(transform, "SkipHint", ChuonKeyHint.SkipKeys(), "건너뛰기", 24);
+        hint.anchorMin = hint.anchorMax = new Vector2(1f, 0f);
+        hint.pivot = new Vector2(1f, 0f);
+        hint.anchoredPosition = new Vector2(-40f, 36f);
 
         // 옵션 메뉴의 자막 크기/배경 설정 반영
         float scale = Mathf.Clamp(OptionsManagerAdvanced.CurrentSubtitleSize, 0.6f, 1.8f);
@@ -169,7 +172,7 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
         {
             DialogueTable.Entry reply = replies[i];
             _speakerText.text = string.IsNullOrEmpty(reply.speaker) ? "EGO" : reply.speaker;
-            _speakerText.color = reply.speaker == "추온" ? new Color(0.93f, 0.96f, 1f, 0.96f) : new Color(0f, 0.85f, 1f, 1f);
+            _speakerText.color = ChuonUiPalette.Speaker(_speakerText.text); // 반복 16 (E7): EGO 시안 → 스틸 화이트
             _lineText.text = string.Empty;
             yield return CoTypeLine(reply.text, reply.duration > 0f ? reply.duration : 1.8f);
         }

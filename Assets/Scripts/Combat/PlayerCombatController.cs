@@ -583,10 +583,19 @@ public class PlayerCombatController : MonoBehaviour
 
     private bool TryPlayBreakFinisher(float fade)
     {
+        // 반복 16: 처형(보스 정면/후면/최종, 잡몹, 잠입 암살) — ExecutionDirector 가 설치된 씬에서만. 처리하면 공격 입력을 소비한다.
+        Transform executor = playerRoot != null ? playerRoot : transform;
+        if (ExecutionDirector.TryBeginFromAttackInput(executor))
+        {
+            if (inAttack)
+                EndAttack();
+            return true;
+        }
+
         if (!enableBreakFinisher)
             return false;
 
-        Transform self = playerRoot != null ? playerRoot : transform;
+        Transform self = executor;
         if (!BossBreakController.TryBeginFinisher(self, out BossBreakController target) || target == null)
             return false;
 

@@ -264,6 +264,7 @@ MonoBehaviour:
   faceTarget: 2
   faceAnchorName: 
   clearBehind: 6.2
+  groundToFloor: 0
 --- !u!1 &1408615904438527536
 GameObject:
   m_ObjectHideFlags: 0
@@ -385,8 +386,10 @@ MonoBehaviour:
   letterbox: 1
   letterboxRamp: 0.35
   returnFadeSeconds: 0.35
+  holdEndCoverSeconds: 0
   stageRoot: {fileID: 5577632633457838427}
   maxRealtimeSeconds: 0
+  prewarmOnLoad: 1
   bindings: []
   onStarted:
     m_PersistentCalls:
@@ -585,8 +588,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3152618615325433742}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.05704304, y: -0.07482042, z: 0.00428704, w: 0.995555}
-  m_LocalPosition: {x: 1.3, y: 2.4, z: -5.6}
+  m_LocalRotation: {x: 0.03465755, y: -0.0508461, z: 0.0017655498, w: 0.99810344}
+  m_LocalPosition: {x: 0.95, y: 2.05, z: -6.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -805,6 +808,7 @@ MonoBehaviour:
   faceTarget: 0
   faceAnchorName: 
   clearBehind: 0
+  groundToFloor: 0
 --- !u!1 &3743769451555057983
 GameObject:
   m_ObjectHideFlags: 0
@@ -864,6 +868,7 @@ MonoBehaviour:
   faceTarget: 3
   faceAnchorName: 
   clearBehind: 0
+  groundToFloor: 0
 --- !u!1 &3748639848385152131
 GameObject:
   m_ObjectHideFlags: 0

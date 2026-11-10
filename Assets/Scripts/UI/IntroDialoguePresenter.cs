@@ -31,14 +31,36 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
     const int SpeakerFontSize = 23;
     const int ContentFontSize = 27;
 
+    // 반복 16 (플레이어 리뷰 #6): 조작 중 오버레이 줄(전투 bark, 리빌 뒤 남은 인트로 대사)은 화면 하단 중앙(캐릭터 하체·보스와 겹침)
+    // 대신 오른쪽 아래 '통신 패널' 안전 영역에 작게 띄운다. 블로킹 대사(CoShow)와 연출 자막(cinematicHost)은 기존 하단 중앙 그대로.
+    enum Layout : byte { None, Standard, Comms }
+    const int CommsSpeakerFontSize = 17;
+    const int CommsContentFontSize = 22;
+    static readonly Vector2 CommsSize = new Vector2(600f, 74f);
+    static readonly Vector2 CommsMargin = new Vector2(48f, 44f);
+    static readonly Color CommsBackground = new Color(0.035f, 0.035f, 0.045f, 0.7f);
+    static readonly Color CommsAccent = new Color(1f, 0.16f, 0.12f, 0.95f);
+
+    [Tooltip("연출 오버레이 캔버스의 자막 호스트: 오버레이 줄도 하단 중앙(연출 자막) 배치를 쓴다.")]
+    [SerializeField] bool cinematicHost;
+
     readonly StringBuilder _builder = new StringBuilder(96);
     CanvasGroup _group;
     RectTransform _root;
     Image _background;
+    Image _commsAccent;
     Text _speakerText;
     Text _contentText;
     WaitForSeconds _typingWait;
     float _typingWaitSeconds = -1f;
+    Layout _layout = Layout.None;
+
+    /// <summary>연출 자막 호스트로 지정 (CinematicOverlay). 오버레이 줄도 하단 중앙 자막 배치.</summary>
+    public bool CinematicHost
+    {
+        get => cinematicHost;
+        set => cinematicHost = value;
+    }
 
     void OnEnable()
     {
@@ -63,12 +85,82 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
     void ApplySubtitleSize(float value)
     {
         float scale = Mathf.Clamp(value, subtitleScaleRange.x, subtitleScaleRange.y);
+        bool comms = _layout == Layout.Comms;
         if (_speakerText != null)
-            _speakerText.fontSize = Mathf.RoundToInt(SpeakerFontSize * scale);
+            _speakerText.fontSize = Mathf.RoundToInt((comms ? CommsSpeakerFontSize : SpeakerFontSize) * scale);
         if (_contentText != null)
-            _contentText.fontSize = Mathf.RoundToInt(ContentFontSize * scale);
+            _contentText.fontSize = Mathf.RoundToInt((comms ? CommsContentFontSize : ContentFontSize) * scale);
         if (_root != null)
-            _root.sizeDelta = new Vector2(size.x, size.y * Mathf.Max(1f, scale));
+        {
+            Vector2 baseSize = comms ? CommsSize : size;
+            _root.sizeDelta = new Vector2(baseSize.x, baseSize.y * Mathf.Max(1f, scale));
+        }
+    }
+
+    /// <summary>배치 전환 (값이 바뀔 때만). Standard = 기존 하단 중앙, Comms = 오른쪽 아래 통신 패널.</summary>
+    void ApplyLayout(Layout layout)
+    {
+        if (_root == null || layout == _layout)
+            return;
+        _layout = layout;
+        bool comms = layout == Layout.Comms;
+
+        if (comms)
+        {
+            _root.anchorMin = _root.anchorMax = new Vector2(1f, 0f);
+            _root.pivot = new Vector2(1f, 0f);
+            _root.anchoredPosition = new Vector2(-CommsMargin.x, CommsMargin.y);
+        }
+        else
+        {
+            _root.anchorMin = _root.anchorMax = anchor;
+            _root.pivot = new Vector2(0.5f, 0f);
+            _root.anchoredPosition = new Vector2(0f, -size.y * 0.5f);
+        }
+
+        if (_background != null)
+        {
+            _background.color = comms ? CommsBackground : backgroundColor;
+            RectTransform bg = _background.rectTransform;
+            bg.offsetMin = comms ? new Vector2(-18f, -8f) : new Vector2(-24f, -10f);
+            bg.offsetMax = comms ? new Vector2(14f, 8f) : new Vector2(24f, 10f);
+        }
+
+        if (comms && _commsAccent == null && _background != null)
+        {
+            // 오른쪽 끝 레드 헤어라인 (츠카사 통신 패널 문법)
+            var accentObject = new GameObject("CommsAccent", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            RectTransform accent = accentObject.GetComponent<RectTransform>();
+            accent.SetParent(_background.rectTransform, false);
+            accent.anchorMin = new Vector2(1f, 0f);
+            accent.anchorMax = new Vector2(1f, 1f);
+            accent.pivot = new Vector2(1f, 0.5f);
+            accent.sizeDelta = new Vector2(3f, -10f);
+            accent.anchoredPosition = Vector2.zero;
+            _commsAccent = accentObject.GetComponent<Image>();
+            _commsAccent.color = CommsAccent;
+            _commsAccent.raycastTarget = false;
+        }
+        if (_commsAccent != null)
+            _commsAccent.enabled = comms;
+
+        TextAnchor align = comms ? TextAnchor.MiddleRight : TextAnchor.MiddleCenter;
+        if (_speakerText != null)
+        {
+            _speakerText.alignment = align;
+            RectTransform r = _speakerText.rectTransform;
+            r.anchorMin = comms ? new Vector2(0f, 0.6f) : new Vector2(0f, 0.58f);
+            r.offsetMin = r.offsetMax = Vector2.zero;
+        }
+        if (_contentText != null)
+        {
+            _contentText.alignment = align;
+            RectTransform r = _contentText.rectTransform;
+            r.anchorMax = comms ? new Vector2(1f, 0.66f) : new Vector2(1f, 0.72f);
+            r.offsetMin = r.offsetMax = Vector2.zero;
+        }
+
+        ApplySubtitleOptions();
     }
 
     void ApplySubtitleBackground(bool visible)
@@ -83,6 +175,7 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
         if (_group == null)
             yield break;
 
+        ApplyLayout(Layout.Standard);
         StopOverlay();
         int generation = ++_generation;
         _blockingLineActive = true;
@@ -173,6 +266,7 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
         if (_group == null)
             return false;
 
+        ApplyLayout(cinematicHost ? Layout.Standard : Layout.Comms);
         StopOverlay();
         _overlayRoutine = StartCoroutine(CoOverlayLine(speaker, text, hold));
         return true;
@@ -326,6 +420,7 @@ public sealed class IntroDialoguePresenter : MonoBehaviour
 
         _speakerText = CreateText(root, "Speaker", SpeakerFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, speakerColor, new Vector2(0f, 0.58f), Vector2.one);
         _contentText = CreateText(root, "Content", ContentFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, textColor, Vector2.zero, new Vector2(1f, 0.72f));
+        _layout = Layout.Standard;
         ApplySubtitleOptions();
     }
 

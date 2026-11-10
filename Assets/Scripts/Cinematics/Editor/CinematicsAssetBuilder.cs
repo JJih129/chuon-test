@@ -434,20 +434,21 @@ public static class CinematicsAssetBuilder
             a.mode = CineSubtitleClip.Mode.Line; a.key = key; a.speaker = speaker; a.text = fallback;
         }
 
-        public void Card(double start, double dur, string key, string title, string sub)
+        public void Card(double start, double dur, string key, string title, string sub, CinematicOverlay.CardPlacement placement = CinematicOverlay.CardPlacement.Center)
         {
             TimelineClip c = _subTrack.CreateClip<CineSubtitleClip>();
             c.start = start; c.duration = dur; c.displayName = "CARD " + title;
             var a = (CineSubtitleClip)c.asset;
-            a.mode = CineSubtitleClip.Mode.Card; a.key = key; a.speaker = ""; a.text = title; a.cardSub = sub;
+            a.mode = CineSubtitleClip.Mode.Card; a.key = key; a.speaker = ""; a.text = title; a.cardSub = sub; a.cardPlacement = placement;
         }
 
-        public void Fade(double start, double dur, float from, float to, Color? color = null, bool flash = false)
+        public void Fade(double start, double dur, float from, float to, Color? color = null, bool flash = false, CineFadeClip.Style style = CineFadeClip.Style.Solid)
         {
             TimelineClip c = _fadeTrack.CreateClip<CineFadeClip>();
-            c.start = start; c.duration = dur; c.displayName = $"Fade {from:0.#}->{to:0.#}";
+            c.start = start; c.duration = dur;
+            c.displayName = style == CineFadeClip.Style.VrDissolve ? $"VrDissolve {from:0.#}->{to:0.#}" : $"Fade {from:0.#}->{to:0.#}";
             var a = (CineFadeClip)c.asset;
-            a.fromAlpha = from; a.toAlpha = to; a.color = color ?? Color.black; a.isFlash = flash;
+            a.fromAlpha = from; a.toAlpha = to; a.color = color ?? Color.black; a.isFlash = flash; a.style = style;
         }
 
         public void Sound(string wav, double start, double maxDur = 0d)
@@ -900,19 +901,25 @@ public static class CinematicsAssetBuilder
     {
         var rig = new Rig(IdTutExit, "CINE_TutVrExit", "Tutorial");
         rig.sequence.Configure(IdTutExit, "Tutorial", true, CinematicSettings.SeenScope.None, true, false, false, true);
+        rig.sequence.SetHoldEndCover(3f); // 반복 16: 끝 덮개를 걷지 않고 씬 로드로 넘긴다 (복귀 페이드 동안 게임플레이가 비치던 문제)
         Transform atDoor = rig.Sub("AtDoor", CineAttach.Target.Anchor, "CineAnchor_TutExitDoor");
+        // 반복 16: 앵커는 출구 패널 높이(약 2.5 m)라 앵커 기준 샷이 문 위 허공·벽 글자를 비췄다 → 바닥에 붙인다
+        atDoor.GetComponent<CineAttach>().SetGroundToFloor(true);
         Transform atPlayer = rig.Sub("AtPlayer", CineAttach.Target.Player, face: CineAttach.Target.Anchor, faceAnchor: "CineAnchor_TutExitDoor");
+        atPlayer.GetComponent<CineAttach>().SetClearBehind(3.4f);
         Transform head = rig.Sub("PlayerHead", CineAttach.Target.PlayerHead, follow: true, matchYaw: false);
-        // 14C: 문 앞 와이드에 추온이 함께 들어오게 뒤로, 패널 클로즈는 문 전체가 읽히는 미디엄으로
-        var s1 = rig.Cam("S1_Door", atDoor, V(-1.4f, 2.2f, -5.5f), V(0, 1.5f, 0.5f), 42f);
+        // 반복 16: X1 = 추온 어깨너머 로우 와이드로 로비 유리문을 정면에 (앵커 방향/높이와 무관하게 항상 문을 향함)
+        var s1 = rig.Cam("S1_Door", atPlayer, V(0.75f, 1.5f, -3.2f), V(-0.3f, 1.9f, 6f), 40f);
         var s2 = rig.Cam("S2_Panel", atDoor, V(0.9f, 1.6f, -2.2f), V(0, 1.4f, 0), 34f);
         var s3 = rig.Cam("S3_Chuon", atPlayer, V(0.6f, 1.62f, 1.3f), V(0, 1.55f, 0), 30f, true, head);
         rig.Shot(s1, 0, 1.8, "S1_Door");
         rig.Shot(s2, 1.8, 1.6, "S2_Panel");
         rig.Shot(s3, 3.4, 1.6, "S3_Chuon");
-        rig.Fade(2.2, 0.4, 0.3f, 0, Color.white, true);
-        rig.Fade(4.2, 0.8, 0, 1, Color.white);
-        rig.Card(3.5, 1.5, null, "SIMULATION TERMINATED", "VR LINK RELEASED  //  현실 복귀");
+        // 반복 16: 순백 화면 대신 — 패널 섬광은 옅은 세라믹 화이트(번쩍임 옵션 배율), 끝은 VR 스캔라인 디졸브로 그래파이트까지
+        rig.Fade(2.2, 0.4, 0.22f, 0, new Color(0.92f, 0.94f, 0.96f), true);
+        rig.Fade(3.9, 1.1, 0, 1, new Color(0.035f, 0.035f, 0.042f), false, CineFadeClip.Style.VrDissolve);
+        // 반복 16: 카드는 하단 1/3 (클로즈업 얼굴을 가로지르지 않게)
+        rig.Card(3.5, 1.5, null, "SIMULATION TERMINATED", "VR LINK RELEASED  //  현실 복귀", CinematicOverlay.CardPlacement.LowerThird);
         rig.Sound("SFX_Cine_VrRelease", 3.4);
         rig.Save(5.0);
     }
@@ -1036,7 +1043,8 @@ public static class CinematicsAssetBuilder
         TMP_Text floor = WorldText("FloorText", ind.transform, V(0, 0, 0.058f), 180, V(0.56f, 0.16f, 0), "B1", new Color(1f, 0.18f, 0.14f));
         Light stripA = MakeLight("StripA", cab, LightType.Point, V(0.7f, 2.85f, 0), V(0.7f, 0, 0), new Color(0.95f, 0.97f, 1f), 2.2f, 5f);
         Light stripB = MakeLight("StripB", cab, LightType.Point, V(-0.7f, 2.85f, 0), V(-0.7f, 0, 0), new Color(0.95f, 0.97f, 1f), 2.2f, 5f);
-        Light emer = MakeLight("EmergencyRed", cab, LightType.Point, V(0, 2.85f, 0), V(0, 0, 0), new Color(1f, 0.1f, 0.08f), 3f, 5f);
+        // 반복 16: 비상등은 '강조'만 — 천장 중앙 3.0/5 m 는 캐빈·피부 전체를 분홍으로 물들였다(4:12) → 뒤 왼쪽 천장 모서리, 짧은 범위
+        Light emer = MakeLight("EmergencyRed", cab, LightType.Point, V(-0.85f, 2.7f, -1.05f), V(-0.85f, 0, -1.05f), new Color(1f, 0.1f, 0.08f), 2.0f, 2.2f);
         Animator chuon = Puppet(ChuonVisual, cab, "Chuon_Cab", V(-0.25f, 0, -0.3f), 0);
 
         var s1 = rig.Cam("S1_CabWide", rig.cams, V(1.0f, 2.5f, -1.0f), V(-0.25f, 1.1f, 0.2f), 55f);

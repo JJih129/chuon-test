@@ -19,6 +19,8 @@ public sealed class CineSubtitleClip : PlayableAsset, ITimelineClipAsset
     [TextArea(1, 3)] public string text;
     [Tooltip("Card 모드 보조 문구 (작은 글씨)")]
     public string cardSub;
+    [Tooltip("Card 배치: Center = 검정 위 장소 카드, LowerThird = 인물 클로즈업 위 하단 1/3 (얼굴을 가리지 않게, 반복 16)")]
+    public CinematicOverlay.CardPlacement cardPlacement = CinematicOverlay.CardPlacement.Center;
 
     public ClipCaps clipCaps => ClipCaps.None;
 
@@ -31,6 +33,7 @@ public sealed class CineSubtitleClip : PlayableAsset, ITimelineClipAsset
         b.speaker = speaker;
         b.text = text;
         b.cardSub = cardSub;
+        b.cardPlacement = cardPlacement;
         return playable;
     }
 }
@@ -43,6 +46,7 @@ public sealed class CineSubtitleBehaviour : PlayableBehaviour
     public string speaker;
     public string text;
     public string cardSub;
+    public CinematicOverlay.CardPlacement cardPlacement;
 
     bool _shown;
     float _lastCard = -1f;
@@ -67,7 +71,7 @@ public sealed class CineSubtitleBehaviour : PlayableBehaviour
         CineDialogue.Resolve(key, ref s, ref t);
         if (mode == CineSubtitleClip.Mode.Card)
         {
-            overlay.ShowCard(t, cardSub);
+            overlay.ShowCard(t, cardSub, cardPlacement);
             return;
         }
 

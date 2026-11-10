@@ -22,6 +22,8 @@ public static class CinePlayables
 public sealed class CineFadeMixer : PlayableBehaviour
 {
     float _last = -1f;
+    float _lastDissolve = -1f;
+    bool _drove;
 
     public override void ProcessFrame(Playable playable, FrameData info, object playerData)
     {
@@ -30,11 +32,15 @@ public sealed class CineFadeMixer : PlayableBehaviour
         CinematicOverlay overlay = CinematicOverlay.Active;
         if (overlay == null)
             return;
+        _drove = true;
 
         int count = playable.GetInputCount();
         float alpha = 0f;
         float weightSum = 0f;
         Color color = Color.black;
+        float dissolve = 0f;
+        float dissolveWeight = 0f;
+        Color dissolveColor = Color.black;
         for (int i = 0; i < count; i++)
         {
             float w = playable.GetInputWeight(i);
@@ -44,10 +50,39 @@ public sealed class CineFadeMixer : PlayableBehaviour
             CineFadeBehaviour b = input.GetBehaviour();
             float t = (float)(input.GetTime() / System.Math.Max(0.0001d, input.GetDuration()));
             t = Mathf.Clamp01(t);
+            if (b.style == CineFadeClip.Style.VrDissolve)
+            {
+                // 디졸브는 밴드가 각자 이징하므로 진행도는 선형으로 넘긴다
+                dissolve += w * Mathf.Lerp(b.fromAlpha, b.toAlpha, t);
+                dissolveColor = Color.Lerp(dissolveColor, b.color, dissolveWeight <= 0f ? 1f : w);
+                dissolveWeight += w;
+                continue;
+            }
             t = t * t * (3f - 2f * t);
             alpha += w * Mathf.Lerp(b.fromAlpha, b.toAlpha, t);
             color = Color.Lerp(color, b.color, weightSum <= 0f ? 1f : w);
             weightSum += w;
+        }
+
+        // 반복 16: VR 디졸브 — 끝 무렵(0.8~0.95) 같은 색 단색 페이드를 깔아 완전히 덮는다 (마지막 평가 프레임이 1 보다 조금 작아도 덮이게).
+        // 연출이 끝나면 단색 페이드는 CinematicDirector 의 복귀 페이드가 걷고, 디졸브 밴드는 OnPlayableDestroy 에서 걷힌다.
+        if (dissolveWeight > 0f || _lastDissolve > 0f)
+        {
+            if (Mathf.Abs(dissolve - _lastDissolve) > 0.0005f)
+            {
+                _lastDissolve = dissolve;
+                overlay.SetDissolve(dissolveColor, dissolve);
+            }
+            if (dissolveWeight > 0f)
+            {
+                float cover = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.8f, 0.95f, dissolve));
+                if (cover > alpha)
+                {
+                    alpha = cover;
+                    color = dissolveColor;
+                    weightSum = Mathf.Max(weightSum, 1f);
+                }
+            }
         }
 
         if (weightSum <= 0f)
@@ -66,5 +101,15 @@ public sealed class CineFadeMixer : PlayableBehaviour
             _last = alpha;
             overlay.SetFade(color, alpha);
         }
+    }
+
+    public override void OnPlayableDestroy(Playable playable)
+    {
+        if (!_drove || !Application.isPlaying)
+            return;
+        CinematicOverlay overlay = CinematicOverlay.Active;
+        if (overlay != null && _lastDissolve > 0f)
+            overlay.SetDissolve(Color.black, 0f);
+        _lastDissolve = -1f;
     }
 }

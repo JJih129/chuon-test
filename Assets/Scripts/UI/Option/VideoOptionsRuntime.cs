@@ -24,20 +24,24 @@ public class VideoOptionsRuntime : MonoBehaviour
     const float BaseBloomThreshold = 1.1f;
     const float BaseBloomIntensity = 0.65f;
     const float BaseBloomScatter = 0.68f;
-    const float BaseVignetteIntensity = 0.2f;
+    const float BaseVignetteIntensity = 0.17f;
 
     // Base grade: counter the flat / washed-out look. Neutral tonemapping is kept on purpose
     // (ACES darkens and hue-shifts the anime character shading).
-    const float BaseContrast = 12f;      // ColorAdjustments.contrast (-100..100)
-    const float BaseSaturation = 8f;     // ColorAdjustments.saturation (-100..100)
-    const float BaseExposureOffset = -0.2f; // added to the brightness option's postExposure mapping (EV)
+    // 반복 16 (플레이어 리뷰 #8): 튜토리얼 골목·로비·엘리베이터 복도·아레나 외곽이 전반적으로 어두웠다.
+    // 원인 = 이 전역 볼륨(우선순위 10000)이 씬 볼륨 위에서 -0.2 EV + 그림자 -0.04 + 비네트 0.2 를 항상 깔았음.
+    // → +0.15 EV(순 +0.35 EV), 미드톤 +0.05, 그림자 눌림 완화, 대비 12 → 14 로 올려 콘트라스트(그래파이트/화이트 분리)는 유지.
+    // 하이라이트는 -0.08 로 조금 더 눌러 세라믹 화이트가 뉴트럴 톤매핑에서 날아가지 않게 한다.
+    const float BaseContrast = 14f;      // ColorAdjustments.contrast (-100..100)
+    const float BaseSaturation = 6f;     // ColorAdjustments.saturation (-100..100)
+    const float BaseExposureOffset = 0.15f; // added to the brightness option's postExposure mapping (EV)
     const float BrightnessMinExposure = -1.6f;
     const float BrightnessMaxExposure = 0f;
     // Subtle shadows/midtones/highlights: slightly richer, cooler shadows and tamed highlights.
     // Vector4 = (r, g, b, w); w is the luminance offset, rgb is the tint (1 = neutral).
-    static readonly Vector4 BaseShadows = new Vector4(0.98f, 0.99f, 1.02f, -0.04f);
-    static readonly Vector4 BaseMidtones = new Vector4(1f, 1f, 1f, 0f);
-    static readonly Vector4 BaseHighlights = new Vector4(1f, 1f, 1f, -0.06f);
+    static readonly Vector4 BaseShadows = new Vector4(0.98f, 0.99f, 1.02f, -0.015f);
+    static readonly Vector4 BaseMidtones = new Vector4(1f, 1f, 1f, 0.05f);
+    static readonly Vector4 BaseHighlights = new Vector4(1f, 1f, 1f, -0.08f);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Bootstrap()

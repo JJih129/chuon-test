@@ -1107,6 +1107,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
         float multiplier = Tuning.ResolvePhasePatternWeightMultiplier(pattern, isFollowUp);
         multiplier *= ObservationTracker.ResolvePlayerStatePatternWeightMultiplier(pattern);
         multiplier *= ResolveReactivePatternWeightMultiplier(pattern); // SpecialPatterns.cs (기획 반응형 조건)
+        multiplier *= ResolveOverhaulPatternWeight(pattern); // Overhaul.cs (파괴된 팔 칼날 콤보 제거)
         multiplier *= ResolvePatternVarietyWeightMultiplier(pattern, isFollowUp);
 
         return multiplier;
@@ -3537,6 +3538,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
         string telegraphLabel = pattern.ResolveTelegraphLabel();
         AttackTimingStyle timingStyle = pattern.ResolveTimingStyle();
         float extraHoldDelay = pattern.ResolveExtraHoldDelay();
+        ApplyOverhaulDelayedTiming(pattern, isQueuedFollowUp, ref timingStyle, ref extraHoldDelay); // Overhaul.cs (페이즈 2+ 지연 공격, 공지 포함)
         string secondaryTelegraphLabel = pattern.ResolveSecondaryTelegraphLabel();
         bool canParry = pattern.ResolveCanParry();
         bool canPerfectDodge = pattern.ResolveCanPerfectDodge();

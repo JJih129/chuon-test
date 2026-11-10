@@ -42,6 +42,10 @@ public sealed class FacilityCombatRules : MonoBehaviour
     [SerializeField] bool damageCracks = true;
     [Tooltip("반복 10: 보스전 보스 공격력 배율 (봇 0.4 대부분 패배 / 0.6 위협 / 0.9 승리 기준으로 조정)")]
     [SerializeField, Range(0.5f, 2f)] float bossDamageScale = 1.2f;
+    [Tooltip("반복 16: Type-D 개편(충격 4단계·처형·HP 페이즈 기믹·반격·UI). Docs/Boss_TypeD_Phases.md")]
+    [SerializeField] bool typeDOverhaul = true;
+    [Tooltip("반복 16: 잡몹 처형·잠입 암살·처형 표식 (씬 공용 ExecutionDirector)")]
+    [SerializeField] bool executions = true;
 
     public static FacilityCombatRules Active { get; private set; }
     public int LowerFloorRefills { get; private set; }
@@ -119,6 +123,11 @@ public sealed class FacilityCombatRules : MonoBehaviour
             dodge.RapidChainInvulnerabilityDuration = rapidDodgeIFrames;
         }
 
+        if (typeDOverhaul && refs.GetComponent<PlayerOverhaulReactions>() == null)
+            refs.gameObject.AddComponent<PlayerOverhaulReactions>();
+        if (executions)
+            ExecutionDirector.Ensure();
+
         return true;
     }
 
@@ -142,6 +151,9 @@ public sealed class FacilityCombatRules : MonoBehaviour
 
         if (damageCracks && boss.GetComponent<BossDamageCracks>() == null)
             boss.gameObject.AddComponent<BossDamageCracks>();
+
+        if (typeDOverhaul && boss.GetComponent<TypeDOverhaul>() == null)
+            boss.gameObject.AddComponent<TypeDOverhaul>();
 
         return true;
     }

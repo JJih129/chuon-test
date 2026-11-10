@@ -27,6 +27,21 @@ public sealed class CinematicOverlay : MonoBehaviour
     Text _cardSub;
     Image _cardLine;
     IntroDialoguePresenter _subtitles;
+    RectTransform _cardRect;
+    Image _cardBacking;
+    CardPlacement _cardPlacement = CardPlacement.Center;
+
+    // 반복 16: VR 디졸브 (튜토리얼 종료: 순백 화면 대신 스캔라인 밴드 + 그리드로 그래파이트까지 덮음)
+    const int DissolveBands = 20;
+    RectTransform _dissolveRoot;
+    Image[] _dissolveBands;
+    float[] _dissolveDelay;
+    RawImage _dissolveGrid;
+    Image _dissolveScan;
+    float _dissolve = -1f;
+    static Texture2D s_dissolveGrid;
+
+    public enum CardPlacement : byte { Center = 0, LowerThird = 1 }
 
     float _letterbox = -1f;
     float _fadeAlpha = -1f;
@@ -128,6 +143,17 @@ public sealed class CinematicOverlay : MonoBehaviour
         subtitleHost.transform.SetParent(transform, false);
         Stretch((RectTransform)subtitleHost.transform);
         _subtitles = subtitleHost.AddComponent<IntroDialoguePresenter>();
+        _subtitles.CinematicHost = true; // 반복 16: 연출 자막은 하단 중앙 그대로 (게임플레이 bark 만 통신 패널로)
+
+        // 반복 16: 하단 1/3 카드 배경 (클로즈업 위 카드가 얼굴을 가로지르지 않게)
+        _cardBacking = NewImage("Backing", cardRect, new Color(0.03f, 0.03f, 0.038f, 0.66f));
+        RectTransform backing = _cardBacking.rectTransform;
+        backing.anchorMin = backing.anchorMax = new Vector2(0.5f, 0.5f);
+        backing.sizeDelta = new Vector2(760f, 118f);
+        backing.anchoredPosition = new Vector2(0f, -4f);
+        backing.SetAsFirstSibling();
+        _cardBacking.enabled = false;
+        _cardRect = cardRect;
 
         SetLetterbox(0f);
         SetFade(Color.black, 0f);
@@ -187,11 +213,136 @@ public sealed class CinematicOverlay : MonoBehaviour
         }
     }
 
-    public void ShowCard(string title, string sub)
+    public void ShowCard(string title, string sub) => ShowCard(title, sub, CardPlacement.Center);
+
+    /// <summary>
+    /// 카드 표시. Center = 검정 위 장소·시간 카드(기존), LowerThird = 인물 클로즈업 위 하단 1/3 (배경 판 + 작은 글씨, 얼굴을 가리지 않음).
+    /// </summary>
+    public void ShowCard(string title, string sub, CardPlacement placement)
     {
         _cardTitle.text = title ?? string.Empty;
         _cardSub.text = sub ?? string.Empty;
         _cardLine.enabled = !string.IsNullOrEmpty(title);
+        ApplyCardPlacement(placement);
+    }
+
+    void ApplyCardPlacement(CardPlacement placement)
+    {
+        if (_cardRect == null || placement == _cardPlacement)
+            return;
+        _cardPlacement = placement;
+        bool lower = placement == CardPlacement.LowerThird;
+        // 하단 1/3: 레터박스 바(2.35:1 → 화면 높이 11.9 %) 바로 위
+        _cardRect.anchorMin = _cardRect.anchorMax = lower ? new Vector2(0.5f, 0.235f) : new Vector2(0.5f, 0.5f);
+        _cardTitle.fontSize = lower ? 32 : 44;
+        _cardTitle.rectTransform.anchoredPosition = lower ? new Vector2(0f, 18f) : new Vector2(0f, 22f);
+        _cardLine.rectTransform.anchoredPosition = lower ? new Vector2(0f, -8f) : new Vector2(0f, -16f);
+        _cardLine.rectTransform.sizeDelta = lower ? new Vector2(160f, 2f) : new Vector2(220f, 2f);
+        _cardSub.fontSize = lower ? 17 : 20;
+        _cardSub.rectTransform.anchoredPosition = lower ? new Vector2(0f, -30f) : new Vector2(0f, -44f);
+        if (_cardBacking != null)
+            _cardBacking.enabled = lower;
+    }
+
+    /// <summary>
+    /// VR 디졸브 0..1: 가로 스캔 밴드가 엇갈려 닫히며 그래파이트로 덮이고, 레드 그리드·스캔라인이 잠깐 비친다. 1 = 전부 덮임.
+    /// 흰 섬광 없음(광과민 안전). 0 이면 숨김. 프레임당 할당 없음.
+    /// </summary>
+    public void SetDissolve(Color color, float progress)
+    {
+        progress = Mathf.Clamp01(progress);
+        if (Mathf.Abs(progress - _dissolve) < 0.0005f)
+            return;
+        _dissolve = progress;
+        if (progress <= 0.0005f)
+        {
+            if (_dissolveRoot != null && _dissolveRoot.gameObject.activeSelf)
+                _dissolveRoot.gameObject.SetActive(false);
+            return;
+        }
+
+        EnsureDissolve();
+        if (!_dissolveRoot.gameObject.activeSelf)
+            _dissolveRoot.gameObject.SetActive(true);
+
+        color.a = 1f;
+        for (int i = 0; i < DissolveBands; i++)
+        {
+            float k = Mathf.Clamp01((progress - _dissolveDelay[i]) / 0.42f);
+            float e = k * k * (3f - 2f * k);
+            _dissolveBands[i].color = color;
+            _dissolveBands[i].rectTransform.localScale = new Vector3(e, 1f, 1f);
+        }
+
+        // 그리드: 중간에 가장 밝고 끝에는 사라짐. 결정적 깜빡임 (Random 미사용)
+        float flicker = Mathf.Repeat(Time.unscaledTime * 17.3f, 1f) < 0.18f ? 0.45f : 1f;
+        _dissolveGrid.color = new Color(1f, 0.22f, 0.18f, 0.26f * Mathf.Sin(Mathf.PI * progress) * flicker);
+        // 스캔라인: 위 → 아래로 한 번 지나감
+        RectTransform scan = _dissolveScan.rectTransform;
+        scan.anchorMin = new Vector2(0f, 1f - progress);
+        scan.anchorMax = new Vector2(1f, 1f - progress);
+        _dissolveScan.color = new Color(1f, 0.2f, 0.16f, 0.7f * (1f - progress));
+    }
+
+    void EnsureDissolve()
+    {
+        if (_dissolveRoot != null)
+            return;
+        var root = new GameObject("VrDissolve", typeof(RectTransform));
+        root.transform.SetParent(transform, false);
+        _dissolveRoot = (RectTransform)root.transform;
+        Stretch(_dissolveRoot);
+        // 페이드 판 바로 위, 카드·건너뛰기 아래
+        _dissolveRoot.SetSiblingIndex(_fade.transform.GetSiblingIndex() + 1);
+
+        _dissolveBands = new Image[DissolveBands];
+        _dissolveDelay = new float[DissolveBands];
+        uint seed = 2166136261u;
+        for (int i = 0; i < DissolveBands; i++)
+        {
+            Image band = NewImage("Band" + i, _dissolveRoot, Color.black);
+            RectTransform rt = band.rectTransform;
+            rt.anchorMin = new Vector2(0f, (float)i / DissolveBands);
+            rt.anchorMax = new Vector2(1f, (float)(i + 1) / DissolveBands);
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+            rt.pivot = new Vector2(i % 2 == 0 ? 0f : 1f, 0.5f);
+            rt.localScale = new Vector3(0f, 1f, 1f);
+            _dissolveBands[i] = band;
+            seed = (seed ^ (uint)(i * 7919 + 13)) * 16777619u;
+            _dissolveDelay[i] = (seed % 1000u) / 1000f * 0.5f; // 0..0.5, 마지막 밴드도 0.92 에 닫힘
+        }
+
+        _dissolveGrid = new GameObject("Grid", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage)).GetComponent<RawImage>();
+        _dissolveGrid.transform.SetParent(_dissolveRoot, false);
+        _dissolveGrid.texture = DissolveGridTexture();
+        _dissolveGrid.uvRect = new Rect(0f, 0f, 1920f / 64f, 1080f / 64f);
+        _dissolveGrid.raycastTarget = false;
+        Stretch(_dissolveGrid.rectTransform);
+
+        _dissolveScan = NewImage("Scanline", _dissolveRoot, Color.clear);
+        RectTransform scan = _dissolveScan.rectTransform;
+        scan.pivot = new Vector2(0.5f, 0.5f);
+        scan.sizeDelta = new Vector2(0f, 2f);
+    }
+
+    static Texture2D DissolveGridTexture()
+    {
+        if (s_dissolveGrid != null)
+            return s_dissolveGrid;
+        const int n = 64;
+        var tex = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "CineVrDissolveGrid", wrapMode = TextureWrapMode.Repeat, filterMode = FilterMode.Bilinear, hideFlags = HideFlags.DontSave };
+        var px = new Color32[n * n];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                bool line = x == 0 || y == 0;
+                bool scanRow = y % 4 == 0;
+                px[y * n + x] = new Color32(255, 255, 255, (byte)(line ? 210 : scanRow ? 34 : 0));
+            }
+        tex.SetPixels32(px);
+        tex.Apply(false, true);
+        s_dissolveGrid = tex;
+        return tex;
     }
 
     public void SetCard(float alpha)
@@ -223,6 +374,7 @@ public sealed class CinematicOverlay : MonoBehaviour
         SetFade(Color.black, 0f);
         SetSkipPrompt(0f, 0f);
         SetCard(0f);
+        SetDissolve(Color.black, 0f);
         HideLine();
     }
 

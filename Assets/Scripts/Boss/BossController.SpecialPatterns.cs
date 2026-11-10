@@ -15,7 +15,11 @@ public enum BossSpecialPatternKind
 {
     None = 0,
     Shockwave = 1,
-    ShadowLeapSlam = 2
+    ShadowLeapSlam = 2,
+    // 반복 16 개편 (BossController.Overhaul.cs)
+    MagentaGrab = 3,
+    HeatVent = 4,
+    Desperation = 5
 }
 
 public partial class BossController
@@ -234,7 +238,7 @@ public partial class BossController
             return true;
         TickReactiveObservation();
         TickFarObservation(distance);
-        bool urgent = _qaRequestedSpecial != BossSpecialPatternKind.None || IsHealReactionActive || IsFarSustainActive;
+        bool urgent = _qaRequestedSpecial != BossSpecialPatternKind.None || IsHealReactionActive || IsFarSustainActive || IsOverhaulSpecialUrgent;
         if (onlyUrgent && !urgent)
             return false;
         if (!urgent && (Time.time < _nextSpecialProbeAt || !CanRequestAttackSelection()))
@@ -294,8 +298,11 @@ public partial class BossController
         {
             kind = _preChosenSpecial;
             _preChosenSpecial = BossSpecialPatternKind.None;
-            return Time.time - _preChosenAt <= 1.5f && CanStartSpecialNow();
+            return Time.time - _preChosenAt <= 1.5f && (kind >= BossSpecialPatternKind.MagentaGrab || CanStartSpecialNow());
         }
+        // 반복 16: 개편 패턴(임계 폭주/배기/잡기)은 특수 패턴 공용 쿨다운과 별개
+        if (TryChooseOverhaulSpecial(distance, out kind))
+            return true;
         TickReactiveObservation();
         if (!CanStartSpecialNow())
             return false;
@@ -346,6 +353,8 @@ public partial class BossController
 
     AttackPattern ResolveSpecialStub(BossSpecialPatternKind kind)
     {
+        if (kind >= BossSpecialPatternKind.MagentaGrab)
+            return ResolveOverhaulStub(kind);
         if (kind == BossSpecialPatternKind.Shockwave)
             return _shockwavePatternStub ??= new AttackPattern { patternName = "Shockwave", animTriggerName = shockwaveStateName, damageAmount = shockwaveDamage, isUnblockable = true, canGuard = false, isParryable = false, cooldown = shockwaveCooldown };
         return _leapPatternStub ??= new AttackPattern { patternName = "ShadowLeap", animTriggerName = leapStateName, damageAmount = leapDamage, isParryable = false, canGuard = false, cooldown = leapCooldown };
@@ -385,6 +394,7 @@ public partial class BossController
         AttackTelegraphType legacy = type == BossAttackTelegraphType.Unblockable ? AttackTelegraphType.Danger : AttackTelegraphType.Dodge;
         BossAttackTimingCueFlags flags = BossAttackTimingCueFlags.WeaponFlash | BossAttackTimingCueFlags.BodyFlash | BossAttackTimingCueFlags.WarningSound;
         OnAttackTimingCue?.Invoke(type, secondsToHit, flags);
+        NoteOverhaulCue(type, secondsToHit); // Overhaul.cs: 블링크 반격(자홍) 판정용
         BossTelegraphVfxPresenter presenter = ResolveTelegraphVfxPresenter();
         if (presenter != null)
             presenter.PlayCue(type, secondsToHit, flags);
@@ -409,7 +419,9 @@ public partial class BossController
         if (attackHitbox != null)
             attackHitbox.DeactivateWindow();
 
-        IEnumerator body = kind == BossSpecialPatternKind.Shockwave ? Co_Shockwave() : Co_ShadowLeap();
+        IEnumerator body = kind >= BossSpecialPatternKind.MagentaGrab
+            ? ResolveOverhaulSpecialBody(kind)
+            : kind == BossSpecialPatternKind.Shockwave ? Co_Shockwave() : Co_ShadowLeap();
         while (true)
         {
             bool more;
