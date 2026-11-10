@@ -53,7 +53,7 @@ public static class UltimateTempVfxBuilder
             return;
         if (!EditorPrefs.GetBool(AutoBuildPreferenceKey, true))
             return;
-        if (HasGeneratedAssignedSequence())
+        if (HasGeneratedAssignedSequence() || HasAuthoredAssignedSequence())
         {
             EditorPrefs.SetBool(AutoBuildPreferenceKey, false);
             return;
@@ -78,6 +78,18 @@ public static class UltimateTempVfxBuilder
             && IsGeneratedPrefab(vfx.FindPropertyRelative("crackWorldVfxPrefab")?.objectReferenceValue)
             && IsGeneratedPrefab(vfx.FindPropertyRelative("explosionVfxPrefab")?.objectReferenceValue)
             && IsGeneratedPrefab(vfx.FindPropertyRelative("shardVfxPrefab")?.objectReferenceValue);
+    }
+
+    // 정식 VFX(Assets/Art/ChuonPolish/VFX/Ultimate)가 이미 연결돼 있으면 임시 프리팹으로 덮어쓰지 않는다 (릴리스 게이트 8).
+    static bool HasAuthoredAssignedSequence()
+    {
+        UltimateSequenceData sequence = AssetDatabase.LoadAssetAtPath<UltimateSequenceData>(SequenceAssetPath);
+        if (sequence == null)
+            return false;
+
+        SerializedProperty vfx = new SerializedObject(sequence).FindProperty("vfx");
+        Object dash = vfx?.FindPropertyRelative("dashSlashVfxPrefab")?.objectReferenceValue;
+        return dash != null && !IsGeneratedPrefab(dash);
     }
 
     static bool IsGeneratedPrefab(Object reference)

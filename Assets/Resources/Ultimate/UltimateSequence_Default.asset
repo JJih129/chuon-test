@@ -99,14 +99,14 @@ MonoBehaviour:
       orbitFocusBias: 0.82
       holdStaticFraming: 1
   vfx:
-    introPoseVfxPrefab: {fileID: 5210959345948210511, guid: b79c52e011006e3408e7d3090aacc51c, type: 3}
-    dashSlashVfxPrefab: {fileID: 5757494987360826802, guid: d29647f8db5fc204eb952e60b234896f, type: 3}
-    lightBeamVfxPrefab: {fileID: 2411774245160808706, guid: 6354926733bd68948806832890f33e78, type: 3}
-    crackWorldVfxPrefab: {fileID: 6366026470070092117, guid: 8a8ba7e20e37d8544a78a859054126a3, type: 3}
+    introPoseVfxPrefab: {fileID: 7771065763107959102, guid: d571905f53ad46c41b0ecadade6640a5, type: 3}
+    dashSlashVfxPrefab: {fileID: 7211220584955626746, guid: bfad6e6b4ab36bd47bc590c4d033912d, type: 3}
+    lightBeamVfxPrefab: {fileID: 4020098024017534459, guid: 12d2f7546fdbf144a9b257814e80bfc5, type: 3}
+    crackWorldVfxPrefab: {fileID: 9014918501950551326, guid: 5f50620a361a29748bd67d14ee84a676, type: 3}
     crackScreenVfxPrefab: {fileID: 0}
     explosionVfxPrefab: {fileID: 4669697555684712952, guid: 3018bb7634c0d874f87754793c8fac9e, type: 3}
-    shardVfxPrefab: {fileID: 7229793754096018441, guid: be87923a1d00334438f3d93701889602, type: 3}
-    walkoutVfxPrefab: {fileID: 8232990265197679967, guid: a615c46ec6f57fd4faebdb1e33dd9c9b, type: 3}
+    shardVfxPrefab: {fileID: 906081595684116630, guid: 12b80dbf72f15bb45aa15c8060d1c755, type: 3}
+    walkoutVfxPrefab: {fileID: 278250642934220283, guid: 03ff64b141fb9df4da9ac22bf8f6272d, type: 3}
     slashStormAoeVfxPrefab: {fileID: 6855955652325114174, guid: f8dc879bd6649cb4782409815764d676, type: 3}
     useScreenSpaceCrack: 0
     useAfterImageStyleSlash: 1
