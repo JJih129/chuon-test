@@ -1,0 +1,451 @@
+{
+ "out": "Builds/PV/Chuon_PV_v1",
+ "work": "Temp/pv_work_v1",
+ "fps": 60,
+ "size": [
+  1920,
+  1080
+ ],
+ "bpm": 132,
+ "xfade": 0.25,
+ "game_audio_db": -14,
+ "loudness": -14,
+ "fade_in": 0.3,
+ "music": [
+  {
+   "file": "Temp/pv/PV_Score_v1_GEN.wav",
+   "at": 0,
+   "gain_db": 0,
+   "fade_out": 0.5
+  }
+ ],
+ "segments": [
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 121.4,
+   "beats": 4,
+   "transition": "none",
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 123.3,
+   "beats": 4,
+   "transition": "fade",
+   "tdur": 0.25,
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 133.3,
+   "beats": 4,
+   "transition": "fade",
+   "tdur": 0.25,
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 137.4,
+   "beats": 12,
+   "transition": "fade",
+   "tdur": 0.3,
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 142.9,
+   "beats": 8,
+   "transition": "fade",
+   "tdur": 0.3,
+   "audio_db": -9
+  },
+  {
+   "type": "card",
+   "beats": 8,
+   "logo": true,
+   "logo_size": 0.42,
+   "transition": "none",
+   "flash": 0.15,
+   "lines": [
+    [
+     "질서가 곧 안전입니다",
+     0.04,
+     "white"
+    ]
+   ],
+   "tracking": 0.12,
+   "y": 0.72
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 14.0,
+   "beats": 4,
+   "transition": "none",
+   "flash": 0.15,
+   "caption": "VR 침투 리허설",
+   "sub": "INFILTRATION TUTORIAL"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 21.2,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 29.6,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 48.6,
+   "beats": 4,
+   "transition": "none",
+   "caption": "패링 · 금색 큐",
+   "sub": "PARRY THE GOLD CUE"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 85.4,
+   "beats": 4,
+   "transition": "none",
+   "caption": "회피 전용 · 빨강 큐",
+   "sub": "DODGE THE RED CUE"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 91.6,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 93.4,
+   "beats": 4,
+   "transition": "none",
+   "caption": "방패 집행관 · 가드 브레이크",
+   "sub": "GUARD BREAK"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 102.0,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "card",
+   "beats": 8,
+   "transition": "none",
+   "flash": 0.2,
+   "tracking": 0.12,
+   "lines": [
+    [
+     "CHUON",
+     0.2,
+     "white"
+    ],
+    [
+     "추온",
+     0.075,
+     "red"
+    ]
+   ]
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/lobby_d_av.mov",
+   "in": 7.9,
+   "beats": 4,
+   "transition": "none",
+   "flash": 0.15,
+   "caption": "츠카사 본사 로비",
+   "sub": "TSUKASA HQ"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/lobby_d_av.mov",
+   "in": 13.2,
+   "beats": 4,
+   "transition": "none",
+   "caption": "경보 · 드론 출격",
+   "sub": "LOBBY ALERT"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 154.9,
+   "beats": 4,
+   "transition": "none",
+   "caption": "격리된 실험체",
+   "sub": "SKYDECK"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 163.6,
+   "beats": 4,
+   "transition": "none",
+   "caption": "츠카사 보안 병력",
+   "sub": "ANDROID · ENFORCER · TURRET · DRONE"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 167.8,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 196.4,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 201.8,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 211.5,
+   "beats": 4,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 246.6,
+   "beats": 2,
+   "transition": "none",
+   "flash": 0.12
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 249.3,
+   "beats": 2,
+   "transition": "none",
+   "zoom": 1.5,
+   "crop_y": 0.0
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 254.6,
+   "beats": 2,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 262.75,
+   "beats": 2,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 269.0,
+   "beats": 4,
+   "transition": "none",
+   "caption": "정직한 텔레그래프",
+   "sub": "GOLD · RED · MAGENTA · AMBER"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 274.0,
+   "beats": 2,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 308.0,
+   "beats": 4,
+   "transition": "none",
+   "caption": "패링 · 흑백 흡수",
+   "sub": "PARRY — B&W ABSORB"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 313.0,
+   "beats": 2,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 322.7,
+   "beats": 2,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 332.8,
+   "beats": 4,
+   "transition": "none",
+   "caption": "퍼펙트 회피",
+   "sub": "PERFECT DODGE"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 294.2,
+   "beats": 4,
+   "transition": "none",
+   "caption": "브레이크 · 처형",
+   "sub": "BREAK & FINISHER"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 298.4,
+   "beats": 2,
+   "transition": "none"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 281.2,
+   "beats": 4,
+   "transition": "fade",
+   "speed": 0.5,
+   "tdur": 0.2,
+   "audio_db": -12
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 282.62,
+   "beats": 8,
+   "transition": "none",
+   "speed": 0.5,
+   "flash": 0.25,
+   "audio_db": -12,
+   "caption": "궁극기 · 위상단절검",
+   "sub": "ULTIMATE — PHASE-SEVERING BLADE"
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 284.45,
+   "beats": 4,
+   "transition": "none",
+   "speed": 0.6,
+   "audio_db": -12
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 285.75,
+   "beats": 4,
+   "transition": "none",
+   "speed": 0.8,
+   "zoom": 1.2,
+   "crop_y": 0.1,
+   "audio_db": -12
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 338.95,
+   "beats": 2,
+   "transition": "none",
+   "audio_db": -9,
+   "flash": 0.2
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 339.95,
+   "beats": 2,
+   "transition": "none",
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 344.4,
+   "beats": 4,
+   "transition": "fade",
+   "tdur": 0.2,
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 351.6,
+   "beats": 8,
+   "transition": "fade",
+   "tdur": 0.2,
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 355.6,
+   "beats": 4,
+   "transition": "fade",
+   "tdur": 0.2,
+   "zoom": 1.5,
+   "crop_y": 0.05,
+   "audio_db": -9
+  },
+  {
+   "type": "clip",
+   "file": "Recordings/PV/full_b_av.mov",
+   "in": 358.2,
+   "beats": 4,
+   "transition": "fade",
+   "tdur": 0.2,
+   "audio_db": -9
+  },
+  {
+   "type": "card",
+   "beats": 16,
+   "logo": false,
+   "transition": "fadeblack",
+   "tdur": 0.5,
+   "tracking": 0.1,
+   "lines": [
+    [
+     "CHUON",
+     0.16,
+     "white"
+    ],
+    [
+     "추온",
+     0.06,
+     "red"
+    ],
+    [
+     "PLAYX4 2026 DEMO",
+     0.035,
+     "grey"
+    ]
+   ]
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{"bpm": 132,
+ "sections": [
+  {"kind": "drone", "bars": 8},
+  {"kind": "hit", "bars": 2},
+  {"kind": "build", "bars": 8},
+  {"kind": "hit", "bars": 2},
+  {"kind": "full", "bars": 8},
+  {"kind": "full2", "bars": 8},
+  {"kind": "gap", "bars": 1},
+  {"kind": "hero", "bars": 6},
+  {"kind": "story", "bars": 6},
+  {"kind": "end", "bars": 2}
+ ]}
