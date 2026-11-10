@@ -375,3 +375,5 @@ ShaderVariantCollection:
       variants:
       - keywords:
         passType: 13
+      - keywords:
+        passType: 14

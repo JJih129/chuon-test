@@ -50,6 +50,7 @@ public sealed class QaCommandLine : MonoBehaviour
         if (System.Array.IndexOf(args, "-qaFlowSmoke") >= 0)
         {
             s_consumed = true;
+            QaCinematicWatch.Ensure(); // 반복 14C: 연출 시청 시간·프레임 ("[QA-CINE]")
             var flow = new GameObject("__QaFlowSmoke");
             DontDestroyOnLoad(flow);
             QaCommandLine flowRunner = flow.AddComponent<QaCommandLine>();
@@ -62,6 +63,7 @@ public sealed class QaCommandLine : MonoBehaviour
             return;
 
         s_consumed = true;
+        QaCinematicWatch.Ensure();
         var go = new GameObject("__QaCommandLine");
         DontDestroyOnLoad(go);
         QaCommandLine runner = go.AddComponent<QaCommandLine>();
@@ -197,6 +199,13 @@ public sealed class QaCommandLine : MonoBehaviour
         QaFrameSampler.Mark("facility_upper");
         QaCombatBot bot = QaCombatBot.Attach(0.9f);
         bot.captureScreenshots = false;
+        // 반복 14C: 오프닝(30 s)·도착 대사·경보 리빌(9.5 s)을 건너뛰지 않고 본다 → 전투 단계가 시작될 때까지 기다린다 (최대 80 s).
+        LobbyManager lobbyForCine = FindObjectOfType<LobbyManager>();
+        float cineEnd = Time.realtimeSinceStartup + 80f;
+        while (Time.realtimeSinceStartup < cineEnd && (CinematicDirector.IsPlaying
+               || (lobbyForCine != null && lobbyForCine.CurrentPhase == LobbyManager.LobbyFlowPhase.Arrival)))
+            yield return new WaitForSecondsRealtime(0.5f);
+        Flow($"facility: upper-floor cinematics done ({QaCinematicWatch.Count} played so far)");
         yield return new WaitForSecondsRealtime(12f);
         // Let the bot finish the upper-floor drone fight like a player would (bounded), then take the elevator.
         LobbyManager lobbyForCombat = FindObjectOfType<LobbyManager>();
@@ -209,7 +218,7 @@ public sealed class QaCommandLine : MonoBehaviour
         LobbyManager.LowerFloorReached += onLower;
         LobbyManager lobby = FindObjectOfType<LobbyManager>();
         if (lobby != null) { Flow("facility: OnInteractElevator()"); lobby.OnInteractElevator(); }
-        float lowerEnd = Time.realtimeSinceStartup + 30f;
+        float lowerEnd = Time.realtimeSinceStartup + 40f; // 반복 14C: 하강 연출 13 s 포함
         while (!lowerReached && Time.realtimeSinceStartup < lowerEnd)
             yield return null;
         LobbyManager.LowerFloorReached -= onLower;
@@ -242,9 +251,11 @@ public sealed class QaCommandLine : MonoBehaviour
         // Ending: Tsukasa hologram must play right after Type-D falls (let it run unskipped, bounded).
         float killAt = Time.realtimeSinceStartup;
         int endingPlaysBefore = TsukasaEndingPresenter.PlayCount;
-        while (TsukasaEndingPresenter.LastFinishedAt < killAt && Time.realtimeSinceStartup - killAt < 20f)
+        // 반복 14C: 연출 경로(ending_tsukasa, 24 s) 또는 기존 오버레이
+        bool CineEndingDone() => CinematicDirector.LastFinishedId == "ending_tsukasa" && CinematicDirector.LastFinishedAt >= killAt;
+        while (TsukasaEndingPresenter.LastFinishedAt < killAt && !CineEndingDone() && Time.realtimeSinceStartup - killAt < 34f)
             yield return null;
-        Flow($"facility: tsukasa ending started={TsukasaEndingPresenter.PlayCount > endingPlaysBefore} finished={TsukasaEndingPresenter.LastFinishedAt >= killAt} after {Time.realtimeSinceStartup - killAt:F1}s");
+        Flow($"facility: tsukasa ending overlayStarted={TsukasaEndingPresenter.PlayCount > endingPlaysBefore} cinematicDone={CineEndingDone()} finished={TsukasaEndingPresenter.LastFinishedAt >= killAt || CineEndingDone()} after {Time.realtimeSinceStartup - killAt:F1}s");
         float clearEnd = Time.realtimeSinceStartup + 40f;
         while (ActiveScene == "Level_Facility" && Time.realtimeSinceStartup < clearEnd)
         {
@@ -263,6 +274,7 @@ public sealed class QaCommandLine : MonoBehaviour
         // 6) Credits
         yield return new WaitForSecondsRealtime(6f);
         Flow("credits ok; frame report:\n" + QaFrameSampler.Report());
+        Flow("cinematics:\n" + QaCinematicWatch.Report());
         Application.logMessageReceived -= HandleLog;
         Flow($"RESULT errors={_errors} exceptions={_exceptions}\n--- summary ---\n{_flowLog}");
         Application.Quit();
@@ -376,6 +388,7 @@ public sealed class QaCommandLine : MonoBehaviour
             yield return new WaitForSecondsRealtime(0.25f);
         }
         QaFrameSampler.Mark("after_tutorial");
+        Debug.Log(QaCinematicWatch.Report());
         Debug.Log($"[QA-TUT] t={Time.realtimeSinceStartup - start:F1}s tutorial finished -> {ActiveScene} (last step {step})\n[QA-TUT] {_tutSummary}\n[QA] frame report (tutorial):\n{QaFrameSampler.Report()}");
     }
     string _tutSummary;
@@ -435,6 +448,7 @@ public sealed class QaCommandLine : MonoBehaviour
             Debug.Log("[QA] camera report:\n" + CameraMetricsSampler.Instance.Report());
         if (bot != null)
             Debug.Log("[QA] bot: " + bot.Summary);
+        Debug.Log(QaCinematicWatch.Report());
 
         if (_quit)
             Application.Quit();

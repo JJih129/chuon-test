@@ -10,7 +10,7 @@
 | 재생 | `CinematicDirector.Play(id, onDone)` / `yield return CinematicDirector.PlayRoutine(id)`. 리그가 씬에 없으면 즉시 onDone (기존 흐름 그대로) |
 | 시간 | PlayableDirector `UnscaledGameTime`. `Time.timeScale` 은 건드리지 않는다. 일시정지 메뉴(GameTimeScale 0) 동안 타임라인도 정지 |
 | 조작 | 재생 중 플레이어 입력 차단(IInputBlocker), 무적(IInvulnerabilityToggle), 락온 카메라 양도, 보스 AI 정지(이미 다른 연출이 멈춰 뒀으면 건드리지 않음), HUD(`Player_HUD` 등) 숨김 |
-| 건너뛰기 | 모든 연출. 상호작용 키(키보드 F / 패드 A, 리바인드 반영) 또는 Space·Enter·Start **길게 0.7 s**. 첫 입력에 오른쪽 아래 프롬프트 `[F]  길게 눌러 건너뛰기`(InputGlyphs 표기) + 레드 진행 바 |
+| 건너뛰기 | 모든 연출. 상호작용 키(키보드 F / 패드 A, 리바인드 반영) 또는 Space·Enter **길게 0.7 s** (패드 Start 는 일시정지 메뉴 전용 — 14C). 연출을 발동한 키를 계속 누르고 있으면 한 번 뗀 뒤부터 센다. 첫 입력에 오른쪽 아래 프롬프트 `[F]  길게 눌러 건너뛰기`(InputGlyphs 표기) + 레드 진행 바 |
 | 재도전 생략 | 같은 회차에서 본 연출은 재생 없이 끝 상태로(`chuon.cine.skipSeen`, 기본 켬). 회차 = 타이틀/팀 로고 씬 로드 시 초기화. QA `-qaSkipCinematics` 는 전부 생략 |
 | 레터박스 | 2.35:1, 0.35 s 램프(`chuon.cine.letterbox`, 기본 켬). 끄면 그리지 않음 |
 | 자막 | 기존 `IntroDialoguePresenter`(자막 크기·배경 옵션, 화자 색, 음악 더킹) 를 연출 오버레이 캔버스(정렬 870)에서 사용. 대사 옵션(`chuon.dialogue.enabled`) 끄면 대사 줄 미표시, 장소 카드는 표시 |
@@ -69,10 +69,10 @@
 |---|---|---|---|
 | `CineAnchor_OpeningStage` | Level_Facility | 레벨 밖 무대 원점 | (0, −400, 0), 요 0 |
 | `CineAnchor_ElevatorStage` | Level_Facility | 레벨 밖 무대 원점 | (80, −400, 0), 요 0 |
-| `CineAnchor_LobbyFrontDesk` | Level_Facility | 프론트 데스크 중앙 바닥. forward = 데스크 → 로비 입구(방문객 쪽). 드론 해치는 데스크 뒤 3 m(−Z) | 상층(Y>20) `FrontDesk_Reception`(없으면 이름에 FrontDesk/Desk, Lift·Holo 제외) 위치를 아래 6 m 레이캐스트로 바닥에 붙임. 없으면 LobbyManager 위치(**확인 필요**) |
+| `CineAnchor_LobbyFrontDesk` | Level_Facility | 프론트 데스크 중앙 바닥. forward = 데스크 → 로비 입구(방문객 쪽). 드론 해치는 데스크 뒤 3 m(−Z) | 상층(Y>20) `FrontDesk_Reception`(없으면 이름에 FrontDesk/Desk, Lift·Holo 제외) 위치를 아래 6 m 레이캐스트로 바닥에 붙임. 없으면 LobbyManager 위치. **14C 확인: (0, 40, 0.1), 요 0** — `FrontDesk_Reception` 피벗이 원점이라 이름 검색이 실패했었음 → 설치기가 하위 렌더러 바닥 중심을 쓰도록 수정 |
 | `CineAnchor_SkydeckGlass` | Level_Facility | 유리 바닥 중앙. forward = 보스 쪽 | `LevelFacilityObservationBeat` 위치 |
 | `CineAnchor_TutStart` | Tutorial | 플레이어 시작점. forward = 북쪽(본사 타워) | `InfiltrationTutorialDirector.playerStart` |
-| `CineAnchor_TutExitDoor` | Tutorial | 로비 유리문 패널. forward = 시작점 → 문 | `exitInteractable` 위치 |
+| `CineAnchor_TutExitDoor` | Tutorial | 로비 유리문 패널. forward = 출구 구역(zoneExit) → 문 (14C) | `exitInteractable` 위치 |
 | (보스/플레이어) | 공통 | `CineAttach` 가 재생 순간 위치·요를 잡음 (Player/Boss/PlayerHead/BossHead) | — |
 
 ## 2. 장면별 샷 리스트
@@ -154,11 +154,11 @@
 |---|---|---|---|---|
 | 1 | 0.00–2.25 | 설정(POV) | 캐빈 안 추온 어깨너머, 문이 열리는 격납고 45° | DoorOpen 0.65, Line00 "도착. 격납고 층이야, 추온." Line01 |
 | 2 | 2.25–4.35 | 액션 | 기존 VCam_MainIntro_ElevatorExit (측면 와이드) | PlayerWalkOut 2.25, Line02 |
-| 3 | 4.35–6.80 | 설정 | 격납고 와이드, 보스 뒤 높은 곳 38° | BossReveal 4.35, Line03 "정정할게…" + 저역 임팩트 |
-| 4 | 6.80–9.90 | 인서트 | Type-D 바이저 클로즈 18°(≈76 mm, 머리 뼈 추적) | (Line04/05 시각) |
-| 5 | 9.90–12.00 | 반응 | 추온 얼굴 28° (머리 추적) | Line06 "Type-D. 너와 같은 실험체 시리즈야…" |
-| 6 | 12.00–15.55 | 투샷 | 기존 VCam_MainIntro_BossReveal | Line07, Line08 |
-| 7 | 15.55–17.60 | 복귀 | 등 뒤 50° = 게임플레이 구도 | Line09, CombatStart 17.15, End 17.25 → 0.35 s 블렌드 |
+| 3 | 4.35–5.55 | 설정 | 격납고 와이드, 보스 뒤 높은 곳 38° | BossReveal 4.35, Line03 "정정할게…" + 저역 임팩트 |
+| 4 | 5.55–6.75 | 인서트 | Type-D 바이저 클로즈 18°(≈76 mm, 머리 뼈 추적) | (리빌 걸음 중) |
+| 5 | 6.75–끝 | 복귀 | 등 뒤 50° = 게임플레이 구도 | 실제로는 약 7.0 s 에 리빌 걸음이 끝나면 컨트롤러가 타임라인을 멈추고 전투 시작(`endTimelineWhenBossRevealWalkEnds`), Line04~09 는 조작 중 자막으로 이어짐 → 0.35 s 블렌드 |
+
+- 14C Play 검증: 원본 설계(17.6 s 전부 연출)와 달리 기존 컨트롤러가 약 7.0 s 에 끝내므로, 6.80 s 이후 샷(바이저·반응·투샷)은 재생되지 않고 바이저가 0.2 s 번쩍이던 문제가 있었다. 와이드·바이저를 앞으로 당기고 반응·투샷 클립은 삭제(`ChuonReaction`/`BossReveal` 카메라 오브젝트는 남아 있음). 17.6 s 전체를 보이려면 리드가 `endTimelineWhenBossRevealWalkEnds` 를 끄고 클립을 되살릴 것(전투 시작 +10 s).
 
 ### 장면 7. 페이즈 전환 — Type-D 과열·균열 (비점유, 1.6 s × 페이즈 2·3)
 - 소울라이크 원칙상 전투 중 카메라·조작을 빼앗지 않는다. 대신 `CinePhaseOverheatBeat`(보스에 부착)가 `BossController.OnBossPhaseChanged` 에서 **월드 안 짧은 컷**처럼 읽히는 1.6 s 연출을 겹친다: 등 배기구 증기 분출(2연발) + 붉은 불티 + 가슴 앞 열광 점광원(0.12 s 치솟고 식음, 번쩍임 옵션 배율) + 카메라 리그 흔들림(흔들림 옵션 배율) + 증기 히스. 기존 `TypeDArmorRig` 코어 펄스·균열 텍스처와 `phase2.typed`/`phase3.typed` 시스템 음성 bark 는 그대로.

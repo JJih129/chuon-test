@@ -13,13 +13,19 @@ public sealed class CineFadeTrack : TrackAsset
     }
 }
 
+/// <summary>반복 14C: 디렉터가 재생하는 그래프에서만 오버레이를 건드린다. 프리웜용 수동 그래프(CombatVfxPrewarmer: PlayableGraph.Create + Evaluate(0))는 리졸버가 없어 제외 — 시작이 검정인 연출이 화면을 검게 남기던 버그.</summary>
+public static class CinePlayables
+{
+    public static bool IsDirectorGraph(Playable playable) => playable.GetGraph().GetResolver() is PlayableDirector;
+}
+
 public sealed class CineFadeMixer : PlayableBehaviour
 {
     float _last = -1f;
 
     public override void ProcessFrame(Playable playable, FrameData info, object playerData)
     {
-        if (!Application.isPlaying)
+        if (!Application.isPlaying || !CinePlayables.IsDirectorGraph(playable))
             return;
         CinematicOverlay overlay = CinematicOverlay.Active;
         if (overlay == null)

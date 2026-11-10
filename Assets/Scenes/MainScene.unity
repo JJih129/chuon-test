@@ -7415,6 +7415,15 @@ MonoBehaviour:
   subtitleSizeSlider: {fileID: 0}
   subtitleBackgroundToggle: {fileID: 0}
   cameraShakeSlider: {fileID: 0}
+  flashIntensitySlider: {fileID: 0}
+  bwAbsorbToggle: {fileID: 0}
+  cinematicLetterboxToggle: {fileID: 0}
+  cinematicSkipSeenToggle: {fileID: 0}
+  lookSensitivityMouseSlider: {fileID: 0}
+  lookSensitivityPadSlider: {fileID: 0}
+  invertYToggle: {fileID: 0}
+  autoRecenterToggle: {fileID: 0}
+  cameraFovSlider: {fileID: 0}
 --- !u!4 &351237262
 Transform:
   m_ObjectHideFlags: 0
@@ -9007,6 +9016,123 @@ Transform:
   - {fileID: 138652719}
   m_Father: {fileID: 57978581}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &463505392
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 902207463}
+    m_Modifications:
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6359472932885448859, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+      propertyPath: m_Name
+      value: CINE_TypeDReveal_v2_Shots
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+--- !u!114 &463505393 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8774309431919368090, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+  m_PrefabInstance: {fileID: 463505392}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!4 &463505394 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 819085517150247015, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+  m_PrefabInstance: {fileID: 463505392}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &463505395 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8304316261615670597, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+  m_PrefabInstance: {fileID: 463505392}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &463505396 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 240766894734607478, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+  m_PrefabInstance: {fileID: 463505392}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &463505397 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 564581305818128810, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+  m_PrefabInstance: {fileID: 463505392}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &463505398 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 2543924714000080850, guid: d62bb31ee099292479671dffe8b22a6d, type: 3}
+  m_PrefabInstance: {fileID: 463505392}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9dfa5b682dcd46bda6128250e975f58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &464502422
 GameObject:
   m_ObjectHideFlags: 0
@@ -17043,7 +17169,7 @@ PlayableDirector:
   m_GameObject: {fileID: 902207460}
   m_Enabled: 1
   serializedVersion: 3
-  m_PlayableAsset: {fileID: 11400000, guid: 7d7ab8d285a942345b1dcb1eb7afed41, type: 2}
+  m_PlayableAsset: {fileID: 11400000, guid: f45772fc2019de04e981da1e6bccc8a0, type: 2}
   m_InitialState: 0
   m_WrapMode: 2
   m_DirectorUpdateMode: 1
@@ -17073,10 +17199,19 @@ PlayableDirector:
     value: {fileID: 902207462}
   - key: {fileID: 948689397381057330, guid: 7d7ab8d285a942345b1dcb1eb7afed41, type: 2}
     value: {fileID: 963194233}
+  - key: {fileID: -2849206077010899098, guid: f45772fc2019de04e981da1e6bccc8a0, type: 2}
+    value: {fileID: 902207462}
+  - key: {fileID: 5377517502100540848, guid: f45772fc2019de04e981da1e6bccc8a0, type: 2}
+    value: {fileID: 963194233}
   m_ExposedReferences:
     m_References:
+    - TDRv2.ChuonReaction: {fileID: 463505398}
     - MainIntro.SHOT_ElevatorExit.VCam_MainIntro_ElevatorExit: {fileID: 1320465489}
+    - TDRv2.DoorPOV: {fileID: 463505397}
+    - TDRv2.VisorInsert: {fileID: 463505396}
     - MainIntro.SHOT_BossReveal.VCam_MainIntro_BossReveal: {fileID: 469234259}
+    - TDRv2.Return: {fileID: 463505395}
+    - TDRv2.HangarWide: {fileID: 463505393}
 --- !u!114 &902207462
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -17347,6 +17482,7 @@ Transform:
   m_Children:
   - {fileID: 1320465488}
   - {fileID: 469234260}
+  - {fileID: 463505394}
   m_Father: {fileID: 1340670546}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &912002277
@@ -18259,6 +18395,12 @@ MonoBehaviour:
   trailMaterial: {fileID: 0}
   trailTint: {r: 1, g: 1, b: 1, a: 1}
   applyTintPropertyBlock: 1
+  bladeRibbonMode: 1
+  maxSubdivisions: 8
+  subdivisionSpacing: 0.045
+  preRollSeconds: 0.04
+  ribbonMinTipMove: 0.003
+  preferChuonBladeMaterial: 1
 --- !u!23 &952646347
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -19892,6 +20034,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   debugLog: 0
+  baseDamagePercentOfMaxHP: 0
 --- !u!114 &1023266516
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25657,10 +25800,14 @@ MonoBehaviour:
   - {fileID: 2074182986}
   - {fileID: 14622528}
   - {fileID: 2020581894}
+  spentAmpouleSlotAlpha: 0.22
   ultimateGaugePercentText: {fileID: 0}
   showUltimateGaugePercent: 1
   ultimateGaugePercentFontSize: 18
   ultimateGaugePercentTextColor: {r: 0.86, g: 1, b: 1, a: 0.98}
+  usePhaseCore: 1
+  phaseCorePercentFontSize: 13
+  phaseCorePercentOffsetY: -5
   frameAlpha: 0.68
   showLegacyGuardStrainBar: 0
   guardStrainFillImage: {fileID: 0}
@@ -25726,6 +25873,8 @@ MonoBehaviour:
   performanceHudWarningColor: {r: 1, g: 0.76, b: 0.28, a: 0.98}
   performanceHudCriticalColor: {r: 1, g: 0.38, b: 0.3, a: 1}
   statusHudRefreshInterval: 0.041666668
+  hpDamageChunkHold: 0.35
+  hpDamageChunkDrain: 0.45
 --- !u!1 &1339949391
 GameObject:
   m_ObjectHideFlags: 0
@@ -25831,6 +25980,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 38a13a9a281579441a3e4b67a328862c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  bindAsMainLevel: 0
 --- !u!4 &1340670546
 Transform:
   m_ObjectHideFlags: 0
@@ -25999,6 +26149,8 @@ MonoBehaviour:
   useBossIntroDialogueSubtitle: 1
   introDialoguePresenter: {fileID: 0}
   playElevatorArrivalOnSceneStart: 1
+  awaitLobbyHandoff: 0
+  hideBossWhileAwaitingLobbyHandoff: 0
   elevatorArrivalAnchor: {fileID: 0}
   elevatorDoorController: {fileID: 0}
   closedElevatorDoorVisual: {fileID: 0}
@@ -26021,6 +26173,7 @@ MonoBehaviour:
   elevatorIntroCameraLookOffset: {x: 0, y: 1.25, z: 1.2}
   elevatorArrivalCameraPitch: 8
   elevatorArrivalCameraYawOffset: 180
+  snapCameraBehindPlayerOnControlHandoff: 0
   elevatorArrivalCameraDistance: 4.2
   elevatorArrivalCameraHeight: 1.25
   elevatorDoorClosedHold: 0.9
@@ -34987,6 +35140,10 @@ MonoBehaviour:
   phaseEntryPressureDuration: 5
   phaseEntryUnlockedPatternWeight: 1.75
   phaseTransitionAttackLockDuration: 0.45
+  holdAtArenaUntilPlayerEnters: 0
+  arenaEngageCenter: {fileID: 0}
+  arenaEngageRadius: 14
+  arenaEngageFirstAttackDelay: 0.6
   difficultyTier: 1
   difficultyProfiles:
   - tier: 0
@@ -35041,6 +35198,7 @@ MonoBehaviour:
     overrideMaxFollowUpCount: 1
     maxFollowUpCount: 3
     parryWindowMultiplier: 0.92
+  followGlobalDifficulty: 1
   minimumParryTelegraphLeadTime: 0.28
   minimumGuardTelegraphLeadTime: 0.3
   minimumDodgeTelegraphLeadTime: 0.36
@@ -35747,6 +35905,62 @@ MonoBehaviour:
   rootToDestroyOnDead: {fileID: 543450653219452590}
   extraObjectsToDestroyOnDead: []
   maxFollowUpChainCount: 1
+  alignCuesToHitbox: 0
+  honestCueFallbackClipLead: 0.2
+  honestCueMinDuration: 0.05
+  enableSpecialPatterns: 0
+  shockwaveStateName: Attack_Shockwave
+  leapStateName: Attack_Leap
+  specialSpeedParam: SpecialSpeed
+  specialGlobalCooldown: 7
+  shockwaveCooldown: 15
+  shockwaveRadius: 5.2
+  shockwaveMaxStartDistance: 4.6
+  shockwaveDamage: 24
+  shockwaveBaseChance: 0.16
+  shockwaveUnlockHp: 0.8
+  shockwaveClipSpeed: 0.9
+  shockwaveClipImpactTime: 1.28
+  shockwaveRecovery: 1
+  leapCooldown: 12
+  leapRadius: 2.4
+  leapMinStartDistance: 3.8
+  leapMaxStartDistance: 15
+  leapMaxTravel: 14
+  leapDamage: 22
+  leapBaseChance: 0.14
+  leapClipSpeed: 0.75
+  leapClipTakeoffTime: 0.15
+  leapClipImpactTime: 1.08
+  leapLockLeadTime: 0.45
+  leapRecovery: 1.1
+  leapFarSustainDistance: 6
+  leapFarSustainTime: 2
+  enablePlanReactiveBias: 0
+  healReactionWindow: 3
+  healReactionCooldown: 14
+  healLeapWeightMultiplier: 6
+  dodgeSpamWindow: 3
+  dodgeSpamCount: 2
+  dodgeSpamDiagonalMultiplier: 2.6
+  dodgeSpamCooldown: 8
+  diagonalSlashPatternNames: e
+  backOffSustainTime: 0.8
+  backOffMinDistance: 4.2
+  backOffDashMultiplier: 2.6
+  backOffCooldown: 8
+  dashThrustPatternNames: d
+  enablePerHitStringCues: 0
+  perHitCueLeadTime: 0.24
+  perHitCueFlashDuration: 0.14
+  perHitCueRingScale: 0.6
+  perHitParryLeadTime: 0.12
+  perHitParryTailTime: 0.08
+  perHitActivateEventName: Anim_ActivateHitbox
+  tintOpenerHandTelegraphByType: 0
+  enableThirdHitParryStagger: 0
+  thirdHitParryStaggerDuration: 1.6
+  thirdHitParryBreakBonus: 12.5
 --- !u!114 &1727032505
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -47980,13 +48194,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   patternPivot: {fileID: 0}
   telegraphMaterial: {fileID: 0}
-  baseScale: 0.78
   verticalOffset: 0.02
   cameraPullForward: 0.32
-  pulseAmount: 0.18
-  pulseSpeed: 9
-  rotateSpeed: 120
   fallbackColor: {r: 1, g: 0.94, b: 0.02, a: 0.96}
+  flashDuration: 0.22
+  flashWorldSize: 0.9
+  flashHdrIntensity: 3.2
 --- !u!4 &5885422599327991292
 Transform:
   m_ObjectHideFlags: 0

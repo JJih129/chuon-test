@@ -168,8 +168,15 @@ public class MainSceneClearPresentationController : MonoBehaviour
 
             bool endingDone = false;
             // 반복 14: 엔딩 연출(ending_tsukasa, 24 s)이 설치돼 있으면 그것을, 없으면(또는 다른 연출 재생 중이면) 기존 오버레이.
-            bool usedCinematic = CinematicDirector.Has("ending_tsukasa")
-                && CinematicDirector.Play("ending_tsukasa", () => endingDone = true);
+            bool usedCinematic = false;
+            if (CinematicDirector.Has("ending_tsukasa") && !CinematicDirector.IsPlaying)
+            {
+                // 반복 14C: 기존 엔딩과 같은 전환 — 결전의 정지 화면을 먼저 잡고(2 프레임), 한 줄 베기로 갈라지는 동안 연출 첫 샷이 드러난다.
+                ScreenCut.PlayTransition(new Vector2(0.5f, 0.52f));
+                yield return null;
+                yield return null;
+                usedCinematic = CinematicDirector.Play("ending_tsukasa", () => endingDone = true);
+            }
             if (!usedCinematic && !endingDone)
                 TsukasaEndingPresenter.Play(() => endingDone = true);
             // 가드 30 s (연출 24 s + 여유). 일시정지 중에는 타임라인도 멈추므로 가드도 늘린다.

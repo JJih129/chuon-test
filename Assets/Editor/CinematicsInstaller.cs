@@ -67,9 +67,10 @@ public static class CinematicsInstaller
         Anchor(anchors, "CineAnchor_ElevatorStage", new Vector3(80f, -400f, 0f), Quaternion.identity, log);
 
         // 프론트 데스크: 이름으로 추정 (상층 Y > 20). forward = 데스크에서 로비 입구(플레이어 시작) 쪽.
-        Transform desk = FindByTokens(new[] { "FrontDesk_Reception", "FrontDesk", "Front_Desk", "Desk" }, t => t.position.y > 20f && t.name.IndexOf("Lift", System.StringComparison.OrdinalIgnoreCase) < 0 && t.name.IndexOf("Holo", System.StringComparison.OrdinalIgnoreCase) < 0);
+        // 피벗이 원점에 있는 그룹(FrontDesk_Reception 등)도 잡도록 하위 렌더러 바닥 중심으로 판정한다 (반복 14C).
+        Transform desk = FindByTokens(new[] { "FrontDesk_Reception", "FrontDesk", "Front_Desk", "Desk" }, t => DeskBase(t).y > 20f && t.name.IndexOf("Lift", System.StringComparison.OrdinalIgnoreCase) < 0 && t.name.IndexOf("Holo", System.StringComparison.OrdinalIgnoreCase) < 0);
         Transform player = GameObject.FindWithTag("Player") != null ? GameObject.FindWithTag("Player").transform : null;
-        Vector3 deskPos = desk != null ? desk.position : (LobbyManager.Instance != null ? LobbyManager.Instance.transform.position : new Vector3(0f, 40f, 0f));
+        Vector3 deskPos = desk != null ? DeskBase(desk) : (LobbyManager.Instance != null ? LobbyManager.Instance.transform.position : new Vector3(0f, 40f, 0f));
         if (desk == null)
         {
             LobbyManager lm = Object.FindFirstObjectByType<LobbyManager>(FindObjectsInactive.Include);
@@ -154,13 +155,15 @@ public static class CinematicsInstaller
     {
         Transform anchors = Group(root, "Anchors");
         InfiltrationTutorialDirector dir = Object.FindFirstObjectByType<InfiltrationTutorialDirector>(FindObjectsInactive.Include);
-        Transform start = null, exit = null;
+        Transform start = null, exit = null, zone = null;
         if (dir != null)
         {
             var so = new SerializedObject(dir);
             start = so.FindProperty("playerStart")?.objectReferenceValue as Transform;
             var exitObj = so.FindProperty("exitInteractable")?.objectReferenceValue as Component;
             exit = exitObj != null ? exitObj.transform : null;
+            var zoneObj = so.FindProperty("zoneExit")?.objectReferenceValue as Component;
+            zone = zoneObj != null ? zoneObj.transform : null;
         }
         if (start != null)
             Anchor(anchors, "CineAnchor_TutStart", start.position, FacingYaw(start.forward), log);
@@ -168,7 +171,8 @@ public static class CinematicsInstaller
             log.Append("WARN playerStart not found; ");
         if (exit != null)
         {
-            Vector3 from = start != null ? start.position : exit.position + Vector3.back * 10f;
+            // 14C: forward = 출구 구역(플레이어가 서는 곳) → 문 패널 (시작점 기준이면 실제 접근 방향과 45° 어긋남)
+            Vector3 from = zone != null ? zone.position : start != null ? start.position : exit.position + Vector3.back * 10f;
             Anchor(anchors, "CineAnchor_TutExitDoor", exit.position, FacingToward(from, exit.position), log);
         }
         else
@@ -346,6 +350,27 @@ public static class CinematicsInstaller
                 if (t.name.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) >= 0 && filter(t))
                     return t;
         return null;
+    }
+
+    // 데스크 기준점: 가장 낮은 하위 렌더러에서 1.5 m 안에 시작하는 렌더러 묶음(로고·기둥·홀로 제외)의 바닥 중심. 렌더러가 없으면 피벗.
+    static Vector3 DeskBase(Transform t)
+    {
+        Renderer[] renderers = t.GetComponentsInChildren<Renderer>();
+        float minY = float.PositiveInfinity;
+        foreach (Renderer r in renderers)
+            minY = Mathf.Min(minY, r.bounds.min.y);
+        bool init = false;
+        Bounds b = default;
+        foreach (Renderer r in renderers)
+        {
+            if (r.bounds.min.y > minY + 1.5f || r.bounds.size.y > 3f || r.name.IndexOf("Holo", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                continue;
+            if (!init) { b = r.bounds; init = true; }
+            else b.Encapsulate(r.bounds);
+        }
+        if (!init)
+            return t.position;
+        return new Vector3(b.center.x, b.min.y, b.center.z);
     }
 
     static Quaternion FacingToward(Vector3 from, Vector3 to)

@@ -55,7 +55,7 @@ public sealed class CineSubtitleBehaviour : PlayableBehaviour
 
     public override void OnBehaviourPlay(Playable playable, FrameData info)
     {
-        if (!Application.isPlaying || _shown)
+        if (!Application.isPlaying || _shown || !CinePlayables.IsDirectorGraph(playable))
             return;
         CinematicOverlay overlay = CinematicOverlay.Active;
         if (overlay == null)
@@ -77,7 +77,7 @@ public sealed class CineSubtitleBehaviour : PlayableBehaviour
 
     public override void ProcessFrame(Playable playable, FrameData info, object playerData)
     {
-        if (mode != CineSubtitleClip.Mode.Card || !Application.isPlaying)
+        if (mode != CineSubtitleClip.Mode.Card || !Application.isPlaying || !CinePlayables.IsDirectorGraph(playable))
             return;
         CinematicOverlay overlay = CinematicOverlay.Active;
         if (overlay == null)

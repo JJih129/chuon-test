@@ -1638,6 +1638,15 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
         if (destroyDelayAfterDead > 0f)
             yield return new WaitForSeconds(destroyDelayAfterDead);
 
+        // 반복 14C: 엔딩 연출(ending_tsukasa)이 설치돼 있으면 연출이 끝날 때까지 쓰러진 Type-D 를 남긴다
+        // (연출이 보스 위치에 정렬하고 첫 샷이 쓰러진 Type-D 를 잡는다). 미설치면 기존 그대로. 최대 45 s.
+        if (CinematicDirector.Has("ending_tsukasa"))
+        {
+            float holdUntil = Time.realtimeSinceStartup + 45f;
+            while (Time.realtimeSinceStartup < holdUntil && CinematicDirector.LastFinishedId != "ending_tsukasa")
+                yield return null;
+        }
+
         FinalizeDeathAndDestroy();
     }
 

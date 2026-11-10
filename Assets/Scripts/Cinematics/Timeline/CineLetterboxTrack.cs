@@ -24,7 +24,7 @@ public sealed class CineLetterboxMixer : PlayableBehaviour
 
     public override void ProcessFrame(Playable playable, FrameData info, object playerData)
     {
-        if (!Application.isPlaying || !CinematicSettings.LetterboxEnabled)
+        if (!Application.isPlaying || !CinematicSettings.LetterboxEnabled || !CinePlayables.IsDirectorGraph(playable))
             return;
         bool standalone = !CinematicDirector.IsPlaying;
         CinematicOverlay overlay = standalone ? CinematicOverlay.Ensure() : CinematicOverlay.Active;

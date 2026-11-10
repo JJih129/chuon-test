@@ -151,46 +151,60 @@ def single_slot(ob, slot_name):
 # ------------------------------------------------------------------ pieces
 def tsukasa_figure(out):
     """Founder silhouette. Front = -Y. Long coat hem at 0.28 m, shoulders 1.50 m, head top 1.84 m.
-    Hands clasped behind the back (arms swept back), chin slightly up: the 'designer watching his orbit' pose."""
+    Hands clasped behind the back (arms swept back), chin slightly up: the 'designer watching his orbit' pose.
+    Iteration 14C: the silhouette must read as a person from the front at hologram brightness -- broad squared shoulders
+    (wider than the hem), elbows pushed out so the clasped-arms pose shows in outline, a straighter (less flared) coat,
+    lapels and a defined head/jaw with glasses (scientist read). The old flared lathe read as a lamp."""
     parts = []
     # shoes + trouser legs below the coat hem
     for sx in (-1, 1):
-        parts.append(ellipsoid("shoe", (0.065, 0.15, 0.055), (sx * 0.11, -0.05, 0.05), segs=14, rings=8))
-        parts.append(loft("leg", [(0.07, 0.066, 0.07, sx * 0.11, 0.0), (0.16, 0.074, 0.078, sx * 0.108, 0.0),
-                                  (0.36, 0.085, 0.088, sx * 0.105, 0.0)], 14))
-    # long coat: flared hem -> waist -> chest -> shoulders (ellipses wider in X)
+        parts.append(ellipsoid("shoe", (0.062, 0.14, 0.05), (sx * 0.1, -0.05, 0.045), segs=14, rings=8))
+        parts.append(loft("leg", [(0.07, 0.062, 0.066, sx * 0.1, 0.0), (0.18, 0.068, 0.072, sx * 0.1, 0.0),
+                                  (0.36, 0.078, 0.082, sx * 0.1, 0.0)], 14))
+    # long coat: near-straight hem -> waist -> chest -> broad squared shoulders (ellipses wider in X)
     coat = [
-        (0.26, 0.30, 0.24, 0.0, 0.03),
-        (0.45, 0.27, 0.20, 0.0, 0.02),
-        (0.75, 0.215, 0.155, 0.0, 0.0),
-        (0.98, 0.185, 0.130, 0.0, 0.0),   # waist (belted)
-        (1.04, 0.192, 0.135, 0.0, 0.0),
-        (1.22, 0.215, 0.140, 0.0, -0.005),
-        (1.40, 0.245, 0.14, 0.0, 0.0),
-        (1.47, 0.235, 0.125, 0.0, 0.01),
-        (1.53, 0.12, 0.085, 0.0, 0.015),
+        (0.26, 0.255, 0.20, 0.0, 0.03),
+        (0.50, 0.24, 0.175, 0.0, 0.02),
+        (0.78, 0.215, 0.15, 0.0, 0.0),
+        (0.98, 0.19, 0.13, 0.0, 0.0),     # waist (belted)
+        (1.04, 0.196, 0.134, 0.0, 0.0),
+        (1.22, 0.225, 0.142, 0.0, -0.005),
+        (1.38, 0.262, 0.146, 0.0, 0.0),
+        (1.44, 0.268, 0.138, 0.0, 0.005),  # shoulder line (square)
+        (1.49, 0.22, 0.118, 0.0, 0.012),
+        (1.54, 0.11, 0.082, 0.0, 0.015),
     ]
-    parts.append(loft("coat", coat, 28, cap_bottom=False))
-    # hem thickness (inner skirt so the open bottom never shows a hole in scanlines)
-    parts.append(loft("hem", [(0.27, 0.285, 0.225, 0.0, 0.03), (0.40, 0.255, 0.19, 0.0, 0.02)], 28, cap_bottom=True, cap_top=False))
-    # coat front split line (thin dark slot reads as the coat opening in scanlines) + belt
-    parts.append(K.box("belt", (0.38, 0.29, 0.035), (0, 0, 1.01), "White"))
+    parts.append(loft("coat", coat, 32, cap_bottom=False))
+    parts.append(loft("hem", [(0.27, 0.245, 0.19, 0.0, 0.03), (0.42, 0.235, 0.172, 0.0, 0.02)], 32, cap_bottom=True, cap_top=False))
+    parts.append(K.box("belt", (0.4, 0.28, 0.035), (0, 0, 1.01), "White"))
+    # lapels: two thin wedges on the chest front (catch the scan light as a V)
+    for sx in (-1, 1):
+        lap = K.box("lapel", (0.075, 0.012, 0.26), (sx * 0.06, -0.142, 1.30), "White")
+        lap.rotation_euler = (0, math.radians(sx * 14), 0)
+        parts.append(lap)
+    # shoulder caps (squared outline)
+    for sx in (-1, 1):
+        parts.append(ellipsoid("deltoid", (0.075, 0.08, 0.06), (sx * 0.245, 0.0, 1.425), segs=14, rings=8))
     # high collar (stand-up, open at the front)
-    parts.append(loft("collar", [(1.47, 0.12, 0.10, 0, 0.02), (1.60, 0.105, 0.088, 0, 0.03)], 20, cap_bottom=False, cap_top=False))
-    # neck + head (chin up ~8 deg: head pushed back slightly)
-    parts.append(loft("neck", [(1.50, 0.055, 0.058, 0, 0.02), (1.64, 0.05, 0.052, 0, 0.025)], 12))
-    head = ellipsoid("head", (0.088, 0.105, 0.118), (0, 0.01, 1.735))
+    parts.append(loft("collar", [(1.47, 0.115, 0.098, 0, 0.02), (1.60, 0.1, 0.086, 0, 0.03)], 20, cap_bottom=False, cap_top=False))
+    # neck + head (chin up ~8 deg) + jaw + swept hair + glasses bar
+    parts.append(loft("neck", [(1.50, 0.052, 0.055, 0, 0.02), (1.645, 0.048, 0.05, 0, 0.025)], 12))
+    head = ellipsoid("head", (0.083, 0.1, 0.112), (0, 0.01, 1.74))
     head.rotation_euler = (math.radians(-8), 0, 0)
     parts.append(head)
-    hair = ellipsoid("hair", (0.094, 0.104, 0.07), (0, 0.035, 1.79))
-    hair.rotation_euler = (math.radians(-20), 0, 0)
+    jaw = ellipsoid("jaw", (0.066, 0.075, 0.05), (0, -0.025, 1.668))
+    jaw.rotation_euler = (math.radians(-8), 0, 0)
+    parts.append(jaw)
+    hair = ellipsoid("hair", (0.09, 0.104, 0.062), (0.008, 0.03, 1.80))
+    hair.rotation_euler = (math.radians(-18), math.radians(6), 0)
     parts.append(hair)
-    # arms: shoulder -> elbow (back) -> wrists meeting behind the lower back
+    parts.append(K.box("glasses", (0.15, 0.012, 0.022), (0, -0.098, 1.752), "White"))
+    # arms: shoulder -> elbow pushed OUT and back -> wrists meeting behind the lower back
     for sx in (-1, 1):
-        pts = [Vector((sx * 0.215, 0.0, 1.43)), Vector((sx * 0.25, 0.07, 1.20)), Vector((sx * 0.22, 0.16, 1.02)),
-               Vector((sx * 0.10, 0.19, 0.95)), Vector((sx * 0.02, 0.19, 0.93))]
-        parts.append(tube("arm", pts, [0.062, 0.056, 0.05, 0.043, 0.04], 12))
-    parts.append(ellipsoid("hands", (0.07, 0.05, 0.05), (0, 0.2, 0.93)))
+        pts = [Vector((sx * 0.25, 0.0, 1.42)), Vector((sx * 0.31, 0.06, 1.20)), Vector((sx * 0.30, 0.13, 1.06)),
+               Vector((sx * 0.16, 0.19, 0.97)), Vector((sx * 0.03, 0.2, 0.95))]
+        parts.append(tube("arm", pts, [0.064, 0.058, 0.052, 0.045, 0.04], 12))
+    parts.append(ellipsoid("hands", (0.07, 0.05, 0.05), (0, 0.205, 0.95)))
     for p in parts:
         p.data.materials.clear()
     ob = K.join(parts, "SM_CINE_TsukasaFigure")
@@ -507,6 +521,10 @@ def contact_preview(out, prev):
 if __name__ == "__main__":
     OUT, PREV = args()
     K.reset()
+    if "--only-figure" in sys.argv:   # iteration 14C: re-export just the hologram figure
+        tsukasa_figure(OUT)
+        print("CINE KIT", ", ".join("%s=%d" % e for e in EXPORTED))
+        sys.exit(0)
     tsukasa_figure(OUT); holo_projector(OUT); hideout_shell(OUT); map_table(OUT); crate_stack(OUT); cot(OUT)
     monitor_bank(OUT); barricade(OUT); rubble(OUT); banner(OUT); elevator_cab(OUT); floor_indicator(OUT)
     drone_hatch(OUT)

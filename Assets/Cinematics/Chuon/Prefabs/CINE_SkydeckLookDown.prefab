@@ -57,8 +57,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1585564651545281912}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.544243, y: -0.032185126, z: 0.020901548, w: 0.8380494}
-  m_LocalPosition: {x: 0.35, y: 2.25, z: -0.55}
+  m_LocalRotation: {x: 0.5703234, y: -0.028461864, z: 0.019779079, w: 0.8206887}
+  m_LocalPosition: {x: 0.25, y: 1.7, z: 0.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -240,8 +240,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2916605745734339169}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.0040174257, y: 0.9570001, z: 0.013268655, w: -0.2897563}
-  m_LocalPosition: {x: 2, y: 0.7, z: 3}
+  m_LocalRotation: {x: 0.009659782, y: 0.9886727, z: 0.073035985, w: -0.13076241}
+  m_LocalPosition: {x: 0.7, y: 1, z: 2.6}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -271,7 +271,7 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 42
+    FieldOfView: 40
     OrthographicSize: 10
     NearClipPlane: 0.05
     FarClipPlane: 1200
@@ -363,6 +363,7 @@ MonoBehaviour:
   disableIfMissing: 0
   faceTarget: 3
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &3094097285554770312
 GameObject:
   m_ObjectHideFlags: 0
@@ -646,6 +647,7 @@ MonoBehaviour:
   disableIfMissing: 0
   faceTarget: 0
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &5379057259682591507
 GameObject:
   m_ObjectHideFlags: 0
@@ -816,6 +818,7 @@ MonoBehaviour:
   disableIfMissing: 0
   faceTarget: 3
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &6210546518975229252
 GameObject:
   m_ObjectHideFlags: 0
@@ -871,6 +874,7 @@ MonoBehaviour:
   disableIfMissing: 0
   faceTarget: 0
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &7505989316618708397
 GameObject:
   m_ObjectHideFlags: 0

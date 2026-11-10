@@ -40,6 +40,8 @@ public sealed class CineAttach : MonoBehaviour
     [Tooltip("None 이 아니면 요를 이 대상 쪽으로 돌린다 (예: 플레이어 기준 샷이 보스/데스크를 향하게). matchYaw 보다 우선.")]
     [SerializeField] Target faceTarget = Target.None;
     [SerializeField] string faceAnchorName;
+    [Tooltip("0 보다 크면 시작 시 뒤쪽(-Z)으로 이 거리만큼 벽이 없는 요를 고른다 (엔딩 홀로그램처럼 대상 뒤에 무대를 세우는 리그). 반복 14C.")]
+    [SerializeField] float clearBehind;
 
     Transform _resolved;
     Transform _face;
@@ -47,6 +49,8 @@ public sealed class CineAttach : MonoBehaviour
     public Target AttachTarget => target;
     public string AnchorName => anchorName;
     public bool Follow => follow;
+
+    public void SetClearBehind(float metres) => clearBehind = Mathf.Max(0f, metres);
 
     public void ConfigureFacing(Target face, string anchor = null)
     {
@@ -69,6 +73,17 @@ public sealed class CineAttach : MonoBehaviour
     {
         _resolved = ResolveTarget(target, anchorName, player, boss);
         _face = faceTarget != Target.None ? ResolveTarget(faceTarget, faceAnchorName, player, boss) : null;
+        if (_resolved == null && target == Target.Boss && player != null && !follow)
+        {
+            // 반복 14C: 보스가 이미 사라졌으면(파괴) 플레이어 앞 6 m 에 플레이어를 보게 세운다 — 무대가 씬 원점에 생기지 않게.
+            Vector3 fwd = player.forward; fwd.y = 0f;
+            if (fwd.sqrMagnitude < 0.0001f) fwd = Vector3.forward;
+            fwd.Normalize();
+            transform.SetPositionAndRotation(player.position + fwd * 6f, Quaternion.LookRotation(-fwd, Vector3.up) * Quaternion.Euler(0f, yawOffset, 0f));
+            if (clearBehind > 0f)
+                ResolveClearBehind(player, boss);
+            return true;
+        }
         if (_resolved == null)
         {
             if (target != Target.None && disableIfMissing)
@@ -79,7 +94,42 @@ public sealed class CineAttach : MonoBehaviour
         if (!gameObject.activeSelf && disableIfMissing)
             gameObject.SetActive(true);
         Snap();
+        if (clearBehind > 0f)
+            ResolveClearBehind(player, boss);
         return true;
+    }
+
+    // 대상 뒤(-Z)가 벽에 막혀 있으면 ±35° 씩 돌려 가며 처음으로 트인 방향을 쓴다 (모두 막히면 가장 먼 방향). 시작 시 1회, 할당은 RaycastAll 배열 뿐.
+    static readonly float[] s_clearYaws = { 0f, 35f, -35f, 70f, -70f, 105f, -105f, 140f, -140f, 180f };
+
+    void ResolveClearBehind(Transform player, Transform boss)
+    {
+        Quaternion baseRot = transform.rotation;
+        Vector3 origin = transform.position + Vector3.up * 1.2f;
+        float bestDist = -1f;
+        Quaternion best = baseRot;
+        for (int i = 0; i < s_clearYaws.Length; i++)
+        {
+            Quaternion r = Quaternion.Euler(0f, s_clearYaws[i], 0f) * baseRot;
+            Vector3 back = r * Vector3.back;
+            float d = clearBehind;
+            RaycastHit[] hits = Physics.SphereCastAll(origin, 0.45f, back, clearBehind, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (int h = 0; h < hits.Length; h++)
+            {
+                Transform ht = hits[h].transform;
+                if (hits[h].distance <= 0f || (player != null && ht.IsChildOf(player)) || (boss != null && ht.IsChildOf(boss)))
+                    continue;
+                d = Mathf.Min(d, hits[h].distance);
+            }
+            if (d > bestDist + 0.01f)
+            {
+                bestDist = d;
+                best = r;
+            }
+            if (d >= clearBehind - 0.01f)
+                break;
+        }
+        transform.rotation = best;
     }
 
     public void Tick()

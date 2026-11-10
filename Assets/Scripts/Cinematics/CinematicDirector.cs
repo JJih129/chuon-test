@@ -237,6 +237,8 @@ public sealed class CinematicDirector : MonoBehaviour
         float paused = 0f;
         bool skipped = false;
         bool pausedByMenu = false;
+        // 반복 14C: 연출을 발동한 상호작용 키(F 등)를 계속 누르고 있으면 건너뛰기로 새지 않게, 한 번 뗀 뒤의 새 입력만 센다.
+        bool needRelease = SkipHeld();
 
         while (true)
         {
@@ -276,7 +278,9 @@ public sealed class CinematicDirector : MonoBehaviour
             }
 
             // 길게 눌러 건너뛰기
-            if (seq.Skippable && elapsed > 0.3f)
+            if (needRelease && !SkipHeld())
+                needRelease = false;
+            if (seq.Skippable && elapsed > 0.3f && !needRelease)
             {
                 if (AnySkipPressedThisFrame())
                     promptUntil = Time.unscaledTime + 2.5f;
@@ -396,8 +400,8 @@ public sealed class CinematicDirector : MonoBehaviour
         Keyboard kb = Keyboard.current;
         if (kb != null && (kb.spaceKey.isPressed || kb.enterKey.isPressed || kb.numpadEnterKey.isPressed))
             return true;
-        Gamepad pad = Gamepad.current;
-        return pad != null && pad.startButton.isPressed;
+        // 반복 14C: 패드 Start 는 일시정지 메뉴 키라 건너뛰기에서 뺀다 (누르면 메뉴가 열리고 연출도 멈춤 — 둘이 겹치지 않게).
+        return false;
     }
 
     static bool AnySkipPressedThisFrame()
@@ -410,7 +414,7 @@ public sealed class CinematicDirector : MonoBehaviour
             return true;
         Gamepad pad = Gamepad.current;
         return pad != null && (pad.buttonSouth.wasPressedThisFrame || pad.buttonEast.wasPressedThisFrame
-            || pad.buttonNorth.wasPressedThisFrame || pad.buttonWest.wasPressedThisFrame || pad.startButton.wasPressedThisFrame);
+            || pad.buttonNorth.wasPressedThisFrame || pad.buttonWest.wasPressedThisFrame);
     }
 
     // ------------------------------------------------------------------ gameplay lock

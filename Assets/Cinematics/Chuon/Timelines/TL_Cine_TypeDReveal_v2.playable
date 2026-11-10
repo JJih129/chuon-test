@@ -353,22 +353,6 @@ MonoBehaviour:
   m_Retroactive: 0
   m_EmitOnce: 1
   m_Asset: {fileID: 11400000, guid: 630598da28243e64591716d6bbd89858, type: 2}
---- !u!114 &-3301827199737218095
-MonoBehaviour:
-  m_ObjectHideFlags: 1
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 90fb794a295e73545af71bcdb7375791, type: 3}
-  m_Name: CinemachineShot
-  m_EditorClassIdentifier: 
-  DisplayName: SHOT_BossReveal
-  VirtualCamera:
-    exposedName: MainIntro.SHOT_BossReveal.VCam_MainIntro_BossReveal
-    defaultValue: {fileID: 0}
 --- !u!114 &-2849206077010899098
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -421,22 +405,6 @@ MonoBehaviour:
   DisplayName: SHOT_TDR_HangarWide
   VirtualCamera:
     exposedName: TDRv2.HangarWide
-    defaultValue: {fileID: 0}
---- !u!114 &-2781715338201221414
-MonoBehaviour:
-  m_ObjectHideFlags: 1
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 90fb794a295e73545af71bcdb7375791, type: 3}
-  m_Name: CinemachineShot
-  m_EditorClassIdentifier: 
-  DisplayName: SHOT_TDR_ChuonReaction
-  VirtualCamera:
-    exposedName: TDRv2.ChuonReaction
     defaultValue: {fileID: 0}
 --- !u!114 &-1819730098067315076
 MonoBehaviour:
@@ -830,7 +798,7 @@ MonoBehaviour:
     m_Start: 4.35
     m_ClipIn: 0
     m_Asset: {fileID: -2826649065607604830}
-    m_Duration: 2.45
+    m_Duration: 1.2
     m_TimeScale: 1
     m_ParentTrack: {fileID: 5377517502100540848}
     m_EaseInDuration: 0
@@ -896,10 +864,10 @@ MonoBehaviour:
     m_PreExtrapolationTime: 0
     m_DisplayName: SHOT_TDR_HangarWide
   - m_Version: 1
-    m_Start: 6.8
+    m_Start: 5.55
     m_ClipIn: 0
     m_Asset: {fileID: 4055800477755581394}
-    m_Duration: 3.1
+    m_Duration: 1.2
     m_TimeScale: 1
     m_ParentTrack: {fileID: 5377517502100540848}
     m_EaseInDuration: 0
@@ -965,148 +933,10 @@ MonoBehaviour:
     m_PreExtrapolationTime: 0
     m_DisplayName: SHOT_TDR_VisorInsert
   - m_Version: 1
-    m_Start: 9.9
-    m_ClipIn: 0
-    m_Asset: {fileID: -2781715338201221414}
-    m_Duration: 2.1
-    m_TimeScale: 1
-    m_ParentTrack: {fileID: 5377517502100540848}
-    m_EaseInDuration: 0
-    m_EaseOutDuration: 0
-    m_BlendInDuration: -1
-    m_BlendOutDuration: -1
-    m_MixInCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 0
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      - serializedVersion: 3
-        time: 1
-        value: 1
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    m_MixOutCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 1
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      - serializedVersion: 3
-        time: 1
-        value: 0
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    m_BlendInCurveMode: 0
-    m_BlendOutCurveMode: 0
-    m_ExposedParameterNames: []
-    m_AnimationCurves: {fileID: 0}
-    m_Recordable: 0
-    m_PostExtrapolationMode: 0
-    m_PreExtrapolationMode: 0
-    m_PostExtrapolationTime: 0
-    m_PreExtrapolationTime: 0
-    m_DisplayName: SHOT_TDR_ChuonReaction
-  - m_Version: 1
-    m_Start: 12
-    m_ClipIn: 0
-    m_Asset: {fileID: -3301827199737218095}
-    m_Duration: 3.55
-    m_TimeScale: 1
-    m_ParentTrack: {fileID: 5377517502100540848}
-    m_EaseInDuration: 0
-    m_EaseOutDuration: 0
-    m_BlendInDuration: -1
-    m_BlendOutDuration: -1
-    m_MixInCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 0
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      - serializedVersion: 3
-        time: 1
-        value: 1
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    m_MixOutCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 1
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      - serializedVersion: 3
-        time: 1
-        value: 0
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0
-        outWeight: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    m_BlendInCurveMode: 0
-    m_BlendOutCurveMode: 0
-    m_ExposedParameterNames: []
-    m_AnimationCurves: {fileID: 0}
-    m_Recordable: 0
-    m_PostExtrapolationMode: 0
-    m_PreExtrapolationMode: 0
-    m_PostExtrapolationTime: 0
-    m_PreExtrapolationTime: 0
-    m_DisplayName: SHOT_BossReveal
-  - m_Version: 1
-    m_Start: 15.55
+    m_Start: 6.75
     m_ClipIn: 0
     m_Asset: {fileID: -353324048411837605}
-    m_Duration: 2.0500000000000007
+    m_Duration: 10.850000000000001
     m_TimeScale: 1
     m_ParentTrack: {fileID: 5377517502100540848}
     m_EaseInDuration: 0

@@ -350,6 +350,15 @@ public class LobbyManager : MonoBehaviour
         return null;
     }
 
+    void FlashLobbyAlert(int loops)
+    {
+        if (alertOverlay == null)
+            return;
+        alertOverlay.DOKill();
+        alertOverlay.color = new Color(1f, 0f, 0f, 0f);
+        alertOverlay.DOFade(AccessibilityOptionsRuntime.ScaleFlash(0.3f), 0.5f).SetLoops(loops, LoopType.Yoyo);
+    }
+
     IEnumerator SequenceArrival()
     {
         if (_fromTutorialTransition)
@@ -377,17 +386,18 @@ public class LobbyManager : MonoBehaviour
         if (_handedOffToLowerFloor)
             yield break;
 
-        if (alertOverlay != null)
-        {
-            alertOverlay.DOKill();
-            alertOverlay.color = new Color(1f, 0f, 0f, 0f);
-            alertOverlay.DOFade(AccessibilityOptionsRuntime.ScaleFlash(0.3f), 0.5f).SetLoops(6, LoopType.Yoyo);
-        }
+        // 반복 14C: 연출이 재생되면 화면 전체 경보 점멸은 연출 뒤로 미룬다 (연출 안의 회전 경보등이 대신하고, 클로즈업이 붉게 덮이지 않게).
+        bool cineAlarm = CinematicDirector.Has("lobby_alarm") && !_isElevatorTransitioning && !CinematicDirector.IsCombatActive();
+        if (!cineAlarm)
+            FlashLobbyAlert(6);
 
         // \ubc18\ubcf5 14: \uacbd\ubcf4\u00b7\ub4dc\ub860 \ub9ac\ube4c \uc5f0\ucd9c\uc774 \uc124\uce58\ub3fc \uc788\uc73c\uba74 \uac19\uc740 \ud0a4(lobby.alarm/drones)\ub97c \uc5f0\ucd9c \uc790\ub9c9\uc73c\ub85c \ud45c\uc2dc\ud558\ubbc0\ub85c \uae30\uc874 4\uc904\uc740 \uac74\ub108\ub6f4\ub2e4.
-        if (CinematicDirector.Has("lobby_alarm") && !CinematicDirector.IsCombatActive())
+        // (엘리베이터를 이미 탔으면 연출을 시작하지 않는다 — 하강 연출과 겹침 방지)
+        if (cineAlarm)
         {
             yield return CinematicDirector.PlayRoutine("lobby_alarm");
+            if (!_handedOffToLowerFloor)
+                FlashLobbyAlert(2);
         }
         else
         {
@@ -1622,15 +1632,26 @@ public class LobbyManager : MonoBehaviour
         // 연출 오버레이를 먼저 검정으로 채운 뒤 같은 씬 검정을 걷고, 끝나면 다시 덮는다. 미설치면 기존 흐름 그대로.
         if (CinematicDirector.Has("elevator_descent"))
         {
-            CinematicOverlay cineOverlay = CinematicOverlay.Ensure();
-            cineOverlay.SetFade(Color.black, 1f);
-            if (fade != null)
-                fade.alpha = 0f;
-            yield return CinematicDirector.PlayRoutine("elevator_descent");
-            if (fade != null)
-                fade.alpha = 1f;
+            // 다른 연출(예: 경보 리빌)이 아직 재생 중이면 끝 상태로 넘긴 뒤 시작한다 (검정 아래라 보이지 않음).
+            if (CinematicDirector.IsPlaying)
+            {
+                CinematicDirector.SkipCurrent();
+                float skipUntil = Time.realtimeSinceStartup + 1.5f;
+                while (CinematicDirector.IsPlaying && Time.realtimeSinceStartup < skipUntil)
+                    yield return null;
+            }
+
             if (!CinematicDirector.IsPlaying)
-                cineOverlay.SetFade(Color.black, 0f); // 재도전 생략(즉시 끝) 경로에서도 남은 검정을 비운다
+            {
+                CinematicOverlay cineOverlay = CinematicOverlay.Ensure();
+                cineOverlay.SetFade(Color.black, 1f);
+                if (fade != null)
+                    fade.alpha = 0f;
+                yield return CinematicDirector.PlayRoutine("elevator_descent");
+                if (fade != null)
+                    fade.alpha = 1f;
+                cineOverlay.SetFade(Color.black, 0f); // 재도전 생략(즉시 끝) 경로에서도 남은 검정을 비운다 (같은 씬 검정 아래)
+            }
         }
 
         _handedOffToLowerFloor = true;
