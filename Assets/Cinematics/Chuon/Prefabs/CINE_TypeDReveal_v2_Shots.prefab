@@ -225,6 +225,7 @@ MonoBehaviour:
   disableIfMissing: 0
   faceTarget: 3
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &2433368863961045446
 GameObject:
   m_ObjectHideFlags: 0
@@ -279,6 +280,7 @@ MonoBehaviour:
   disableIfMissing: 0
   faceTarget: 0
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &4540803730192842660
 GameObject:
   m_ObjectHideFlags: 0
@@ -331,10 +333,11 @@ MonoBehaviour:
   yawOnly: 1
   localOffset: {x: 0, y: 0, z: 0}
   yawOffset: 0
-  follow: 0
+  follow: 1
   disableIfMissing: 0
   faceTarget: 2
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &4564163621794597125
 GameObject:
   m_ObjectHideFlags: 0
@@ -478,10 +481,11 @@ MonoBehaviour:
   yawOnly: 1
   localOffset: {x: 0, y: 0, z: 0}
   yawOffset: 0
-  follow: 0
+  follow: 1
   disableIfMissing: 0
   faceTarget: 0
   faceAnchorName: 
+  clearBehind: 0
 --- !u!1 &6359472932885448859
 GameObject:
   m_ObjectHideFlags: 0
@@ -589,7 +593,7 @@ MonoBehaviour:
     LookAtTarget: {fileID: 390737213622618866}
     CustomLookAtTarget: 1
   Lens:
-    FieldOfView: 18
+    FieldOfView: 24
     OrthographicSize: 10
     NearClipPlane: 0.05
     FarClipPlane: 800

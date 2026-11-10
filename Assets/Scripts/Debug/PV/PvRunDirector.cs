@@ -31,6 +31,7 @@ public sealed class PvRunDirector : MonoBehaviour
     {
         if (s_instance != null)
             Destroy(s_instance.gameObject);
+        QaErrorShaderWatch.Ensure(); // 반복 15: 테이크 중 자홍(에러 셰이더) 렌더러가 생기면 "[QA-SHADER]" 경고
         var go = new GameObject("__PvRunDirector");
         go.hideFlags = HideFlags.HideInHierarchy;
         DontDestroyOnLoad(go);

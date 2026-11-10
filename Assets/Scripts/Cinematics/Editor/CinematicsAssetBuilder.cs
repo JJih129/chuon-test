@@ -156,6 +156,15 @@ public static class CinematicsAssetBuilder
             m.SetInt("_ZWrite", 0);
             m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             m.renderQueue = 3000;
+            // 반복 15: 텍스처가 없으면 파티클이 흰 네모로 보인다 → 부드러운 증기 퍼프 / 불티 점 (Tools/ArtGen 대신 i15 스크립트로 생성한 PNG)
+            Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(additive
+                ? "Assets/Art/ChuonPolish/Cinematics/Textures/T_CINE_EmberDot.png"
+                : "Assets/Art/ChuonPolish/Cinematics/Textures/T_CINE_SteamPuff.png");
+            if (tex != null)
+            {
+                m.SetTexture("_BaseMap", tex);
+                m.SetTexture("_MainTex", tex);
+            }
         });
     }
 
@@ -330,7 +339,7 @@ public static class CinematicsAssetBuilder
         }
 
         /// <summary>카메라 이동 (위치·시선·FOV, 스무스). 좌표는 holder 부모 로컬.</summary>
-        public void Move(CinemachineCamera cam, double start, double dur, Vector3 p0, Vector3 l0, float f0, Vector3 p1, Vector3 l1, float f1, bool ease = true)
+        public AnimationClip Move(CinemachineCamera cam, double start, double dur, Vector3 p0, Vector3 l0, float f0, Vector3 p1, Vector3 l1, float f1, bool ease = true)
         {
             var clip = new AnimationClip { name = $"AC_{id}_{cam.transform.parent.name}_{_clipSerial++}", frameRate = 60f };
             float d = (float)dur;
@@ -355,6 +364,29 @@ public static class CinematicsAssetBuilder
             cam.transform.localPosition = p0;
             cam.transform.localRotation = q0;
             LensSettings lens = cam.Lens; lens.FieldOfView = f0; cam.Lens = lens;
+            return clip;
+        }
+
+        /// <summary>반복 15: Move 클립의 시선(회전)을 여러 키로 덮어쓴다 (예: 해치에 머물렀다가 드론을 따라 틸트). pos(t) 는 Move 의 선형 보간.</summary>
+        public static void LookKeys(AnimationClip clip, float dur, Vector3 p0, Vector3 p1, params (float t, Vector3 look)[] keys)
+        {
+            var qs = new Quaternion[keys.Length];
+            for (int i = 0; i < keys.Length; i++)
+            {
+                Vector3 p = Vector3.Lerp(p0, p1, Mathf.Clamp01(keys[i].t / dur));
+                qs[i] = Quaternion.LookRotation((keys[i].look - p).normalized, Vector3.up);
+                if (i > 0 && Quaternion.Dot(qs[i], qs[i - 1]) < 0f) qs[i] = new Quaternion(-qs[i].x, -qs[i].y, -qs[i].z, -qs[i].w);
+            }
+            string[] props = { "m_LocalRotation.x", "m_LocalRotation.y", "m_LocalRotation.z", "m_LocalRotation.w" };
+            for (int c = 0; c < 4; c++)
+            {
+                var curve = new AnimationCurve();
+                for (int i = 0; i < keys.Length; i++)
+                    curve.AddKey(new Keyframe(keys[i].t, qs[i][c]));
+                for (int i = 0; i < curve.length; i++)
+                    curve.SmoothTangents(i, 0f);
+                AnimationUtility.SetEditorCurve(clip, EditorCurveBinding.FloatCurve("Cam", typeof(Transform), props[c]), curve);
+            }
         }
 
         public AnimationTrack AnimTrack(Animator animator, string name, bool sceneOffsets)
@@ -771,15 +803,21 @@ public static class CinematicsAssetBuilder
         var s2 = rig.Cam("S2_MonitorInsert", cams, V(3.78f, 1.3f, -1.15f), V(3.6f, 1.2f, -2.45f), 26f);
         rig.Move(s2, 6.6, 2.4, V(3.78f, 1.3f, -1.15f), V(3.6f, 1.2f, -2.45f), 26f, V(3.7f, 1.26f, -1.4f), V(3.6f, 1.2f, -2.45f), 24f);
         // 반복 14C: 엎드린 추온의 머리·어깨 쪽 하이앵글 (Falldown 머리 ≈ (0.21,0.13,0.63), 골반 ≈ (0.36,0.13,1.08)). 뒤쪽 하이앵글은 골반만 잡혀 교체.
-        var s3 = rig.Cam("S3_ChuonDown", cams, V(-0.8f, 2.0f, -0.2f), V(0.25f, 0.22f, 0.78f), 30f);
-        rig.Move(s3, 9.0, 3.4, V(-0.8f, 2.0f, -0.2f), V(0.25f, 0.22f, 0.78f), 30f, V(-0.6f, 1.75f, -0.02f), V(0.25f, 0.2f, 0.75f), 28f);
+        // 반복 15: 구도는 머리·어깨 (몸통/하체 위주 금지). 엎드린 머리 ≈ (0.21, 0.13, 0.63), 선 머리 ≈ (0.41, 1.51, 1.19), 정면 = −Z 쪽
+        var s3 = rig.Cam("S3_ChuonDown", cams, V(0.0f, 1.9f, -0.8f), V(0.2f, 0.12f, 0.58f), 30f);
+        rig.Move(s3, 9.0, 3.4, V(0.0f, 1.9f, -0.8f), V(0.2f, 0.12f, 0.58f), 30f, V(0.05f, 1.65f, -0.6f), V(0.2f, 0.12f, 0.58f), 28f);
         // 반복 14C: 정면 측면 로우앵글 (뒤쪽 로우앵글은 골반 중심 구도라 교체)
-        var s4 = rig.Cam("S4_GetUp", cams, V(0.75f, 0.5f, -0.85f), V(0.3f, 0.8f, 0.8f), 34f, false);
-        rig.Move(s4, 12.4, 3.8, V(0.75f, 0.5f, -0.85f), V(0.3f, 0.8f, 0.8f), 34f, V(0.7f, 0.55f, -0.9f), V(0.4f, 1.45f, 1.2f), 32f);
+        // 반복 15: 로우 앵글(0.5 m) → 가슴 높이 3/4 정면, 일어서는 머리를 따라 틸트
+        var s4 = rig.Cam("S4_GetUp", cams, V(-0.75f, 1.15f, -0.25f), V(0.25f, 0.35f, 0.72f), 26f, false);
+        AnimationClip s4Clip = rig.Move(s4, 12.4, 3.8, V(-0.75f, 1.15f, -0.25f), V(0.25f, 0.35f, 0.72f), 26f, V(-0.8f, 1.3f, -0.2f), V(0.4f, 1.48f, 1.18f), 30f);
+        // 시선은 머리 뼈를 따라간다 (중간 보간이 허리 높이를 지나며 하체를 잡던 문제): 엎드림 → 13.5 s 무릎 → 14.5 s 섬
+        Rig.LookKeys(s4Clip, 3.8f, V(-0.75f, 1.15f, -0.25f), V(-0.8f, 1.3f, -0.2f),
+            (0f, V(0.21f, 0.2f, 0.63f)), (0.5f, V(0.2f, 0.4f, 0.7f)), (0.9f, V(0.2f, 0.85f, 0.85f)), (1.1f, V(0.19f, 1.2f, 1.0f)), (2.1f, V(0.41f, 1.48f, 1.19f)), (3.8f, V(0.41f, 1.48f, 1.18f)));
         var s5 = rig.Cam("S5_Fallen", cams, V(-0.6f, 1.6f, 2.8f), V(-1.0f, 0.3f, -1.0f), 32f);
         rig.Move(s5, 16.2, 3.4, V(-0.6f, 1.6f, 2.8f), V(-1.0f, 0.3f, -1.0f), 32f, V(-0.7f, 1.6f, 2.8f), V(-5.75f, 1.8f, 0.2f), 32f);
-        var s6 = rig.Cam("S6_LookUp", cams, E + V(0.75f, 0.45f, -2.2f), E + V(0, 1.4f, 0), 40f, false);
-        rig.Move(s6, 19.6, 5.4, E + V(0.75f, 0.45f, -2.2f), E + V(0, 1.4f, 0), 40f, E + V(0.6f, 0.35f, -2.5f), E + V(0, 125f, 95f), 34f);
+        // 반복 15: 허리 아래 로우 앵글 대신 어깨 높이 어깨너머 → 타워 크라운까지 틸트 업
+        var s6 = rig.Cam("S6_LookUp", cams, E + V(0.55f, 1.6f, -1.9f), E + V(-0.1f, 1.45f, 3f), 40f, false);
+        rig.Move(s6, 19.6, 5.4, E + V(0.55f, 1.6f, -1.9f), E + V(-0.1f, 1.45f, 3f), 40f, E + V(0.5f, 1.45f, -2.3f), E + V(0, 125f, 95f), 34f);
         var s7 = rig.Cam("S7_Approach", cams, E + V(-1.2f, 1.6f, -5.0f), E + V(0, 8f, 40f), 40f);
 
         rig.Shot(s1, 2.8, 3.8, "S1_Establish");
@@ -886,7 +924,9 @@ public static class CinematicsAssetBuilder
         var rig = new Rig(IdLobbyAlarm, "CINE_LobbyAlarm", "Level_Facility");
         rig.sequence.Configure(IdLobbyAlarm, "Level_Facility", true, CinematicSettings.SeenScope.Run, true, false, false, true);
         Transform desk = rig.Sub("AtFrontDesk", CineAttach.Target.Anchor, "CineAnchor_LobbyFrontDesk");
-        Transform atPlayer = rig.Sub("AtPlayer", CineAttach.Target.Player, face: CineAttach.Target.Anchor, faceAnchor: "CineAnchor_LobbyFrontDesk");
+        // 반복 15: 플레이어 기준 샷은 따라가고(재생 시작 때 플레이어가 옮겨져도 안전), 뒤 3.2 m 가 막혔거나 바닥이 없으면 요를 돌린다
+        Transform atPlayer = rig.Sub("AtPlayer", CineAttach.Target.Player, face: CineAttach.Target.Anchor, faceAnchor: "CineAnchor_LobbyFrontDesk", follow: true);
+        atPlayer.GetComponent<CineAttach>().SetClearBehind(3.2f);
         Transform head = rig.Sub("PlayerHead", CineAttach.Target.PlayerHead, follow: true, matchYaw: false);
 
         Cine("DroneHatch", desk, V(0, 0.01f, -3.0f), 0);
@@ -904,8 +944,14 @@ public static class CinematicsAssetBuilder
 
         var s1 = rig.Cam("S1_LobbyWide", desk, V(-8.5f, 6.2f, 9.5f), V(0, 1.2f, 0), 40f);
         var s2 = rig.Cam("S2_ChuonReact", atPlayer, V(-0.55f, 1.65f, 1.5f), V(0, 1.55f, 0), 30f, true, head);
-        var s3 = rig.Cam("S3_HatchReveal", desk, V(2.0f, 0.55f, -0.9f), V(0, 1.0f, -3.0f), 36f, false);
-        rig.Move(s3, 4.2, 3.0, V(2.0f, 0.55f, -0.9f), V(0, 1.0f, -3.0f), 36f, V(2.1f, 0.6f, -0.8f), V(0, 4.2f, -3.8f), 40f);
+        // 반복 15: 첫 프레임에 해치가 화면 안에 (시선 1.0 → 0.3 m), 해치 컷 전용 키(화이트)·림(레드) 라이트
+        var s3 = rig.Cam("S3_HatchReveal", desk, V(2.0f, 0.55f, -0.9f), V(0, 0.3f, -3.0f), 36f, false);
+        AnimationClip s3Clip = rig.Move(s3, 4.2, 3.0, V(2.0f, 0.55f, -0.9f), V(0, 0.3f, -3.0f), 36f, V(2.1f, 0.6f, -0.8f), V(0, 4.2f, -3.8f), 40f);
+        // 해치 개방(0~0.8 s)을 보여 준 뒤 드론 상승을 따라 틸트 (드론: 0.6 s 부터 상승, 1.5 s 에 2.4~2.8 m)
+        Rig.LookKeys(s3Clip, 3.0f, V(2.0f, 0.55f, -0.9f), V(2.1f, 0.6f, -0.8f),
+            (0f, V(0, 0.3f, -3.0f)), (0.85f, V(0, 0.55f, -3.0f)), (1.6f, V(0, 2.3f, -3.25f)), (3.0f, V(0, 4.2f, -3.8f)));
+        Light hatchKey = MakeLight("HatchKey", desk, LightType.Spot, V(2.6f, 3.4f, 0.6f), V(0, 0.8f, -3.2f), new Color(0.92f, 0.94f, 1f), 14f, 12f, 55f);
+        Light hatchRim = MakeLight("HatchRim", desk, LightType.Spot, V(-1.2f, 4.0f, -7.0f), V(0, 1.5f, -3.2f), new Color(1f, 0.16f, 0.12f), 10f, 12f, 50f);
         var s4 = rig.Cam("S4_Return", atPlayer, V(0.5f, 1.75f, -2.8f), V(0, 1.4f, 4f), 48f, false);
         rig.Shot(s1, 0, 2.4, "S1_LobbyWide");
         rig.Shot(s2, 2.4, 1.8, "S2_ChuonReact");
@@ -935,6 +981,8 @@ public static class CinematicsAssetBuilder
             }
         });
         rig.Active(drones.gameObject, 4.2, 3.2);
+        rig.Active(hatchKey.gameObject, 4.2, 3.2);
+        rig.Active(hatchRim.gameObject, 4.2, 3.2);
         rig.LightBeat(alarm, 0, 9.5, 1f, 0.7f, 1.6f);
         rig.Line(0.2, 2.3, "lobby.alarm.0", "System", "침입자 감지.\n방어 프로토콜을 가동합니다.");
         rig.Line(2.5, 1.8, "lobby.alarm.1", "System", "임직원 여러분은\n업무를 계속해 주십시오.");
@@ -942,6 +990,8 @@ public static class CinematicsAssetBuilder
         rig.Line(7.3, 1.9, "lobby.drones.1", "추온", "전부 부순다.");
         rig.Sound("SFX_Cine_DroneLaunch", 4.3);
         drones.gameObject.SetActive(false);
+        hatchKey.gameObject.SetActive(false);
+        hatchRim.gameObject.SetActive(false);
         rig.Save(9.5);
     }
 
@@ -959,7 +1009,7 @@ public static class CinematicsAssetBuilder
 
         // 반복 14C: 시선 대상은 가슴·머리 높이 (골반 높이 구도 금지), 어깨너머는 머리에서 1 m 이상 뒤
         // (다리는 좁은 유리 통로: 카메라는 통로 폭 안. S1 = 보스 쪽에서 본 정면 미디엄, S2 = 유리 아래를 내려다보는 POV)
-        var s1 = rig.Cam("S1_StepOn", atPlayer, V(0.7f, 1.0f, 2.6f), V(0, 1.4f, 0), 40f);
+        var s1 = rig.Cam("S1_StepOn", atPlayer, V(0.7f, 1.4f, 2.6f), V(0, 1.4f, 0), 40f); // 반복 15: 1.0 m 로우 → 가슴 높이 (로우 앵글 감사)
         var s2 = rig.Cam("S2_LookDown", atPlayer, V(0.25f, 1.7f, 0.4f), V(0, -8f, 4f), 40f);
         var s3a = rig.Cam("S3a_ThroughGlass", atGlass, V(0, 0.9f, -1.2f), V(0, -10f, 2f), 26f, false, bossLookPoint);
         var s3b = rig.Cam("S3b_Crane", atBoss, V(4.5f, 14f, 5f), V(0, 1.4f, 0), 30f, false, bossLookPoint);
@@ -1179,8 +1229,9 @@ public static class CinematicsAssetBuilder
             return x;
         }
         Transform atPlayer = AttachSub("AtPlayer", CineAttach.Target.Player, CineAttach.Target.Boss);
-        Transform atBoss = AttachSub("AtBoss", CineAttach.Target.Boss, CineAttach.Target.Player);
-        Transform bossHead = AttachSub("BossHead", CineAttach.Target.BossHead, CineAttach.Target.None, false, false);
+        // 반복 15: 리빌 걸음 동안 Type-D 가 5 m 이상 움직이므로 보스 쪽 루트·머리는 따라간다 (바이저 인서트가 빈 자리를 비추던 문제)
+        Transform atBoss = AttachSub("AtBoss", CineAttach.Target.Boss, CineAttach.Target.Player, true);
+        Transform bossHead = AttachSub("BossHead", CineAttach.Target.BossHead, CineAttach.Target.None, true, false);
         Transform playerHead = AttachSub("PlayerHead", CineAttach.Target.PlayerHead, CineAttach.Target.None, false, false);
         CinemachineCamera MakeCam(string n, Transform parent, Vector3 pos, Vector3 look, float fov, Transform lookT, bool noise)
         {
@@ -1200,7 +1251,7 @@ public static class CinematicsAssetBuilder
         }
         MakeCam("DoorPOV", atPlayer, V(0.35f, 1.62f, -1.5f), V(0, 1.5f, 6f), 45f, null, true);
         MakeCam("HangarWide", atBoss, V(-5.0f, 6.0f, 14.0f), V(0, 1.8f, 0), 38f, null, true);
-        MakeCam("VisorInsert", atBoss, V(0.28f, 2.05f, 1.25f), V(0, 2.0f, 0), 18f, bossHead, true);
+        MakeCam("VisorInsert", atBoss, V(0.28f, 2.05f, 1.25f), V(0, 2.0f, 0), 24f, bossHead, true); // 반복 15: 18 → 24° (바이저 + 어깨)
         MakeCam("ChuonReaction", atPlayer, V(-0.5f, 1.6f, 1.4f), V(0, 1.55f, 0), 28f, playerHead, true);
         MakeCam("Return", atPlayer, V(0.3f, 1.75f, -3.4f), V(0, 1.4f, 5f), 50f, null, false);
         PrefabUtility.SaveAsPrefabAsset(root, $"{PrefabDir}/CINE_TypeDReveal_v2_Shots.prefab", out bool ok);

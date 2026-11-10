@@ -742,6 +742,11 @@ public class BossBreakController : MonoBehaviour
                 DestroyImmediate(_runtimeHologramMaterial);
         }
         _runtimeHologramMaterial = null;
+
+        // 반복 15: 홀로그램 중에 HP 균열 단계가 바뀌었으면 위 스냅샷 복원으로 균열이 빠진다 → 현재 단계로 다시 덧그림.
+        BossDamageCracks cracks = BossDamageCracks.Active;
+        if (cracks != null)
+            cracks.Reapply();
     }
 
     private void OnValidate()

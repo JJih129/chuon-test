@@ -48,6 +48,7 @@ public sealed class CinematicDirector : MonoBehaviour
     bool _tookCamera;
     readonly List<CanvasGroup> _hudGroups = new List<CanvasGroup>(4);
     readonly List<float> _hudAlphas = new List<float>(4);
+    readonly List<Canvas> _hudCanvases = new List<Canvas>(4); // 반복 15: 알파를 매 프레임 덮어쓰는 HUD(Boss_HUD) 대비 — 캔버스 자체를 끈다
     bool _skipRequested;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -480,6 +481,12 @@ public sealed class CinematicDirector : MonoBehaviour
                 _hudGroups.Add(group);
                 _hudAlphas.Add(group.alpha);
                 group.alpha = 0f;
+                Canvas canvas = go.GetComponent<Canvas>();
+                if (canvas != null && canvas.enabled)
+                {
+                    canvas.enabled = false;
+                    _hudCanvases.Add(canvas);
+                }
             }
         }
     }
@@ -510,5 +517,9 @@ public sealed class CinematicDirector : MonoBehaviour
                 _hudGroups[i].alpha = _hudAlphas[i];
         _hudGroups.Clear();
         _hudAlphas.Clear();
+        for (int i = 0; i < _hudCanvases.Count; i++)
+            if (_hudCanvases[i] != null)
+                _hudCanvases[i].enabled = true;
+        _hudCanvases.Clear();
     }
 }

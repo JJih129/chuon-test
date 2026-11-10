@@ -141,8 +141,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 36995714983285975}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.39556417, y: 0.35957414, z: -0.17189333, w: 0.8274588}
-  m_LocalPosition: {x: -0.8, y: 2, z: -0.2}
+  m_LocalRotation: {x: 0.43665397, y: 0.06464433, z: -0.03147717, w: 0.8967517}
+  m_LocalPosition: {x: 0, y: 1.9, z: -0.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -370,8 +370,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1367543259376943867}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.08594621, y: -0.13223319, z: -0.011509753, w: 0.9874184}
-  m_LocalPosition: {x: 0.75, y: 0.5, z: -0.85}
+  m_LocalRotation: {x: 0.28369242, y: 0.38283604, z: -0.12479678, w: 0.8702764}
+  m_LocalPosition: {x: -0.75, y: 1.15, z: -0.25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -401,7 +401,7 @@ MonoBehaviour:
     LookAtTarget: {fileID: 0}
     CustomLookAtTarget: 0
   Lens:
-    FieldOfView: 34
+    FieldOfView: 26
     OrthographicSize: 10
     NearClipPlane: 0.05
     FarClipPlane: 1200
@@ -1585,6 +1585,7 @@ MonoBehaviour:
   returnFadeSeconds: 0.35
   stageRoot: {fileID: 7034749405561323943}
   maxRealtimeSeconds: 0
+  prewarmOnLoad: 1
   bindings: []
   onStarted:
     m_PersistentCalls:
@@ -2152,8 +2153,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6764658678996106934}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.19018969, y: -0.16047008, z: -0.031527676, w: 0.96803063}
-  m_LocalPosition: {x: 0.75, y: 0.45, z: 597.8}
+  m_LocalRotation: {x: 0.015134926, y: -0.065885864, z: 0.0009994645, w: 0.9977119}
+  m_LocalPosition: {x: 0.55, y: 1.6, z: 598.1}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

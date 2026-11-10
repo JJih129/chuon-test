@@ -268,10 +268,15 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         if (!enabled)
             return;
         PlacePlayer(playerStart);
-        VrTransitionOverlay.Play("TSUKASA HQ  //  INFILTRATION ROUTE", "VR SIMULATION  //  가상현실 부팅", 0.8f);
+        int resumeStep = s_resumeStep;
+        bool bootCine = resumeStep <= 0 && CinematicDirector.Has(BootCinematicId);
+        // 반복 15: 부팅 연출이 있으면 밴드 유지 시간을 줄이고(0.8 → 0.15 s) 연출을 바로 뒤에 시작한다 —
+        // 예전엔 연출 첫 ~3 s(도시 크레인 샷)가 오버레이·씬 로드 뒤에 가려졌다. VFX/JIT 예열은 연출이 끝난 뒤로 미룬다(첫 프레임 히치).
+        VrTransitionOverlay.Play("TSUKASA HQ  //  INFILTRATION ROUTE", "VR SIMULATION  //  가상현실 부팅", bootCine ? BootOverlayHold : 0.8f);
         // 반복 14A: VR 부팅 동안 Level_Facility 와 같은 예열(VFX 풀 + 궁극기/퍼펙트 회피 코드 JIT + 타임라인 그래프)
         // → 튜토리얼 첫 궁극기·첫 퍼펙트 회피 슬로우 히치(98~110 ms) 제거
-        CombatVfxPrewarmer.EnsureAndPrewarm(gameObject);
+        if (!bootCine)
+            CombatVfxPrewarmer.EnsureAndPrewarm(gameObject);
         PrewarmDialogueGlyphs();
         int resume = s_resumeStep;
         s_resumeStep = -1;
@@ -283,8 +288,8 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         else
         {
             // 반복 14: VR 부팅 연출(6.5 s, 기존 밴드 와이프와 동시). 미설치면 기존 그대로.
-            if (CinematicDirector.Has(BootCinematicId))
-                CinematicDirector.Play(BootCinematicId);
+            if (bootCine)
+                StartCoroutine(CoPlayBootCinematic());
             _flow.StartFlow();
         }
     }
@@ -1155,6 +1160,16 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
     }
 
     const string BootCinematicId = "tut_vr_boot";
+    const float BootOverlayHold = 0.15f;
+
+    System.Collections.IEnumerator CoPlayBootCinematic()
+    {
+        yield return new WaitForSecondsRealtime(BootOverlayHold);
+        if (CinematicDirector.Has(BootCinematicId) && !CinematicDirector.IsPlaying)
+            yield return CinematicDirector.PlayRoutine(BootCinematicId);
+        // 첫 궁극기·퍼펙트 회피 히치 예열(반복 14A)은 부팅 연출 뒤 — 튜토리얼 첫 교전까지 충분히 남는다
+        CombatVfxPrewarmer.EnsureAndPrewarm(gameObject);
+    }
     const string ExitCinematicId = "tut_vr_exit";
 
     static void PlayExitOverlay() =>

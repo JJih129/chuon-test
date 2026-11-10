@@ -40,6 +40,22 @@ public sealed class UltimateCinematicController : MonoBehaviour
     [SerializeField] private float shot03LookAtHeight = 1.05f;
     [SerializeField] private float shot03LookAhead = 0.08f;
 
+    // 반복 15 (PV 리뷰): 인트로 컷이 웅크린 추온을 엉덩이 높이 뒤에서, 베기(시간정지) 컷이 어둡고 먼 후방 와이드로 잡혔다.
+    // 새 필드라 기존 씬 직렬화 값(위 오프셋)은 그대로 두고 아래 값이 우선한다. 끄면 이전 구도.
+    [Header("Framing (iter 15)")]
+    [Tooltip("인트로(발도 자세) 샷을 머리 높이 측면 프로필로 잡는다 (로우·후방·부감 정면 금지 — 웅크린 자세)")]
+    [SerializeField] private bool frontalIntroFraming = true;
+    [Tooltip("인트로 카메라: 플레이어 시작점 기준 (오른쪽, 위, 앞=대상 쪽)")]
+    [SerializeField] private Vector3 introFrontalCameraOffset = new Vector3(-2.05f, 1.3f, 0.35f);
+    [Tooltip("인트로 시선 높이 (웅크린 자세의 가슴~머리)")]
+    [SerializeField] private float introFrontalLookHeight = 1.02f;
+    [Tooltip("베기 컷: 대상 기준 궤도를 플레이어 축에서 이만큼 돌려 시작 (3/4 정면 미디엄)")]
+    [SerializeField] private bool mediumSlashStormFraming = true;
+    [SerializeField] private float slashStormStartYaw = 62f;
+    [SerializeField] private float slashStormMediumRadius = 3.7f;
+    [SerializeField] private float slashStormMediumHeight = 1.6f;
+    [SerializeField] private float slashStormMediumLookHeight = 1.15f;
+
     [Header("Storyboard Frame Offsets")]
     [SerializeField] private Vector3 playerStartOffset = new Vector3(0f, 0f, -2.4f);
     [SerializeField] private Vector3 playerStrikeOffset = new Vector3(0f, 0f, -0.45f);
@@ -803,12 +819,16 @@ public sealed class UltimateCinematicController : MonoBehaviour
             toPlayer = Vector3.back;
         toPlayer.Normalize();
 
-        Quaternion orbitRotation = Quaternion.AngleAxis(angleDegrees, Vector3.up);
+        float startYaw = mediumSlashStormFraming ? slashStormStartYaw : 0f;
+        float radius = mediumSlashStormFraming ? slashStormMediumRadius : shot03OrbitRadius;
+        float height = mediumSlashStormFraming ? slashStormMediumHeight : shot03OrbitHeight;
+        float lookHeight = mediumSlashStormFraming ? slashStormMediumLookHeight : shot03LookAtHeight;
+        Quaternion orbitRotation = Quaternion.AngleAxis(angleDegrees + startYaw, Vector3.up);
         Vector3 orbitDirection = orbitRotation * toPlayer;
-        Vector3 cameraPosition = center + orbitDirection * shot03OrbitRadius + Vector3.up * shot03OrbitHeight;
+        Vector3 cameraPosition = center + orbitDirection * radius + Vector3.up * height;
 
         bindings.Shot03Pos.position = cameraPosition;
-        bindings.Shot03LookAt.position = center + Vector3.up * shot03LookAtHeight + orbitDirection * shot03LookAhead;
+        bindings.Shot03LookAt.position = center + Vector3.up * lookHeight + orbitDirection * shot03LookAhead;
     }
 
     Vector3 GetTargetLookPoint()
@@ -985,10 +1005,19 @@ public sealed class UltimateCinematicController : MonoBehaviour
             + frame.Up * finishCameraOffset.y
             + frame.Forward * Mathf.Abs(finishCameraOffset.z);
 
+        Vector3 startLook = frame.PlayerStartPoint + frame.Up * lookAtOffset.y;
+        if (frontalIntroFraming)
+        {
+            startCamera = frame.PlayerStartPoint
+                + frame.Right * introFrontalCameraOffset.x
+                + frame.Up * introFrontalCameraOffset.y
+                + frame.Forward * introFrontalCameraOffset.z;
+            startLook = frame.PlayerStartPoint + frame.Up * introFrontalLookHeight;
+        }
         if (bindings.Shot01Pos != null)
             bindings.Shot01Pos.position = startCamera;
         if (bindings.Shot01LookAt != null)
-            bindings.Shot01LookAt.position = frame.PlayerStartPoint + frame.Up * lookAtOffset.y;
+            bindings.Shot01LookAt.position = startLook;
         if (bindings.Shot02Pos != null)
             bindings.Shot02Pos.position = dashCamera;
         if (bindings.Shot02LookAt != null)
@@ -1000,6 +1029,15 @@ public sealed class UltimateCinematicController : MonoBehaviour
                 + frame.Forward * slashStormCameraOffset.z;
         if (bindings.Shot03LookAt != null)
             bindings.Shot03LookAt.position = targetLook;
+        if (mediumSlashStormFraming && bindings.Shot03Pos != null && bindings.Shot03LookAt != null)
+        {
+            // 궤도 코루틴의 0° 자리와 같게 (컷 진입 시 튐 없음)
+            Vector3 dir = Quaternion.AngleAxis(slashStormStartYaw, Vector3.up) * -frame.Forward;
+            dir.y = 0f;
+            dir = dir.sqrMagnitude > 0.0001f ? dir.normalized : Vector3.back;
+            bindings.Shot03Pos.position = frame.TargetCenter + dir * slashStormMediumRadius + Vector3.up * slashStormMediumHeight;
+            bindings.Shot03LookAt.position = frame.TargetCenter + Vector3.up * slashStormMediumLookHeight + dir * shot03LookAhead;
+        }
         if (bindings.Shot04Pos != null)
             bindings.Shot04Pos.position = finishCamera;
         if (bindings.Shot04LookAt != null)
@@ -1186,8 +1224,16 @@ public sealed class UltimateCinematicController : MonoBehaviour
             : chest;
         Vector3 weaponLook = Vector3.Lerp(swordFocus, chest, 0.3f);
 
-        shot01Pos.position = swordFocus + right * startCameraOffset.x + Vector3.up * startCameraOffset.y + forward * startCameraOffset.z;
-        shot01LookAt.position = weaponLook;
+        if (frontalIntroFraming)
+        {
+            shot01Pos.position = playerPosition + right * introFrontalCameraOffset.x + Vector3.up * introFrontalCameraOffset.y + forward * introFrontalCameraOffset.z;
+            shot01LookAt.position = playerPosition + Vector3.up * introFrontalLookHeight;
+        }
+        else
+        {
+            shot01Pos.position = swordFocus + right * startCameraOffset.x + Vector3.up * startCameraOffset.y + forward * startCameraOffset.z;
+            shot01LookAt.position = weaponLook;
+        }
 
         shot02Pos.position = chest + right * dashCameraOffset.x + Vector3.up * dashCameraOffset.y + forward * dashCameraOffset.z;
         shot02LookAt.position = Vector3.Lerp(chest, head, 0.24f) - right * 0.02f;

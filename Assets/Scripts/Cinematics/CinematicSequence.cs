@@ -65,6 +65,11 @@ public sealed class CinematicSequence : MonoBehaviour
     [Tooltip("안전 장치: 이 시간(실시간)이 지나면 강제로 끝낸다. 0 = 타임라인 길이 + 2 s")]
     [SerializeField, Min(0f)] float maxRealtimeSeconds;
 
+    [Header("Prewarm (iter 15)")]
+    [Tooltip("씬 로드 프레임(Start)에 무대를 한 번 켜고 타임라인 그래프 생성 + 전용 카메라 1회 렌더(셰이더·텍스처·안개 변형) 후 다시 끈다. " +
+             "모두 같은 프레임 안에서 끝나므로 화면에는 보이지 않는다. 첫 프레임 히치(경보 78 ms·엘리베이터 59 ms) 대책.")]
+    [SerializeField] bool prewarmOnLoad = true;
+
     [Header("Scene bindings (resolved on play)")]
     [SerializeField] List<Binding> bindings = new List<Binding>();
 
@@ -76,6 +81,13 @@ public sealed class CinematicSequence : MonoBehaviour
 
     PlayableDirector _director;
     CineAttach[] _attachments;
+    bool _prewarmed;
+    static Camera s_warmCamera;
+    static RenderTexture s_warmTarget;
+    static readonly List<GameObject> s_warmActivated = new List<GameObject>(64);
+
+    /// <summary>마지막 예열에 걸린 시간 (ms, 개발 로그용).</summary>
+    public float LastPrewarmMs { get; private set; } = -1f;
     Renderer[] _hiddenRenderers;
     bool[] _hiddenRendererStates;
 
@@ -136,7 +148,165 @@ public sealed class CinematicSequence : MonoBehaviour
             stageRoot.SetActive(false);
     }
 
+    // 씬 시작 직후 바로 재생되는 연출은 로드 프레임에 즉시 예열, 나머지는 0.6 s 뒤 프레임당 1개씩 (첫 연출의 첫 프레임에 몰리지 않게)
+    static readonly string[] s_immediatePrewarmIds = { "tut_vr_boot", "opening" };
+    static readonly List<CinematicSequence> s_prewarmQueue = new List<CinematicSequence>(8);
+    static float s_prewarmQueueAt;
+    static int s_prewarmQueueFrame;
+
+    void Start()
+    {
+        if (!prewarmOnLoad || CinematicSettings.QaSkipAll)
+            return;
+        if (Array.IndexOf(s_immediatePrewarmIds, sequenceId) >= 0)
+        {
+            PrewarmNow();
+            return;
+        }
+        if (s_prewarmQueue.Count == 0)
+            s_prewarmQueueAt = Time.realtimeSinceStartup + 0.6f;
+        s_prewarmQueue.Add(this);
+    }
+
+    void LateUpdate()
+    {
+        // 큐의 첫 원소만 처리 (프레임당 1개). 재생 중인 연출과 겹치면 다음 프레임으로 미루지 않고 건너뛴다.
+        if (s_prewarmQueue.Count == 0 || s_prewarmQueue[0] != this || Time.realtimeSinceStartup < s_prewarmQueueAt || s_prewarmQueueFrame == Time.frameCount)
+            return;
+        s_prewarmQueueFrame = Time.frameCount;
+        s_prewarmQueue.RemoveAt(0);
+        PrewarmNow();
+    }
+
+    /// <summary>
+    /// 무대 예열 (동기, 한 프레임 안). 무대·비활성 소품을 잠깐 켜서 Awake/OnEnable·TMP 메시를 끝내고, 타임라인 그래프를 미리 만들고,
+    /// 숨은 카메라로 무대 전체를 한 번 렌더해 셰이더 변형(무대 전용 안개·조명 포함)과 텍스처 업로드를 끝낸 뒤 원래 상태로 되돌린다.
+    /// </summary>
+    public void PrewarmNow()
+    {
+        if (_prewarmed || CinematicDirector.IsPlaying && CinematicDirector.CurrentId == sequenceId)
+            return;
+        _prewarmed = true;
+        float t0 = Time.realtimeSinceStartup;
+        GameObject root = stageRoot != null ? stageRoot : gameObject;
+        bool wasActive = root.activeSelf;
+        s_warmActivated.Clear();
+        try
+        {
+            if (!wasActive)
+                root.SetActive(true);
+            // 활성화 트랙으로 나중에 켜지는 소품(드론·컷 전용 조명 등)도 한 번 켠다
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!t.gameObject.activeSelf)
+                {
+                    t.gameObject.SetActive(true);
+                    s_warmActivated.Add(t.gameObject);
+                }
+            }
+
+            PlayableDirector d = Director;
+            if (d != null && d.playableAsset != null && !d.playableGraph.IsValid())
+                d.RebuildGraph();
+
+            WarmRender(root);
+            WarmShotCameras(root);
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e, this);
+        }
+        finally
+        {
+            for (int i = s_warmActivated.Count - 1; i >= 0; i--)
+                if (s_warmActivated[i] != null)
+                    s_warmActivated[i].SetActive(false);
+            s_warmActivated.Clear();
+            if (!wasActive && root != null)
+                root.SetActive(false);
+        }
+        LastPrewarmMs = (Time.realtimeSinceStartup - t0) * 1000f;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log($"[Cinematic] '{sequenceId}' prewarmed in {LastPrewarmMs:F0} ms");
+#endif
+    }
+
+    // 샷 카메라 자리에서도 한 번씩 렌더 (무대 밖 씬 배경 — 예: 튜토리얼 도시 크레인 샷의 첫 화면). 앵커 정렬 후 렌더, 끝나면 해제.
+    void WarmShotCameras(GameObject root)
+    {
+        CinemachineCamera[] cams = root.GetComponentsInChildren<CinemachineCamera>(false);
+        if (cams.Length == 0 || s_warmCamera == null && !EnsureWarmCamera())
+            return;
+        PlayerReferences refs = GameplaySceneCache.ResolvePlayerReferences();
+        BossController boss = GameplaySceneCache.ResolveBossController();
+        if (_attachments == null)
+            _attachments = GetComponentsInChildren<CineAttach>(true);
+        for (int i = 0; i < _attachments.Length; i++)
+            if (_attachments[i] != null)
+                _attachments[i].Begin(refs != null ? refs.PlayerRoot : null, boss != null ? boss.transform : null);
+        try
+        {
+            for (int i = 0; i < cams.Length; i++)
+            {
+                Transform t = cams[i].transform;
+                s_warmCamera.transform.SetPositionAndRotation(t.position, t.rotation);
+                s_warmCamera.fieldOfView = Mathf.Clamp(cams[i].Lens.FieldOfView, 10f, 100f);
+                s_warmCamera.nearClipPlane = 0.05f;
+                s_warmCamera.farClipPlane = Mathf.Max(100f, cams[i].Lens.FarClipPlane);
+                s_warmCamera.Render();
+            }
+        }
+        finally
+        {
+            for (int i = 0; i < _attachments.Length; i++)
+                if (_attachments[i] != null)
+                    _attachments[i].End();
+            s_warmCamera.fieldOfView = 75f;
+        }
+    }
+
+    static bool EnsureWarmCamera()
+    {
+        if (s_warmCamera != null)
+            return true;
+        var go = new GameObject("__CineWarmCamera") { hideFlags = HideFlags.HideAndDontSave };
+        s_warmCamera = go.AddComponent<Camera>();
+        s_warmCamera.enabled = false;
+        s_warmCamera.fieldOfView = 75f;
+        s_warmCamera.clearFlags = CameraClearFlags.Skybox;
+        s_warmTarget = new RenderTexture(256, 144, 24) { name = "__CineWarmTarget", hideFlags = HideFlags.HideAndDontSave };
+        s_warmCamera.targetTexture = s_warmTarget;
+        return true;
+    }
+
+    static void WarmRender(GameObject root)
+    {
+        bool any = false;
+        Bounds b = default;
+        foreach (Renderer r in root.GetComponentsInChildren<Renderer>(false))
+        {
+            if (!r.enabled)
+                continue;
+            if (!any) { b = r.bounds; any = true; }
+            else b.Encapsulate(r.bounds);
+        }
+        if (!any)
+            return;
+
+        EnsureWarmCamera();
+
+        float radius = Mathf.Max(1f, b.extents.magnitude);
+        float dist = radius / Mathf.Tan(s_warmCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+        Vector3 dir = new Vector3(0.35f, -0.3f, 1f).normalized;
+        s_warmCamera.transform.SetPositionAndRotation(b.center - dir * dist, Quaternion.LookRotation(dir, Vector3.up));
+        s_warmCamera.nearClipPlane = Mathf.Max(0.05f, dist - radius * 1.1f);
+        s_warmCamera.farClipPlane = dist + radius * 1.1f;
+        s_warmCamera.Render();
+    }
+
     void OnEnable() => CinematicDirector.Register(this);
+
+    void OnDestroy() => s_prewarmQueue.Remove(this);
     void OnDisable() => CinematicDirector.Unregister(this);
 
     // ------------------------------------------------------------------ lifecycle (CinematicDirector 가 호출)

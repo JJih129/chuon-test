@@ -146,6 +146,17 @@ public sealed class CinePhaseOverheatBeat : MonoBehaviour
         root.SetParent(transform, false);
 
         _steam = CreateSystem("Steam", root, new Color(0.86f, 0.86f, 0.88f, 0.55f), 2.4f, 1.1f, 46f, 0.55f, -0.15f, 0.9f, steamMaterial);
+        // 반복 15: 흰 네모 블록 → 부드러운 퍼프 텍스처(M_CINE_Steam) + 그래파이트~화이트 색 분산 + 회전 + 감속(뭉게뭉게 퍼짐)
+        ParticleSystem.MainModule steamMain = _steam.main;
+        steamMain.startColor = new ParticleSystem.MinMaxGradient(new Color(0.34f, 0.35f, 0.38f, 0.5f), new Color(0.9f, 0.9f, 0.92f, 0.55f));
+        steamMain.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+        ParticleSystem.RotationOverLifetimeModule steamRot = _steam.rotationOverLifetime;
+        steamRot.enabled = true;
+        steamRot.z = new ParticleSystem.MinMaxCurve(-0.8f, 0.8f);
+        ParticleSystem.LimitVelocityOverLifetimeModule steamDrag = _steam.limitVelocityOverLifetime;
+        steamDrag.enabled = true;
+        steamDrag.limit = 0.6f;
+        steamDrag.dampen = 0.12f;
         ParticleSystem.ShapeModule shape = _steam.shape;
         shape.shapeType = ParticleSystemShapeType.Cone;
         shape.angle = 18f;
@@ -158,6 +169,13 @@ public sealed class CinePhaseOverheatBeat : MonoBehaviour
         ParticleSystem.ShapeModule eshape = _embers.shape;
         eshape.shapeType = ParticleSystemShapeType.Sphere;
         eshape.radius = 0.35f;
+        // 불티: 속도 방향으로 늘린 작은 점(스파크), 레드~앰버
+        ParticleSystem.MainModule emberMain = _embers.main;
+        emberMain.startColor = new ParticleSystem.MinMaxGradient(heatColor, new Color(1f, 0.55f, 0.22f, 1f));
+        var emberRenderer = _embers.GetComponent<ParticleSystemRenderer>();
+        emberRenderer.renderMode = ParticleSystemRenderMode.Stretch;
+        emberRenderer.velocityScale = 0.04f;
+        emberRenderer.lengthScale = 1.6f;
 
         var lightGo = new GameObject("HeatLight");
         lightGo.transform.SetParent(root, false);
@@ -217,6 +235,9 @@ public sealed class CinePhaseOverheatBeat : MonoBehaviour
         else if (shader != null)
         {
             var mat = new Material(shader) { name = "M_CinePhase_" + name };
+            Texture2D soft = SoftParticleTexture;
+            mat.SetTexture("_BaseMap", soft);
+            mat.SetTexture("_MainTex", soft);
             mat.SetFloat("_Surface", 1f);
             mat.SetFloat("_Blend", name == "Embers" ? 2f : 0f); // Embers: additive, Steam: alpha
             mat.SetColor("_BaseColor", Color.white);
@@ -231,5 +252,29 @@ public sealed class CinePhaseOverheatBeat : MonoBehaviour
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         return ps;
+    }
+
+    // 재질이 없을 때의 폴백 텍스처: 원형 소프트 폴오프 (텍스처 없는 파티클 재질 = 흰 네모)
+    static Texture2D s_soft;
+    static Texture2D SoftParticleTexture
+    {
+        get
+        {
+            if (s_soft != null)
+                return s_soft;
+            const int n = 64;
+            var px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                float a = Mathf.Pow(Mathf.Clamp01(1f - Mathf.Sqrt(dx * dx + dy * dy)), 1.6f);
+                px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+            }
+            s_soft = new Texture2D(n, n, TextureFormat.RGBA32, true) { name = "_CinePhaseSoft", wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.DontSave };
+            s_soft.SetPixels32(px);
+            s_soft.Apply(true, true);
+            return s_soft;
+        }
     }
 }

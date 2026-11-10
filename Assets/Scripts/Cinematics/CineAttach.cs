@@ -45,12 +45,14 @@ public sealed class CineAttach : MonoBehaviour
 
     Transform _resolved;
     Transform _face;
+    float _clearYaw; // 반복 15: clearBehind 로 고른 요 보정 (follow 중에도 유지)
 
     public Target AttachTarget => target;
     public string AnchorName => anchorName;
     public bool Follow => follow;
 
     public void SetClearBehind(float metres) => clearBehind = Mathf.Max(0f, metres);
+    public void SetFollow(bool value) => follow = value;
 
     public void ConfigureFacing(Target face, string anchor = null)
     {
@@ -71,6 +73,7 @@ public sealed class CineAttach : MonoBehaviour
     /// <summary>재생 시작 시 1회. 찾았으면 true.</summary>
     public bool Begin(Transform player, Transform boss)
     {
+        _clearYaw = 0f;
         _resolved = ResolveTarget(target, anchorName, player, boss);
         _face = faceTarget != Target.None ? ResolveTarget(faceTarget, faceAnchorName, player, boss) : null;
         if (_resolved == null && target == Target.Boss && player != null && !follow)
@@ -107,7 +110,7 @@ public sealed class CineAttach : MonoBehaviour
         Quaternion baseRot = transform.rotation;
         Vector3 origin = transform.position + Vector3.up * 1.2f;
         float bestDist = -1f;
-        Quaternion best = baseRot;
+        float bestYaw = 0f;
         for (int i = 0; i < s_clearYaws.Length; i++)
         {
             Quaternion r = Quaternion.Euler(0f, s_clearYaws[i], 0f) * baseRot;
@@ -121,15 +124,20 @@ public sealed class CineAttach : MonoBehaviour
                     continue;
                 d = Mathf.Min(d, hits[h].distance);
             }
+            // 반복 15: 뒤쪽 카메라 자리 아래에 바닥이 없으면(난간 너머·유리 통로 밖 허공) 막힌 것으로 본다 — 로비 OTS 가 하층 격납고를 비추던 문제.
+            Vector3 probe = origin + back * Mathf.Min(d, clearBehind) * 0.85f;
+            if (!Physics.Raycast(probe, Vector3.down, 3.5f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                d *= 0.3f;
             if (d > bestDist + 0.01f)
             {
                 bestDist = d;
-                best = r;
+                bestYaw = s_clearYaws[i];
             }
             if (d >= clearBehind - 0.01f)
                 break;
         }
-        transform.rotation = best;
+        _clearYaw = bestYaw;
+        transform.rotation = Quaternion.Euler(0f, bestYaw, 0f) * baseRot;
     }
 
     public void Tick()
@@ -164,7 +172,7 @@ public sealed class CineAttach : MonoBehaviour
     {
         if (root == null)
             return null;
-        Animator[] animators = root.GetComponentsInChildren<Animator>(false);
+        Animator[] animators = root.GetComponentsInChildren<Animator>(true);
         for (int i = 0; i < animators.Length; i++)
         {
             Animator a = animators[i];
@@ -175,7 +183,41 @@ public sealed class CineAttach : MonoBehaviour
                     return head;
             }
         }
-        return root;
+
+        // 반복 15: 휴머노이드 뼈를 못 찾으면 예전엔 루트(발)를 돌려줘 클로즈업이 바닥을 비췄다 (Type-D 바이저 인서트, 로비 S2).
+        // 이름에 Head 가 들어간 뼈 → 없으면 렌더러 높이 88 % 지점의 대리 트랜스폼.
+        Transform[] all = root.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < all.Length; i++)
+        {
+            string n = all[i].name;
+            if (n.EndsWith("Head", System.StringComparison.OrdinalIgnoreCase) && !n.StartsWith("__"))
+                return all[i];
+        }
+        return HeadProxy(root);
+    }
+
+    static Transform HeadProxy(Transform root)
+    {
+        const string ProxyName = "__CineHeadProxy";
+        Transform proxy = root.Find(ProxyName);
+        if (proxy == null)
+        {
+            proxy = new GameObject(ProxyName).transform;
+            proxy.SetParent(root, false);
+        }
+        float height = 1.55f;
+        bool any = false;
+        Bounds b = default;
+        foreach (Renderer r in root.GetComponentsInChildren<Renderer>(false))
+        {
+            if (!(r is SkinnedMeshRenderer || r is MeshRenderer))
+                continue;
+            if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+        }
+        if (any && b.size.y > 0.5f && b.size.y < 8f)
+            height = (b.min.y + b.size.y * 0.88f) - root.position.y;
+        proxy.position = root.position + Vector3.up * height;
+        return proxy;
     }
 
     void Snap()
@@ -203,6 +245,8 @@ public sealed class CineAttach : MonoBehaviour
         }
 
         rot *= Quaternion.Euler(0f, yawOffset, 0f);
+        if (_clearYaw != 0f)
+            rot = Quaternion.Euler(0f, _clearYaw, 0f) * rot;
         transform.SetPositionAndRotation(_resolved.position + rot * localOffset, rot);
     }
 }

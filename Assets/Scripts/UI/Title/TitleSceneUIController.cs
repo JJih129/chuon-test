@@ -231,6 +231,22 @@ public class TitleSceneUIController : MonoBehaviour
             typeof(TitleCreditsOverlay));
         _creditsOverlay = overlayObject.GetComponent<TitleCreditsOverlay>();
         _creditsOverlay.Initialize(_titleCanvas.transform);
+        // 반복 15: '뒤로' 버튼으로 닫으면 포커스가 사라진 버튼에 남아 키보드·패드 내비게이션이 끊겼다 → 크레딧 버튼으로 복귀
+        if (_creditsOverlay.CloseButton != null)
+            _creditsOverlay.CloseButton.onClick.AddListener(ReturnFocusToCreditsButton);
         return true;
+    }
+
+    void ReturnFocusToCreditsButton()
+    {
+        UnityEngine.EventSystems.EventSystem es = UnityEngine.EventSystems.EventSystem.current;
+        if (es == null || _creditsButton == null || !_creditsButton.gameObject.activeInHierarchy)
+            return;
+        GameObject selected = es.currentSelectedGameObject;
+        // 키보드/패드로 '뒤로'를 눌렀으면(선택이 오버레이 안) 항상, 마우스면 패드 스킴일 때만
+        if (selected == null || (_creditsOverlay != null && selected.transform.IsChildOf(_creditsOverlay.transform)))
+            es.SetSelectedGameObject(_creditsButton.gameObject);
+        else
+            ChuonInputRuntime.SelectForGamepad(_creditsButton.gameObject);
     }
 }

@@ -20,6 +20,10 @@ public sealed class QaCinematicWatch : MonoBehaviour
         public bool finished;
         public readonly List<float> frames = new List<float>(2048);
         public float firstHalfSecondWorst;
+        // 반복 15: 화면이 연출 검정(페이드 ≥ 0.98)으로 덮이지 않은 프레임만 — 로드·검정 카드 아래 히치는 보이지 않는다
+        public float visibleWorst;
+        public float firstVisibleAt = -1f;
+        public float firstVisibleWorst;
     }
 
     static QaCinematicWatch s_instance;
@@ -73,6 +77,16 @@ public sealed class QaCinematicWatch : MonoBehaviour
         _current.frames.Add(dt);
         if (Time.realtimeSinceStartup - _current.start <= 0.5f)
             _current.firstHalfSecondWorst = Mathf.Max(_current.firstHalfSecondWorst, dt);
+        CinematicOverlay overlay = CinematicOverlay.Active;
+        bool covered = overlay != null && overlay.FadeAlpha >= 0.98f;
+        if (!covered)
+        {
+            if (_current.firstVisibleAt < 0f)
+                _current.firstVisibleAt = Time.realtimeSinceStartup;
+            _current.visibleWorst = Mathf.Max(_current.visibleWorst, dt);
+            if (Time.realtimeSinceStartup - _current.firstVisibleAt <= 0.5f)
+                _current.firstVisibleWorst = Mathf.Max(_current.firstVisibleWorst, dt);
+        }
     }
 
     static string Stats(Entry e)
@@ -89,7 +103,7 @@ public sealed class QaCinematicWatch : MonoBehaviour
         var sorted = new List<float>(e.frames);
         sorted.Sort();
         float p99 = sorted[Mathf.Clamp(Mathf.FloorToInt(sorted.Count * 0.99f), 0, sorted.Count - 1)];
-        return $"frames={e.frames.Count} avg={e.frames.Count / Mathf.Max(0.0001f, total):F0}fps 1%low={1f / Mathf.Max(0.0001f, p99):F0}fps worst={sorted[sorted.Count - 1] * 1000f:F0}ms first0.5s={e.firstHalfSecondWorst * 1000f:F0}ms over33ms={over33}";
+        return $"frames={e.frames.Count} avg={e.frames.Count / Mathf.Max(0.0001f, total):F0}fps 1%low={1f / Mathf.Max(0.0001f, p99):F0}fps worst={sorted[sorted.Count - 1] * 1000f:F0}ms first0.5s={e.firstHalfSecondWorst * 1000f:F0}ms over33ms={over33} visibleWorst={e.visibleWorst * 1000f:F0}ms firstVisible0.5s={e.firstVisibleWorst * 1000f:F0}ms";
     }
 
     public static string Report()

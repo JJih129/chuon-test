@@ -51,6 +51,7 @@ public sealed class QaCommandLine : MonoBehaviour
         {
             s_consumed = true;
             QaCinematicWatch.Ensure(); // 반복 14C: 연출 시청 시간·프레임 ("[QA-CINE]")
+            QaErrorShaderWatch.Ensure(); // 반복 15: 자홍(에러 셰이더) 렌더러 감시 ("[QA-SHADER]")
             var flow = new GameObject("__QaFlowSmoke");
             DontDestroyOnLoad(flow);
             QaCommandLine flowRunner = flow.AddComponent<QaCommandLine>();
@@ -64,6 +65,7 @@ public sealed class QaCommandLine : MonoBehaviour
 
         s_consumed = true;
         QaCinematicWatch.Ensure();
+        QaErrorShaderWatch.Ensure();
         var go = new GameObject("__QaCommandLine");
         DontDestroyOnLoad(go);
         QaCommandLine runner = go.AddComponent<QaCommandLine>();
@@ -275,6 +277,7 @@ public sealed class QaCommandLine : MonoBehaviour
         yield return new WaitForSecondsRealtime(6f);
         Flow("credits ok; frame report:\n" + QaFrameSampler.Report());
         Flow("cinematics:\n" + QaCinematicWatch.Report());
+        Flow(QaErrorShaderWatch.Report());
         Application.logMessageReceived -= HandleLog;
         Flow($"RESULT errors={_errors} exceptions={_exceptions}\n--- summary ---\n{_flowLog}");
         Application.Quit();
@@ -449,6 +452,7 @@ public sealed class QaCommandLine : MonoBehaviour
         if (bot != null)
             Debug.Log("[QA] bot: " + bot.Summary);
         Debug.Log(QaCinematicWatch.Report());
+        Debug.Log(QaErrorShaderWatch.Report());
 
         if (_quit)
             Application.Quit();

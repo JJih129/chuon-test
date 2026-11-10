@@ -359,8 +359,15 @@ public class LobbyManager : MonoBehaviour
         alertOverlay.DOFade(AccessibilityOptionsRuntime.ScaleFlash(0.3f), 0.5f).SetLoops(loops, LoopType.Yoyo);
     }
 
+    /// <summary>
+    /// 반복 15: 로비 경보 연출(lobby_alarm)은 대본상 고정 비트다. 이 값이 true 인 동안 LobbyMobEncounter 는 가르치기 경비를 깨우지 않는다
+    /// (예전에는 플레이어가 먼저 게이트를 넘어 교전이 시작되면 IsCombatActive 로 연출이 통째로 생략됐다).
+    /// </summary>
+    public bool AlarmBeatPending { get; private set; }
+
     IEnumerator SequenceArrival()
     {
+        AlarmBeatPending = true;
         if (_fromTutorialTransition)
         {
             // \ubc18\ubcf5 14: \uc624\ud504\ub2dd \uc5f0\ucd9c\uc774 \uc124\uce58\ub3fc \uc788\uc73c\uba74 \uc7ac\uc0dd\ud558\uace0 lobby.fromtut 2\uc904\uc740 \uc0dd\ub7b5(\ub0b4\uc6a9 \uc911\ubcf5). \uc5c6\uc73c\uba74 \uae30\uc874 2\uc904.
@@ -377,17 +384,35 @@ public class LobbyManager : MonoBehaviour
         }
 
         if (_handedOffToLowerFloor)
+        {
+            AlarmBeatPending = false;
             yield break;
+        }
 
         yield return StartCoroutine(PlayKeyed("lobby.arrive.0", "ChuOn", "\uc5ec\uae30\uac00 \ub188\ub4e4\uc758 \uc2ec\uc7a5\ubd80\u2026", 2.2f));
         yield return StartCoroutine(PlayOptional("lobby.arrive.1", 2f));
 
         // 하층으로 이미 넘어갔으면(도착 중 엘리베이터 호출 등) 상층 시퀀스를 더 진행하지 않는다.
         if (_handedOffToLowerFloor)
+        {
+            AlarmBeatPending = false;
             yield break;
+        }
+
+        // 반복 15: 다른 연출(스카이덱 내려다보기 등)이 재생 중이면 끝날 때까지 기다린다 — 예전에는 Play 가 거절돼 경보 연출이 조용히 생략됐다(PV 테이크 b/c).
+        float waitOtherUntil = Time.realtimeSinceStartup + 20f;
+        bool waitedForOther = false;
+        while (CinematicDirector.IsPlaying && !_handedOffToLowerFloor && Time.realtimeSinceStartup < waitOtherUntil)
+        {
+            waitedForOther = true;
+            yield return null;
+        }
+        if (waitedForOther && !_handedOffToLowerFloor)
+            yield return new WaitForSecondsRealtime(0.4f); // 앞 연출의 복귀 블렌드(0.35 s)가 끝난 뒤 시작
 
         // 반복 14C: 연출이 재생되면 화면 전체 경보 점멸은 연출 뒤로 미룬다 (연출 안의 회전 경보등이 대신하고, 클로즈업이 붉게 덮이지 않게).
-        bool cineAlarm = CinematicDirector.Has("lobby_alarm") && !_isElevatorTransitioning && !CinematicDirector.IsCombatActive();
+        // 반복 15: 전투 가드(IsCombatActive)로 생략하지 않는다 — 경비는 AlarmBeatPending 동안 깨지 않고, 연출 중엔 무적·공격 토큰 차단.
+        bool cineAlarm = CinematicDirector.Has("lobby_alarm") && !_isElevatorTransitioning && !_handedOffToLowerFloor && !CinematicDirector.IsPlaying;
         if (!cineAlarm)
             FlashLobbyAlert(6);
 
@@ -406,6 +431,7 @@ public class LobbyManager : MonoBehaviour
             yield return StartCoroutine(PlayKeyed("lobby.drones.0", "EGO", "\ud504\ub860\ud2b8 \ub370\uc2a4\ud06c \ub4a4\uc5d0\uc11c \ub4dc\ub860\uc774 \ub098\uc628\ub2e4. \uba3c\uc800 \uc815\ub9ac\ud558\uc790.", 2.5f));
             yield return StartCoroutine(PlayKeyed("lobby.drones.1", "ChuOn", "\uc88b\uc544. \ubc00\uace0 \ub098\uac04\ub2e4.", 2f));
         }
+        AlarmBeatPending = false;
 
         if (_handedOffToLowerFloor)
             yield break;
@@ -1433,11 +1459,30 @@ public class LobbyManager : MonoBehaviour
         _currentQuestDescription = desc;
 
         if (questTitleText != null)
+        {
+            FitQuestText(questTitleText);
             questTitleText.text = title;
+        }
         if (questDescriptionText != null)
+        {
+            FitQuestText(questDescriptionText);
             questDescriptionText.text = desc;
+        }
 
         QuestUpdated?.Invoke(title, desc);
+    }
+
+    // 반복 15: 긴 목표 문구가 패널 밖으로 잘리던 문제(예: "복도를 따라 본사 로비로 진입해.") — 줄바꿈 + 패널 안 자동 크기(최소 70 %).
+    static void FitQuestText(TMP_Text text)
+    {
+        if (text.enableAutoSizing && text.enableWordWrapping)
+            return;
+        float size = text.fontSize;
+        text.enableWordWrapping = true;
+        text.overflowMode = TextOverflowModes.Ellipsis;
+        text.fontSizeMax = size;
+        text.fontSizeMin = Mathf.Max(12f, size * 0.7f);
+        text.enableAutoSizing = true;
     }
 
     void ShowQuestPanel()
@@ -1627,6 +1672,7 @@ public class LobbyManager : MonoBehaviour
         }
 
         HideUpperFloorPresentation();
+        yield return null; // 반복 15: 상층 정리(대량 비활성화) 프레임과 하강 연출 첫 프레임을 분리 (검정 아래) — 첫 프레임 히치 59 ms 대책
 
         // 반복 14: 엘리베이터 하강 연출 (검정에서 시작·끝). 같은 씬 검정(정렬 32000)이 연출 오버레이(870)를 덮으므로
         // 연출 오버레이를 먼저 검정으로 채운 뒤 같은 씬 검정을 걷고, 끝나면 다시 덮는다. 미설치면 기존 흐름 그대로.

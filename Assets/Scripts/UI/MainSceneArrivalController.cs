@@ -92,6 +92,8 @@ public class MainSceneArrivalController : MonoBehaviour
     [SerializeField, Min(0f)] float alarmSirenPulseSpeed = 7.5f;
     [SerializeField] Color alarmSirenColor = new Color(1f, 0.05f, 0.02f, 1f);
     [SerializeField, Range(0f, 1f)] float alarmSirenMaxOverlayAlpha = 0.22f;
+    [Tooltip("반복 15: 붉은 사이렌 화면 워시 최대 길이(실 재생). Type-D v2 바이저 인서트(5.55 s~)를 가리지 않게 리빌(4.35 s) 뒤 1.1 s 에 끝낸다. 0 = 제한 없음")]
+    [SerializeField, Min(0f)] float alarmSirenOverlayCapSeconds = 1.1f;
     [SerializeField, Min(0f)] float alarmSirenLightIntensity = 3.2f;
     [SerializeField, Min(0f)] float alarmSirenLightRange = 8f;
     [SerializeField] bool showAlarmSirenWarningText = false;
@@ -1110,7 +1112,8 @@ public class MainSceneArrivalController : MonoBehaviour
         if (_alarmSirenLight != null)
             _alarmSirenLight.enabled = true;
 
-        while (elapsed < alarmSirenDuration)
+        float sirenDuration = alarmSirenOverlayCapSeconds > 0f ? Mathf.Min(alarmSirenDuration, alarmSirenOverlayCapSeconds) : alarmSirenDuration;
+        while (elapsed < sirenDuration)
         {
             float pulse = 0.5f + Mathf.Sin(elapsed * alarmSirenPulseSpeed) * 0.5f;
             float sharpPulse = pulse * pulse;

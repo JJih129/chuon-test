@@ -17,7 +17,6 @@ public sealed class BossDamageCracks : MonoBehaviour
 
     BossHealth _health;
     readonly List<Renderer> _targets = new List<Renderer>();
-    readonly List<Material[]> _originalMaterials = new List<Material[]>();
     Material _overlay;
     static Texture2D s_stage1Texture;
     static Texture2D s_stage2Texture;
@@ -153,7 +152,6 @@ public sealed class BossDamageCracks : MonoBehaviour
             if (skip || r.sharedMesh == null)
                 continue;
             _targets.Add(r);
-            _originalMaterials.Add(r.sharedMaterials);
         }
 
         // 반복 10: Type-D 장갑판에도 균열 (코어/바이저 발광 파츠 제외). 오버레이는 마지막 서브메시(장갑 본체)에 그려진다.
@@ -166,10 +164,13 @@ public sealed class BossDamageCracks : MonoBehaviour
             if (mf == null || mf.sharedMesh == null)
                 continue;
             _targets.Add(r);
-            _originalMaterials.Add(r.sharedMaterials);
         }
     }
 
+    // 반복 15 (PV 자홍 버그): 예전에는 첫 적용 때 sharedMaterials 를 한 번 찍어 두고 계속 그 사본에 덧붙였다.
+    // 첫 적용이 브레이크 홀로그램(BossBreakController, 런타임 재질 → 브레이크 끝에 Destroy) 중이면 사본에 파괴된
+    // 재질이 들어가 다음 단계(HP 25%)에서 null 슬롯 = 단색 자홍으로 엔딩까지 남았다. 이제 매번 '현재' 재질에서
+    // 우리 오버레이만 떼고/붙인다 → 홀로그램·가림 페이드 등 다른 교체와 순서 무관하게 합성된다.
     void ApplyOverlay()
     {
         CollectTargets();
@@ -178,10 +179,15 @@ public sealed class BossDamageCracks : MonoBehaviour
             Renderer r = _targets[i];
             if (r == null)
                 continue;
-            Material[] original = _originalMaterials[i];
-            var mats = new Material[original.Length + 1];
-            original.CopyTo(mats, 0);
-            mats[mats.Length - 1] = _overlay;
+            Material[] current = r.sharedMaterials;
+            int baseCount = BaseCount(current);
+            if (baseCount == 0)
+                continue;
+            if (baseCount == current.Length - 1 && current[current.Length - 1] == _overlay)
+                continue;
+            var mats = new Material[baseCount + 1];
+            CopyBase(current, mats);
+            mats[baseCount] = _overlay;
             r.sharedMaterials = mats;
         }
     }
@@ -189,8 +195,42 @@ public sealed class BossDamageCracks : MonoBehaviour
     void RemoveOverlay()
     {
         for (int i = 0; i < _targets.Count; i++)
-            if (_targets[i] != null)
-                _targets[i].sharedMaterials = _originalMaterials[i];
+        {
+            Renderer r = _targets[i];
+            if (r == null)
+                continue;
+            Material[] current = r.sharedMaterials;
+            int baseCount = BaseCount(current);
+            if (baseCount == current.Length)
+                continue;
+            var mats = new Material[baseCount];
+            CopyBase(current, mats);
+            r.sharedMaterials = mats;
+        }
+    }
+
+    /// <summary>다른 연출(브레이크 홀로그램 등)이 원래 재질을 되돌린 직후 호출 → 현재 단계의 균열을 다시 덧그린다.</summary>
+    public void Reapply()
+    {
+        if (_stage > 0 && _overlay != null)
+            ApplyOverlay();
+    }
+
+    int BaseCount(Material[] mats)
+    {
+        int n = 0;
+        for (int m = 0; m < mats.Length; m++)
+            if (mats[m] != _overlay || _overlay == null)
+                n++;
+        return n;
+    }
+
+    void CopyBase(Material[] src, Material[] dst)
+    {
+        int n = 0;
+        for (int m = 0; m < src.Length && n < dst.Length; m++)
+            if (src[m] != _overlay || _overlay == null)
+                dst[n++] = src[m];
     }
 
     static Texture2D Stage1Texture => s_stage1Texture != null ? s_stage1Texture : (s_stage1Texture = BuildCrackTexture(1731, 26));
