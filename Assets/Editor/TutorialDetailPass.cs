@@ -116,7 +116,7 @@ public static class TutorialDetailPass
 
     static Texture2D Tex(string n) => AssetDatabase.LoadAssetAtPath<Texture2D>($"{TexDir}/{n}.png");
 
-    static Material Lit(string name, string tex, float smoothness, float metallic, Color emission, bool mask, bool normal, bool alphaClip = false)
+    static Material Lit(string name, string tex, float smoothness, float metallic, Color emission, bool mask, bool normal, bool alphaClip = false, float baseTint = 1f)
     {
         Directory.CreateDirectory(MatDir);
         string path = $"{MatDir}/M_{name}.mat";
@@ -126,7 +126,7 @@ public static class TutorialDetailPass
         else if (m.shader != sh) m.shader = sh;
         m.enableInstancing = true;
         m.SetFloat("_WorkflowMode", 1f);
-        m.SetColor("_BaseColor", Color.white);
+        m.SetColor("_BaseColor", new Color(baseTint, baseTint, baseTint, 1f));
         m.SetTexture("_BaseMap", Tex(tex + "_Albedo"));
         m.SetFloat("_Smoothness", smoothness);
         m.SetFloat("_Metallic", metallic);
@@ -165,7 +165,8 @@ public static class TutorialDetailPass
         // 창문 아틀라스: 사무실·주거 실내광 (네온 아님) — 기존 Facade 재질 1.2~1.35 대비 약간 밝게
         Mats["INFD_Windows"] = Lit("INFD_Windows", "T_INFD_Windows", 0.9f, 0f, new Color(1f, 0.96f, 0.9f) * 1.5f, false, false);
         Mats["INFD_Impostor"] = Lit("INFD_Impostor", "T_INFD_Impostor", 0.25f, 0f, new Color(1f, 0.96f, 0.9f) * 1.5f, false, false);
-        Mats["INFD_Puddle"] = Lit("INFD_Puddle", "T_INFD_Puddle", 1f, 0f, Color.black, true, true, true);
+        // 웅덩이 알베도(≈6/255)는 그대로면 검은 구멍처럼 보인다 → 감마 2.8 (선형 ≈×10) 으로 젖은 아스팔트 톤
+        Mats["INFD_Puddle"] = Lit("INFD_Puddle", "T_INFD_Puddle", 1f, 0f, Color.black, true, true, true, 2.8f);
         Mats["INF_Signs"] = AssetDatabase.LoadAssetAtPath<Material>(SignsMatPath);
         if (Mats["INF_Signs"] == null) Log.Append("WARN M_INF_Signs missing (run Build Infiltration Map once); ");
         AssetDatabase.SaveAssets();
@@ -677,16 +678,17 @@ public static class TutorialDetailPass
         l.shadows = LightShadows.None;
         if (s.p == "BeaconAmber")
         {
-            l.type = LightType.Point; l.color = new Color(1f, 0.55f, 0.15f); l.intensity = 1.6f; l.range = 4f;
+            l.type = LightType.Point; l.color = new Color(1f, 0.55f, 0.15f); l.intensity = 3f; l.range = 4f;
             return 1;
         }
         go.transform.rotation = Quaternion.LookRotation((s.aim - p).normalized, Vector3.up);
         l.type = LightType.Spot;
         switch (s.p)
         {
-            case "BayLamp": l.color = new Color(1f, 0.94f, 0.85f); l.intensity = 7f; l.range = 10f; l.spotAngle = 110f; break;
-            case "LightTower": l.color = new Color(0.92f, 0.96f, 1f); l.intensity = 24f; l.range = 36f; l.spotAngle = 72f; break;
-            default: l.color = new Color(0.92f, 0.96f, 1f); l.intensity = 22f; l.range = 34f; l.spotAngle = 78f; break;
+            // URP 역제곱 감쇠: 15~30 m 거리의 바닥이 실제로 밝아지려면 100+ 필요 (22 는 바닥에서 거의 0)
+            case "BayLamp": l.color = new Color(1f, 0.94f, 0.85f); l.intensity = 22f; l.range = 10f; l.spotAngle = 110f; break;
+            case "LightTower": l.color = new Color(0.92f, 0.96f, 1f); l.intensity = 130f; l.range = 36f; l.spotAngle = 72f; break;
+            default: l.color = new Color(0.92f, 0.96f, 1f); l.intensity = 110f; l.range = 34f; l.spotAngle = 78f; break;
         }
         l.innerSpotAngle = l.spotAngle * 0.55f;
         return 1;
@@ -718,6 +720,8 @@ public static class TutorialDetailPass
         Vector2 UV(float x, float z) => uv[top[0]] + ax * (x - w0.x) + az * (z - w0.z);
         Bounds b = mr.bounds;
         Directory.CreateDirectory(GenDir);
+        Material[] mats = mr.sharedMaterials;
+        if (name == "G_DockYard" && mats.Length > 0 && mats[0] != null) mats = new[] { DockAsphalt(mats[0]) };
         int count = 0;
         for (int i = 0; i < nx; i++)
         for (int j = 0; j < nz; j++)
@@ -740,7 +744,7 @@ public static class TutorialDetailPass
             go.transform.SetParent(parent, false);
             go.GetComponent<MeshFilter>().sharedMesh = mesh;
             var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterials = mr.sharedMaterials;
+            r.sharedMaterials = mats;
             r.shadowCastingMode = ShadowCastingMode.Off;
             r.reflectionProbeUsage = ReflectionProbeUsage.BlendProbesAndSkybox;
             GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.BatchingStatic | StaticEditorFlags.ReflectionProbeStatic);
@@ -748,5 +752,19 @@ public static class TutorialDetailPass
         }
         // 원본 슬래브의 윗면은 타일 아래로 가려진다. 원본은 그대로 두고(콜라이더·옆면·NavMesh) 렌더만 유지.
         return count;
+    }
+
+    // 하역장 타일 전용 아스팔트 (M_INF_Asphalt 복제, 알베도 감마 1.25 ≈ 선형 ×1.6). 원본 재질(G_Base 공용)은 건드리지 않는다.
+    static Material DockAsphalt(Material src)
+    {
+        string path = $"{MatDir}/M_INFD_DockAsphalt.mat";
+        Directory.CreateDirectory(MatDir);
+        Material m = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (m == null) { m = new Material(src); AssetDatabase.CreateAsset(m, path); }
+        else { m.shader = src.shader; m.CopyPropertiesFromMaterial(src); }
+        m.SetColor("_BaseColor", new Color(1.25f, 1.25f, 1.25f, 1f));
+        m.enableInstancing = true;
+        EditorUtility.SetDirty(m);
+        return m;
     }
 }
