@@ -21,7 +21,7 @@ public sealed class CinematicOverlay : MonoBehaviour
     Image _fade;
     CanvasGroup _skipGroup;
     RectTransform _skipFill;
-    Text _skipText;
+    RectTransform _skipHint;
     CanvasGroup _cardGroup;
     Text _cardTitle;
     Text _cardSub;
@@ -113,7 +113,7 @@ public sealed class CinematicOverlay : MonoBehaviour
         rule.anchorMin = rule.anchorMax = new Vector2(0.5f, 0.5f);
         rule.sizeDelta = new Vector2(220f, 2f);
         rule.anchoredPosition = new Vector2(0f, -16f);
-        _cardSub = NewText("Sub", cardRect, font, 20, new Color(1f, 1f, 1f, 0.62f), new Vector2(0f, -44f), new Vector2(1400f, 32f));
+        _cardSub = NewText("Sub", cardRect, font, 22, new Color(0.80f, 0.82f, 0.86f, 0.92f), new Vector2(0f, -44f), new Vector2(1400f, 32f)); // 반복 16: 20 px 흰 62 % → 22 px 뮤트 화이트 92 %
 
         // 길게 눌러 건너뛰기 (오른쪽 아래, 레터박스 바 위)
         var skip = new GameObject("SkipPrompt", typeof(RectTransform), typeof(CanvasGroup));
@@ -124,10 +124,14 @@ public sealed class CinematicOverlay : MonoBehaviour
         RectTransform skipRect = (RectTransform)skip.transform;
         skipRect.anchorMin = skipRect.anchorMax = new Vector2(1f, 0f);
         skipRect.pivot = new Vector2(1f, 0f);
-        skipRect.sizeDelta = new Vector2(380f, 40f);
+        // 반복 16 (E2): 18 px 흰 82 % → 22 px 흰 94 % + 그림자 (1080p 기준, 밝은 장면 위에서도 읽히게)
+        skipRect.sizeDelta = new Vector2(460f, 52f);
         skipRect.anchoredPosition = new Vector2(-40f, 34f);
-        _skipText = NewText("Label", skipRect, font, 18, new Color(1f, 1f, 1f, 0.82f), new Vector2(0f, 8f), new Vector2(380f, 26f));
-        _skipText.alignment = TextAnchor.MiddleRight;
+        // 반복 17: 평문 "[F] 길게 눌러 건너뛰기" → 키 글리프 상자 + 24 px 설명 (궁극기·엔딩 오버레이와 같은 ChuonKeyHint)
+        _skipHint = ChuonKeyHint.Create(skipRect, "SkipHint", ChuonKeyHint.SkipKeys(), SkipLabel, ChuonKeyHint.DefaultLabelSize);
+        _skipHint.anchorMin = _skipHint.anchorMax = new Vector2(1f, 0f);
+        _skipHint.pivot = new Vector2(1f, 0f);
+        _skipHint.anchoredPosition = new Vector2(0f, 10f);
         Image track = NewImage("Track", skipRect, new Color(1f, 1f, 1f, 0.18f));
         RectTransform trackRect = track.rectTransform;
         trackRect.anchorMin = new Vector2(0f, 0f); trackRect.anchorMax = new Vector2(1f, 0f); trackRect.pivot = new Vector2(1f, 0f);
@@ -238,7 +242,7 @@ public sealed class CinematicOverlay : MonoBehaviour
         _cardTitle.rectTransform.anchoredPosition = lower ? new Vector2(0f, 18f) : new Vector2(0f, 22f);
         _cardLine.rectTransform.anchoredPosition = lower ? new Vector2(0f, -8f) : new Vector2(0f, -16f);
         _cardLine.rectTransform.sizeDelta = lower ? new Vector2(160f, 2f) : new Vector2(220f, 2f);
-        _cardSub.fontSize = lower ? 17 : 20;
+        _cardSub.fontSize = lower ? 20 : 22;
         _cardSub.rectTransform.anchoredPosition = lower ? new Vector2(0f, -30f) : new Vector2(0f, -44f);
         if (_cardBacking != null)
             _cardBacking.enabled = lower;
@@ -386,8 +390,10 @@ public sealed class CinematicOverlay : MonoBehaviour
             InputGlyphs.Changed += HandleGlyphsChanged;
         }
         _skipTextDirty = false;
-        _skipText.text = "[" + InputGlyphs.Get(ChuonAction.Interact) + "]  길게 눌러 건너뛰기";
+        ChuonKeyHint.SetKeys(_skipHint, ChuonKeyHint.SkipKeys(), SkipLabel, ChuonKeyHint.DefaultLabelSize);
     }
+
+    const string SkipLabel = "길게 눌러 건너뛰기";
 
     void HandleGlyphsChanged() => _skipTextDirty = true;
 

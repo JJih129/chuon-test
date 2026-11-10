@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 8206042976857570245}
   - component: {fileID: 8774309431919368090}
   - component: {fileID: 6534932531381225219}
+  - component: {fileID: 8357507398397649548}
   m_Layer: 0
   m_Name: TDRv2_HangarWide
   m_TagString: Untagged
@@ -93,6 +94,21 @@ MonoBehaviour:
   AmplitudeGain: 0.25
   FrequencyGain: 0.5
   m_NoiseOffsets: {x: 0, y: 0, z: 0}
+--- !u!114 &8357507398397649548
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 466995303933651427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0d4a6238e9844742a457bfe0756d66a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveLocal: {x: 0.45, y: -0.9, z: -1.1}
+  fovDelta: -2
+  duration: 1.2
 --- !u!1 &823810979422086093
 GameObject:
   m_ObjectHideFlags: 0
@@ -226,6 +242,7 @@ MonoBehaviour:
   faceTarget: 3
   faceAnchorName: 
   clearBehind: 0
+  groundToFloor: 0
 --- !u!1 &2433368863961045446
 GameObject:
   m_ObjectHideFlags: 0
@@ -281,6 +298,7 @@ MonoBehaviour:
   faceTarget: 0
   faceAnchorName: 
   clearBehind: 0
+  groundToFloor: 0
 --- !u!1 &4540803730192842660
 GameObject:
   m_ObjectHideFlags: 0
@@ -338,6 +356,7 @@ MonoBehaviour:
   faceTarget: 2
   faceAnchorName: 
   clearBehind: 0
+  groundToFloor: 0
 --- !u!1 &4564163621794597125
 GameObject:
   m_ObjectHideFlags: 0
@@ -349,6 +368,7 @@ GameObject:
   - component: {fileID: 5389317148358343437}
   - component: {fileID: 564581305818128810}
   - component: {fileID: 5427815973611960874}
+  - component: {fileID: 8647627574955485480}
   m_Layer: 0
   m_Name: TDRv2_DoorPOV
   m_TagString: Untagged
@@ -431,6 +451,21 @@ MonoBehaviour:
   AmplitudeGain: 0.25
   FrequencyGain: 0.5
   m_NoiseOffsets: {x: 0, y: 0, z: 0}
+--- !u!114 &8647627574955485480
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4564163621794597125}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0d4a6238e9844742a457bfe0756d66a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveLocal: {x: 0, y: -0.02, z: 0.35}
+  fovDelta: -2
+  duration: 2.25
 --- !u!1 &5304925347991060373
 GameObject:
   m_ObjectHideFlags: 0
@@ -486,6 +521,7 @@ MonoBehaviour:
   faceTarget: 0
   faceAnchorName: 
   clearBehind: 0
+  groundToFloor: 0
 --- !u!1 &6359472932885448859
 GameObject:
   m_ObjectHideFlags: 0
@@ -545,8 +581,9 @@ GameObject:
   m_Component:
   - component: {fileID: 7998387183233175367}
   - component: {fileID: 240766894734607478}
-  - component: {fileID: 282729668309946031}
+  - component: {fileID: 1184479485399690461}
   - component: {fileID: 2304317585698313247}
+  - component: {fileID: 6273348753848386971}
   m_Layer: 0
   m_Name: TDRv2_VisorInsert
   m_TagString: Untagged
@@ -612,7 +649,7 @@ MonoBehaviour:
       BarrelClipping: 0.25
       Anamorphism: 0
   BlendHint: 0
---- !u!114 &282729668309946031
+--- !u!114 &1184479485399690461
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -621,10 +658,26 @@ MonoBehaviour:
   m_GameObject: {fileID: 6438273260212985565}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1e8b78ac948f05a46a6d8339a503172b, type: 3}
+  m_Script: {fileID: 11500000, guid: f38bda98361e1de48a4ca2bd86ea3c17, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LookAtOffset: {x: 0, y: 0, z: 0}
+  Composition:
+    ScreenPosition: {x: -0.1, y: -0.12}
+    DeadZone:
+      Enabled: 0
+      Size: {x: 0.2, y: 0.2}
+    HardLimits:
+      Enabled: 0
+      Size: {x: 0.8, y: 0.8}
+      Offset: {x: 0, y: 0}
+  CenterOnActivate: 1
+  TargetOffset: {x: 0, y: 0, z: 0}
+  Damping: {x: 0, y: 0}
+  Lookahead:
+    Enabled: 0
+    Time: 0
+    Smoothing: 0
+    IgnoreY: 0
 --- !u!114 &2304317585698313247
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -642,6 +695,21 @@ MonoBehaviour:
   AmplitudeGain: 0.25
   FrequencyGain: 0.5
   m_NoiseOffsets: {x: 0, y: 0, z: 0}
+--- !u!114 &6273348753848386971
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6438273260212985565}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0d4a6238e9844742a457bfe0756d66a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  moveLocal: {x: -0.03, y: 0, z: -0.2}
+  fovDelta: -2.5
+  duration: 1.2
 --- !u!1 &7851183036511878554
 GameObject:
   m_ObjectHideFlags: 0
@@ -652,7 +720,7 @@ GameObject:
   m_Component:
   - component: {fileID: 365340736817122388}
   - component: {fileID: 2543924714000080850}
-  - component: {fileID: 2003825645402648463}
+  - component: {fileID: 8872182669791634710}
   - component: {fileID: 520937016727454478}
   m_Layer: 0
   m_Name: TDRv2_ChuonReaction
@@ -719,7 +787,7 @@ MonoBehaviour:
       BarrelClipping: 0.25
       Anamorphism: 0
   BlendHint: 0
---- !u!114 &2003825645402648463
+--- !u!114 &8872182669791634710
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -728,10 +796,26 @@ MonoBehaviour:
   m_GameObject: {fileID: 7851183036511878554}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1e8b78ac948f05a46a6d8339a503172b, type: 3}
+  m_Script: {fileID: 11500000, guid: f38bda98361e1de48a4ca2bd86ea3c17, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  LookAtOffset: {x: 0, y: 0, z: 0}
+  Composition:
+    ScreenPosition: {x: 0.12, y: -0.15}
+    DeadZone:
+      Enabled: 0
+      Size: {x: 0.2, y: 0.2}
+    HardLimits:
+      Enabled: 0
+      Size: {x: 0.8, y: 0.8}
+      Offset: {x: 0, y: 0}
+  CenterOnActivate: 1
+  TargetOffset: {x: 0, y: 0, z: 0}
+  Damping: {x: 0, y: 0}
+  Lookahead:
+    Enabled: 0
+    Time: 0
+    Smoothing: 0
+    IgnoreY: 0
 --- !u!114 &520937016727454478
 MonoBehaviour:
   m_ObjectHideFlags: 0

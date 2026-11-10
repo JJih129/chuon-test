@@ -345,6 +345,19 @@ public sealed class CinematicDirector : MonoBehaviour
             StartCoroutine(CoReleaseHeldCover(overlay, seq.HoldEndCoverSeconds, ret));
             yield break;
         }
+        if (fadeFrom >= 0.98f)
+        {
+            // 반복 17 (E3): 검정으로 끝나는 연출(레벨 밖 무대 — 오프닝·엘리베이터)은 카메라 리그 복귀 블렌드가 무대 → 플레이어 사이를
+            // 지나가는 중간 프레임(로비 천장·조명을 올려다보는 흰 화면)이 걷히는 검정 사이로 보였다 → 블렌드(0.35 s)가 끝날 때까지 검정 유지 후 걷는다.
+            float held = 0f;
+            float holdFor = ret + 0.05f;
+            while (held < holdFor && !IsPlaying)
+            {
+                held += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+                overlay.SetFade(fadeColor, fadeFrom);
+                yield return null;
+            }
+        }
         while (t < ret && (fadeFrom > 0f || boxFrom > 0f))
         {
             t += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
