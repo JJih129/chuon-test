@@ -57,6 +57,14 @@ public class OptionsManagerAdvanced : MonoBehaviour
     public Toggle cinematicLetterboxToggle;
     [Tooltip("재도전 시 이미 본 연출 생략 (CinematicSettings). 비어 있으면 자막 배경 행을 복제해 만든다.")]
     public Toggle cinematicSkipSeenToggle;
+    [Tooltip("자막(대사) 표시 (ExhibitionPrototypePresentationPolicy.DialogueEnabled). 비어 있으면 런타임 생성.")]
+    public Toggle subtitlesEnabledToggle;
+    [Tooltip("전투 중 짧은 대사 (CombatBarkDirector). 비어 있으면 런타임 생성.")]
+    public Toggle combatBarksToggle;
+    [Tooltip("처형 카메라 연출 (ExecutionCamSettings.Enabled, opt_exec_cam). 비어 있으면 런타임 생성.")]
+    public Toggle executionCamToggle;
+    [Tooltip("처형 연출 모션 줄이기 (ExecutionCamSettings.ReduceMotion, opt_reduce_motion). 비어 있으면 런타임 생성.")]
+    public Toggle reduceMotionToggle;
 
     [Header("▶ 카메라 (비어 있으면 런타임 생성, CameraOptionsRuntime 에 저장/즉시 적용)")]
     public Slider lookSensitivityMouseSlider;
@@ -213,6 +221,10 @@ public class OptionsManagerAdvanced : MonoBehaviour
         if (cinematicLetterboxToggle != null) { cinematicLetterboxToggle.onValueChanged.RemoveAllListeners(); cinematicLetterboxToggle.onValueChanged.AddListener(CinematicSettings.SetLetterboxEnabled); cinematicLetterboxToggle.isOn = CinematicSettings.LetterboxEnabled; }
         if (cinematicSkipSeenToggle != null) { cinematicSkipSeenToggle.onValueChanged.RemoveAllListeners(); cinematicSkipSeenToggle.onValueChanged.AddListener(CinematicSettings.SetSkipSeenOnRetry); cinematicSkipSeenToggle.isOn = CinematicSettings.SkipSeenOnRetry; }
         if (cameraShakeSlider != null) { cameraShakeSlider.onValueChanged.RemoveAllListeners(); cameraShakeSlider.onValueChanged.AddListener(v => { PlayerPrefs.SetFloat(K_CAM_SHAKE, v); OnCameraShakeStrengthChanged?.Invoke(v); }); cameraShakeSlider.value = PlayerPrefs.GetFloat(K_CAM_SHAKE, 1f); }
+        BindPrefToggle(subtitlesEnabledToggle, ExhibitionPrototypePresentationPolicy.DialogueEnabled, ExhibitionPrototypePresentationPolicy.SetDialogueEnabled);
+        BindPrefToggle(combatBarksToggle, PlayerPrefs.GetInt(ExhibitionPrototypePresentationPolicy.CombatBarkPrefKey, 1) != 0, ExhibitionPrototypePresentationPolicy.SetCombatBarksEnabled);
+        BindPrefToggle(executionCamToggle, ExecutionCamSettings.Enabled, ExecutionCamSettings.SetEnabled);
+        BindPrefToggle(reduceMotionToggle, ExecutionCamSettings.ReduceMotion, ExecutionCamSettings.SetReduceMotion);
         BindCameraOptionControls();
 
         foreach (var b in keybindButtons)
@@ -436,6 +448,25 @@ public class OptionsManagerAdvanced : MonoBehaviour
             invertYToggle = CreateGeneratedToggleRow(toggleTemplate, "InvertY_Row", "Invert Y", "Toggle_InvertY") ?? CreateHiddenToggle("Toggle_InvertY");
         if (autoRecenterToggle == null)
             autoRecenterToggle = CreateGeneratedToggleRow(toggleTemplate, "AutoRecenter_Row", "Auto Camera Recenter", "Toggle_AutoRecenter") ?? CreateHiddenToggle("Toggle_AutoRecenter");
+        // 반복 21: 저장/적용은 되지만 메뉴 항목이 없던 옵션 (자막 표시, 전투 대사, 처형 카메라, 모션 줄이기)
+        if (subtitlesEnabledToggle == null)
+            subtitlesEnabledToggle = CreateGeneratedToggleRow(toggleTemplate, "SubtitlesEnabled_Row", "자막 표시", "Toggle_SubtitlesEnabled") ?? CreateHiddenToggle("Toggle_SubtitlesEnabled");
+        if (combatBarksToggle == null)
+            combatBarksToggle = CreateGeneratedToggleRow(toggleTemplate, "CombatBarks_Row", "전투 대사", "Toggle_CombatBarks") ?? CreateHiddenToggle("Toggle_CombatBarks");
+        if (executionCamToggle == null)
+            executionCamToggle = CreateGeneratedToggleRow(toggleTemplate, "ExecutionCam_Row", "처형 카메라 연출", "Toggle_ExecutionCam") ?? CreateHiddenToggle("Toggle_ExecutionCam");
+        if (reduceMotionToggle == null)
+            reduceMotionToggle = CreateGeneratedToggleRow(toggleTemplate, "ReduceMotion_Row", "처형 연출 모션 줄이기", "Toggle_ReduceMotion") ?? CreateHiddenToggle("Toggle_ReduceMotion");
+    }
+
+    // 저장값을 알림 없이 표시한 뒤 setter(저장 + 즉시 적용)를 연결한다.
+    static void BindPrefToggle(Toggle toggle, bool value, Action<bool> setter)
+    {
+        if (toggle == null)
+            return;
+        toggle.onValueChanged.RemoveAllListeners();
+        toggle.SetIsOnWithoutNotify(value);
+        toggle.onValueChanged.AddListener(v => setter(v));
     }
 
     // 카메라 옵션 (CameraOptionsRuntime: PlayerPrefs 저장 + 즉시 적용)

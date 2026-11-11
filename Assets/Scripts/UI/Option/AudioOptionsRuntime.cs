@@ -33,6 +33,13 @@ public static class AudioOptionsRuntime
         get { EnsureInitialized(); return _voiceVolume; }
     }
 
+    // 반복 21: 옵션 화면/오디오 소스가 처음 접근하기 전에도 저장된 마스터 볼륨(AudioListener.volume)을 부팅 시 적용
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    static void Bootstrap()
+    {
+        RefreshFromPrefs();
+    }
+
     public static void RefreshFromPrefs()
     {
         _masterVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(K_MASTER, 1f));

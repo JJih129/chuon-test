@@ -460,6 +460,8 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         CreateSectionHeader(content, "자막", "컷신과 이벤트 텍스트 가독성을 조정합니다.");
         CreateSliderRow(content, "자막 크기", _optionsManager.subtitleSizeSlider, rowIndex++, SliderDisplayMode.Multiplier);
         CreateToggleRow(content, "자막 배경", _optionsManager.subtitleBackgroundToggle, rowIndex++);
+        CreateToggleRow(content, "자막 표시", _optionsManager.subtitlesEnabledToggle, rowIndex++);
+        CreateToggleRow(content, "전투 대사", _optionsManager.combatBarksToggle, rowIndex++);
 
         CreateSectionHeader(content, "카메라 편의", "강한 연출과 화면 흔들림을 제어합니다.");
         CreateSliderRow(content, "카메라 흔들림 강도", _optionsManager.cameraShakeSlider, rowIndex++, SliderDisplayMode.Percent);
@@ -467,9 +469,11 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
         CreateToggleRow(content, "흑백 흡수 연출", _optionsManager.bwAbsorbToggle, rowIndex++);
         CreateStaticBindingRow(content, "권장 프리셋", "흔들림 40% 이하", "보스전 가독성 중심 권장값", rowIndex++);
 
-        CreateSectionHeader(content, "연출", "컷신 레터박스와 재도전 시 생략을 설정합니다. 길게 눌러 언제든 건너뛸 수 있습니다.");
+        CreateSectionHeader(content, "연출", "컷신 레터박스·재도전 시 생략·처형 카메라를 설정합니다. 길게 눌러 언제든 건너뛸 수 있습니다.");
         CreateToggleRow(content, "레터박스", _optionsManager.cinematicLetterboxToggle, rowIndex++);
         CreateToggleRow(content, "본 연출 다시 보지 않기", _optionsManager.cinematicSkipSeenToggle, rowIndex++);
+        CreateToggleRow(content, "처형 카메라 연출", _optionsManager.executionCamToggle, rowIndex++);
+        CreateToggleRow(content, "처형 연출 모션 줄이기", _optionsManager.reduceMotionToggle, rowIndex++);
     }
 
     // ---- 게임 탭: 난이도 선택 (GameDifficulty, 즉시 반영) ----
