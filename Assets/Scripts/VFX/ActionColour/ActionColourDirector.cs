@@ -506,7 +506,12 @@ public sealed class ActionColourDirector : MonoBehaviour
             var list = s_qaNextFrame.ToArray();
             s_qaNextFrame.Clear();
             foreach (var a in list)
-                a?.Invoke();
+            {
+                // 반복 20: 씬 재로드 뒤 파괴된 오브젝트(PlayableDirector 등)를 잡은 QA 프로브는 예외 대신 조용히 버린다
+                try { a?.Invoke(); }
+                catch (MissingReferenceException) { }
+                catch (System.Exception e) { Debug.LogException(e); }
+            }
         }
 #endif
         if (_prewarmPending && Time.unscaledTime > 0.5f)

@@ -320,6 +320,7 @@ public sealed class CinematicSequence : MonoBehaviour
     {
         if (stageRoot != null)
             stageRoot.SetActive(true);
+        SetShotCamsEnabled(true);
 
         if (_attachments == null)
             _attachments = GetComponentsInChildren<CineAttach>(true);
@@ -354,8 +355,22 @@ public sealed class CinematicSequence : MonoBehaviour
             for (int i = 0; i < _attachments.Length; i++)
                 if (_attachments[i] != null)
                     _attachments[i].End();
+        SetShotCamsEnabled(false);
         if (stageRoot != null)
             stageRoot.SetActive(false);
+    }
+
+    // 반복 20: 샷 카메라(CinemachineCamera)는 프리팹에서 꺼 둔다 — 에디트 모드에서 브레인이 RotationComposer 를 돌려
+    // 씬 인스턴스에 자식 회전 오버라이드를 매 도메인 리로드·저장마다 만들던 문제. 재생 중에만 켠다 (구도는 그대로).
+    CinemachineCamera[] _shotCams;
+
+    void SetShotCamsEnabled(bool on)
+    {
+        if (_shotCams == null)
+            _shotCams = GetComponentsInChildren<CinemachineCamera>(true);
+        for (int i = 0; i < _shotCams.Length; i++)
+            if (_shotCams[i] != null && _shotCams[i].enabled != on)
+                _shotCams[i].enabled = on;
     }
 
     void BindSceneTracks(Transform player, Transform boss)

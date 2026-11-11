@@ -24,7 +24,7 @@ public sealed class QaCombatBot : MonoBehaviour
     [Tooltip("Walk toward the boss when out of attack range (needed when the boss holds at the arena centre).")]
     public bool approachBoss = true;
     [Tooltip("Use a heal ampoule at or below this HP (0 = never).")]
-    public int healAtHp = 40;
+    public int healAtHp = 50; // 반복 20: 40 -> 50 (후반 연타 피해 속도에서 사람은 더 일찍 회복한다)
     [Tooltip("Fight the nearest live DroneController (upper drone hall) before the boss.")]
     public bool fightDrones = true;
     public float droneEngageRange = 28f;

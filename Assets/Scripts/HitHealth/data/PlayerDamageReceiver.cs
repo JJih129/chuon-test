@@ -37,6 +37,14 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
     [SerializeField, Range(0.1f, 1f)] private float stringLateHitMultiplier = 0.6f;
     [Tooltip("한 연타가 줄 수 있는 총 피해 상한 (최대 HP 비율). 0이면 상한 없음.")]
     [SerializeField, Range(0f, 1f)] private float stringDamageCapFraction = 0.45f;
+    // 반복 20: 보스 오버홀 연타(2·3페이즈)는 타격 간격이 0.87~1.2초라 stringGapSeconds(0.85)를 넘어
+    // 매 타가 '새 연타'로 취급돼 상한을 우회했다 (c 34/34/24, d 24/24 → 1초에 48~92 피해). 보스 공격자는 창을 넓히고 상한을 낮춘다.
+    [Tooltip("보스 공격자 전용 연타 간격(초, 실시간). 이 시간 안에 다시 맞으면 같은 연타.")]
+    [SerializeField, Min(0.05f)] private float bossStringGapSeconds = 1.3f;
+    [Tooltip("보스 연타 창의 최대 길이(초). 이보다 길게 이어지면 새 연타로 본다 (무한 상한 방지).")]
+    [SerializeField, Min(0.5f)] private float bossStringMaxWindowSeconds = 2.6f;
+    [Tooltip("보스 한 연타 창의 총 피해 상한 (최대 HP 비율).")]
+    [SerializeField, Range(0f, 1f)] private float bossStringDamageCapFraction = 0.35f;
 
     [Header("Debug")]
     [SerializeField] private bool debugLogs = false;
@@ -45,6 +53,9 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
     float _stringLastHitRealtime = float.NegativeInfinity;
     int _stringLandedHits;
     float _stringDamageTotal;
+    float _stringStartRealtime = float.NegativeInfinity;
+    Transform _bossCheckAttacker;
+    bool _bossCheckResult;
 
     /// <summary>QA용: 연타 스케일링으로 깎인 누적 피해.</summary>
     public float StringDamageReduced { get; private set; }
@@ -193,20 +204,27 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
     ResolvedHitResult ScaleStringHit(ResolvedHitResult hit, Transform attacker)
     {
         float now = Time.realtimeSinceStartup;
-        bool sameString = attacker != null && attacker == _stringAttacker && now - _stringLastHitRealtime <= stringGapSeconds;
+        bool bossAttacker = IsBossAttacker(attacker);
+        float gap = bossAttacker ? Mathf.Max(stringGapSeconds, bossStringGapSeconds) : stringGapSeconds;
+        bool sameString = attacker != null && attacker == _stringAttacker && now - _stringLastHitRealtime <= gap
+            && (!bossAttacker || now - _stringStartRealtime <= bossStringMaxWindowSeconds);
         if (!sameString)
         {
             _stringLandedHits = 0;
             _stringDamageTotal = 0f;
+            _stringStartRealtime = now;
         }
 
         float damage = hit.HealthDamage;
         if (_stringLandedHits + 1 >= stringScaleFromHit)
             damage *= stringLateHitMultiplier;
 
-        if (stringDamageCapFraction > 0f && health != null)
+        float capFraction = bossAttacker && bossStringDamageCapFraction > 0f
+            ? (stringDamageCapFraction > 0f ? Mathf.Min(stringDamageCapFraction, bossStringDamageCapFraction) : bossStringDamageCapFraction)
+            : stringDamageCapFraction;
+        if (capFraction > 0f && health != null)
         {
-            float cap = health.MaxHP * stringDamageCapFraction;
+            float cap = health.MaxHP * capFraction;
             // 첫 타는 상한과 무관하게 원래 피해 (단발 강공격은 그대로)
             if (_stringLandedHits > 0)
                 damage = Mathf.Min(damage, Mathf.Max(0f, cap - _stringDamageTotal));
@@ -219,6 +237,18 @@ public class PlayerDamageReceiver : MonoBehaviour, IDamageReceiver
             Debug.Log($"[PlayerDamageReceiver] String hit #{_stringLandedHits + 1}: {hit.HealthDamage:0.#} -> {damage:0.#} (total {_stringDamageTotal:0.#})", this);
 
         return ResolvedHitResult.Damage(damage, hit.HitType, hit.BreakBonus, hit.ShouldSuppressHitAnimation);
+    }
+
+    bool IsBossAttacker(Transform attacker)
+    {
+        if (attacker == null)
+            return false;
+        if (attacker != _bossCheckAttacker)
+        {
+            _bossCheckAttacker = attacker;
+            _bossCheckResult = attacker.GetComponentInParent<BossController>() != null;
+        }
+        return _bossCheckResult;
     }
 
     void RefreshAnimatorParameterCache()

@@ -269,11 +269,7 @@ public static class CinematicsAssetBuilder
             sequence.SetStageRoot(stage.gameObject);
 
             string tlPath = $"{TimelineDir}/TL_Cine_{prefabName.Replace("CINE_", "")}.playable";
-            if (AssetDatabase.LoadAssetAtPath<TimelineAsset>(tlPath) != null)
-                AssetDatabase.DeleteAsset(tlPath);
-            timeline = ScriptableObject.CreateInstance<TimelineAsset>();
-            timeline.name = Path.GetFileNameWithoutExtension(tlPath);
-            AssetDatabase.CreateAsset(timeline, tlPath);
+            timeline = LoadOrResetTimeline(tlPath, Path.GetFileNameWithoutExtension(tlPath));
             timeline.editorSettings.frameRate = 60d;
             director.playableAsset = timeline;
             _camTrack = timeline.CreateTrack<CinemachineTrack>(null, "TRK_Cam_Shots");
@@ -302,6 +298,7 @@ public static class CinematicsAssetBuilder
             holder.gameObject.AddComponent<Animator>();
             Transform camT = Child(holder, "Cam");
             var cam = camT.gameObject.AddComponent<CinemachineCamera>();
+            cam.enabled = false; // 반복 20: 재생 중에만 켠다 (CinematicSequence.Begin/End) — 에디트 모드 회전 오버라이드 방지
             camT.localPosition = pos;
             Vector3 dir = look - pos;
             camT.localRotation = dir.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(dir.normalized, Vector3.up) : Quaternion.identity;
@@ -542,6 +539,33 @@ public static class CinematicsAssetBuilder
             Log.Append($"{root.name} {(ok ? "ok" : "FAILED")} {duration:0.#}s; ");
             Object.DestroyImmediate(root);
         }
+    }
+
+    // 반복 20: 타임라인을 지우고 새로 만들면 GUID 가 바뀌어 씬의 PlayableDirector 참조가 null 이 된다 →
+    //   기존 에셋 객체를 유지하고 트랙·마커·서브 에셋(클립·애니메이션 클립)만 비운 뒤 다시 채운다.
+    static TimelineAsset LoadOrResetTimeline(string path, string name)
+    {
+        var tl = AssetDatabase.LoadAssetAtPath<TimelineAsset>(path);
+        if (tl == null)
+        {
+            tl = ScriptableObject.CreateInstance<TimelineAsset>();
+            tl.name = name;
+            AssetDatabase.CreateAsset(tl, path);
+            return tl;
+        }
+        foreach (TrackAsset t in tl.GetRootTracks().ToList())
+            tl.DeleteTrack(t);
+        MarkerTrack markers = tl.markerTrack;
+        if (markers != null)
+            foreach (IMarker m in markers.GetMarkers().ToList())
+                markers.DeleteMarker(m);
+        foreach (Object sub in AssetDatabase.LoadAllAssetsAtPath(path))
+            if (sub != null && sub != tl && sub != markers && !(sub is GameObject) && !(sub is Component))
+                Object.DestroyImmediate(sub, true);
+        tl.name = name;
+        tl.durationMode = TimelineAsset.DurationMode.BasedOnClips;
+        EditorUtility.SetDirty(tl);
+        return tl;
     }
 
     // ------------------------------------------------------------------ scene object helpers
@@ -1248,11 +1272,7 @@ public static class CinematicsAssetBuilder
     {
         var src = AssetDatabase.LoadAssetAtPath<TimelineAsset>(TypeDOriginal);
         if (src == null) { Log.Append("TypeD original missing; "); return; }
-        if (AssetDatabase.LoadAssetAtPath<TimelineAsset>(TypeDV2Path) != null)
-            AssetDatabase.DeleteAsset(TypeDV2Path);
-        var tl = ScriptableObject.CreateInstance<TimelineAsset>();
-        tl.name = "TL_Cine_TypeDReveal_v2";
-        AssetDatabase.CreateAsset(tl, TypeDV2Path);
+        var tl = LoadOrResetTimeline(TypeDV2Path, "TL_Cine_TypeDReveal_v2");
 
         // 신호: 원본 시각·에셋·플래그 그대로 (MainSceneArrivalController IntroStep 0~9 순서 고정)
         var sig = tl.CreateTrack<SignalTrack>(null, "TRK_Signals_Intro");
@@ -1321,6 +1341,7 @@ public static class CinematicsAssetBuilder
         {
             Transform t = Child(parent, "TDRv2_" + n);
             var c = t.gameObject.AddComponent<CinemachineCamera>();
+            c.enabled = false; // 반복 20: 재생 중에만 켠다 (CineAttachOnDirectorPlay) — 에디트 모드 회전 오버라이드 방지
             t.localPosition = pos;
             t.localRotation = Quaternion.LookRotation((look - pos).normalized, Vector3.up);
             LensSettings lens = LensSettings.Default; lens.FieldOfView = fov; lens.NearClipPlane = 0.05f; lens.FarClipPlane = 800f;
