@@ -43,7 +43,7 @@ public class MainSceneBossStatusController : MonoBehaviour
     [SerializeField] private string phaseTwoDirective = "\ubaa9\ud45c: \uacf5\uc138 \uc751\uc218 \ud6c4 \uc0ac\uac70\ub9ac \uc720\uc9c0";
     [SerializeField] private string phaseThreeDirective = "\ubaa9\ud45c: \ud68c\ud53c \uc6b0\uc120. \ubb34\ub9ac\ud55c \uc555\ubc15 \uae08\uc9c0";
     [SerializeField] private string breakDirective = "\ubaa9\ud45c: \ube0c\ub808\uc774\ud06c \uadf9\ub51c. \uad81\uadf9\uae30 \ud0c0\uc774\ubc0d \uacb9\uccd0";
-    [SerializeField] private string ultimateReadyDirective = "\ubaa9\ud45c: ULT READY. \ube0c\ub808\uc774\ud06c \uc9c4\uc785 \uc2dc \uc0ac\uc6a9";
+    [SerializeField] private string ultimateReadyDirective = "\ubaa9\ud45c: \uad81\uadf9\uae30 \uc900\ube44 \uc644\ub8cc. \ube0c\ub808\uc774\ud06c \uc9c4\uc785 \uc2dc \uc0ac\uc6a9";
     [SerializeField] private string ultimateActiveDirective = "\ubaa9\ud45c: \uad81\uadf9\uae30 \uc9d1\ud589 \uc911";
     [SerializeField] private string clearBadge = "CLEAR";
     [SerializeField] private string clearStatus = "\uc704\ud611 \ubc18\uc751 \uc18c\uba78. \uc2e4\uc804 \uac80\uc99d \uc644\ub8cc";
@@ -525,9 +525,9 @@ public class MainSceneBossStatusController : MonoBehaviour
             case 2:
                 return "\uacf5\uc138\uac00 \ube68\ub77c\uc9c4\ub2e4. \uc751\uc218 \ud6c4 \uc9e7\uac8c \ub123\uc5b4";
             case 3:
-                return "\ubc84\uc11c\ud06c \uad6c\uac04. \ubb34\ub9ac\ud558\uc9d3 \ub9d0\uace0 \ud328\ud134 \uc6b0\uc120";
+                return "\ubc84\uc11c\ud06c \uad6c\uac04. \ubb34\ub9ac\ud558\uc9c0 \ub9d0\uace0 \ud328\ud134 \uc6b0\uc120";
             default:
-                return "\uccab \uad50\ud658\uc740 \ubc29\uc5b4 \uc6b0\uc120. \ube48\ud2c8\uc740 \uc9e7\uac8c \ucc14\ub974";
+                return "\uccab \uad50\ud658\uc740 \ubc29\uc5b4 \uc6b0\uc120. \ube48\ud2c8\uc740 \uc9e7\uac8c \ucc14\ub7ec";
         }
     }
 

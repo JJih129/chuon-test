@@ -13,7 +13,7 @@ public class LobbyCombatCoachController : MonoBehaviour
     [SerializeField] private string firstFireTitle = "\uc804\uc220 \ud53c\ub4dc\ubc31";
     [SerializeField] private string firstFireDescription = "\uc6d0\uac70\ub9ac \uacf5\uaca9\uc774\ub2e4. \uac00\ub4dc\ub85c \ubc1b\uc544\ub0b4\uac70\ub098 \ud68c\ud53c\ub85c \uac01\uc744 \ub04a\uc5b4.";
     [SerializeField] private string firstDamageTitle = "\ud53c\uaca9";
-    [SerializeField] private string firstDamageDescription = "\uc2dc\uc57c\ub97c \uc5f4\uc5b4 \ub450. \ud0c4\ub3c4\ub294 \uc77d\uc744 \uc218 \uc788\uc5b4.";
+    [SerializeField] private string firstDamageDescription = "\uc2dc\uc57c\ub97c \uc5f4\uc5b4 \ub46c. \ud0c4\ub3c4\ub294 \uc77d\uc744 \uc218 \uc788\uc5b4.";
     [SerializeField] private string firstKillTitle = "\uc804\uc9c4";
     [SerializeField] private string firstKillDescription = "\uc88b\uc544. \ud55c \uae30 \uc815\ub9ac\ud588\ub2e4. \ub2e4\uc74c \ud45c\uc801\uc744 \ubc14\ub85c \uc804\ud658\ud574.";
     [SerializeField] private string repeatTelegraphTitle = "\uad50\uc804 \ubcf4\uc870";

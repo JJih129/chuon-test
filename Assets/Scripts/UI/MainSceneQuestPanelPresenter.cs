@@ -245,11 +245,11 @@ public class MainSceneQuestPanelPresenter : MonoBehaviour
         else if (dead)
         {
             title = "임무 완료";
-            description = "실험체 TYPE-D를 제압했습니다.";
+            description = "실험체 Type-D를 제압했습니다.";
         }
         else
         {
-            title = "실험체 TYPE-D 제압";
+            title = "실험체 Type-D 제압";
             if (breakActive)
                 description = "브레이크! 무너진 지금 집중 공격하세요.";
             else if (ultimateReady)

@@ -70,8 +70,8 @@ public static class GameDifficulty
     {
         switch (Sanitize(tier))
         {
-            case BossDifficultyTier.Easy: return "Type-D 의 공격이 느리고 약해집니다. 패링 판정이 넉넉합니다.";
-            case BossDifficultyTier.Hard: return "Type-D 가 더 빠르고 집요하게 몰아붙입니다. 연계가 늘어납니다.";
+            case BossDifficultyTier.Easy: return "Type-D의 공격이 느리고 약해집니다. 패링 판정이 넉넉합니다.";
+            case BossDifficultyTier.Hard: return "Type-D가 더 빠르고 집요하게 몰아붙입니다. 연계가 늘어납니다.";
             default: return "기획 의도대로의 기본 난이도입니다.";
         }
     }

@@ -338,7 +338,7 @@ public sealed class TitleCreditsOverlay : MonoBehaviour
         FitPreferredHeight(thankYou.rectTransform, 44f);
 
         Text footer = CreateText("Footer", block, 18, FontStyle.Bold, TextAnchor.MiddleCenter);
-        footer.text = "\uD504\uB85C\uC81D\uD2B8 \uCD94\uC628 / \uAC1C\uBC1C \uD06C\uB808\uB515";
+        footer.text = "\uD504\uB85C\uC81D\uD2B8 \uCD94\uC628 / \uAC1C\uBC1C \uD06C\uB808\uB527";
         footer.color = MutedTextColor;
         FitPreferredHeight(footer.rectTransform, 42f);
     }

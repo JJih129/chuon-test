@@ -466,7 +466,7 @@ MonoBehaviour:
     duration: 0
   - key: tut.inf.guard.remind.0
     speaker: EGO
-    text: "\uB188\uC774 \uD718\uB450\uB97C \uB54C E.\n\uC77C\uB2E8 \uBC84\uD2F0\uB294
+    text: "\uB188\uC774 \uD718\uB450\uB97C \uB54C {guard}.\n\uC77C\uB2E8 \uBC84\uD2F0\uB294
       \uBC95\uBD80\uD130."
     duration: 0
   - key: tut.inf.guard.success.0

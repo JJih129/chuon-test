@@ -51,6 +51,7 @@ public sealed class CinematicOverlay : MonoBehaviour
     float _cardAlpha = -1f;
     bool _skipTextDirty = true;
     bool _glyphHooked;
+    bool _optionsHooked;
 
     public static CinematicOverlay Active => s_instance;
     public float Letterbox => Mathf.Max(0f, _letterbox);
@@ -74,6 +75,11 @@ public sealed class CinematicOverlay : MonoBehaviour
             s_instance = null;
         if (_glyphHooked)
             InputGlyphs.Changed -= HandleGlyphsChanged;
+        if (_optionsHooked)
+        {
+            OptionsManagerAdvanced.SubtitleSizeChangedGlobal -= HandleSubtitleSizeChanged;
+            OptionsManagerAdvanced.SubtitleBackgroundChangedGlobal -= HandleSubtitleBackgroundChanged;
+        }
     }
 
     void Build()
@@ -158,6 +164,8 @@ public sealed class CinematicOverlay : MonoBehaviour
         backing.SetAsFirstSibling();
         _cardBacking.enabled = false;
         _cardRect = cardRect;
+        HookSubtitleOptions();
+        ApplyCardSubtitleOptions();
 
         SetLetterbox(0f);
         SetFade(Color.black, 0f);
@@ -238,14 +246,39 @@ public sealed class CinematicOverlay : MonoBehaviour
         bool lower = placement == CardPlacement.LowerThird;
         // 하단 1/3: 레터박스 바(2.35:1 → 화면 높이 11.9 %) 바로 위
         _cardRect.anchorMin = _cardRect.anchorMax = lower ? new Vector2(0.5f, 0.235f) : new Vector2(0.5f, 0.5f);
-        _cardTitle.fontSize = lower ? 32 : 44;
         _cardTitle.rectTransform.anchoredPosition = lower ? new Vector2(0f, 18f) : new Vector2(0f, 22f);
         _cardLine.rectTransform.anchoredPosition = lower ? new Vector2(0f, -8f) : new Vector2(0f, -16f);
         _cardLine.rectTransform.sizeDelta = lower ? new Vector2(160f, 2f) : new Vector2(220f, 2f);
-        _cardSub.fontSize = lower ? 20 : 22;
         _cardSub.rectTransform.anchoredPosition = lower ? new Vector2(0f, -30f) : new Vector2(0f, -44f);
+        ApplyCardSubtitleOptions();
+    }
+
+    // 반복 22: 카드(장소·시간 자막)도 대사 자막과 같은 옵션을 따른다 — 자막 크기(글씨·하단 판 높이), 자막 배경(하단 1/3 판).
+    void HookSubtitleOptions()
+    {
+        if (_optionsHooked)
+            return;
+        _optionsHooked = true;
+        OptionsManagerAdvanced.SubtitleSizeChangedGlobal += HandleSubtitleSizeChanged;
+        OptionsManagerAdvanced.SubtitleBackgroundChangedGlobal += HandleSubtitleBackgroundChanged;
+    }
+
+    void HandleSubtitleSizeChanged(float _) => ApplyCardSubtitleOptions();
+    void HandleSubtitleBackgroundChanged(bool _) => ApplyCardSubtitleOptions();
+
+    void ApplyCardSubtitleOptions()
+    {
+        if (_cardTitle == null || _cardSub == null)
+            return;
+        bool lower = _cardPlacement == CardPlacement.LowerThird;
+        float scale = Mathf.Clamp(OptionsManagerAdvanced.CurrentSubtitleSize, 0.6f, 1.8f);
+        _cardTitle.fontSize = Mathf.RoundToInt((lower ? 32 : 44) * scale);
+        _cardSub.fontSize = Mathf.RoundToInt((lower ? 20 : 22) * scale);
         if (_cardBacking != null)
-            _cardBacking.enabled = lower;
+        {
+            _cardBacking.enabled = lower && OptionsManagerAdvanced.CurrentSubtitleBackground;
+            _cardBacking.rectTransform.sizeDelta = new Vector2(760f * Mathf.Max(1f, scale), 118f * Mathf.Max(1f, scale));
+        }
     }
 
     /// <summary>

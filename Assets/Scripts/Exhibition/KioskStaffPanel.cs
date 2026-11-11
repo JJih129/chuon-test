@@ -101,7 +101,7 @@ public sealed class KioskStaffPanel : MonoBehaviour
                     if (_quitArmed)
                         return Command.QuitGame;
                     _quitArmed = true;
-                    Flash("게임을 종료하려면 0 을 한 번 더 누르세요.");
+                    Flash("게임을 종료하려면 0을 한 번 더 누르세요.");
                     return Command.None;
                 }
             }

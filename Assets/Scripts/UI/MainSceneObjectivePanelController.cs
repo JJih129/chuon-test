@@ -839,7 +839,7 @@ public class MainSceneObjectivePanelController : MonoBehaviour
         switch (stage)
         {
             case EncounterObjectiveStage.Break:
-                return "\ube0c\ub808\uc774\ud06c \uc720\ub3c4 \uc644\ub8cc. \ub2e4\uc74c \ube48\ud2c8\ub97c \ub300\uae30";
+                return "\ube0c\ub808\uc774\ud06c \uc720\ub3c4 \uc644\ub8cc. \ub2e4\uc74c \ube48\ud2c8\uc744 \ub300\uae30";
 
             case EncounterObjectiveStage.Punish:
                 if (_currentPhase >= 3)

@@ -961,7 +961,7 @@ public class LobbyObjectivePanelController : MonoBehaviour
         switch (phase)
         {
             case LobbyManager.LobbyFlowPhase.Combat:
-                return "\uacbd\uace0\uc120\uacfc \ud53c\aca9 \ud53c\ub4dc\ubc31\uc744 \ud655\uc778\ud558\uace0 \uc0ac\uaca9 \uac01\uc744 \ub04a\uc5b4.";
+                return "\uacbd\uace0\uc120\uacfc \ud53c\uaca9 \ud53c\ub4dc\ubc31\uc744 \ud655\uc778\ud558\uace0 \uc0ac\uaca9 \uac01\uc744 \ub04a\uc5b4.";
             case LobbyManager.LobbyFlowPhase.Route:
                 return "\uac1c\ubc29\ub41c \uacbd\ub85c\ub97c \ub530\ub77c \uc2b9\uac15\uae30\ub85c \uc804\uc9c4\ud574.";
             case LobbyManager.LobbyFlowPhase.Board:

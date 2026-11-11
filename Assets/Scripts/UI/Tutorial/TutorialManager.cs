@@ -250,7 +250,7 @@ public class TutorialManager : MonoBehaviour
     IEnumerator Sequence_Defense()
     {
         yield return StartCoroutine(PlayKeyed("tutm.defense.0", "EGO", "이번에는 방어와 패링을 연습해.", defenseDelay));
-        yield return StartCoroutine(PlayKeyed("tutm.defense.1", "EGO", "E키로 방어하고, 공격 타이밍에 맞추면 패링이 발동돼.", defenseDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.defense.1", "EGO", "E 키로 방어하고, 공격 타이밍에 맞추면 패링이 발동돼.", defenseDelay));
 
         if (droneEnemy != null)
         {
@@ -325,7 +325,7 @@ public class TutorialManager : MonoBehaviour
     {
         currentStep = TutorialStep.None;
         yield return StartCoroutine(PlayKeyed("tutm.heal.0", "추온", "실패하면 바로 회복하는 감각도 중요하지.", healDelay));
-        yield return StartCoroutine(PlayKeyed("tutm.heal.1", "EGO", "Q키로 앰플을 사용해 체력을 회복할 수 있어.", healDelay));
+        yield return StartCoroutine(PlayKeyed("tutm.heal.1", "EGO", "Q 키로 앰플을 사용해 체력을 회복할 수 있어.", healDelay));
 
         currentStep = TutorialStep.Heal;
         ShowCenterKeyCue("Q", "HEAL", 999f);

@@ -489,7 +489,7 @@ public sealed class TitleSettingsOverlay : MonoBehaviour
 
         CreateSectionHeader(content, "전투 규칙 / FIELD RULES", "츠카사 경비 체계와 싸우기 위한 기본 규칙입니다.");
         CreateStaticBindingRow(content, "발광 색", "금 / 빨강 / 자홍", "금색 = 패링 가능 · 빨강 = 회피 · 자홍 = 가드·패링 불가", rowIndex++);
-        CreateStaticBindingRow(content, "페이즈 코어", "5단 충전", "코어가 5단까지 차면 R 로 궁극기. 보스전마다 1회만 사용", rowIndex++);
+        CreateStaticBindingRow(content, "페이즈 코어", "5단 충전", "코어가 5단까지 차면 궁극기 발동 가능. 보스전마다 1회만 사용", rowIndex++);
         CreateStaticBindingRow(content, "브레이크", "게이지 최대", "적이 5초간 그로기 상태가 되고 피니셔를 넣을 수 있다", rowIndex++);
         CreateStaticBindingRow(content, "연속 회피", "3회째부터", "연속 회피는 3번째부터 무적 시간이 짧아진다", rowIndex++);
     }

@@ -160,7 +160,7 @@ public sealed class InfiltrationTutorialDirector : MonoBehaviour
         new Line("tut.inf.combo.remind.0", EGO, "약공은 {light}, 강공은 {heavy}.\n끊지 말고 이어."),
         new Line("tut.inf.combo.success.0", EGO, "깔끔해. 시뮬레이션 경비라도\n살짝 미안해질 정도네."),
         new Line("tut.inf.guard.intro.0", EGO, "부스에서 하나 더 나온다.\n{guard}를 누르고 있으면 막아."),
-        new Line("tut.inf.guard.remind.0", EGO, "놈이 휘두를 때 E.\n일단 버티는 법부터."),
+        new Line("tut.inf.guard.remind.0", EGO, "놈이 휘두를 때 {guard}.\n일단 버티는 법부터."),
         new Line("tut.inf.guard.success.0", EGO, "좋아, 방어 리듬 잡혔어."),
         new Line("tut.inf.parry.intro.0", EGO, "세 번째 공격 전에 헬멧이 금색으로\n번쩍여. 그게 패링 신호야."),
         new Line("tut.inf.parry.intro.1", EGO, "맞기 직전에 {guard}.\n막는 게 아니라 끊는 거야."),
