@@ -13962,6 +13962,10 @@ MonoBehaviour:
   bwAbsorbToggle: {fileID: 0}
   cinematicLetterboxToggle: {fileID: 0}
   cinematicSkipSeenToggle: {fileID: 0}
+  subtitlesEnabledToggle: {fileID: 0}
+  combatBarksToggle: {fileID: 0}
+  executionCamToggle: {fileID: 0}
+  reduceMotionToggle: {fileID: 0}
   lookSensitivityMouseSlider: {fileID: 0}
   lookSensitivityPadSlider: {fileID: 0}
   invertYToggle: {fileID: 0}
@@ -15124,6 +15128,58 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 396851862}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &397104224
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 397104225}
+  - component: {fileID: 397104226}
+  m_Layer: 0
+  m_Name: NavLink_ElevatorDoor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &397104225
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 397104224}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -1.09, y: 40.08, z: -18.7}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 735381956}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &397104226
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 397104224}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6eeb5dc026fdf4b488bc7ae0138ab719, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_AgentTypeID: 0
+  m_StartPoint: {x: 0, y: 0, z: 0.95}
+  m_EndPoint: {x: 0, y: 0.25, z: -1}
+  m_Width: 2.4
+  m_CostModifier: -1
+  m_Bidirectional: 1
+  m_AutoUpdatePosition: 0
+  m_Area: 0
 --- !u!1001 &398502469
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -28024,6 +28080,7 @@ Transform:
   - {fileID: 2101000003}
   - {fileID: 2101000013}
   - {fileID: 697403118}
+  - {fileID: 397104225}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &735484348
@@ -51213,7 +51270,7 @@ MonoBehaviour:
   guardStrainActiveAlpha: 0.95
   guardBreakFlashDuration: 0.28
   guardStrainTrackColor: {r: 0.06, g: 0.1, b: 0.12, a: 0.92}
-  guardStrainLowColor: {r: 0.2, g: 0.82, b: 0.92, a: 0.96}
+  guardStrainLowColor: {r: 0.94, g: 0.95, b: 0.97, a: 0.96}
   guardStrainHighColor: {r: 1, g: 0.34, b: 0.18, a: 1}
   showCombatTelegraphText: 0
   combatTelegraphText: {fileID: 0}

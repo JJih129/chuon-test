@@ -58,7 +58,7 @@ public class PlayerHUD : MonoBehaviour
     [Tooltip("가드 브레이크 플래시 시간")]
     public float guardBreakFlashDuration = 0.28f;
     public Color guardStrainTrackColor = new Color(0.06f, 0.10f, 0.12f, 0.92f);
-    public Color guardStrainLowColor = new Color(0.20f, 0.82f, 0.92f, 0.96f);
+    public Color guardStrainLowColor = new Color(0.94f, 0.95f, 0.97f, 0.96f); // 세라믹 화이트 (반복 21: 시안 → 비네온 팔레트)
     public Color guardStrainHighColor = new Color(1.00f, 0.34f, 0.18f, 1.00f);
 
     [Header("Combat Telegraph")]

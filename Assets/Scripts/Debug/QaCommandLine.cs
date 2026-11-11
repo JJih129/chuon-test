@@ -474,6 +474,7 @@ public sealed class QaCommandLine : MonoBehaviour
         if (bot != null)
             Debug.Log("[QA] bot: " + bot.Summary);
         Debug.Log("[QA] overhaul: " + QaCombatBot.OverhaulReport()); // 반복 16
+        Debug.Log("[QA] cue audit:\n" + QaCombatBot.CueTimingReport()); // 반복 21: 텔레그래프 정직성 (타격당 큐/경고음/오프셋)
         Debug.Log(QaCinematicWatch.Report());
         Debug.Log(QaErrorShaderWatch.Report());
 

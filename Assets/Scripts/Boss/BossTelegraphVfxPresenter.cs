@@ -610,6 +610,7 @@ public sealed class BossTelegraphVfxPresenter : MonoBehaviour
         _cueAudio.pitch = followUp ? 1.08f : 1f;
         _cueAudio.PlayOneShot(clip, volume);
         LastCueSfx = clip.name + (followUp ? " (follow-up)" : "");
+        BossController.NoteQaCueAudioPlayed(); // QA 텔레그래프 감사: 청각 신호 실제 재생
     }
 
     void ResolveCueMotion(BossAttackTelegraphType telegraphType)

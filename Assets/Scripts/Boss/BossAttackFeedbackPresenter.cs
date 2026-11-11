@@ -153,10 +153,10 @@ public sealed class BossAttackFeedbackPresenter : MonoBehaviour
         if (flashFlags != BossAttackTimingCueFlags.None && telegraphVfx != null)
             visualHandled = telegraphVfx.PlayCue(telegraphType, duration, flashFlags);
 
-        if ((resolvedFlags & BossAttackTimingCueFlags.WarningSound) != 0)
-            PlayOneShot(profile.warningClip, profile.volume);
-        if ((resolvedFlags & BossAttackTimingCueFlags.ChargeSound) != 0)
-            PlayOneShot(profile.chargeClip, profile.volume);
+        if ((resolvedFlags & BossAttackTimingCueFlags.WarningSound) != 0 && PlayOneShot(profile.warningClip, profile.volume))
+            BossController.NoteQaCueAudioPlayed();
+        if ((resolvedFlags & BossAttackTimingCueFlags.ChargeSound) != 0 && PlayOneShot(profile.chargeClip, profile.volume))
+            BossController.NoteQaCueAudioPlayed();
         if ((resolvedFlags & BossAttackTimingCueFlags.CameraShake) != 0)
             ApplyCameraShake(profile);
         if ((resolvedFlags & BossAttackTimingCueFlags.GroundWarning) != 0 && groundTelegraph != null && attackCollider != null)
@@ -229,17 +229,18 @@ public sealed class BossAttackFeedbackPresenter : MonoBehaviour
         return BossAttackFeedbackProfile.Create(telegraphType, true, false, false, false, true, false, false, false, true, false, false, 0f, 0f, 1f, 0f);
     }
 
-    void PlayOneShot(AudioClip clip, float volume)
+    bool PlayOneShot(AudioClip clip, float volume)
     {
         if (clip == null || audioSource == null)
-            return;
+            return false;
 
         float now = Time.unscaledTime;
         if (now - _lastSoundRealtime < Mathf.Max(0f, soundMinIntervalRealtime))
-            return;
+            return false;
 
         _lastSoundRealtime = now;
         audioSource.PlayOneShot(clip, Mathf.Clamp01(volume));
+        return true;
     }
 
     void ApplyCameraShake(BossAttackFeedbackProfile profile)

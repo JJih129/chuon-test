@@ -32,6 +32,65 @@ public partial class BossController
     [SerializeField] private bool tintOpenerHandTelegraphByType = false;
 
     const float PerHitClipResolveTimeout = 0.45f;
+    const float PerHitClipLostGrace = 0.3f;
+
+    /// <summary>QA: 후속타 큐 루틴 추적 (시작/클립 확정/실패 사유/종료). 구독자가 없으면 문자열을 만들지 않는다.</summary>
+    public static event System.Action<BossController, string> QaPerHitTrace;
+    /// <summary>QA: 보스 공격 큐 경고음이 실제로 재생될 때마다 (오프너/후속타/특수패턴 공통).</summary>
+    public static event System.Action QaCueAudioPlayed;
+    internal static void NoteQaCueAudioPlayed() => QaCueAudioPlayed?.Invoke();
+
+    void TracePerHit(string message)
+    {
+        QaPerHitTrace?.Invoke(this, message);
+    }
+
+    string DescribeAnimatorClipsForQa()
+    {
+        if (bossAnimator == null) return "animator=null";
+        var sb = new System.Text.StringBuilder();
+        bool inTransition = bossAnimator.IsInTransition(0);
+        bossAnimator.GetCurrentAnimatorClipInfo(0, _perHitClipInfos);
+        sb.Append("cur=");
+        for (int i = 0; i < _perHitClipInfos.Count; i++)
+            sb.Append(_perHitClipInfos[i].clip != null ? _perHitClipInfos[i].clip.name : "null").Append('(').Append(GetPerHitTimes(_perHitClipInfos[i].clip).Length).Append(')').Append(' ');
+        AnimatorStateInfo st = bossAnimator.GetCurrentAnimatorStateInfo(0);
+        sb.Append("t=").Append(st.normalizedTime.ToString("F2")).Append(" state=").Append(QaStateName(st.shortNameHash))
+            .Append(" len=").Append(st.length.ToString("F2")).Append(" spd=").Append(bossAnimator.speed.ToString("F2"))
+            .Append(" en=").Append(bossAnimator.enabled).Append(" f=").Append(Time.frameCount);
+        if (inTransition)
+        {
+            bossAnimator.GetNextAnimatorClipInfo(0, _perHitClipInfos);
+            sb.Append(" next=");
+            for (int i = 0; i < _perHitClipInfos.Count; i++)
+                sb.Append(_perHitClipInfos[i].clip != null ? _perHitClipInfos[i].clip.name : "null").Append('(').Append(GetPerHitTimes(_perHitClipInfos[i].clip).Length).Append(')').Append(' ');
+        }
+        return sb.ToString();
+    }
+
+    static readonly string[] s_qaStateNames = { "Locomotion", "CombatStrafe", "Attack_A", "Attack_B", "Attack_C", "Attack_D", "Attack_E", "Attack_F",
+        "Attack_Leap", "Attack_Shockwave", "RunStop", "RunStart", "Quickshift_B", "Break", "Hit", "Dead", "TurnL90", "TurnR90", "TurnL180", "TurnR180", "Backstep" };
+    static string QaStateName(int hash)
+    {
+        for (int i = 0; i < s_qaStateNames.Length; i++)
+            if (Animator.StringToHash(s_qaStateNames[i]) == hash) return s_qaStateNames[i];
+        return "#" + hash;
+    }
+
+    string DescribePerHitInactiveForQa(AttackPattern pattern)
+    {
+        if (_currentPattern != pattern) return "patternChanged(" + (_currentPattern != null ? _currentPattern.patternName : "null") + ")";
+        if (!_hasActiveAttackTimingData) return "noTimingData";
+        if (_isDead) return "dead";
+        if (_isUltimateVictim) return "ultVictim";
+        if (IsCombatRecoveryActive) return "recovery";
+        if (_externalIntroPaused) return "introPaused";
+        if (currentState != BossState.Attack) return "state=" + currentState;
+        if (_parryStunRoutine != null) return "parryStun";
+        if (bossHealth != null && bossHealth.IsStaggered) return "staggered";
+        if (breakController != null && breakController.IsInBreak) return "break";
+        return "target";
+    }
     static readonly Dictionary<AnimationClip, float[]> s_perHitClipTimes = new Dictionary<AnimationClip, float[]>();
     readonly List<AnimatorClipInfo> _perHitClipInfos = new List<AnimatorClipInfo>(4);
     Coroutine _perHitCueRoutine;
@@ -143,6 +202,8 @@ public partial class BossController
         {
             if (!IsPerHitPatternActive(pattern) || waited > PerHitClipResolveTimeout)
             {
+                if (QaPerHitTrace != null)
+                    TracePerHit($"perhit FAIL resolve pat={pattern.patternName} phase={_currentPhase} waited={waited:F2} reason={(IsPerHitPatternActive(pattern) ? "timeout" : DescribePerHitInactiveForQa(pattern))} {DescribeAnimatorClipsForQa()}");
                 _perHitCueRoutine = null;
                 yield break;
             }
@@ -152,14 +213,51 @@ public partial class BossController
         }
 
         _perHitTotalHits = hits != null ? hits.Length : 0;
+        if (QaPerHitTrace != null)
+            TracePerHit($"perhit resolved pat={pattern.patternName} phase={_currentPhase} clip={clip.name} hits={hits.Length} waited={waited:F2}");
         int cueIndex = 1; // 0번 히트(오프너)는 BossAttackTimingController 담당
-        while (IsPerHitPatternActive(pattern) && TrySamplePerHitClip(clip, out float clipTime, out float rate))
+        string exitReason = "done";
+        float lostAt = -1f;
+        while (true)
         {
+            if (!IsPerHitPatternActive(pattern))
+            {
+                exitReason = QaPerHitTrace != null ? DescribePerHitInactiveForQa(pattern) : "inactive";
+                break;
+            }
+            if (!TrySamplePerHitClip(clip, out float clipTime, out float rate))
+            {
+                // 애니메이터가 한두 프레임 동안 클립 정보를 비울 때가 있다(상태 진입 직후 등). 바로 포기하면 그 패턴의
+                // 후속타 전부가 신호 없이 들어왔다(QA I19/I20: d/e/b/a "hitbox ON without cue"). 잠시 기다렸다 같은 클립을 다시 잡는다.
+                if (lostAt < 0f)
+                {
+                    lostAt = Time.time;
+                    if (QaPerHitTrace != null)
+                        TracePerHit($"perhit LOST pat={pattern.patternName} {DescribeAnimatorClipsForQa()}");
+                }
+                if (Time.time - lostAt <= PerHitClipLostGrace)
+                {
+                    SetPerHitParryWindow(false);
+                    yield return null;
+                    continue;
+                }
+                exitReason = QaPerHitTrace != null ? "leftClip " + DescribeAnimatorClipsForQa() : "leftClip";
+                break;
+            }
+            if (lostAt >= 0f)
+            {
+                if (QaPerHitTrace != null)
+                    TracePerHit($"perhit REGAINED pat={pattern.patternName} after {Time.time - lostAt:F3}s");
+                lostAt = -1f;
+            }
+
             while (cueIndex < hits.Length && (hits[cueIndex] - clipTime) / rate <= perHitCueLeadTime)
             {
                 float secondsToHit = (hits[cueIndex] - clipTime) / rate;
                 if (secondsToHit > -0.02f) // 프레임 드랍으로 이미 지나간 히트에는 큐를 내지 않는다
                     PlayPerHitCue(telegraphType, Mathf.Max(0f, secondsToHit), cueIndex);
+                else if (QaPerHitTrace != null)
+                    TracePerHit($"perhit SKIP late pat={pattern.patternName} hit#{cueIndex} secondsToHit={secondsToHit:F3}");
                 cueIndex++;
             }
 
@@ -187,6 +285,8 @@ public partial class BossController
             yield return null;
         }
 
+        if (QaPerHitTrace != null && (cueIndex < hits.Length || exitReason != "done"))
+            TracePerHit($"perhit END pat={pattern.patternName} cued={cueIndex - 1}/{hits.Length - 1} reason={exitReason}");
         SetPerHitParryWindow(false);
         _perHitCueRoutine = null;
     }

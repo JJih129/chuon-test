@@ -242,26 +242,41 @@ public sealed class QaCombatBot : MonoBehaviour
         Directory.CreateDirectory(OutputDir);
         Resolve();
         AttackHitbox.QaWindowActivated += HandleHitboxActivated;
+        BossController.QaPerHitTrace += HandlePerHitTrace;
+        BossController.QaCueAudioPlayed += HandleCueAudio;
         Note("attached");
     }
 
     // ---- Cue honesty measurement: announced cue duration vs. when the boss hitbox actually opens ----
     static readonly Dictionary<string, List<(float announced, float actual)>> s_cueTiming = new Dictionary<string, List<(float, float)>>();
-    static int s_unannouncedHits;
+    static int s_unannouncedHits, s_hitsNoAudio, s_auditHits;
+    static float s_maxAbsOffset;
+    static readonly List<string> s_unannouncedPatterns = new List<string>();
     // FIFO: a per-hit cue for hit N can be raised in the same frame hit N-1 opens, so match oldest-first.
-    readonly List<(float at, float announced, string key)> _pendingCues = new List<(float, float, string)>();
+    readonly List<(float at, float announced, string key, int frame, string pat)> _pendingCues = new List<(float, float, string, int, string)>();
+    // Frames in which a boss cue sound actually played (BossController.QaCueAudioPlayed); matched to the cue raised in that frame.
+    readonly List<int> _cueAudioFrames = new List<int>(64);
+    void HandleCueAudio()
+    {
+        if (_cueAudioFrames.Count >= 64) _cueAudioFrames.RemoveAt(0);
+        _cueAudioFrames.Add(Time.frameCount);
+    }
+    void HandlePerHitTrace(BossController boss, string message)
+    {
+        if (boss == _boss) Note(message);
+    }
     float _pendingPreAt = -1f, _pendingPreLead;
     string _pendingPreKey;
 
-    void RecordCueTiming(string key, float announced, float actual)
+    void RecordCueTiming(string key, float announced, float actual, string tail = "")
     {
         if (!s_cueTiming.TryGetValue(key, out var list))
             s_cueTiming[key] = list = new List<(float, float)>();
         list.Add((announced, actual));
-        Note($"hitbox ON {key} announced={announced:F3} actual={actual:F3}");
+        Note($"hitbox ON {key} announced={announced:F3} actual={actual:F3}{tail}");
     }
 
-    public static void ResetCueTiming() { s_cueTiming.Clear(); s_unannouncedHits = 0; }
+    public static void ResetCueTiming() { s_cueTiming.Clear(); s_unannouncedHits = 0; s_hitsNoAudio = 0; s_auditHits = 0; s_maxAbsOffset = 0f; s_unannouncedPatterns.Clear(); }
 
     /// <summary>Per cue kind: n, mean announced, mean actual (cue to hitbox ON), mean and min slack (actual - announced).</summary>
     public static string CueTimingReport()
@@ -275,6 +290,8 @@ public sealed class QaCombatBot : MonoBehaviour
             sb.Append($"{kv.Key}: n={n} announced={a / n:F3} actual={r / n:F3} slack={(r - a) / n:+0.000;-0.000} minSlack={minSlack:+0.000;-0.000}\n");
         }
         sb.Append($"unannounced hitbox activations={s_unannouncedHits}");
+        sb.Append($"\n[QA-CUE] audit hits={s_auditHits} noCue={s_unannouncedHits} noAudio={s_hitsNoAudio} maxAbsOffset={s_maxAbsOffset:F3}s");
+        if (s_unannouncedPatterns.Count > 0) sb.Append(" noCuePats=").Append(string.Join(",", s_unannouncedPatterns));
         return sb.ToString();
     }
 
@@ -298,16 +315,25 @@ public sealed class QaCombatBot : MonoBehaviour
         while (_pendingCues.Count > 0 && Time.time - _pendingCues[0].at > _pendingCues[0].announced + 0.6f)
             _pendingCues.RemoveAt(0);
 
+        s_auditHits++;
         if (_pendingCues.Count == 0)
         {
             s_unannouncedHits++;
-            Note($"hitbox ON without cue pat={_boss.CurrentPatternName}");
+            if (s_unannouncedPatterns.Count < 40) s_unannouncedPatterns.Add(_boss.CurrentPatternName + "@p" + _boss.CurrentPhase);
+            Note($"hitbox ON without cue pat={_boss.CurrentPatternName} phase={_boss.CurrentPhase}");
             return;
         }
 
         var cue = _pendingCues[0];
         _pendingCues.RemoveAt(0);
-        RecordCueTiming(cue.key, cue.announced, Time.time - cue.at);
+        float actual = Time.time - cue.at;
+        float offset = actual - cue.announced;
+        bool audio = _cueAudioFrames.Contains(cue.frame);
+        if (!audio) s_hitsNoAudio++;
+        // Telegraph honesty audit line: cue start vs hitbox ON (offset = actual - announced; gate |offset| <= 0.03 s).
+        // Frame quantisation: a cue can only be raised on a frame, so |offset| is bounded below by ~1 frame.
+        s_maxAbsOffset = Mathf.Max(s_maxAbsOffset, Mathf.Abs(offset));
+        RecordCueTiming(cue.key, cue.announced, actual, $" off={offset:+0.000;-0.000} audio={(audio ? 1 : 0)} pat={cue.pat} phase={_boss.CurrentPhase}");
     }
 
     void OnDestroy()
@@ -315,6 +341,8 @@ public sealed class QaCombatBot : MonoBehaviour
         PlayerMoveController.QaMoveInputOverride = null;
         PlayerGuardController.QaClearGuardInput();
         AttackHitbox.QaWindowActivated -= HandleHitboxActivated;
+        BossController.QaPerHitTrace -= HandlePerHitTrace;
+        BossController.QaCueAudioPlayed -= HandleCueAudio;
         if (_consumables != null) _consumables.OnHealCancelled -= HandleHealCancelled;
         if (_boss != null)
         {
@@ -678,7 +706,7 @@ public sealed class QaCombatBot : MonoBehaviour
         _cues++;
         _lastCueTime = Time.time;
         _lastThreatTime = Time.time;
-        _pendingCues.Add((Time.time, duration, (flags == BossAttackTimingCueFlags.WeaponFlash ? "perhit/" : "opener/") + type));
+        _pendingCues.Add((Time.time, duration, (flags == BossAttackTimingCueFlags.WeaponFlash ? "perhit/" : "opener/") + type, Time.frameCount, _boss != null ? _boss.CurrentPatternName : "?"));
         bool dodge = type == BossAttackTelegraphType.DodgeOnly || type == BossAttackTelegraphType.Unblockable || type == BossAttackTelegraphType.Ranged;
         bool react = _rng.NextDouble() < defenseSkill;
         Note($"cue {type} in {duration:F2}s react={react} pat={_boss.CurrentPatternName}");

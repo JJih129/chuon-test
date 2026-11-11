@@ -2160,6 +2160,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
             return;
 
         attackTimingCueAudioSource.PlayOneShot(attackTimingWarningClip, Mathf.Clamp01(attackTimingWarningVolume));
+        NoteQaCueAudioPlayed(); // StringHitCues.cs: QA 텔레그래프 감사 (청각 신호)
         _nextAttackTimingWarningRealtime = now + Mathf.Max(0f, attackTimingWarningMinIntervalRealtime);
     }
 
