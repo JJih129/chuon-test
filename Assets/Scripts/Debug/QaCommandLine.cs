@@ -236,8 +236,14 @@ public sealed class QaCommandLine : MonoBehaviour
         float controlAt = -1f, firstAttackAt = -1f;
         bool seenBlocked = false;
         int attacksAtLower = bot != null ? bot.AttackCount : 0;
+        // 반복 19: Type-D 리빌(MainSceneIntroDirector) 이 실제로 재생됐는지 — 씬 참조가 빠지면 조용히 건너뛰므로 로그로 확인
+        GameObject introGo = GameObject.Find("MainSceneIntroDirector");
+        UnityEngine.Playables.PlayableDirector intro = introGo != null ? introGo.GetComponent<UnityEngine.Playables.PlayableDirector>() : null;
+        double introMaxTime = -1d;
         while (Time.realtimeSinceStartup - lowerAt < 25f)
         {
+            if (intro != null && intro.state == UnityEngine.Playables.PlayState.Playing && intro.time > introMaxTime)
+                introMaxTime = intro.time;
             bool blocked = blocker != null && blocker.IsBlocked;
             seenBlocked |= blocked;
             if (controlAt < 0f && !blocked && (seenBlocked || Time.realtimeSinceStartup - lowerAt > 3f))
@@ -247,6 +253,7 @@ public sealed class QaCommandLine : MonoBehaviour
             yield return null;
         }
         Flow($"facility: arrival control at +{controlAt:F1}s, bot first attack at +{firstAttackAt:F1}s after LowerFloorReached");
+        Flow($"facility: type-d reveal director={(intro != null)} asset={(intro != null && intro.playableAsset != null ? intro.playableAsset.name : "none")} played={(introMaxTime >= 0d)} reached={introMaxTime:F2}s");
         BossHealth boss = FindObjectOfType<BossHealth>();
         Flow($"facility: bot {(bot != null ? bot.Summary : "gone")}");
         if (boss != null && !boss.IsDead) { Flow("facility: BossHealth.Kill()"); boss.Kill(); }

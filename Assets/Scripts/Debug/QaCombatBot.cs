@@ -114,8 +114,8 @@ public sealed class QaCombatBot : MonoBehaviour
         {
             _skipNode = _nodeTarget;
             _skipNodeUntil = Time.time + 8f;
+            Note($"node target switch (stuck) player={_player.position:F1} dist={Vector3.Distance(_nodeTarget.position, _player.position):F1} boss={(_boss != null ? Vector3.Distance(_boss.transform.position, _player.position).ToString("F1") : "-")}");
             _nodeTarget = null;
-            Note("node target switch (stuck)");
         }
         if (_nodeTarget != null)
             return _nodeTarget;
@@ -936,7 +936,12 @@ public sealed class QaCombatBot : MonoBehaviour
         bool mobOpen = mobTarget && (_mob.InRiposteWindow || _mob.State == EnemyBrainState.Recover);
         bool mobBusy = mobTarget && (_mob.PendingHitAt > 0f || MeleeMobAboutToSwing());
         bool nodeTargeted = nodeTarget != null && target == nodeTarget; // 반복 16: 노드는 보스 위협 직후에도 친다 (방어 예약만 기다림)
-        bool threatened = _drone == null && !mobOpen && !nodeTargeted && (bossBusy || mobBusy || Time.time - _lastThreatTime < holdAttackAfterThreat);
+        // 반복 19: 노드를 칠 때도 '가까이서 진행 중인 보스 연타' 사이에는 휘두르지 않는다 (사람은 연타 중간에 노드를 치지 않음).
+        //   예전엔 노드 표적이면 위협을 통째로 무시해 연타 도중 공격 → 다음 타격 큐의 패리가 공격 모션에 먹혀 봉쇄 중 피격의 절반이 이것이었다.
+        //   (CurrentPatternName 기준은 너무 넓어 QA 에서 봉쇄가 안 끝났다 → 실제 공격 상태 + 4.5 m 이내만 본다)
+        bool bossStringNear = nodeTargeted && _boss != null && !inBreak && !_boss.IsPunishWindowActive && _boss.IsAttackStateActive
+            && (_boss.transform.position - _player.position).sqrMagnitude < 20.25f;
+        bool threatened = _drone == null && !mobOpen && (nodeTargeted ? bossStringNear : (bossBusy || mobBusy || Time.time - _lastThreatTime < holdAttackAfterThreat));
         if (dist <= range && !defensePending && !threatened && Time.time >= _nextAttackAt)
         {
             _nextAttackAt = Time.time + attackInterval;
@@ -1241,6 +1246,12 @@ public sealed class QaCombatBot : MonoBehaviour
         toBoss.Normalize();
 
         // Crude obstacle handling: if we made no progress for 0.8 s, side-step (alternating) for 1.2 s.
+        // 반복 19: 공격·피격 모션 중엔 원래 못 움직인다 — 이걸 '막힘'으로 세면 노드 앞에서 옆으로 빠져 사거리를 벗어났다
+        if (_combat != null && (_combat.IsAttacking || _combat.IsInHit))
+        {
+            _lastProgressPos = _player.position;
+            _progressCheckAt = Time.time + 0.8f;
+        }
         if (Time.time >= _progressCheckAt)
         {
             if ((_player.position - _lastProgressPos).sqrMagnitude < 0.09f && _progressCheckAt > 0f)
@@ -1298,7 +1309,14 @@ public sealed class QaCombatBot : MonoBehaviour
             Vector3 toCorner = _pathCorner - _player.position;
             toCorner.y = 0f;
             if (toCorner.sqrMagnitude > 0.04f)
-                return toCorner.normalized;
+            {
+                // 반복 19: NavMesh 는 보스·적 몸을 모른다 — 경로 방향을 몸이 막으면 막힘 판정(0.8 s)을 기다리지 않고
+                //   한 방향으로 정해 0.8 s 돌아간다 (매 프레임 좌우를 다시 고르면 보스 앞에서 제자리 왕복했다)
+                desired = toCorner.normalized;
+                if (Time.time >= _detourUntil && IsBlockedByActor(desired, target))
+                    _detourUntil = Time.time + 0.8f;
+                return desired;
+            }
         }
 
         if (!IsBlocked(desired, target))
@@ -1323,6 +1341,17 @@ public sealed class QaCombatBot : MonoBehaviour
             return false;
         Transform t = hit.collider.transform;
         return !(t.IsChildOf(_player) || (target != null && t.IsChildOf(target.root)));
+    }
+
+    bool IsBlockedByActor(Vector3 direction, Transform target)
+    {
+        Vector3 origin = _player.position + Vector3.up * 0.9f;
+        if (!Physics.SphereCast(origin, 0.35f, direction, out RaycastHit hit, 1.6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            return false;
+        Transform t = hit.collider.transform;
+        if (t.IsChildOf(_player) || (target != null && t.IsChildOf(target.root)))
+            return false;
+        return hit.collider.GetComponentInParent<BossController>() != null || hit.collider.GetComponentInParent<EnemyBrain>() != null;
     }
 
     void Note(string message)
