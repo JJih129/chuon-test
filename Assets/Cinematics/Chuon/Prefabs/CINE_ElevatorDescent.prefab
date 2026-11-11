@@ -666,6 +666,7 @@ GameObject:
   - component: {fileID: 1352891881785349770}
   - component: {fileID: 6401479875806457773}
   - component: {fileID: 8311775249654199402}
+  - component: {fileID: 1426941826880185508}
   m_Layer: 0
   m_Name: FloorText
   m_TagString: Untagged
@@ -826,6 +827,14 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 6401479875806457773}
   m_maskType: 0
+--- !u!33 &1426941826880185508
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3983951438103609849}
+  m_Mesh: {fileID: 0}
 --- !u!1 &4011774419984785124
 GameObject:
   m_ObjectHideFlags: 0

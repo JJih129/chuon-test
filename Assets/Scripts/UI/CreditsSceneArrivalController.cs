@@ -122,11 +122,19 @@ public class CreditsSceneArrivalController : MonoBehaviour
         if (!_allowReturnInput || _returnTriggered)
             return;
 
-        if (!Input.anyKeyDown && !Input.GetKeyDown(fallbackReturnKey))
+        // 반복 22: 레거시 anyKeyDown 은 Input System 장치(패드) 입력을 못 볼 수 있다 → 패드 버튼도 직접 확인
+        if (!Input.anyKeyDown && !Input.GetKeyDown(fallbackReturnKey) && !AnyGamepadButtonPressed())
             return;
 
         _returnTriggered = true;
         StartCoroutine(CoReturnToTitle());
+    }
+
+    static bool AnyGamepadButtonPressed()
+    {
+        UnityEngine.InputSystem.Gamepad pad = UnityEngine.InputSystem.Gamepad.current;
+        return pad != null && (pad.buttonSouth.wasPressedThisFrame || pad.buttonEast.wasPressedThisFrame
+            || pad.buttonWest.wasPressedThisFrame || pad.buttonNorth.wasPressedThisFrame || pad.startButton.wasPressedThisFrame);
     }
 
     IEnumerator CoPlayArrivalSequence()

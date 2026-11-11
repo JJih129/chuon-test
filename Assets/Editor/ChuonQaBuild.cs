@@ -23,7 +23,14 @@ public static class ChuonQaBuild
         Debug.Log("[ChuonQaBuild] " + Build("QA_Latest"));
     }
 
-    public static string Build(string folderName)
+    public static string Build(string folderName) => BuildCore(folderName, BuildOptions.Development);
+
+    /// <summary>
+    /// 반복 22: 비개발(릴리스) 플레이어 — 배포본과 같은 옵션. 자동 흐름 검사는 -qaReleaseFlow 플래그로만 켜진다 (QaReleaseFlow).
+    /// </summary>
+    public static string BuildRelease(string folderName) => BuildCore(folderName, BuildOptions.None);
+
+    static string BuildCore(string folderName, BuildOptions buildOptions)
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode)
             return "PLAYING (exit Play mode first)";
@@ -44,7 +51,7 @@ public static class ChuonQaBuild
             locationPathName = Path.Combine(projectRoot, "Builds", folderName, "ChuOn.exe"),
             target = BuildTarget.StandaloneWindows64,
             targetGroup = BuildTargetGroup.Standalone,
-            options = BuildOptions.Development
+            options = buildOptions
         };
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -52,7 +59,8 @@ public static class ChuonQaBuild
         watch.Stop();
 
         var sb = new StringBuilder();
-        sb.Append("scenesSaved=").Append(saved)
+        sb.Append("dev=").Append((buildOptions & BuildOptions.Development) != 0)
+          .Append(" scenesSaved=").Append(saved)
           .Append(" result=").Append(report.summary.result)
           .Append(" size=").Append((report.summary.totalSize / 1048576.0).ToString("F1")).Append("MB")
           .Append(" time=").Append(watch.Elapsed.TotalSeconds.ToString("F0")).Append("s")

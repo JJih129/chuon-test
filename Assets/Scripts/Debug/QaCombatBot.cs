@@ -67,7 +67,8 @@ public sealed class QaCombatBot : MonoBehaviour
         $"bossHP={(_bossHealth ? _bossHealth.CurrentHP : -1)}/{(_bossHealth ? _bossHealth.MaxHP : -1)} " +
         $"break={(_break ? _break.CurrentBreak : -1):F0} cues={_cues} parryPress={_parries} parried={PlayerGuardController.QaParrySuccessCount - _parryBaseline} dodgePress={_dodges} " +
         $"attacks={_attacks} hitsTaken={HitsTaken} heals={Heals} healCancel={HealsCancelled} deaths={Deaths} respawns={Respawns} bossDeadAt={BossDeadAt:F0} minHP={(MinHp < 0 ? -1 : MinHp)} finishers={_finishers} ultimates={_ultimates} ts={Time.timeScale:F2} autoLock={LockAttempts - LockFailures}/{LockAttempts}" +
-        $" mobKills={MobKills} mobHitsTaken={MobHitsTaken} mobParryPress={MobParryPresses} mobDodgePress={MobDodgePresses} maxMeleeTokens={MaxMeleeTokens} lockOnDeadFrames={LockOnDeadMobFrames} mobFight={MobFightStart:F0}-{MobFightEnd:F0}s";
+        $" mobKills={MobKills} mobHitsTaken={MobHitsTaken} mobParryPress={MobParryPresses} mobDodgePress={MobDodgePresses} maxMeleeTokens={MaxMeleeTokens} lockOnDeadFrames={LockOnDeadMobFrames} mobFight={MobFightStart:F0}-{MobFightEnd:F0}s" +
+        $" input={(UsePad ? "pad" : "direct")} padPresses={QaPadInput.ActionPresses} scheme={ChuonInput.Scheme} animWatchdog={(_boss != null ? _boss.QaAnimWatchdogRecoveries : 0)}";
 
     /// <summary>Per-mob QA line (hits both ways, parries, staggers, cue honesty).</summary>
     public static string MobReport()
@@ -171,7 +172,7 @@ public sealed class QaCombatBot : MonoBehaviour
             away.y = 0f;
             if (away.magnitude > oh.VentRadius + 1.2f)
             {
-                PlayerMoveController.QaMoveInputOverride = null;
+                MoveIntent = null;
                 return true;
             }
             goal = _boss.transform.position + (away.sqrMagnitude > 0.01f ? away.normalized : -_boss.transform.forward) * (oh.VentRadius + 2f);
@@ -181,13 +182,13 @@ public sealed class QaCombatBot : MonoBehaviour
         Camera cam = Camera.main;
         if (to.magnitude < 0.35f || cam == null)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return true;
         }
         Vector3 f = cam.transform.forward; f.y = 0f; f.Normalize();
         Vector3 r = cam.transform.right; r.y = 0f; r.Normalize();
         to.Normalize();
-        PlayerMoveController.QaMoveInputOverride = new Vector2(Vector3.Dot(to, r), Vector3.Dot(to, f));
+        MoveIntent = new Vector2(Vector3.Dot(to, r), Vector3.Dot(to, f));
         return true;
     }
 
@@ -340,6 +341,7 @@ public sealed class QaCombatBot : MonoBehaviour
     {
         PlayerMoveController.QaMoveInputOverride = null;
         PlayerGuardController.QaClearGuardInput();
+        if (UsePad) QaPadInput.ReleaseAll();
         AttackHitbox.QaWindowActivated -= HandleHitboxActivated;
         BossController.QaPerHitTrace -= HandlePerHitTrace;
         BossController.QaCueAudioPlayed -= HandleCueAudio;
@@ -587,6 +589,7 @@ public sealed class QaCombatBot : MonoBehaviour
             if (_lockMismatchSince < 0f) _lockMismatchSince = now;
             if (now - _lockMismatchSince < 1.0f)
                 return;
+            if (UsePad) { QaPadInput.PressAction(ChuonAction.LockOn); _padLockPressedAt = -1f; _nextLockTryAt = now + 0.35f; _lockMismatchSince = -1f; return; }
             _lockOn.Unlock(); // 다른 적에 고정된 채 1 s → 락온 키 탭(해제) 후 다시 잡는다
             _lockMismatchSince = -1f;
         }
@@ -595,6 +598,26 @@ public sealed class QaCombatBot : MonoBehaviour
             return;
         _nextLockTryAt = now + 0.25f;
         LockAttempts++;
+        if (UsePad)
+        {
+            // 패드: 락온 버튼(R3) 탭 → 다음 시도(0.35 s 뒤)에 결과 확인. 못 잡았으면 아래처럼 시선을 돌린 뒤 다시 누른다.
+            if (_padLockPressedAt >= 0f && !_lockOn.IsLockedOn())
+            {
+                LockFailures++;
+                SoulsCameraRig padRig = SoulsCameraRig.Active;
+                if (padRig != null && _player != null)
+                {
+                    Vector3 pd = target.position - _player.position;
+                    pd.y = 0f;
+                    if (pd.sqrMagnitude > 0.01f)
+                        padRig.SnapToYaw(Mathf.Atan2(pd.x, pd.z) * Mathf.Rad2Deg);
+                }
+            }
+            QaPadInput.PressAction(ChuonAction.LockOn);
+            _padLockPressedAt = now;
+            _nextLockTryAt = now + 0.35f;
+            return;
+        }
         if (_lockOn.TryAutoLock() && _lockOn.CurrentTarget != null && _lockOn.CurrentTarget.root == target.root)
         {
             _lockedTo = target;
@@ -666,6 +689,62 @@ public sealed class QaCombatBot : MonoBehaviour
         Note($"drone shot in {t:F2}s react={react}");
         if (react)
             _scheduled.Add((Time.time + Mathf.Max(0f, t - dodgeLead - 0.08f), true));
+    }
+
+    // ------------------------------------------------------------------ 반복 22: 입력 액추에이터
+    // UsePad(-qaPad) 면 판단은 그대로 두고 실행만 가상 게임패드(QaPadInput, Input System 장치)로 보낸다 → 게임의 실제 패드 바인딩·
+    // 스킴 전환·글리프 경로를 그대로 탄다. 아니면 기존 직접 호출(명령 버퍼/QA 가드 훅/이동 오버라이드).
+    public static bool UsePad;
+    float _padLockPressedAt = -1f;
+
+    Vector2? MoveIntent
+    {
+        set
+        {
+            if (UsePad) { PlayerMoveController.QaMoveInputOverride = null; QaPadInput.SetStick(value ?? Vector2.zero); }
+            else PlayerMoveController.QaMoveInputOverride = value;
+        }
+    }
+
+    void PressDodge()
+    {
+        if (UsePad) QaPadInput.PressAction(ChuonAction.Dodge);
+        else _input.RecordDodgePress();
+    }
+
+    void PressAttack(bool heavy)
+    {
+        if (UsePad) QaPadInput.PressAction(heavy ? ChuonAction.AttackHeavy : ChuonAction.AttackLight);
+        else if (heavy) _input.RecordAttackHeavyPress();
+        else _input.RecordAttackLightPress();
+    }
+
+    void GuardDown()
+    {
+        if (UsePad) QaPadInput.HoldAction(ChuonAction.Guard, true);
+        else PlayerGuardController.QaPressGuard();
+    }
+
+    void GuardUp()
+    {
+        if (UsePad) QaPadInput.HoldAction(ChuonAction.Guard, false);
+        else PlayerGuardController.QaReleaseGuard();
+    }
+
+    bool UseHeal()
+    {
+        if (!UsePad) return _consumables.TryUseAmpoule();
+        if (_consumables.CurrentAmpoule <= 0) return false;
+        QaPadInput.PressAction(ChuonAction.Heal);
+        return true;
+    }
+
+    bool UseUltimate()
+    {
+        if (!UsePad) return _ultimate.TryActivate();
+        if (!_ultimate.IsGaugeReady) return false;
+        QaPadInput.PressAction(ChuonAction.Ultimate);
+        return true;
     }
 
     void Resolve()
@@ -854,7 +933,7 @@ public sealed class QaCombatBot : MonoBehaviour
 
         if (target == null)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return;
         }
 
@@ -866,7 +945,7 @@ public sealed class QaCombatBot : MonoBehaviour
 
         if (_playerHealth != null && _playerHealth.IsDead)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             Capture("player_dead");
             return;
         }
@@ -885,7 +964,7 @@ public sealed class QaCombatBot : MonoBehaviour
         // Escape multi-hit strings with a recovery dodge, like a real player would.
         if (_combat != null && _combat.IsInHit && _combat.HitStateElapsed > 0.32f && Time.time >= _nextEscapeAt)
         {
-            _input.RecordDodgePress(); _dodges++; _nextEscapeAt = Time.time + 0.8f; Note("escape dodge");
+            PressDodge(); _dodges++; _nextEscapeAt = Time.time + 0.8f; Note("escape dodge");
         }
 
         bool inBreak = _break != null && _break.IsInBreak;
@@ -923,7 +1002,7 @@ public sealed class QaCombatBot : MonoBehaviour
         if (_profileUltState == 1 && Time.frameCount < _profileUltStopFrame - 1190)
             return;
 
-        if (!nonBossTarget && _ultimate != null && _ultimate.IsGaugeReady && _ultimate.TryActivate())
+        if (!nonBossTarget && _ultimate != null && _ultimate.IsGaugeReady && UseUltimate())
         {
             if (_profileUltState == 1)
                 _profileUltStopFrame = Time.frameCount + 90;
@@ -947,7 +1026,7 @@ public sealed class QaCombatBot : MonoBehaviour
             && !defensePending && !inHit && Time.time >= _nextHealAt
             && !(mobTarget && (Time.time - _lastThreatTime < 1.0f || MeleeMobAboutToSwing())))
         {
-            if (_consumables.TryUseAmpoule())
+            if (UseHeal())
             {
                 Heals++;
                 Note($"heal start hp={_playerHealth.CurrentHP} left={_consumables.CurrentAmpoule}");
@@ -982,7 +1061,7 @@ public sealed class QaCombatBot : MonoBehaviour
             // Shield up in front -> a player swaps to heavy (guard break) or flanks; light hits only bounce.
             double heavyChance = mobTarget && _mob is ShieldEnforcerBrain se && se.ShieldUp ? 0.7 : 0.2;
             bool heavy = _rng.NextDouble() < heavyChance;
-            if (heavy) _input.RecordAttackHeavyPress(); else _input.RecordAttackLightPress();
+            if (heavy) PressAttack(true); else PressAttack(false);
             _attacks++;
             if (_attacks == 6)
                 Capture("combo");
@@ -1000,12 +1079,12 @@ public sealed class QaCombatBot : MonoBehaviour
             if (Time.time < _scheduled[i].time)
                 continue;
 
-            if (_scheduled[i].dodge) { _input.RecordDodgePress(); _dodges++; Note("dodge"); }
-            else { PlayerGuardController.QaPressGuard(); _releaseGuardAt = Time.unscaledTime + 0.12f; _parries++; Note((_combat != null && _combat.IsInHit ? "parry (from hit-stun)" : "parry") + DefenseState()); }
+            if (_scheduled[i].dodge) { PressDodge(); _dodges++; Note("dodge"); }
+            else { GuardDown(); _releaseGuardAt = Time.unscaledTime + 0.12f; _parries++; Note((_combat != null && _combat.IsInHit ? "parry (from hit-stun)" : "parry") + DefenseState()); }
             _scheduled.RemoveAt(i);
         }
 
-        if (_releaseGuardAt > 0f && Time.unscaledTime >= _releaseGuardAt) { PlayerGuardController.QaReleaseGuard(); _releaseGuardAt = 0f; }
+        if (_releaseGuardAt > 0f && Time.unscaledTime >= _releaseGuardAt) { GuardUp(); _releaseGuardAt = 0f; }
     }
 
     // ---- Infiltration tutorial route (Tutorial.unity, iteration 13) ----
@@ -1023,7 +1102,7 @@ public sealed class QaCombatBot : MonoBehaviour
         string id = d.CurrentStepId;
         if (id != _tutStep)
         {
-            if (_tutGuardHeld) { PlayerGuardController.QaReleaseGuard(); _tutGuardHeld = false; }
+            if (_tutGuardHeld) { GuardUp(); _tutGuardHeld = false; }
             _tutStep = id;
             _tutStepAt = Time.unscaledTime;
             Note($"tutorial step -> {id}");
@@ -1034,9 +1113,9 @@ public sealed class QaCombatBot : MonoBehaviour
         {
             // 가드 레슨: 막기만 한다 (패링/공격 안 함) — E 를 누르고 버티기
             _scheduled.Clear();
-            if (!_tutGuardHeld) { PlayerGuardController.QaPressGuard(); _tutGuardHeld = true; Note("tutorial guard hold"); }
+            if (!_tutGuardHeld) { GuardDown(); _tutGuardHeld = true; Note("tutorial guard hold"); }
             if (_mob != null) UpdateLockOn(_mob.transform);
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return true;
         }
 
@@ -1049,7 +1128,7 @@ public sealed class QaCombatBot : MonoBehaviour
                 UpdateApproach(d.CurrentGoal, to.magnitude, false, 0f);
             }
             else
-                PlayerMoveController.QaMoveInputOverride = null;
+                MoveIntent = null;
             RunScheduledDefense();
             return true;
         }
@@ -1057,11 +1136,11 @@ public sealed class QaCombatBot : MonoBehaviour
         if (id == "ultimate" && _ultimate != null && _ultimate.IsGaugeReady && !_ultimate.IsCinematic)
         {
             // 사람처럼: 게이지가 차 있으면 공격을 멈추고 궁극기 (공격 중엔 "Player is attacking" 으로 거부된다)
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             if (Time.unscaledTime >= _nextTutActionAt)
             {
                 _nextTutActionAt = Time.unscaledTime + 0.3f;
-                if (_ultimate.TryActivate()) { _ultimates++; Note("tutorial ultimate activate"); }
+                if (UseUltimate()) { _ultimates++; Note("tutorial ultimate activate"); }
                 else if (Time.unscaledTime - _lastUltDiagAt > 2f)
                 {
                     _lastUltDiagAt = Time.unscaledTime;
@@ -1082,10 +1161,10 @@ public sealed class QaCombatBot : MonoBehaviour
             Camera cam = Camera.main;
             if (ExecutionDirector.TryGetPrompt(_player, out ExecutionKind pk, out _) && pk == ExecutionKind.Takedown)
             {
-                PlayerMoveController.QaMoveInputOverride = null;
+                MoveIntent = null;
                 if (Time.unscaledTime >= _nextTutActionAt)
                 {
-                    _input.RecordAttackLightPress(); _attacks++;
+                    PressAttack(false); _attacks++;
                     _nextTutActionAt = Time.unscaledTime + 0.6f;
                     Note("tutorial takedown press");
                     Capture("takedown");
@@ -1101,7 +1180,7 @@ public sealed class QaCombatBot : MonoBehaviour
                 Vector3 dir = goal - _player.position; dir.y = 0f; dir.Normalize();
                 Vector3 f = cam.transform.forward; f.y = 0f; f.Normalize();
                 Vector3 r = cam.transform.right; r.y = 0f; r.Normalize();
-                PlayerMoveController.QaMoveInputOverride = new Vector2(Vector3.Dot(dir, r), Vector3.Dot(dir, f)) * 0.6f;
+                MoveIntent = new Vector2(Vector3.Dot(dir, r), Vector3.Dot(dir, f)) * 0.6f;
             }
             return true;
         }
@@ -1119,7 +1198,7 @@ public sealed class QaCombatBot : MonoBehaviour
                 _nextTutActionAt = Time.unscaledTime + 1.5f;
                 break;
             case "dodge":
-                _input.RecordDodgePress(); _dodges++;
+                PressDodge(); _dodges++;
                 _nextTutActionAt = Time.unscaledTime + 0.9f;
                 break;
             case "scan":
@@ -1128,18 +1207,18 @@ public sealed class QaCombatBot : MonoBehaviour
                     float dz = d.Scanner.transform.position.z - _player.position.z;
                     if (dz > 0.5f && dz < 1.8f)
                     {
-                        _input.RecordDodgePress(); _dodges++;
+                        PressDodge(); _dodges++;
                         _nextTutActionAt = Time.unscaledTime + 1.2f;
                         Note("tutorial scan: dodge through curtain");
                     }
                 }
                 break;
             case "heal":
-                if (_consumables != null && _consumables.TryUseAmpoule()) { Heals++; Note("tutorial heal"); }
+                if (_consumables != null && UseHeal()) { Heals++; Note("tutorial heal"); }
                 _nextTutActionAt = Time.unscaledTime + 1.5f;
                 break;
             case "ultimate":
-                if (_ultimate != null && _ultimate.IsGaugeReady && !_ultimate.IsCinematic && _ultimate.TryActivate()) { _ultimates++; Note("tutorial ultimate activate"); }
+                if (_ultimate != null && _ultimate.IsGaugeReady && !_ultimate.IsCinematic && UseUltimate()) { _ultimates++; Note("tutorial ultimate activate"); }
                 else if (Time.unscaledTime - _tutStepAt > 2f && Time.unscaledTime - _lastUltDiagAt > 3f)
                 {
                     _lastUltDiagAt = Time.unscaledTime;
@@ -1172,14 +1251,14 @@ public sealed class QaCombatBot : MonoBehaviour
             goal = d.ExitInteractable.transform;
         if (goal == null)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return true;
         }
         Vector3 to = goal.position - _player.position;
         to.y = 0f;
         if (to.magnitude < 0.9f)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return true;
         }
         UpdateApproach(goal, to.magnitude, false, 0f);
@@ -1226,7 +1305,7 @@ public sealed class QaCombatBot : MonoBehaviour
         if (leg != _routeLeg) { _routeLeg = leg; Note($"route leg -> {leg ?? "wait"} (phase {_lobby.CurrentPhase})"); }
         if (!goal.HasValue)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return true;
         }
 
@@ -1234,7 +1313,7 @@ public sealed class QaCombatBot : MonoBehaviour
         to.y = 0f;
         if (to.magnitude < 0.6f)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return true;
         }
         if (_routeGoal == null) { _routeGoal = new GameObject("__QaRouteGoal").transform; _routeGoal.SetParent(transform, false); }
@@ -1250,13 +1329,13 @@ public sealed class QaCombatBot : MonoBehaviour
         {
             Vector3 f = Camera.main.transform.forward; f.y = 0f; f.Normalize();
             Vector3 r = Camera.main.transform.right; r.y = 0f; r.Normalize();
-            PlayerMoveController.QaMoveInputOverride = new Vector2(Vector3.Dot(_lateralDir, r), Vector3.Dot(_lateralDir, f));
+            MoveIntent = new Vector2(Vector3.Dot(_lateralDir, r), Vector3.Dot(_lateralDir, f));
             return;
         }
 
         if (!approachBoss || defensePending || dist <= range * 0.85f)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return;
         }
 
@@ -1265,7 +1344,7 @@ public sealed class QaCombatBot : MonoBehaviour
         toBoss.y = 0f;
         if (cam == null || toBoss.sqrMagnitude < 0.0001f)
         {
-            PlayerMoveController.QaMoveInputOverride = null;
+            MoveIntent = null;
             return;
         }
 
@@ -1294,7 +1373,7 @@ public sealed class QaCombatBot : MonoBehaviour
         toBoss = SteerToward(target, toBoss);
         if (Time.time < _detourUntil)
             toBoss = (toBoss * 0.25f + Vector3.Cross(Vector3.up, toBoss) * _detourSign).normalized;
-        PlayerMoveController.QaMoveInputOverride = new Vector2(Vector3.Dot(toBoss, right), Vector3.Dot(toBoss, fwd));
+        MoveIntent = new Vector2(Vector3.Dot(toBoss, right), Vector3.Dot(toBoss, fwd));
     }
 
     PlayerGuardController _guard;

@@ -945,6 +945,7 @@ public partial class BossController : MonoBehaviour, IUltimateVictimState, IParr
             return;
 
         UpdatePlayerStatePatternBias();
+        TickAnimatorWatchdog();
         // 패턴 쿨타임 감소
         
 

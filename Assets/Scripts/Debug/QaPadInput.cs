@@ -155,16 +155,135 @@ public sealed class QaPadInput : MonoBehaviour
         if (s_pad != null && s_pad.added)
             InputSystem.RemoveDevice(s_pad);
         s_pad = null;
+        s_state = new GamepadState();
+        s_actionHeld.Clear();
+        s_actionRelease.Clear();
     }
 
     IEnumerator CoTap(GamepadButton button, int holdFrames)
     {
-        Gamepad pad = Pad;
-        InputSystem.QueueStateEvent(pad, new GamepadState().WithButton(button, true));
+        SetButton(button, true);
+        Flush();
         for (int i = 0; i < holdFrames; i++)
             yield return null;
-        InputSystem.QueueStateEvent(pad, new GamepadState());
+        SetButton(button, false);
+        Flush();
         TapsSent++;
+    }
+
+    // ------------------------------------------------------------------ 반복 22: 봇 패드 구동 (QaCombatBot.UsePad / -qaPad)
+    // 버튼·트리거·스틱을 한 GamepadState 에 모아 바뀐 프레임에만 큐잉한다 (탭 코루틴과 같은 상태를 공유 → 서로 덮어쓰지 않음).
+    static GamepadState s_state;
+    static bool s_dirty;
+    static readonly System.Collections.Generic.Dictionary<ChuonAction, int> s_actionRelease = new System.Collections.Generic.Dictionary<ChuonAction, int>();
+    static readonly System.Collections.Generic.HashSet<ChuonAction> s_actionHeld = new System.Collections.Generic.HashSet<ChuonAction>();
+    static readonly System.Collections.Generic.List<ChuonAction> s_releaseScratch = new System.Collections.Generic.List<ChuonAction>();
+
+    /// <summary>봇이 패드로 보낸 액션 입력 수 (탭 + 홀드 시작).</summary>
+    public static int ActionPresses { get; private set; }
+
+    static void SetButton(GamepadButton button, bool down)
+    {
+        // 트리거는 버튼 비트가 아니라 축이다 (WithButton 에 넣으면 비트가 넘쳐 다른 버튼이 눌린다)
+        if (button == GamepadButton.LeftTrigger) s_state.leftTrigger = down ? 1f : 0f;
+        else if (button == GamepadButton.RightTrigger) s_state.rightTrigger = down ? 1f : 0f;
+        else s_state = s_state.WithButton(button, down);
+        s_dirty = true;
+    }
+
+    static void Flush()
+    {
+        if (!s_dirty)
+            return;
+        s_dirty = false;
+        InputSystem.QueueStateEvent(Pad, s_state);
+    }
+
+    /// <summary>왼스틱 (카메라 기준 x=오른쪽, y=앞). 이동 입력과 같은 좌표계.</summary>
+    public static void SetStick(Vector2 v)
+    {
+        v = Vector2.ClampMagnitude(v, 1f);
+        if ((s_state.leftStick - v).sqrMagnitude < 0.0004f)
+            return;
+        s_state.leftStick = v;
+        s_dirty = true;
+        _ = Runner;
+    }
+
+    /// <summary>액션의 현재 패드 바인딩(리바인드 반영)을 짧게 누른다.</summary>
+    public static void PressAction(ChuonAction a, int holdFrames = 3)
+    {
+        if (!TryResolveButton(a, out GamepadButton b))
+            return;
+        SetButton(b, true);
+        s_actionRelease[a] = Time.frameCount + Mathf.Max(1, holdFrames);
+        ActionPresses++;
+        _ = Runner;
+    }
+
+    /// <summary>액션 버튼을 누른 채 유지 / 뗀다 (가드).</summary>
+    public static void HoldAction(ChuonAction a, bool down)
+    {
+        if (!TryResolveButton(a, out GamepadButton b))
+            return;
+        if (down == s_actionHeld.Contains(a))
+            return;
+        if (down) { s_actionHeld.Add(a); ActionPresses++; }
+        else s_actionHeld.Remove(a);
+        SetButton(b, down);
+        _ = Runner;
+    }
+
+    /// <summary>모든 버튼·스틱을 뗀다.</summary>
+    public static void ReleaseAll()
+    {
+        s_actionHeld.Clear();
+        s_actionRelease.Clear();
+        s_state = new GamepadState();
+        s_dirty = true;
+        if (s_runner != null) Flush();
+    }
+
+    static readonly GamepadButton[] s_buttons =
+    {
+        GamepadButton.South, GamepadButton.East, GamepadButton.West, GamepadButton.North,
+        GamepadButton.LeftShoulder, GamepadButton.RightShoulder, GamepadButton.LeftTrigger, GamepadButton.RightTrigger,
+        GamepadButton.LeftStick, GamepadButton.RightStick, GamepadButton.Start, GamepadButton.Select,
+        GamepadButton.DpadUp, GamepadButton.DpadDown, GamepadButton.DpadLeft, GamepadButton.DpadRight
+    };
+
+    public static bool TryResolveButton(ChuonAction a, out GamepadButton button)
+    {
+        button = GamepadButton.South;
+        InputAction action = ChuonInput.GamepadAction(a);
+        if (action == null || action.bindings.Count == 0)
+            return false;
+        string path = action.bindings[ChuonInput.PrimaryBindingIndex(a, true)].effectivePath;
+        InputControl control = InputControlPath.TryFindControl(Pad, path);
+        if (control == null)
+            return false;
+        foreach (GamepadButton b in s_buttons)
+        {
+            if (Pad[b] == control) { button = b; return true; }
+        }
+        return false;
+    }
+
+    void LateUpdate()
+    {
+        if (s_actionRelease.Count > 0)
+        {
+            s_releaseScratch.Clear();
+            foreach (var kv in s_actionRelease)
+                if (Time.frameCount >= kv.Value) s_releaseScratch.Add(kv.Key);
+            foreach (ChuonAction a in s_releaseScratch)
+            {
+                s_actionRelease.Remove(a);
+                if (!s_actionHeld.Contains(a) && TryResolveButton(a, out GamepadButton b))
+                    SetButton(b, false);
+            }
+        }
+        Flush();
     }
 
     void OnDestroy()

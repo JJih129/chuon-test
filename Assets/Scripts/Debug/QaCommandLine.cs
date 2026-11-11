@@ -2,6 +2,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.InputSystem.LowLevel;
 
 /// <summary>
 /// Development-player-only QA entry point (never compiled into the editor or release builds).
@@ -23,6 +24,11 @@ using UnityEngine.SceneManagement;
 ///                 exit interactable, elevator handoff, boss clear exit) and force-completes tutorial steps / kills the
 ///                 boss by code. Logs "[QA-FLOW] ..." per scene, a FORCED line whenever a fallback LoadScene was needed,
 ///                 and the error/exception count at the end; quits afterwards (no -qaScene needed).
+/// -qaPad          (iter 22) the bot plays through a virtual Input System gamepad (QaPadInput) instead of direct calls; with
+///                 -qaFlowSmoke the title/settings/credits/boot/pause/credits-skip menus are also driven by pad taps, with a
+///                 "[QA-PAD]" line per step and an on-screen glyph audit (keyboard tokens left on screen in pad scheme).
+///                 In bot runs a death overlay is answered with pad South (restart).
+/// -qaAudioMeter   (iter 22) QaAudioMeter: per-second output RMS/peak (Temp/qa/audio_meter.txt) + "[QA-AUDIO]" report at the end.
 /// </summary>
 public sealed class QaCommandLine : MonoBehaviour
 {
@@ -37,6 +43,8 @@ public sealed class QaCommandLine : MonoBehaviour
     bool _occlusionShot;
     bool _fullRun;
     bool _tutorialRun;
+    bool _pad;
+    bool _audioMeter;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Bootstrap()
@@ -89,6 +97,8 @@ public sealed class QaCommandLine : MonoBehaviour
                 case "-qaOcclusionShot": _occlusionShot = true; break;
                 case "-qaFullRun": _fullRun = true; break;
                 case "-qaTutorialRun": _tutorialRun = true; break;
+                case "-qaPad": _pad = true; QaCombatBot.UsePad = true; break;
+                case "-qaAudioMeter": _audioMeter = true; QaAudioMeter.Ensure(); break;
                 case "-qaDifficulty": // easy|normal|hard (저장하지 않음)
                     if (next != null && System.Enum.TryParse(next, true, out BossDifficultyTier tier))
                         GameDifficulty.Set(tier, save: false);
@@ -150,12 +160,26 @@ public sealed class QaCommandLine : MonoBehaviour
         // 2) Title: the real start button handler
         yield return new WaitForSecondsRealtime(2f);
         var title = FindObjectOfType<TitleSceneUIController>();
-        if (title != null) { Flow("title: OnClick_StartGame()"); title.OnClick_StartGame(); }
+        if (_pad)
+            yield return PadTitle();
+        if (ActiveScene == "TitleScene" && title != null) { Flow("title: OnClick_StartGame()" + (_pad ? " (PAD-FAIL fallback)" : "")); title.OnClick_StartGame(); }
         yield return EnsureScene("BootScene", 15f);
 
         // 3) Boot: wait for the "press any key" prompt, then the automation hook
         float bootEnd = Time.realtimeSinceStartup + 40f;
         var boot = FindObjectOfType<SystemBootLoader>();
+        if (_pad)
+        {
+            // 부트 "아무 키나": 패드 South 탭만으로 넘어가는지 (30 s 안에 못 넘어가면 기존 자동화 훅)
+            float padBootEnd = Time.realtimeSinceStartup + 30f;
+            int bootTaps = 0;
+            while (ActiveScene == "BootScene" && Time.realtimeSinceStartup < padBootEnd)
+            {
+                QaPadInput.Tap(GamepadButton.South); bootTaps++;
+                yield return new WaitForSecondsRealtime(0.7f);
+            }
+            PadLog($"boot: {bootTaps} South taps -> {(ActiveScene != "BootScene" ? "left boot" : "PAD-FAIL still in boot")}");
+        }
         while (ActiveScene == "BootScene" && Time.realtimeSinceStartup < bootEnd)
         {
             if (boot != null && boot.ForceProceedForAutomation())
@@ -253,6 +277,8 @@ public sealed class QaCommandLine : MonoBehaviour
             yield return null;
         }
         Flow($"facility: arrival control at +{controlAt:F1}s, bot first attack at +{firstAttackAt:F1}s after LowerFloorReached");
+        if (_pad)
+            yield return PadPauseCheck();
         Flow($"facility: type-d reveal director={(intro != null)} asset={(intro != null && intro.playableAsset != null ? intro.playableAsset.name : "none")} played={(introMaxTime >= 0d)} reached={introMaxTime:F2}s");
         BossHealth boss = FindObjectOfType<BossHealth>();
         Flow($"facility: bot {(bot != null ? bot.Summary : "gone")}");
@@ -282,9 +308,20 @@ public sealed class QaCommandLine : MonoBehaviour
 
         // 6) Credits
         yield return new WaitForSecondsRealtime(6f);
+        if (_pad)
+        {
+            PadLog("credits: " + GlyphAudit("credits"));
+            for (int i = 0; i < 3 && ActiveScene == "CreditsScene"; i++)
+            {
+                QaPadInput.Tap(GamepadButton.South);
+                yield return new WaitForSecondsRealtime(4f);
+            }
+            PadLog($"credits skip by pad South -> {(ActiveScene != "CreditsScene" ? "left credits (" + ActiveScene + ")" : "PAD-FAIL still in credits")}");
+        }
         Flow("credits ok; frame report:\n" + QaFrameSampler.Report());
         Flow("cinematics:\n" + QaCinematicWatch.Report());
         Flow(QaErrorShaderWatch.Report());
+        if (_audioMeter) Flow(QaAudioMeter.ReportNow());
         Application.logMessageReceived -= HandleLog;
         Flow($"RESULT errors={_errors} exceptions={_exceptions}\n--- summary ---\n{_flowLog}");
         Application.Quit();
@@ -449,6 +486,8 @@ public sealed class QaCommandLine : MonoBehaviour
                 StartCoroutine(WatchTutorialRun(bot));
             }
         }
+        if (_pad)
+            StartCoroutine(PadGameOverWatch());
         CameraMetricsSampler.Begin(_scene + (SoulsCameraRig.Active != null ? " (souls rig)" : " (legacy cam)"));
 
         // 보스 처치 후 엔딩 연출(첫 프레임 히치 측정용)까지 본 뒤 조기 종료 — 고정 duration 대기 시간 절약
@@ -477,9 +516,220 @@ public sealed class QaCommandLine : MonoBehaviour
         Debug.Log("[QA] cue audit:\n" + QaCombatBot.CueTimingReport()); // 반복 21: 텔레그래프 정직성 (타격당 큐/경고음/오프셋)
         Debug.Log(QaCinematicWatch.Report());
         Debug.Log(QaErrorShaderWatch.Report());
+        if (_audioMeter) Debug.Log(QaAudioMeter.ReportNow());
+        if (_pad) Debug.Log($"[QA-PAD] run end: padPresses={QaPadInput.ActionPresses} scheme={ChuonInput.Scheme} deathRestarts={_padRestarts} " + GlyphAudit("end"));
 
         if (_quit)
             Application.Quit();
+    }
+
+    // ---------------- -qaPad (iter 22) ----------------
+    int _padRestarts;
+
+    void PadLog(string message)
+    {
+        string line = $"[QA-PAD] {message} | {QaPadInput.Describe()}";
+        _flowLog.AppendLine(line);
+        Debug.Log(line);
+    }
+
+    static string SelectedName()
+    {
+        UnityEngine.EventSystems.EventSystem es = UnityEngine.EventSystems.EventSystem.current;
+        return es != null && es.currentSelectedGameObject != null ? es.currentSelectedGameObject.name : "null";
+    }
+
+    static bool SelectedMatches(string[] keys)
+    {
+        string sel = SelectedName();
+        foreach (string k in keys)
+            if (sel.IndexOf(k, System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+        return false;
+    }
+
+    /// <summary>D-패드 아래로 내려가며 이름에 keys 중 하나가 들어간 버튼을 찾는다. 지나간 선택 이름을 trail 에 남긴다.</summary>
+    IEnumerator PadSelect(string[] keys, System.Text.StringBuilder trail, int maxSteps = 9, GamepadButton step = GamepadButton.DpadDown)
+    {
+        for (int i = 0; i <= maxSteps; i++)
+        {
+            trail.Append(SelectedName()).Append(' ');
+            if (SelectedMatches(keys))
+                yield break;
+            QaPadInput.Tap(step);
+            yield return new WaitForSecondsRealtime(0.35f);
+        }
+    }
+
+    IEnumerator PadTitle()
+    {
+        // 첫 패드 입력 → 스킴 전환 (글리프·선택 상태가 패드 기준으로 바뀌어야 한다)
+        QaPadInput.Tap(GamepadButton.DpadDown);
+        yield return new WaitForSecondsRealtime(0.5f);
+        QaPadInput.Tap(GamepadButton.DpadUp);
+        yield return new WaitForSecondsRealtime(0.5f);
+        PadLog("title: first pad input; " + GlyphAudit("title"));
+
+        var trail = new System.Text.StringBuilder();
+        string[] optKeys = { "Option", "Setting" };
+        yield return PadSelect(optKeys, trail);
+        if (SelectedMatches(optKeys))
+        {
+            QaPadInput.Tap(GamepadButton.South);
+            yield return new WaitForSecondsRealtime(1.2f);
+            TitleSettingsOverlay so = FindObjectOfType<TitleSettingsOverlay>();
+            bool open = so != null && so.IsVisible;
+            PadLog($"title settings: South -> open={open} (trail {trail}); " + GlyphAudit("title-settings"));
+            QaPadInput.Tap(GamepadButton.RightShoulder); // 탭 전환 한 번씩
+            yield return new WaitForSecondsRealtime(0.5f);
+            QaPadInput.Tap(GamepadButton.LeftShoulder);
+            yield return new WaitForSecondsRealtime(0.5f);
+            QaPadInput.Tap(GamepadButton.East);
+            yield return new WaitForSecondsRealtime(1.0f);
+            PadLog($"title settings: East -> open={(so != null && so.IsVisible)}");
+        }
+        else
+            PadLog($"title settings: PAD-FAIL options button not reachable (trail {trail})");
+
+        trail.Length = 0;
+        string[] credKeys = { "Credit" };
+        yield return PadSelect(credKeys, trail);
+        if (SelectedMatches(credKeys))
+        {
+            QaPadInput.Tap(GamepadButton.South);
+            yield return new WaitForSecondsRealtime(1.5f);
+            PadLog("title credits: South (overlay)");
+            QaPadInput.Tap(GamepadButton.East);
+            yield return new WaitForSecondsRealtime(1.0f);
+            if (SelectedName().IndexOf("Close", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                QaPadInput.Tap(GamepadButton.South);
+                yield return new WaitForSecondsRealtime(1.0f);
+            }
+            PadLog("title credits: closed by East/South");
+        }
+        else
+            PadLog($"title credits: PAD-FAIL credits button not reachable (trail {trail})");
+
+        trail.Length = 0;
+        string[] startKeys = { "Start", "New", "Play", "Begin" };
+        yield return PadSelect(startKeys, trail, 9, GamepadButton.DpadUp); // 시작 버튼은 맨 위 (메뉴는 순환하지 않음)
+        if (SelectedMatches(startKeys))
+        {
+            QaPadInput.Tap(GamepadButton.South);
+            yield return WaitForScene("BootScene", 8f);
+        }
+        PadLog($"title start: South -> {(ActiveScene == "BootScene" ? "BootScene" : "PAD-FAIL (trail " + trail + ")")}");
+    }
+
+    IEnumerator PadPauseCheck()
+    {
+        PadLog("facility HUD: " + GlyphAudit("facility-hud"));
+        QaPadInput.Tap(GamepadButton.Start);
+        yield return new WaitForSecondsRealtime(0.8f);
+        PauseManager pm = PauseManager.Instance;
+        bool paused = pm != null && pm.IsPaused;
+        PadLog($"pause: Start -> paused={paused}; " + GlyphAudit("pause"));
+        if (!paused)
+            yield break;
+        var trail = new System.Text.StringBuilder();
+        string[] optKeys = { "Setting", "Option" };
+        yield return PadSelect(optKeys, trail);
+        if (SelectedMatches(optKeys))
+        {
+            QaPadInput.Tap(GamepadButton.South);
+            yield return new WaitForSecondsRealtime(1.0f);
+            PadLog($"pause settings: South -> open={pm.IsSettingsOpen} (trail {trail}); " + GlyphAudit("pause-settings"));
+            QaPadInput.Tap(GamepadButton.East);
+            yield return new WaitForSecondsRealtime(0.8f);
+            PadLog($"pause settings: East -> open={pm.IsSettingsOpen} paused={pm.IsPaused}");
+        }
+        else
+            PadLog($"pause settings: PAD-FAIL not reachable (trail {trail})");
+        QaPadInput.Tap(GamepadButton.East);
+        yield return new WaitForSecondsRealtime(0.8f);
+        if (pm.IsPaused)
+        {
+            QaPadInput.Tap(GamepadButton.Start);
+            yield return new WaitForSecondsRealtime(0.8f);
+            PadLog($"pause: East did not resume; Start -> paused={pm.IsPaused}");
+        }
+        else
+            PadLog("pause: East -> resumed");
+    }
+
+    IEnumerator PadGameOverWatch()
+    {
+        while (true)
+        {
+            MainSceneDeathPresentationController death = FindObjectOfType<MainSceneDeathPresentationController>();
+            string sel = SelectedName();
+            if (death != null && sel.StartsWith("Button_"))
+            {
+                string scene = ActiveScene;
+                yield return new WaitForSecondsRealtime(1.0f);
+                string before = QaPadInput.Describe();
+                string audit = GlyphAudit("game-over");
+                int loadsBefore = _sceneLoads;
+                QaPadInput.Tap(GamepadButton.South);
+                float end = Time.realtimeSinceStartup + 12f;
+                while (_sceneLoads == loadsBefore && Time.realtimeSinceStartup < end)
+                    yield return null;
+                _padRestarts++;
+                Debug.Log($"[QA-PAD] game-over: sel={sel} South -> {(_sceneLoads > loadsBefore ? "reloaded " + ActiveScene : "PAD-FAIL no reload")} (from {scene}; before: {before}) {audit}");
+                yield return new WaitForSecondsRealtime(5f);
+            }
+            yield return new WaitForSecondsRealtime(0.5f);
+        }
+    }
+
+    int _sceneLoads;
+    void OnEnable() { SceneManager.sceneLoaded += CountSceneLoad; }
+    void OnDisable() { SceneManager.sceneLoaded -= CountSceneLoad; }
+    void CountSceneLoad(Scene s, LoadSceneMode m) { _sceneLoads++; }
+
+    /// <summary>패드 스킴에서 화면에 남은 키보드/마우스 표기를 찾는다 (보이는 TMP/UGUI 텍스트).</summary>
+    static string GlyphAudit(string where)
+    {
+        var tokens = new System.Collections.Generic.List<string> { "WASD", "W/A/S/D", "마우스", "좌클릭", "우클릭", "LMB", "RMB", "[Esc]", "ESC", "[Space]", "스페이스", "Shift" };
+        foreach (ChuonAction a in System.Enum.GetValues(typeof(ChuonAction)))
+        {
+            if (a == ChuonAction.Move) continue;
+            string k = InputGlyphs.KeyboardLabel(a);
+            if (string.IsNullOrEmpty(k) || k == "-") continue;
+            tokens.Add("[" + k + "]");
+            tokens.Add(k + " 키");
+        }
+        int scanned = 0, bad = 0;
+        var sb = new System.Text.StringBuilder();
+        void Check(Component c, string text, float alpha)
+        {
+            if (string.IsNullOrEmpty(text) || alpha < 0.05f) return;
+            scanned++;
+            foreach (string t in tokens)
+            {
+                if (text.IndexOf(t, System.StringComparison.Ordinal) < 0) continue;
+                bad++;
+                if (bad <= 8)
+                {
+                    string snip = text.Replace("\n", " ");
+                    if (snip.Length > 70) snip = snip.Substring(0, 70);
+                    sb.Append(" {").Append(c.name).Append(": '").Append(t).Append("' in \"").Append(snip).Append("\"}");
+                }
+                break;
+            }
+        }
+        foreach (TMPro.TMP_Text t in FindObjectsOfType<TMPro.TMP_Text>())
+        {
+            if (!t.isActiveAndEnabled) continue;
+            float alpha = t.alpha * (t is TMPro.TextMeshProUGUI && t.canvasRenderer != null ? t.canvasRenderer.GetInheritedAlpha() : 1f);
+            Check(t, t.text, alpha);
+        }
+        foreach (UnityEngine.UI.Text t in FindObjectsOfType<UnityEngine.UI.Text>())
+        {
+            if (!t.isActiveAndEnabled) continue;
+            Check(t, t.text, t.color.a * (t.canvasRenderer != null ? t.canvasRenderer.GetInheritedAlpha() : 1f));
+        }
+        return $"glyphs[{where}] scheme={ChuonInput.Scheme} scanned={scanned} kbTokens={bad}{sb}";
     }
 }
 #endif

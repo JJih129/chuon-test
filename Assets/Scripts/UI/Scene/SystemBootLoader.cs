@@ -313,6 +313,11 @@ public class SystemBootLoader : MonoBehaviour
 #if ENABLE_INPUT_SYSTEM
         if (Keyboard.current != null && Keyboard.current.anyKey.wasPressedThisFrame)
             return true;
+        // 반복 22: Input System 패드는 레거시 anyKeyDown 에 잡히지 않을 수 있다 (QA 가상 패드로 확인: South 43회에도 부트에서 멈춤)
+        Gamepad pad = Gamepad.current;
+        if (pad != null && (pad.buttonSouth.wasPressedThisFrame || pad.buttonEast.wasPressedThisFrame || pad.buttonWest.wasPressedThisFrame
+            || pad.buttonNorth.wasPressedThisFrame || pad.startButton.wasPressedThisFrame))
+            return true;
 #endif
         return Input.anyKeyDown;
     }

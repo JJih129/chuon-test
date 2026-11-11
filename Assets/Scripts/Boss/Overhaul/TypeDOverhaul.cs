@@ -346,6 +346,11 @@ public sealed class TypeDOverhaul : MonoBehaviour
     {
         if (Boss.IsOverhaulReactionActive || Boss.bossAnimator == null || ExecutionDirector.IsExecuting)
             return;
+        // 반복 22: 전환 중에는 '현재 상태'가 여전히 DownLoop 로 보고된다. 여기서 매 프레임 CrossFade 를 다시 걸면
+        // 전환이 매번 처음부터 재시작돼 영원히 끝나지 않는다 (QA I21 b_0.9_6: 50 s 동안 Falldown_F_End 전환에 고정,
+        // 이후 공격 트리거까지 전부 덮어써 패턴·큐만 돌고 휘두르기/히트박스가 없었다). 전환이 없을 때만 한 번 건다.
+        if (Boss.bossAnimator.IsInTransition(0))
+            return;
         AnimatorStateInfo s = Boss.bossAnimator.GetCurrentAnimatorStateInfo(0);
         if (s.IsName(BossController.OverhaulStateDownLoop) && !(Break != null && Break.IsInBreak))
             Boss.PlayOverhaulState(BossController.OverhaulStateGetUp, 0.15f);

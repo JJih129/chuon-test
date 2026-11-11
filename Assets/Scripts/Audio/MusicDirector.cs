@@ -26,7 +26,7 @@ public sealed class MusicDirector : MonoBehaviour
         switch (state)
         {
             case MusicState.Title: return new Track { Resource = "Audio/Music/Title_Drone_GEN", Gain = 0.8f, Loop = true, FadeIn = 2.5f };
-            case MusicState.Tutorial: return new Track { Resource = "Audio/Music/Tutorial_Ambient_GEN", Gain = 0.55f, Loop = true, FadeIn = 3f };
+            case MusicState.Tutorial: return new Track { Resource = "Audio/Music/Tutorial_Ambient_GEN", Gain = 0.85f, /* 반복 22: 0.55 → 0.85 (+3.8 dB, QA 라우드니스: 튜토리얼 -35~-41 dBFS 로 앞뒤 장면 대비 12 dB 낮았음) */ Loop = true, FadeIn = 3f };
             case MusicState.Lobby: return new Track { Resource = "Audio/Music/Lobby_Pad_GEN", Gain = 0.7f, Loop = true, FadeIn = 2.5f };
             case MusicState.BossPhase1:
             case MusicState.BossPhase2: return new Track { Resource = "Audio/Music/Boss_Loop_GEN", Gain = 0.78f, Loop = true, FadeIn = 1.2f };

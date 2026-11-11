@@ -1901,6 +1901,7 @@ GameObject:
   - component: {fileID: 8110729709902147286}
   - component: {fileID: 8171116987754033037}
   - component: {fileID: 3024150182910718311}
+  - component: {fileID: 6323750718327316399}
   m_Layer: 0
   m_Name: MonitorText
   m_TagString: Untagged
@@ -2063,6 +2064,14 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_renderer: {fileID: 8171116987754033037}
   m_maskType: 0
+--- !u!33 &6323750718327316399
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6219362808146795168}
+  m_Mesh: {fileID: 0}
 --- !u!1 &6226237383487704377
 GameObject:
   m_ObjectHideFlags: 0
