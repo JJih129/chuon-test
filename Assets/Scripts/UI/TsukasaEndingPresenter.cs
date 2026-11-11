@@ -105,7 +105,7 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
         _figure = new GameObject("Silhouette", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage)).GetComponent<RawImage>();
         _figure.transform.SetParent(_panel, false);
         _figure.texture = GetSilhouette();
-        _figure.color = new Color(0.9f, 0.95f, 1f, 0.9f);
+        _figure.color = new Color(1f, 1f, 1f, 0.92f); // 반복 22: 흰 세라믹 텍스처 그대로 (푸른 틴트 제거)
         _figure.raycastTarget = false;
         Place(_figure.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0f, 40f), new Vector2(210f, 420f), new Vector2(0.5f, 0.5f));
 
@@ -320,6 +320,13 @@ public sealed class TsukasaEndingPresenter : MonoBehaviour
     {
         if (s_silhouette != null)
             return s_silhouette;
+        // 반복 22: 제작된 실루엣 텍스처(I22-C)를 우선 사용, 없으면 아래 절차 생성
+        Texture2D authored = Resources.Load<Texture2D>("Ending/T_END_TsukasaHoloSilhouette");
+        if (authored != null)
+        {
+            s_silhouette = authored;
+            return authored;
+        }
 
         const int w = 128, h = 256;
         var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { name = "TsukasaSilhouette", wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };

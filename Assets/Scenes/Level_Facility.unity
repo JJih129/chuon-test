@@ -34449,9 +34449,6 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 3983951438103609849, guid: 26f682409cc6c594baf4324a9658b1f4, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
     - targetCorrespondingSourceObject: {fileID: 2683850597074717928, guid: 26f682409cc6c594baf4324a9658b1f4, type: 3}
       insertIndex: -1
       addedObject: {fileID: 927467879}
@@ -46891,8 +46888,8 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 1, y: 1, z: 1}
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Size: {x: 0.6, y: 1.36, z: 0.48}
+  m_Center: {x: 0, y: -0.89, z: 0}
 --- !u!23 &1245720333
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -46913,7 +46910,9 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: -8499701361930146817, guid: 229f417031d6a1e46812f5b8b51ccebf, type: 3}
+  - {fileID: 2100000, guid: 19ea650fa7de22148bf3c8f290e5d983, type: 2}
+  - {fileID: 2100000, guid: 4de1fec1374ba7f4390e24d57e8f2e35, type: 2}
+  - {fileID: 2100000, guid: 600eda188ec54fddb06492acb64ad229, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -46942,7 +46941,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1245720330}
-  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 2920388319662521887, guid: 40fc3823856d428a867ce811ba0314e4, type: 3}
 --- !u!4 &1245720335
 Transform:
   m_ObjectHideFlags: 0
@@ -79117,9 +79116,6 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 6219362808146795168, guid: 7a27ae26b95ef884b9333fc056e04d81, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
     - targetCorrespondingSourceObject: {fileID: 7329361599711181024, guid: 7a27ae26b95ef884b9333fc056e04d81, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1999073887}
