@@ -8,8 +8,8 @@ using UnityEngine.SceneManagement;
 public static class SwordTrailStaticInstaller
 {
     const string PlayerPrefabPath = "Assets/Prefabs/Generated/PlayerRoot.prefab";
-    const string PlayerSlashPrefabPath = "Assets/Free Slash VFX/Prefabs/Slash Fire VFX.prefab";
-    const string BossSlashPrefabPath = "Assets/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab";
+    const string PlayerSlashPrefabPath = "Assets/ThirdParty/Free Slash VFX/Prefabs/Slash Fire VFX.prefab";
+    const string BossSlashPrefabPath = "Assets/ThirdParty/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab";
 
     static readonly string[] ScenePaths =
     {

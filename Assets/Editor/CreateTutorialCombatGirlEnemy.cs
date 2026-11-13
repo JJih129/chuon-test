@@ -9,12 +9,12 @@ public static class CreateTutorialCombatGirlEnemy
     const string MaterialFolder = OutputFolder + "/Materials";
     const string ControllerPath = OutputFolder + "/TutorialCombatGirlEnemy.controller";
     const string PrefabPath = OutputFolder + "/TutorialCombatGirlEnemy.prefab";
-    const string SourceVisualPath = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Prefab/School_Katana_FullBody-Magica cloth2.prefab";
-    const string IdlePath = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Normal/Idle.fbx";
-    const string RunPath = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Special/Sp_Run.fbx";
-    const string AttackPath = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Special/Sp_Skill3.fbx";
-    const string HitPath = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Normal/Hit1.fbx";
-    const string DiePath = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Normal/Die.fbx";
+    const string SourceVisualPath = "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Prefab/School_Katana_FullBody-Magica cloth2.prefab";
+    const string IdlePath = "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Normal/Idle.fbx";
+    const string RunPath = "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Special/Sp_Run.fbx";
+    const string AttackPath = "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Special/Sp_Skill3.fbx";
+    const string HitPath = "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Normal/Hit1.fbx";
+    const string DiePath = "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Normal/Die.fbx";
     const string AutoCreateSessionKey = "CreateTutorialCombatGirlEnemy.AutoCreate.v8";
 
     [InitializeOnLoadMethod]
@@ -407,7 +407,7 @@ public static class CreateTutorialCombatGirlEnemy
 
         string[] guids = AssetDatabase.FindAssets(query + " t:Texture", new[]
         {
-            "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Texture"
+            "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Texture"
         });
 
         for (int i = 0; i < guids.Length; i++)

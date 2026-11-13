@@ -14,12 +14,12 @@ namespace ChuOn.Editor
         private const string MainScenePath = "Assets/Scenes/MainScene.unity";
         private const string BossRootName = "boss";
         private const string BossVisualPath = "VisualRoot/BossVisual";
-        private const string OutputMaterialFolder = "Assets/Materials/Boss";
+        private const string OutputMaterialFolder = "Assets/Art/Materials/Boss";
 
-        private const string Boss1TexturePath = "Assets/Texture/Boss/boss1.psd";
-        private const string Boss2TexturePath = "Assets/Texture/Boss/boss2.psd";
-        private const string Boss3TexturePath = "Assets/Texture/Boss/boss3.psd";
-        private const string BossHairTexturePath = "Assets/Texture/Boss/bosshair.psd";
+        private const string Boss1TexturePath = "Assets/Art/Textures/Boss/boss1.psd";
+        private const string Boss2TexturePath = "Assets/Art/Textures/Boss/boss2.psd";
+        private const string Boss3TexturePath = "Assets/Art/Textures/Boss/boss3.psd";
+        private const string BossHairTexturePath = "Assets/Art/Textures/Boss/bosshair.psd";
 
         private const string DumpOutputPath = "Assets/__boss_texture_dump.txt";
 

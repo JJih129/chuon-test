@@ -829,11 +829,11 @@ public static class SwordTrailVfxMaterialSource
         Boss
     }
 
-    const string PlayerFallbackPrefabPath = "Assets/Free Slash VFX/Prefabs/Slash Fire VFX.prefab";
-    const string BossFallbackPrefabPath = "Assets/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab";
-    const string NeutralFallbackPrefabPath = "Assets/Free Slash VFX/Prefabs/Slash VFX.prefab";
-    const string PlayerFallbackMaterialPath = "Assets/Free Slash VFX/Materials/Fire Version/Slash World Fire.mat";
-    const string BossFallbackMaterialPath = "Assets/Free Slash VFX/Materials/Slash World.mat";
+    const string PlayerFallbackPrefabPath = "Assets/ThirdParty/Free Slash VFX/Prefabs/Slash Fire VFX.prefab";
+    const string BossFallbackPrefabPath = "Assets/ThirdParty/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab";
+    const string NeutralFallbackPrefabPath = "Assets/ThirdParty/Free Slash VFX/Prefabs/Slash VFX.prefab";
+    const string PlayerFallbackMaterialPath = "Assets/ThirdParty/Free Slash VFX/Materials/Fire Version/Slash World Fire.mat";
+    const string BossFallbackMaterialPath = "Assets/ThirdParty/Free Slash VFX/Materials/Slash World.mat";
 
     public static Material ResolveMaterial(GameObject preferredPrefab, Palette palette)
     {

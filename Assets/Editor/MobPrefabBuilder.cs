@@ -26,11 +26,11 @@ public static class MobPrefabBuilder
     const string AnimDir = ArtRoot + "/Anim";
     const string AudioDir = ArtRoot + "/Audio";
     const string PrefabDir = "Assets/Prefabs/Mobs";
-    const string GhostRoot = "Assets/GhostSamurai_Animset/Animation/katana";
-    const string BodyModelPath = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/Humanoid_Bot/Models/Humanoid_F.fbx";
-    const string HpBarPrefabPath = "Assets/Prefab/EnemyHPBarPrefap.prefab";
-    const string LobbyDronePrefabPath = "Assets/Prefab/New Folder/Cube.prefab";
-    const string HitVfxPath = "Assets/잡동사니/Sword_hit.prefab";
+    const string GhostRoot = "Assets/ThirdParty/GhostSamurai_Animset/Animation/katana";
+    const string BodyModelPath = "Assets/ThirdParty/CombatGirlsCharacterPack/Humanoid_Bot/Models/Humanoid_F.fbx";
+    const string HpBarPrefabPath = "Assets/Prefabs/Misc/EnemyHPBarPrefap.prefab";
+    const string LobbyDronePrefabPath = "Assets/Prefabs/Misc/New Folder/Cube.prefab";
+    const string HitVfxPath = "Assets/Prefabs/VFX/Sword_hit.prefab";
     const string TypeDMatDir = "Assets/Art/ChuonPolish/TypeD/Materials";
     const string SfxRoot = "Assets/Art/ChuonPolish/Audio/Resources";
 

@@ -30,10 +30,10 @@ public static class CinematicsAssetBuilder
     public const string AudioDir = ArtDir + "/Audio";
     const string InfMatDir = "Assets/Art/ChuonPolish/Tutorial/Materials";
     const string InfMeshDir = "Assets/Art/ChuonPolish/Tutorial/Meshes";
-    const string GS = "Assets/GhostSamurai_Animset/Animation/katana";
+    const string GS = "Assets/ThirdParty/GhostSamurai_Animset/Animation/katana";
     const string ChuonVisual = "Assets/Prefabs/Generated/PlayerVisual_Chuon.prefab";
-    const string GhostModel = "Assets/GhostSamurai_Animset/Model/Model_Unity_Ver1.FBX";
-    const string AndroidModel = "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/Humanoid_Bot/Models/Humanoid_F.fbx";
+    const string GhostModel = "Assets/ThirdParty/GhostSamurai_Animset/Model/Model_Unity_Ver1.FBX";
+    const string AndroidModel = "Assets/ThirdParty/CombatGirlsCharacterPack/Humanoid_Bot/Models/Humanoid_F.fbx";
     const string AndroidPrefab = "Assets/Prefabs/Mobs/Mob_SecurityAndroid.prefab";
     const string NoisePath = "Packages/com.unity.cinemachine/Presets/Noise/Handheld_normal_mild.asset";
     public const string TypeDOriginal = "Assets/Cinematics/MainScene/TL_MainScene_Intro.playable";

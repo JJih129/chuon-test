@@ -87,3 +87,13 @@ crashlytics-build.properties
 
 # Python bytecode
 __pycache__/
+
+# Local-only / regenerable (untracked 2026-11 cleanup)
+/_AssetQuarantine/
+/fastmcp/
+/.fastmcp_backups/
+/.idea/
+/.vscode/
+/Thry/
+/malgun.ttf
+/[Aa]ssets/~UnityDirMonSyncFile~*

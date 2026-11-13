@@ -821,7 +821,7 @@ public class TutorialHintUIBridge : MonoBehaviour
         }
 
 #if UNITY_EDITOR
-        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/UIAsset" });
+        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/Art/UI/Sprites" });
         for (int i = 0; i < guids.Length; i++)
         {
             string path = AssetDatabase.GUIDToAssetPath(guids[i]);

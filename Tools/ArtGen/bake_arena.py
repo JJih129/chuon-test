@@ -295,7 +295,7 @@ def bake_floor(SW=2048, SH=4096):
     print('floor done')
 
 def bake_pillar(S=2048):
-    src = np.asarray(Image.open(r"C:/Users/ikh33/source/chuon-test/Assets/MapAsset/11/Object.png").convert('RGB').resize((S, S)), np.float32) / 255.0
+    src = np.asarray(Image.open(r"C:/Users/ikh33/source/chuon-test/Assets/Art/Models/Map/11/Object.png").convert('RGB').resize((S, S)), np.float32) / 255.0
     filled, W, Nn, mpu, mpv = raster(D['pillar001'] + D['elevator001'], S, pad=6)
     x, y, z = W[..., 0], W[..., 1], W[..., 2]
     lum = src.mean(-1)

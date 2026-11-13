@@ -11,7 +11,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
 {
     const string TutorialScenePath = "Assets/Scenes/Tutorial.unity";
     const string CombatGirlEnemyPrefabPath = "Assets/Prefabs/Tutorial/TutorialCombatGirlEnemy.prefab";
-    const string RobotKylePrefabPath = "Assets/UnityTechnologies/SpaceRobotKyle/Prefabs/RobotKyle.prefab";
+    const string RobotKylePrefabPath = "Assets/ThirdParty/UnityTechnologies/SpaceRobotKyle/Prefabs/RobotKyle.prefab";
     const string UltimateTimelineResourcePath = "Cinematics/Ultimate/TL_Ultimate_PlayerSword";
 
     TutorialFlowController _flowController;
@@ -1662,7 +1662,7 @@ public class TutorialRuntimeBootstrap : MonoBehaviour
                 return preferred;
         }
 
-        return LoadEditorAsset<GameObject>("Assets/Effects/111/FX_Slash_02.prefab");
+        return LoadEditorAsset<GameObject>("Assets/Art/Effects/111/FX_Slash_02.prefab");
 #else
         return null;
 #endif

@@ -695,7 +695,7 @@ public class BossBreakController : MonoBehaviour
 
 #if UNITY_EDITOR
         if (breakHologramMaterial == null)
-            breakHologramMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
+            breakHologramMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/ThirdParty/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
 #endif
 
         return breakHologramMaterial;

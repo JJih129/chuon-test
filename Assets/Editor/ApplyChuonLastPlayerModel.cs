@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 
 public static class ApplyChuonLastPlayerModel
 {
-    const string ModelPath = "Assets/Modeling/Player/on (3).fbx";
+    const string ModelPath = "Assets/Art/Models/Player/on (3).fbx";
     const string VisualPrefabPath = "Assets/Prefabs/Generated/PlayerVisual_Chuon.prefab";
     const string PlayerRootPrefabPath = "Assets/Prefabs/Generated/PlayerRoot.prefab";
     const string SessionKey = "ProjectChuOn.ApplyChuonLastPlayerModel.Attempted.v3";

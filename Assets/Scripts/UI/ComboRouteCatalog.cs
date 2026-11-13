@@ -1,7 +1,7 @@
 // 파일명: ComboRouteCatalog.cs
 // 콤보 루트 5종(A–E)의 단일 데이터 소스.
 // 튜토리얼 공격 배치표(TutorialComboGuideView 본문)와 설정창 '콤보' 탭이 같은 데이터를 쓴다.
-// 루트 순서/입력은 Assets/Attack_data/Combo_A..E 와 PlayerCombatController 콤보 트리 기준.
+// 루트 순서/입력은 Assets/Data/AttackData/Combo_A..E 와 PlayerCombatController 콤보 트리 기준.
 using System.Text;
 
 public enum ComboInputKind

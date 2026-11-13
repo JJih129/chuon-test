@@ -20,7 +20,7 @@ public static class TypeDOverhaulBuilder
     const string AnimDir = Root + "/Anim";
     const string AssetPath = "Assets/Art/ChuonPolish/TypeD/Resources/TypeD/TypeD_OverhaulAssets.asset";
     const string InfMatDir = "Assets/Art/ChuonPolish/Tutorial/Materials";
-    const string GhostRoot = "Assets/GhostSamurai_Animset/Animation/katana";
+    const string GhostRoot = "Assets/ThirdParty/GhostSamurai_Animset/Animation/katana";
     const string BossController = "Assets/Anime/Animator/BossAnimator.controller";
     const string PlayerController = "Assets/Anime/Animator/PlayerAnimatorController.controller";
     static readonly string[] MobControllers = { "Assets/Art/ChuonPolish/Mobs/Anim/AC_Mob_Android.controller", "Assets/Art/ChuonPolish/Mobs/Anim/AC_Mob_Enforcer.controller" };

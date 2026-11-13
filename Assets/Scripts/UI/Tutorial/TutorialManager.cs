@@ -470,7 +470,7 @@ public class TutorialManager : MonoBehaviour
             sprite = LoadRuntimeSpriteFromTexture("TutorialUI/\uB9C8\uC6B0\uC2A4");
 #if UNITY_EDITOR
         if (sprite == null)
-            sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/마우스.png");
+            sprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Art/UI/Icons/마우스.png");
 #endif
         if (sprite == null || questPanelGroup == null)
             return;

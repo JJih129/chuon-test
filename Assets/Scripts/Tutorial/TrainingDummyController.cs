@@ -1318,7 +1318,7 @@ public class TrainingDummyController : MonoBehaviour, IDamageReceiver
 
 #if UNITY_EDITOR
         if (hologramTransitionMaterial == null)
-            hologramTransitionMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
+            hologramTransitionMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/ThirdParty/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
 #endif
 
         return hologramTransitionMaterial;

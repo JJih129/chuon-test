@@ -345,9 +345,9 @@ public static class TypeDArmorBuilder
         Material legsSrc = FindSkinned(boss, "Object012")?.sharedMaterial;
         Material outerSrc = FindSkinned(boss, "Plane009")?.sharedMaterial;
         // 이미 재질이 교체돼 있으면(재빌드) 원본은 ASP 데모 재질
-        bodySrc = Original(bodySrc, "Assets/ASP/Demo/body 5.mat");
-        legsSrc = Original(legsSrc, "Assets/ASP/Demo/body 4.mat");
-        outerSrc = Original(outerSrc, "Assets/ASP/Demo/body 3.mat");
+        bodySrc = Original(bodySrc, "Assets/ThirdParty/ASP/Demo/body 5.mat");
+        legsSrc = Original(legsSrc, "Assets/ThirdParty/ASP/Demo/body 4.mat");
+        outerSrc = Original(outerSrc, "Assets/ThirdParty/ASP/Demo/body 3.mat");
 
         d["Suit_Body"] = SuitMaterial("M_TypeD_Suit_Body", bodySrc, "boss2", report);
         d["Suit_Legs"] = SuitMaterial("M_TypeD_Suit_Legs", legsSrc, "boss3", report);
@@ -395,7 +395,7 @@ public static class TypeDArmorBuilder
         if (src == null)
             return null;
         Material m = LoadOrCreate(Root + "/Materials/" + name + ".mat", src, null);
-        Texture2D source = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/ASP/Demo/" + texName + ".psd");
+        Texture2D source = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/ThirdParty/ASP/Demo/" + texName + ".psd");
         if (source != null)
         {
             Texture2D readable = ReadableCopy(source, 2048);
@@ -736,7 +736,7 @@ public static class TypeDArmorBuilder
     }
 }
 
-// 텔레그래프 큐 효과음: Assets/Sound 의 기존 클립을 다듬어(앞 무음 제거, 피치, 레이어, 엔벨로프) 타입별로 구별되는 짧은 큐를 만든다.
+// 텔레그래프 큐 효과음: Assets/Art/Audio 의 기존 클립을 다듬어(앞 무음 제거, 피치, 레이어, 엔벨로프) 타입별로 구별되는 짧은 큐를 만든다.
 // 큐의 어택이 0 ms 에 오도록 해서 '정직한 큐' 시각과 소리가 맞는다.
 public static class TelegraphCueAudio
 {
@@ -744,11 +744,11 @@ public static class TelegraphCueAudio
 
     public static string BuildAll(string dir)
     {
-        float[] parry = Load("Assets/Sound/Parry.wav");
-        float[] clash = Load("Assets/Sound/sword-clashhit-393837.mp3");
-        float[] armor = Load("Assets/Sound/armor-impact-from-sword-393843.mp3");
-        float[] slice = Load("Assets/Sound/violent-sword-slice-2-393841.mp3");
-        float[] blade = Load("Assets/Sound/검_5.mp3");
+        float[] parry = Load("Assets/Art/Audio/Parry.wav");
+        float[] clash = Load("Assets/Art/Audio/sword-clashhit-393837.mp3");
+        float[] armor = Load("Assets/Art/Audio/armor-impact-from-sword-393843.mp3");
+        float[] slice = Load("Assets/Art/Audio/violent-sword-slice-2-393841.mp3");
+        float[] blade = Load("Assets/Art/Audio/검_5.mp3");
         if (parry == null || clash == null || armor == null || slice == null || blade == null)
             return "audio sources missing";
 

@@ -14,7 +14,7 @@ public static class AttackDataTuningBaker
     [MenuItem("Tools/Combat/Bake Recommended Attack Tuning")]
     public static void BakeRecommendedAttackTuning()
     {
-        string[] guids = AssetDatabase.FindAssets("t:AttackData", new[] { "Assets/Attack_data" });
+        string[] guids = AssetDatabase.FindAssets("t:AttackData", new[] { "Assets/Data/AttackData" });
         int changedCount = 0;
 
         foreach (string guid in guids)

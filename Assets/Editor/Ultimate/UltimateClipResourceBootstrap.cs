@@ -5,11 +5,11 @@ using UnityEngine;
 [InitializeOnLoad]
 public static class UltimateClipResourceBootstrap
 {
-    const string IntroPoseSourceAssetPath = "Assets/AnimeAsset/Sp_Idle.anim";
+    const string IntroPoseSourceAssetPath = "Assets/Anime/Clips/Sp_Idle.anim";
     const string IntroPoseOutputAssetPath = "Assets/Resources/Ultimate/Clips/Sp_Idle_IntroPose.anim";
     const float IntroPoseNormalizedTime = 0.205f;
     const string DashClipSourceAssetPath =
-        "Assets/CombatGirlsCharacterPack-20260330T102548Z-3-001/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Special/Sp_Skill3.fbx";
+        "Assets/ThirdParty/CombatGirlsCharacterPack/School_Katana_Girl/Animations/Special/Sp_Skill3.fbx";
     const string DashClipSourceName = "Sp_Skill3";
     const string DashClipOutputAssetPath = "Assets/Resources/Ultimate/Clips/Sp_Skill3_Ultimate.anim";
 

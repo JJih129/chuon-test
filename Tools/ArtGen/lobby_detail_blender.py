@@ -754,7 +754,7 @@ def ucentre(c, s, mat):
 
 def shell(hall_mat):
     before = set(bpy.data.objects)
-    bpy.ops.import_scene.fbx(filepath=os.path.join(ROOT, "Assets", "Modeling", "lobby_object.fbx"))
+    bpy.ops.import_scene.fbx(filepath=os.path.join(ROOT, "Assets", "Art", "Models", "lobby_object.fbx"))
     for o in [o for o in bpy.data.objects if o not in before]:
         if o.type == 'MESH':
             o.data.materials.clear(); o.data.materials.append(hall_mat)

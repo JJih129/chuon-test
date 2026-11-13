@@ -34,8 +34,8 @@ public static class AssetUsageAuditUtility
         "Assets/Editor",
         "Assets/Plugins",
         "Assets/TextMesh Pro",
-        "Assets/JuiceBits",
-        "Assets/QuickOutline"
+        "Assets/ThirdParty/JuiceBits",
+        "Assets/ThirdParty/QuickOutline"
     };
 
     static readonly HashSet<string> ProtectedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

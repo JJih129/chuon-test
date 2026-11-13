@@ -6,8 +6,8 @@ using UnityEngine.SceneManagement;
 
 public sealed class AspToonMaterialToolWindow : EditorWindow
 {
-    private const string DefaultOutputFolder = "Assets/Materials/Boss/ASPToon";
-    private const string DefaultRampPath = "Assets/ASP/Textures/5RampMap.png";
+    private const string DefaultOutputFolder = "Assets/Art/Materials/Boss/ASPToon";
+    private const string DefaultRampPath = "Assets/ThirdParty/ASP/Textures/5RampMap.png";
 
     private GameObject targetRoot;
     private Texture2D rampMap;
@@ -100,8 +100,8 @@ public static class BossAspToonMaterialApplier
     }
 
     private const string ShaderName = "ASP/Character";
-    private const string DefaultOutputFolder = "Assets/Materials/Boss/ASPToon";
-    private const string DefaultRampPath = "Assets/ASP/Textures/5RampMap.png";
+    private const string DefaultOutputFolder = "Assets/Art/Materials/Boss/ASPToon";
+    private const string DefaultRampPath = "Assets/ThirdParty/ASP/Textures/5RampMap.png";
     private const string OneShotMarkerPath = "Assets/Editor/ApplyBossAspToon.once";
 
     [InitializeOnLoadMethod]

@@ -1812,7 +1812,7 @@ public class MainSceneArrivalController : MonoBehaviour
             return bossIntroHologramMaterial;
 
 #if UNITY_EDITOR
-        bossIntroHologramMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
+        bossIntroHologramMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/ThirdParty/Holograms/Materials/Examples/Basic/Scanline_Hologram_Empty.mat");
 #endif
         return bossIntroHologramMaterial;
     }
@@ -2581,7 +2581,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
 #if UNITY_EDITOR
         elevatorWalkStartClip = LoadEditorAnimationClip(
-            "Assets/GhostSamurai_Animset/Animation/katana/Common/Inplace/GhostSamurai_Common_Walk_Start_Inplace.FBX",
+            "Assets/ThirdParty/GhostSamurai_Animset/Animation/katana/Common/Inplace/GhostSamurai_Common_Walk_Start_Inplace.FBX",
             "GhostSamurai_Common_Walk_Start_Inplace");
 #endif
         return elevatorWalkStartClip;
@@ -2594,7 +2594,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
 #if UNITY_EDITOR
         elevatorWalkLoopClip = LoadEditorAnimationClip(
-            "Assets/GhostSamurai_Animset/Animation/katana/Common/Root/GhostSamurai_Common_Walk_Loop_Root.FBX",
+            "Assets/ThirdParty/GhostSamurai_Animset/Animation/katana/Common/Root/GhostSamurai_Common_Walk_Loop_Root.FBX",
             "GhostSamurai_Common_Walk_Loop_Root");
 #endif
         return elevatorWalkLoopClip;
@@ -2607,7 +2607,7 @@ public class MainSceneArrivalController : MonoBehaviour
 
 #if UNITY_EDITOR
         elevatorWalkEndClip = LoadEditorAnimationClip(
-            "Assets/GhostSamurai_Animset/Animation/katana/Common/Root/GhostSamurai_Common_Walk_End_Root.FBX",
+            "Assets/ThirdParty/GhostSamurai_Animset/Animation/katana/Common/Root/GhostSamurai_Common_Walk_End_Root.FBX",
             "GhostSamurai_Common_Walk_End_Root");
 #endif
         return elevatorWalkEndClip;

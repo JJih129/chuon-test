@@ -1280,19 +1280,19 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 #if UNITY_EDITOR
         if (_currentComboDepth >= 4)
         {
-            Material wideMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Effects/Trail/MAT_PlayerTrail_Wide.mat");
+            Material wideMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Art/Effects/Trail/MAT_PlayerTrail_Wide.mat");
             if (wideMat != null)
                 return wideMat;
         }
 
         if (_currentInput == AttackInput.Heavy)
         {
-            Material heavyMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Effects/Trail/MAT_PlayerTrail_Heavy.mat");
+            Material heavyMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Art/Effects/Trail/MAT_PlayerTrail_Heavy.mat");
             if (heavyMat != null)
                 return heavyMat;
         }
 
-        Material lightMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Effects/Trail/MAT_PlayerTrail_Light.mat");
+        Material lightMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Art/Effects/Trail/MAT_PlayerTrail_Light.mat");
         if (lightMat != null)
             return lightMat;
 #endif
@@ -1329,7 +1329,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
 #if UNITY_EDITOR
         _proceduralTrailMaterial = AssetDatabase.LoadAssetAtPath<Material>(
-            "Assets/Drakkar/GameUtils/VISUALS/Trails/DrakkarTrails Examples/Assets/Trail Red 3 Alpha.mat");
+            "Assets/ThirdParty/Drakkar/GameUtils/VISUALS/Trails/DrakkarTrails Examples/Assets/Trail Red 3 Alpha.mat");
 #endif
 
         if (_proceduralTrailMaterial == null)
@@ -1389,11 +1389,11 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
     {
 #if UNITY_EDITOR
         if (drakkarLightTrailTexture == null)
-            drakkarLightTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_player_light.png");
+            drakkarLightTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Effects/Trail/trail_player_light.png");
         if (drakkarHeavyTrailTexture == null)
-            drakkarHeavyTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_player_heavy.png");
+            drakkarHeavyTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Effects/Trail/trail_player_heavy.png");
         if (drakkarWideTrailTexture == null)
-            drakkarWideTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Effects/Trail/trail_ultimate_wide.png");
+            drakkarWideTrailTexture = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Art/Effects/Trail/trail_ultimate_wide.png");
 #endif
     }
 
@@ -2512,7 +2512,7 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
     void EnsureDefaultMappings(bool force)
     {
-        GameObject slashCPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Slash_C.prefab");
+        GameObject slashCPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/VFX/Slash_C.prefab");
         if (unifiedSlashVfxPrefab == null)
             unifiedSlashVfxPrefab = slashCPrefab;
 
@@ -2521,29 +2521,29 @@ public sealed class PlayerAttackVfxPresenter : MonoBehaviour
 
         GameObject lightSlashPrefab = slashCPrefab != null
             ? slashCPrefab
-            : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Free Slash VFX/Prefabs/Slash VFX.prefab");
+            : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ThirdParty/Free Slash VFX/Prefabs/Slash VFX.prefab");
         GameObject heavySlashPrefab = slashCPrefab != null
             ? slashCPrefab
-            : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab");
+            : AssetDatabase.LoadAssetAtPath<GameObject>("Assets/ThirdParty/Free Slash VFX/Prefabs/Slash Eletric VFX.prefab");
         defaultHitRangeVfxPrefab = lightSlashPrefab;
         defaultWeaponTrailVfxPrefab = null;
 
         string[] attackAssetPaths =
         {
-            @"Assets/Attack_data/AD_L1.asset",
-            @"Assets/Attack_data/Combo_A/AD_L2.asset",
-            @"Assets/Attack_data/Combo_A/AD_L3.asset",
-            @"Assets/Attack_data/Combo_A/AD_L4.asset",
-            @"Assets/Attack_data/Combo_D/AD_L2_D.asset",
-            @"Assets/Attack_data/Combo_C/AD_L3_C.asset",
-            @"Assets/Attack_data/AD_H1.asset",
-            @"Assets/Attack_data/Combo_E/AD_H2.asset",
-            @"Assets/Attack_data/Combo_E/AD_H3.asset",
-            @"Assets/Attack_data/Combo_C/AD_H2_C.asset",
-            @"Assets/Attack_data/Combo_D/AD_H3_D.asset",
-            @"Assets/Attack_data/Combo_B/AD_H4_B.asset",
-            @"Assets/Attack_data/Combo_C/AD_H4_C.asset",
-            @"Assets/Attack_data/Combo_B/AD_H5_B.asset"
+            @"Assets/Data/AttackData/AD_L1.asset",
+            @"Assets/Data/AttackData/Combo_A/AD_L2.asset",
+            @"Assets/Data/AttackData/Combo_A/AD_L3.asset",
+            @"Assets/Data/AttackData/Combo_A/AD_L4.asset",
+            @"Assets/Data/AttackData/Combo_D/AD_L2_D.asset",
+            @"Assets/Data/AttackData/Combo_C/AD_L3_C.asset",
+            @"Assets/Data/AttackData/AD_H1.asset",
+            @"Assets/Data/AttackData/Combo_E/AD_H2.asset",
+            @"Assets/Data/AttackData/Combo_E/AD_H3.asset",
+            @"Assets/Data/AttackData/Combo_C/AD_H2_C.asset",
+            @"Assets/Data/AttackData/Combo_D/AD_H3_D.asset",
+            @"Assets/Data/AttackData/Combo_B/AD_H4_B.asset",
+            @"Assets/Data/AttackData/Combo_C/AD_H4_C.asset",
+            @"Assets/Data/AttackData/Combo_B/AD_H5_B.asset"
         };
 
         GameObject trailPrefab = null;
